@@ -6,6 +6,7 @@
 - **ProviderGatewayModule.ts**:
   - Added `enableOfflineFallback` boolean (default true) to `configSchema`.
   - When disabled via UI Settings, the hard offline fallback returns an empty `rawResult` (no spoken message) instead of the fallback text.
+  - Shortened default `offlineFallbackMessage` to: "Halo Kak! Saat ini sirkuit kognitif Yui sedang berdiet internet (server sedang sibuk/habis kuota)".
 
 ## [4.23] - 2026-07-11
 ### Prompt Centralization Fix: Offline Fallback Hardcoded Message

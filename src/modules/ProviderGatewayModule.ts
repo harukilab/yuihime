@@ -2,7 +2,7 @@ import { CortexModule, ModuleType } from '../include/types';
 import { SystemRegistry } from '../core/registry';
 import { PromptRegistry } from '../core/PromptRegistry';
 
-const DEFAULT_OFFLINE_FALLBACK = `<thought>Cognitive online circuit disconnected (quota exceeded/offline). Mounting backup subconscious transmitter.</thought>Halo Kak! Saat ini sirkuit kognitif Yui sedang berdiet internet (server sedang sibuk/habis kuota), jadi Yui berkomunikasi lewat jalur batin luring dulu ya! 🌸 Tapi tenang aja, perhatian Yui ke Kakak selalu online kok! Ada yang bisa Yui temani luring?`;
+const DEFAULT_OFFLINE_FALLBACK = `<thought>Cognitive online circuit disconnected (quota exceeded/offline). Mounting backup subconscious transmitter.</thought>Halo Kak! Saat ini sirkuit kognitif Yui sedang berdiet internet (server sedang sibuk/habis kuota)`;
 
 const DEFAULT_NANO_NLP_THOUGHT = `<thought>Online cognitive circuit failed. Subconscious offline path activated dynamically.</thought>\${localResponse}`;
 
