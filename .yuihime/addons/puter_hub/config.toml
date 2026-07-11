@@ -1,0 +1,21 @@
+id = "puter-hub"
+name = "Puter Neural Hub"
+description = "A shadow subsystem that handles TTS and LLM providers via Puter.js-like architecture, running independently of the main Yuihime configuration."
+version = "1.0.0"
+runtime = "node"
+entry_point = "main.cjs"
+
+[configSchema.fields.token]
+type = "string"
+label = "Puter Auth Token"
+default = ""
+
+[configSchema.fields.defaultModel]
+type = "string"
+label = "Default LLM Model"
+default = "gpt-4o-mini"
+
+[tool]
+name = "use_puter_subsystem"
+description = "Access Puter.js for LLM (Chat/Vision), TTS, Image Generation, and OCR."
+parameters = { type = "object", properties = { action = { type = "string", enum = ["chat", "tts", "txt2img", "img2txt", "list_models"], description = "Action: chat, tts, txt2img, img2txt, list_models" }, input = { type = "string", description = "Input text or prompt (optional for list_models)", default = "" }, model = { type = "string", description = "LLM Model", default = "gpt-4o-mini" }, voice = { type = "string", description = "TTS Voice ID", default = "en-US-1" }, image_url = { type = "string", description = "URL of image for Vision or OCR analysis" } }, required = ["action"] }

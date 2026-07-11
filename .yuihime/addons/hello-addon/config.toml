@@ -1,0 +1,11 @@
+id = "hello-addon"
+name = "Hello Addon"
+description = "A simple addon demonstration."
+version = "1.0.0"
+runtime = "node"
+entry_point = "main.cjs"
+
+[configSchema.fields.greeting]
+type = "string"
+label = "Greeting Message"
+default = "Hello from Neural Kernel!"
