@@ -1,7 +1,8 @@
 {
-  "name": "react-example",
+  "name": "yuihime",
   "private": true,
-  "version": "0.0.0",
+  "version": "4.27",
+  "description": "YuiHime AI Engine - autonomous trans-dimensional virtual companion (AGI) with multi-provider LLM gateway, cognitive cortex, and multi-channel bridges.",
   "type": "module",
   "bin": "dist/server.cjs",
   "scripts": {

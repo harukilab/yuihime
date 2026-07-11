@@ -1,6 +1,11 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.28] - 2026-07-12
+### Project Metadata Sync (package.json)
+- **package.json**: renamed `name` from `react-example` to `yuihime`, set `version` to `4.27` (matches UPDATE_LOG), and added a project `description`. This makes the `npm run dev` header (`> yuihime@4.27 dev`) reflect the actual project instead of the scaffold default.
+- **package-lock.json**: synced `name`/`version` to match `package.json`.
+
 ## [4.27] - 2026-07-12
 ### Tidy Boot Banner
 - **server.ts**:
