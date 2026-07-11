@@ -30,16 +30,16 @@ dynamic = false
 selected = "default"
 
 [sandbox_paths]
-data_dir = "/app/applet/.yuihime/data"
-config_path = "/app/applet/.yuihime/data/config.toml"
-db_path = "/app/applet/.yuihime/data/yuihime.db"
-user_data_path = "/app/applet/.yuihime/user_data"
-agent_path = "/app/applet/.yuihime/agent"
-addons_path = "/app/applet/.yuihime/addons"
+data_dir = "/home/userland/YuiHime/.yuihime/data"
+config_path = "/home/userland/YuiHime/.yuihime/data/config.toml"
+db_path = "/home/userland/YuiHime/.yuihime/data/yuihime.db"
+user_data_path = "/home/userland/YuiHime/.yuihime/user_data"
+agent_path = "/home/userland/YuiHime/.yuihime/agent"
+addons_path = "/home/userland/YuiHime/.yuihime/addons"
 auto_acc_user_data = false
 yolo_mode = false
 confirmation_timeout = 45
-system_root = "/app/applet/.yuihime"
+system_root = "/home/userland/YuiHime/.yuihime"
 
 [developer]
 disableStageTransitions = false
