@@ -1,0 +1,28 @@
+{
+  "id": "view_logs",
+  "name": "View System Logs",
+  "description": "View Yuihime's system logs, audit trails, and LLM input/output details to diagnose system states, execution errors, or API issues.",
+  "version": "1.0.0",
+  "type": "TOOL",
+  "order": 110,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "logType": {
+        "type": "string",
+        "description": "Type of logs to retrieve: 'audit' (for tool execution & structure compliance audit logs) or 'llm' (for direct direct cognitive LLM language prompts & replies).",
+        "enum": ["audit", "llm"]
+      },
+      "limit": {
+        "type": "number",
+        "description": "Number of recent log lines to retrieve (default is 10).",
+        "default": 10
+      },
+      "filter": {
+        "type": "string",
+        "description": "Optional search keyword or tool name to filter logs (e.g., 'tensorart', 'error')."
+      }
+    },
+    "required": ["logType"]
+  }
+}

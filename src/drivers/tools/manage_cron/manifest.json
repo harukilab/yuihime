@@ -1,0 +1,39 @@
+{
+  "id": "manage_cron",
+  "name": "Cron Scheduler",
+  "description": "Schedule, list, and manage recurring tasks (cron jobs) in the system. Use this to create reminders or automated background checks.",
+  "version": "1.0.0",
+  "type": "TOOL",
+  "order": 105,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "action": { 
+        "type": "string", 
+        "enum": ["list", "add", "edit", "toggle", "delete"],
+        "description": "Action to perform on the cron system"
+      },
+      "taskName": { 
+        "type": "string", 
+        "description": "Name of the task" 
+      },
+      "schedule": { 
+        "type": "string", 
+        "description": "Schedule string (e.g., '1m' for every minute, '1h' for every hour, or a standard cron expression like '0 * * * *')" 
+      },
+      "taskId": {
+        "type": "string",
+        "description": "ID of the task to modify or delete"
+      },
+      "repeating": {
+        "type": "boolean",
+        "description": "Whether the task should repeat or be deleted after one-time execution"
+      },
+      "targetChannel": {
+        "type": "string",
+        "description": "Optional fallback chat channel. Use 'Telegram (Private)' if the user requested the output destination to be Telegram."
+      }
+    },
+    "required": ["action"]
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "id": "web_search",
+  "name": "Neural Web Search",
+  "description": "Searches the internet for real-time information.",
+  "version": "1.0.0",
+  "type": "TOOL",
+  "order": 10,
+  "configSchema": {
+    "fields": {
+      "serperApiKey": {
+        "type": "password",
+        "label": "Serper API Key",
+        "description": "Needed for real-time search extraction",
+        "default": ""
+      },
+      "searchProvider": {
+        "type": "select",
+        "label": "Search Provider",
+        "default": "google",
+        "options": [
+          { "label": "Google (Serper)", "value": "google" },
+          { "label": "Bing", "value": "bing" },
+          { "label": "DuckDuckGo", "value": "duckduckgo" }
+        ]
+      },
+      "maxResults": {
+        "type": "number",
+        "label": "Max Results",
+        "default": 5
+      },
+      "usageGuidelines": {
+        "type": "textarea",
+        "label": "Search Context Prompt",
+        "description": "Special instructions for the search engine",
+        "default": "Extract concise, factual information relevant to the user query."
+      }
+    }
+  },
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "query": { "type": "string", "description": "Search query" }
+    },
+    "required": ["query"]
+  }
+}

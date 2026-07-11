@@ -1,0 +1,18 @@
+{
+  "id": "plugin-installer",
+  "name": "Neural Addon Installer",
+  "description": "Installs or updates a system plugin/addon by writing its configuration and entry point.",
+  "version": "1.0.0",
+  "type": "TOOL",
+  "order": 0,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "id": { "type": "string", "description": "Unique identifier for the addon (dash-separated)" },
+      "config": { "type": "string", "description": "TOML configuration content" },
+      "code": { "type": "string", "description": "Main entry point code content" },
+      "runtime": { "type": "string", "description": "Runtime environment", "enum": ["node", "python", "bash"] }
+    },
+    "required": ["id", "config", "code", "runtime"]
+  }
+}

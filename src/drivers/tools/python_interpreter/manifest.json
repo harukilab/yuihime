@@ -1,0 +1,15 @@
+{
+  "id": "python_interpreter",
+  "name": "Neural Python Core",
+  "description": "Executes Python code for data analysis and complex math.",
+  "version": "1.0.0",
+  "type": "TOOL",
+  "order": 13,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "code": { "type": "string", "description": "The Python code to execute" }
+    },
+    "required": ["code"]
+  }
+}

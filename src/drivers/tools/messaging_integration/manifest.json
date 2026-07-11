@@ -1,0 +1,36 @@
+{
+  "id": "messaging_integration",
+  "name": "Universal Dispatcher",
+  "description": "Send alerts or cross-platform messages to Telegram or other connected platforms like Discord, Slack, and Webhooks.",
+  "version": "1.1.0",
+  "type": "TOOL",
+  "order": 201,
+  "configSchema": {
+    "fields": {
+      "discordWebhookUrl": {
+        "type": "password",
+        "label": "Discord Webhook URL",
+        "default": ""
+      },
+      "slackBotToken": {
+        "type": "password",
+        "label": "Slack Bot Token",
+        "default": ""
+      }
+    }
+  },
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "platform": { 
+        "type": "string", 
+        "enum": ["discord", "slack", "webhook", "telegram"],
+        "description": "Target platform" 
+      },
+      "message": { "type": "string", "description": "Content of the message to send" },
+      "recipient": { "type": "string", "description": "The Telegram username (e.g. 'zeropride'), perceived name, real name, or raw chat ID. If empty and platform is telegram, Yui will automatically look up the active talker's linked Telegram profile in her social memory/identities database." },
+      "priority": { "type": "string", "enum": ["low", "normal", "high"], "description": "Urgency level" }
+    },
+    "required": ["platform", "message"]
+  }
+}

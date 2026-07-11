@@ -1,0 +1,13 @@
+{
+  "id": "list_files",
+  "name": "List Files",
+  "description": "List all files available in user_data.",
+  "version": "1.0.0",
+  "type": "TOOL",
+  "order": 103,
+  "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": []
+  }
+}

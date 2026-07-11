@@ -1,0 +1,22 @@
+{
+  "id": "manage_pairing",
+  "name": "Secured Persona Pairing Manager",
+  "description": "Used ONLY when an external chat client (Telegram, Discord, etc.) wants to claim an identity from the Web app (e.g., claiming to be 'Aldi'). Under the hood, this generates a secure 6-digit random code that the user MUST enter in their Web console to complete the link securely.",
+  "type": "TOOL",
+  "version": "1.0.0",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "action": {
+        "type": "string",
+        "enum": ["generate_code_for_user"],
+        "description": "The pairing operation to perform. 'generate_code_for_user' creates a 10-minute temporary claim code."
+      },
+      "claimedName": {
+        "type": "string",
+        "description": "The name of the Web identity/friend profile the external user claims to be (e.g. 'Aldi')"
+      }
+    },
+    "required": ["action", "claimedName"]
+  }
+}

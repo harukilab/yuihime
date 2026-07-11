@@ -1,0 +1,6 @@
+name = "Neural Learning Engine"
+version = "1.0.0"
+author = "Yuihime Core"
+description = "Python-based Q-Learning engine for emotional state optimization."
+runtime = "python"
+entryPoint = "main.py"

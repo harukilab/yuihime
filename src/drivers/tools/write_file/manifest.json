@@ -1,0 +1,16 @@
+{
+  "id": "write_file",
+  "name": "Write File",
+  "description": "Write content to a file in user_data.",
+  "version": "1.0.0",
+  "type": "TOOL",
+  "order": 101,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "filename": { "type": "string", "description": "The target path to write/save the file. You MUST specify the full path starting with 'user_data/' (e.g. 'user_data/catatan_prompt_al.txt') or absolute '/app/user_data/' path to ensure precise resolution." },
+      "content": { "type": "string", "description": "Text content to write" }
+    },
+    "required": ["filename", "content"]
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "id": "search_chat_history",
+  "name": "Search Chat History",
+  "description": "Searches all past conversational chat history and message logs across all connected and paired channels (Web, Telegram, Discord, Live Stream) associated with the current user profile or account to retrieve, recall, or summarize previous discussions.",
+  "version": "1.0.0",
+  "type": "TOOL",
+  "order": 104,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "query": {
+        "type": "string",
+        "description": "Optional keyword, text phrase, or topic to search for in past messages."
+      },
+      "platform": {
+        "type": "string",
+        "description": "Optional platform filter to limit searches to. Allowed: 'web', 'telegram', 'discord', 'all'. Default is 'all'.",
+        "enum": ["web", "telegram", "discord", "all"]
+      },
+      "limit": {
+        "type": "number",
+        "description": "Maximum number of past messages to retrieve. Default is 20."
+      }
+    },
+    "required": []
+  }
+}

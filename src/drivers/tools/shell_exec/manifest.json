@@ -1,0 +1,15 @@
+{
+  "id": "shell_exec",
+  "name": "Command Line",
+  "description": "Execute shell commands on the host system.",
+  "version": "1.0.0",
+  "type": "TOOL",
+  "order": 100,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "command": { "type": "string", "description": "The command to execute" }
+    },
+    "required": ["command"]
+  }
+}

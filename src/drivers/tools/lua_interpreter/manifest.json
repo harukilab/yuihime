@@ -1,0 +1,15 @@
+{
+  "id": "lua_interpreter",
+  "name": "Neural Lua Engine",
+  "description": "Executes Lua code snippets for specialized game logic or integrations.",
+  "version": "1.0.0",
+  "type": "TOOL",
+  "order": 12,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "code": { "type": "string", "description": "The Lua code to execute" }
+    },
+    "required": ["code"]
+  }
+}

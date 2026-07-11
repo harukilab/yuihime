@@ -1,0 +1,35 @@
+{
+  "id": "code_interpreter",
+  "name": "Neural Code Execution",
+  "description": "Executes JavaScript or Python code snippets to solve problems.",
+  "version": "1.0.0",
+  "type": "TOOL",
+  "order": 11,
+  "configSchema": {
+    "fields": {
+      "executionSandbox": {
+        "type": "select",
+        "label": "Neural Sandbox Mode",
+        "default": "local",
+        "options": [
+          { "label": "Local (Fast, Unsafe)", "value": "local" },
+          { "label": "Docker (Secure, Isolated)", "value": "docker" },
+          { "label": "Lambda (Serverless)", "value": "lambda" }
+        ]
+      },
+      "timeoutMs": {
+        "type": "number",
+        "label": "Execution Timeout (ms)",
+        "default": 5000
+      }
+    }
+  },
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "language": { "type": "string", "description": "Programming language (javascript/python)" },
+      "code": { "type": "string", "description": "The code to execute" }
+    },
+    "required": ["language", "code"]
+  }
+}

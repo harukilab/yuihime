@@ -1,0 +1,37 @@
+{
+  "id": "github_integration",
+  "name": "GitHub Navigator",
+  "description": "Interface with GitHub to search repositories, list issues, and fetch code metadata.",
+  "version": "1.0.0",
+  "type": "TOOL",
+  "order": 200,
+  "configSchema": {
+    "fields": {
+      "githubToken": {
+        "type": "password",
+        "label": "GitHub Personal Access Token",
+        "description": "Used for authenticated requests to avoid rate limits",
+        "default": ""
+      },
+      "defaultOwner": {
+        "type": "string",
+        "label": "Default Repository Owner",
+        "description": "Fallback owner if not specified in query",
+        "default": ""
+      }
+    }
+  },
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "action": { 
+        "type": "string", 
+        "enum": ["search_repos", "list_issues", "get_repo_details", "list_pull_requests"],
+        "description": "The GitHub action to perform" 
+      },
+      "query": { "type": "string", "description": "Search query or repository name (e.g., 'owner/repo')" },
+      "state": { "type": "string", "enum": ["open", "closed", "all"], "description": "Filter for issues/PRs" }
+    },
+    "required": ["action", "query"]
+  }
+}

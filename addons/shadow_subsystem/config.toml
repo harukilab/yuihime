@@ -1,0 +1,11 @@
+id = "shadow-subsystem"
+name = "Shadow Independent Subsystem"
+description = "Subsistem yang berjalan sepenuhnya terisolasi dalam sandbox add-on."
+version = "1.0.0"
+runtime = "node"
+entry_point = "main.cjs"
+
+[configSchema.fields.mode]
+type = "string"
+label = "Execution Mode"
+default = "stealth"

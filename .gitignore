@@ -1,0 +1,13 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+
+# Do not ignore settings files, config.toml, and local customization configs
+!**/config.toml
+!.yuihime/
+!.yuihime/data/config.toml

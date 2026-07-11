@@ -1,0 +1,28 @@
+{
+  "id": "overlay_control",
+  "name": "Neural Overlay System",
+  "description": "Controls the broadcast overlay, toggling UI elements and visual effects.",
+  "version": "1.0.0",
+  "type": "TOOL",
+  "order": 20,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "element": { 
+        "type": "string", 
+        "enum": ["matrix", "graph", "chat", "all"],
+        "description": "The UI element to toggle" 
+      },
+      "action": { 
+        "type": "string", 
+        "enum": ["show", "hide", "toggle"],
+        "description": "The action to perform" 
+      },
+      "message": {
+         "type": "string",
+         "description": "Optional status message to display on the overlay"
+      }
+    },
+    "required": ["element", "action"]
+  }
+}

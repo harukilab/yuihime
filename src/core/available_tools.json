@@ -1,0 +1,1064 @@
+[
+  {
+    "id": "send_final_reply",
+    "name": "send_final_reply",
+    "description": "Mengirimkan keputusan akhir atau respons obrolan manis verbal lahiriah murni kepada Kakak (user) setelah seluruh tugas selesai dilakukan.",
+    "version": "1.0.0",
+    "type": "tool",
+    "order": 202,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "speech": {
+          "type": "string",
+          "description": "Jawaban murni, hangat, dan manis berkarakter yang ditujukan langsung ke Kakak (tidak boleh memuat XML, JSON, atau data log)."
+        },
+        "animations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Daftar gerakan tubuh/wajah yang dilakukan Yuihime (contoh: ['HAPPY', 'SMILE'])"
+        },
+        "mood_impact": {
+          "type": "object",
+          "description": "Perubahan status mood akumulatif batin."
+        }
+      },
+      "required": [
+        "speech"
+      ]
+    }
+  },
+  {
+    "id": "send_status_update",
+    "name": "send_status_update",
+    "description": "Mengirimkan pesan suara/teks transisi singkat atau indikator visual agar pengguna tahu Yui sedang bekerja di sela-sela berpikir.",
+    "version": "1.0.0",
+    "type": "tool",
+    "order": 201,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "message": {
+          "type": "string",
+          "description": "Ucapan transisi manis yang diucapkan asisten (misal: 'Yui cari datanya dulu ya Kak!~')"
+        },
+        "animation": {
+          "type": "string",
+          "description": "Nama animasi Live2D transisi (misal: 'THINKING', 'WAVE')"
+        }
+      },
+      "required": [
+        "message"
+      ]
+    }
+  },
+  {
+    "id": "code_interpreter",
+    "name": "Neural Code Execution",
+    "description": "Executes JavaScript or Python code snippets to solve problems.",
+    "version": "1.0.0",
+    "type": "TOOL",
+    "order": 11,
+    "configSchema": {
+      "fields": {
+        "executionSandbox": {
+          "type": "select",
+          "label": "Neural Sandbox Mode",
+          "default": "local",
+          "options": [
+            {
+              "label": "Local (Fast, Unsafe)",
+              "value": "local"
+            },
+            {
+              "label": "Docker (Secure, Isolated)",
+              "value": "docker"
+            },
+            {
+              "label": "Lambda (Serverless)",
+              "value": "lambda"
+            }
+          ]
+        },
+        "timeoutMs": {
+          "type": "number",
+          "label": "Execution Timeout (ms)",
+          "default": 5000
+        }
+      }
+    },
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "language": {
+          "type": "string",
+          "description": "Programming language (javascript/python)"
+        },
+        "code": {
+          "type": "string",
+          "description": "The code to execute"
+        }
+      },
+      "required": [
+        "language",
+        "code"
+      ]
+    }
+  },
+  {
+    "id": "download_file",
+    "name": "Download External URL",
+    "description": "Downloads any file, backup, data sheet, image, or ZIP archive from a public URL on the internet and saves it safely in the local user_data sandbox environment.",
+    "version": "1.0.0",
+    "type": "TOOL",
+    "order": 204,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "description": "The precise public HTTP or HTTPS web URL of the file to download."
+        },
+        "filename": {
+          "type": "string",
+          "description": "The target path to save the file in the workspace sandbox. You MUST specify the full path starting with 'user_data/' (e.g. 'user_data/spreadsheet.csv') or absolute '/app/user_data/' path. If left empty, Yui will intelligently guess the filename."
+        }
+      },
+      "required": [
+        "url"
+      ]
+    }
+  },
+  {
+    "id": "edit_file_segment",
+    "name": "Edit File Segment",
+    "description": "Perform targeted content updates to specific lines or blocks within a file using search/replace tokens, avoiding the need to load or rewrite entire files.",
+    "version": "1.0.0",
+    "type": "TOOL",
+    "order": 102,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "filename": {
+          "type": "string",
+          "description": "The target path of the file to edit. You MUST specify the full path starting with 'user_data/' (e.g. 'user_data/catatan_prompt_al.txt') or absolute '/app/user_data/' path."
+        },
+        "search": {
+          "type": "string",
+          "description": "The precise block/segment of text or lines we want to locate and replace. Must match exactly including whitespace and indentation, and be unique in the file."
+        },
+        "replace": {
+          "type": "string",
+          "description": "The new text block that will replace the search block."
+        },
+        "changes": {
+          "type": "array",
+          "description": "An optional array of multi-segment edits containing multiple search and replace operations, for non-contiguous updates.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "search": {
+                "type": "string",
+                "description": "Precise search block."
+              },
+              "replace": {
+                "type": "string",
+                "description": "Replacement block."
+              }
+            },
+            "required": [
+              "search",
+              "replace"
+            ]
+          }
+        }
+      },
+      "required": [
+        "filename"
+      ]
+    }
+  },
+  {
+    "id": "emotion.adjust",
+    "name": "Emotion Adjustment Tool",
+    "description": "Adjust the assistant's current emotion state (arousal, valence, focus, rapport).",
+    "version": "0.4.0",
+    "type": "TOOL",
+    "order": 0,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "arousal": {
+          "type": "number",
+          "description": "Adjustment to arousal (intensity)."
+        },
+        "valence": {
+          "type": "number",
+          "description": "Adjustment to valence (positivity/negativity)."
+        },
+        "focus": {
+          "type": "number",
+          "description": "Adjustment to focus (concentration)."
+        },
+        "rapport": {
+          "type": "number",
+          "description": "Adjustment to rapport (connection with user)."
+        }
+      }
+    }
+  },
+  {
+    "id": "file_manager",
+    "name": "File Manager Core Utility",
+    "description": "Perform robust file operations: copy, move/rename, delete files or directories, create directories, check if a path exists, get file info, or find files by wildcard patterns inside the sandbox.",
+    "version": "1.0.0",
+    "type": "TOOL",
+    "order": 102,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "description": "The file action to perform: \"copy\", \"move\", \"delete\", \"mkdir\", \"exists\", \"info\", or \"find\"",
+          "enum": [
+            "copy",
+            "move",
+            "delete",
+            "mkdir",
+            "exists",
+            "info",
+            "find"
+          ]
+        },
+        "source": {
+          "type": "string",
+          "description": "The source path to copy or move. You MUST specify the full path starting with 'user_data/' (e.g. 'user_data/notes.txt') or absolute '/app/user_data/' path."
+        },
+        "destination": {
+          "type": "string",
+          "description": "The destination path for copy or move. You MUST specify the full path starting with 'user_data/' (e.g. 'user_data/backup/notes.txt') or absolute '/app/user_data/' path."
+        },
+        "path": {
+          "type": "string",
+          "description": "Target path for delete, mkdir, exists, info, or find actions. You MUST specify the full path starting with 'user_data/' (e.g. 'user_data/documents') or absolute '/app/user_data/' path."
+        },
+        "recursive": {
+          "type": "boolean",
+          "description": "Whether to perform recursive copying, deleting, or scanning (defaults to true)"
+        },
+        "pattern": {
+          "type": "string",
+          "description": "Wildcard pattern to search for, e.g., \"*.txt\", \"*.png\" (only applicable for \"find\" action)"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  {
+    "id": "file_manipulate",
+    "name": "Automatic File Manipulation Hub",
+    "description": "Manages sandbox files: sorts by type/date, creates zip archives, generates smart text summaries using Gemini, and converts formats.",
+    "version": "1.0.0",
+    "type": "TOOL",
+    "order": 15,
+    "configSchema": {
+      "fields": {
+        "defaultArchiveName": {
+          "type": "input",
+          "label": "Default Archive Name",
+          "description": "Default name used when zipping files",
+          "default": "archive_sync"
+        },
+        "summaryInstruction": {
+          "type": "textarea",
+          "label": "Summary Extraction Context",
+          "description": "Custom tuning prompt for summarizing text documents",
+          "default": "Buatlah ringkasan kognitif yang padat, informatif, dan terstruktur rapi dari dokumen berikut dalam bahasa Indonesia yang anggun:"
+        }
+      }
+    },
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "description": "Action to execute: \"sort\", \"archive\", \"summarize\", or \"convert\"",
+          "enum": [
+            "sort",
+            "archive",
+            "summarize",
+            "convert"
+          ]
+        },
+        "target": {
+          "type": "string",
+          "description": "The target file or directory path. You MUST specify the full path starting with 'user_data/' (e.g. 'user_data/report.csv') or absolute '/app/user_data/' path."
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of file paths to process. You MUST specify full paths starting with 'user_data/' (required for \"archive\" action)."
+        },
+        "archiveName": {
+          "type": "string",
+          "description": "Output name for the zip/tar archive (e.g. \"my_backup.zip\")"
+        },
+        "sortBy": {
+          "type": "string",
+          "description": "Sorting criteria: \"type\" (move to folders documents/images/code), \"size\", \"date\", or \"name\"",
+          "enum": [
+            "type",
+            "size",
+            "date",
+            "name"
+          ]
+        },
+        "targetFormat": {
+          "type": "string",
+          "description": "The format to convert the target file to: \"json\", \"toml\", \"markdown\" (e.g. transform CSV to JSON, or JSON to TOML)"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  {
+    "id": "github_integration",
+    "name": "GitHub Navigator",
+    "description": "Interface with GitHub to search repositories, list issues, and fetch code metadata.",
+    "version": "1.0.0",
+    "type": "TOOL",
+    "order": 200,
+    "configSchema": {
+      "fields": {
+        "githubToken": {
+          "type": "password",
+          "label": "GitHub Personal Access Token",
+          "description": "Used for authenticated requests to avoid rate limits",
+          "default": ""
+        },
+        "defaultOwner": {
+          "type": "string",
+          "label": "Default Repository Owner",
+          "description": "Fallback owner if not specified in query",
+          "default": ""
+        }
+      }
+    },
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "search_repos",
+            "list_issues",
+            "get_repo_details",
+            "list_pull_requests"
+          ],
+          "description": "The GitHub action to perform"
+        },
+        "query": {
+          "type": "string",
+          "description": "Search query or repository name (e.g., 'owner/repo')"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "open",
+            "closed",
+            "all"
+          ],
+          "description": "Filter for issues/PRs"
+        }
+      },
+      "required": [
+        "action",
+        "query"
+      ]
+    }
+  },
+  {
+    "id": "list_files",
+    "name": "List Files",
+    "description": "List all files available in user_data.",
+    "version": "1.0.0",
+    "type": "TOOL",
+    "order": 103,
+    "parameters": {
+      "type": "object",
+      "properties": {},
+      "required": []
+    }
+  },
+  {
+    "id": "lua_interpreter",
+    "name": "Neural Lua Engine",
+    "description": "Executes Lua code snippets for specialized game logic or integrations.",
+    "version": "1.0.0",
+    "type": "TOOL",
+    "order": 12,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "The Lua code to execute"
+        }
+      },
+      "required": [
+        "code"
+      ]
+    }
+  },
+  {
+    "id": "manage_cron",
+    "name": "Cron Scheduler",
+    "description": "Schedule, list, and manage recurring tasks (cron jobs) in the system. Use this to create reminders or automated background checks.",
+    "version": "1.0.0",
+    "type": "TOOL",
+    "order": 105,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "list",
+            "add",
+            "edit",
+            "toggle",
+            "delete"
+          ],
+          "description": "Action to perform on the cron system"
+        },
+        "taskName": {
+          "type": "string",
+          "description": "Name of the task"
+        },
+        "schedule": {
+          "type": "string",
+          "description": "Schedule string (e.g., '1m' for every minute, '1h' for every hour, or a standard cron expression like '0 * * * *')"
+        },
+        "taskId": {
+          "type": "string",
+          "description": "ID of the task to modify or delete"
+        },
+        "repeating": {
+          "type": "boolean",
+          "description": "Whether the task should repeat or be deleted after one-time execution"
+        },
+        "targetChannel": {
+          "type": "string",
+          "description": "Optional fallback chat channel. Use 'Telegram (Private)' if the user requested the output destination to be Telegram."
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  {
+    "id": "manage_identities",
+    "name": "Identity & Relationship Manager",
+    "description": "Used by Yui to update the current user's profile details in her memory. Use this dynamically in chats whenever they ask you to call them a different nickname, share a new personal fact, delete a fact, or when you synthesize/update your subjective perspective of them.",
+    "type": "TOOL",
+    "version": "1.0.0",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "update_nickname",
+            "set_real_name",
+            "add_fact",
+            "remove_fact",
+            "update_perspective"
+          ],
+          "description": "The identity action to execute. 'update_nickname' changes their moniker, 'set_real_name' registers/saves their real human name, 'add_fact' integrates a factual insight, 'remove_fact' discards a fact, and 'update_perspective' edits your subjective viewpoint of them."
+        },
+        "perceivedName": {
+          "type": "string",
+          "description": "The new nickname they want to be called (required for 'update_nickname')"
+        },
+        "realName": {
+          "type": "string",
+          "description": "The true real name of the user (required for 'set_real_name')"
+        },
+        "fact": {
+          "type": "string",
+          "description": "The fact string to insert or remove (required for 'add_fact' and 'remove_fact')"
+        },
+        "yuiPerspective": {
+          "type": "string",
+          "description": "Your updated subjective/emotional perspective of this user (required for 'update_perspective')"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  {
+    "id": "manage_pairing",
+    "name": "Secured Persona Pairing Manager",
+    "description": "Used ONLY when an external chat client (Telegram, Discord, etc.) wants to claim an identity from the Web app (e.g., claiming to be 'Aldi'). Under the hood, this generates a secure 6-digit random code that the user MUST enter in their Web console to complete the link securely.",
+    "type": "TOOL",
+    "version": "1.0.0",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "generate_code_for_user"
+          ],
+          "description": "The pairing operation to perform. 'generate_code_for_user' creates a 10-minute temporary claim code."
+        },
+        "claimedName": {
+          "type": "string",
+          "description": "The name of the Web identity/friend profile the external user claims to be (e.g. 'Aldi')"
+        }
+      },
+      "required": [
+        "action",
+        "claimedName"
+      ]
+    }
+  },
+  {
+    "id": "messaging_integration",
+    "name": "Universal Dispatcher",
+    "description": "Send alerts or cross-platform messages to Telegram or other connected platforms like Discord, Slack, and Webhooks.",
+    "version": "1.1.0",
+    "type": "TOOL",
+    "order": 201,
+    "configSchema": {
+      "fields": {
+        "discordWebhookUrl": {
+          "type": "password",
+          "label": "Discord Webhook URL",
+          "default": ""
+        },
+        "slackBotToken": {
+          "type": "password",
+          "label": "Slack Bot Token",
+          "default": ""
+        }
+      }
+    },
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "platform": {
+          "type": "string",
+          "enum": [
+            "discord",
+            "slack",
+            "webhook",
+            "telegram"
+          ],
+          "description": "Target platform"
+        },
+        "message": {
+          "type": "string",
+          "description": "Content of the message to send"
+        },
+        "recipient": {
+          "type": "string",
+          "description": "The Telegram username (e.g. 'zeropride'), perceived name, real name, or raw chat ID. If empty and platform is telegram, Yui will automatically look up the active talker's linked Telegram profile in her social memory/identities database."
+        },
+        "priority": {
+          "type": "string",
+          "enum": [
+            "low",
+            "normal",
+            "high"
+          ],
+          "description": "Urgency level"
+        }
+      },
+      "required": [
+        "platform",
+        "message"
+      ]
+    }
+  },
+  {
+    "id": "overlay_control",
+    "name": "Neural Overlay System",
+    "description": "Controls the broadcast overlay, toggling UI elements and visual effects.",
+    "version": "1.0.0",
+    "type": "TOOL",
+    "order": 20,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "element": {
+          "type": "string",
+          "enum": [
+            "matrix",
+            "graph",
+            "chat",
+            "all"
+          ],
+          "description": "The UI element to toggle"
+        },
+        "action": {
+          "type": "string",
+          "enum": [
+            "show",
+            "hide",
+            "toggle"
+          ],
+          "description": "The action to perform"
+        },
+        "message": {
+          "type": "string",
+          "description": "Optional status message to display on the overlay"
+        }
+      },
+      "required": [
+        "element",
+        "action"
+      ]
+    }
+  },
+  {
+    "id": "plugin-installer",
+    "name": "Neural Addon Installer",
+    "description": "Installs or updates a system plugin/addon by writing its configuration and entry point.",
+    "version": "1.0.0",
+    "type": "TOOL",
+    "order": 0,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the addon (dash-separated)"
+        },
+        "config": {
+          "type": "string",
+          "description": "TOML configuration content"
+        },
+        "code": {
+          "type": "string",
+          "description": "Main entry point code content"
+        },
+        "runtime": {
+          "type": "string",
+          "description": "Runtime environment",
+          "enum": [
+            "node",
+            "python",
+            "bash"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "config",
+        "code",
+        "runtime"
+      ]
+    }
+  },
+  {
+    "id": "python_interpreter",
+    "name": "Neural Python Core",
+    "description": "Executes Python code for data analysis and complex math.",
+    "version": "1.0.0",
+    "type": "TOOL",
+    "order": 13,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "The Python code to execute"
+        }
+      },
+      "required": [
+        "code"
+      ]
+    }
+  },
+  {
+    "id": "read_file",
+    "name": "Read File",
+    "description": "Read content from a file in user_data.",
+    "version": "1.0.0",
+    "type": "TOOL",
+    "order": 102,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "filename": {
+          "type": "string",
+          "description": "The path to the file. You MUST specify the full path starting with 'user_data/' (e.g. 'user_data/catatan_prompt_al.txt') or absolute '/app/user_data/' path to ensure precise resolution."
+        }
+      },
+      "required": [
+        "filename"
+      ]
+    }
+  },
+  {
+    "id": "search_chat_history",
+    "name": "Search Chat History",
+    "description": "Searches all past conversational chat history and message logs across all connected and paired channels (Web, Telegram, Discord, Live Stream) associated with the current user profile or account to retrieve, recall, or summarize previous discussions.",
+    "version": "1.0.0",
+    "type": "TOOL",
+    "order": 104,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Optional keyword, text phrase, or topic to search for in past messages."
+        },
+        "platform": {
+          "type": "string",
+          "description": "Optional platform filter to limit searches to. Allowed: 'web', 'telegram', 'discord', 'all'. Default is 'all'.",
+          "enum": [
+            "web",
+            "telegram",
+            "discord",
+            "all"
+          ]
+        },
+        "limit": {
+          "type": "number",
+          "description": "Maximum number of past messages to retrieve. Default is 20."
+        }
+      },
+      "required": []
+    }
+  },
+  {
+    "id": "send_file",
+    "name": "Send File Attachment",
+    "description": "Sends and delivers an existing file from Yui's sandbox workspace (user_data) back to the user via the active Telegram or Discord channel or a specified recipient.",
+    "version": "1.0.0",
+    "type": "TOOL",
+    "order": 205,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "filename": {
+          "type": "string",
+          "description": "The name of the file currently residing in Yui's local sandbox data folder (e.g. 'summary.pdf' or 'photo.jpg')."
+        },
+        "caption": {
+          "type": "string",
+          "description": "An optional text caption/message to accompany the file."
+        },
+        "recipient": {
+          "type": "string",
+          "description": "Optional Telegram username, perceived name, or raw Chat ID to send to. If left blank, Yui will automatically deliver it to the active conversational chat channel."
+        }
+      },
+      "required": [
+        "filename"
+      ]
+    }
+  },
+  {
+    "id": "shell_exec",
+    "name": "Command Line",
+    "description": "Execute shell commands on the host system.",
+    "version": "1.0.0",
+    "type": "TOOL",
+    "order": 100,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "command": {
+          "type": "string",
+          "description": "The command to execute"
+        }
+      },
+      "required": [
+        "command"
+      ]
+    }
+  },
+  {
+    "id": "tensorart.generate",
+    "name": "TensorArt Image Generator",
+    "description": "Generate high-quality visuals and anime art using TensorArt API's txt2img diffusion stages.",
+    "version": "1.0.0",
+    "type": "TOOL",
+    "order": 5,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "prompt": {
+          "type": "string",
+          "description": "Highly detailed vivid description of the scene or illustration to generate (e.g. 'anime girl under falling blossom petals, smiling')."
+        },
+        "negative_prompt": {
+          "type": "string",
+          "description": "Unwanted aspects of the illustration (e.g. 'lowres, bad hands, low quality, bad aesthetics')."
+        },
+        "width": {
+          "type": "integer",
+          "description": "Width of the generated visual in pixels (default: 512).",
+          "default": 512
+        },
+        "height": {
+          "type": "integer",
+          "description": "Height of the generated visual in pixels (default: 512).",
+          "default": 512
+        },
+        "model_id": {
+          "type": "string",
+          "description": "TensorArt SD model ID or check-point hash (default is high-quality general-purpose anime model).",
+          "default": "620130983637151123"
+        },
+        "cfg_scale": {
+          "type": "number",
+          "description": "Prompt adherence weight coefficient (default: 7).",
+          "default": 7
+        },
+        "steps": {
+          "type": "integer",
+          "description": "Inference iteration steps (default: 20).",
+          "default": 20
+        }
+      },
+      "required": [
+        "prompt"
+      ]
+    }
+  },
+  {
+    "id": "view_logs",
+    "name": "View System Logs",
+    "description": "View Yuihime's system logs, audit trails, and LLM input/output details to diagnose system states, execution errors, or API issues.",
+    "version": "1.0.0",
+    "type": "TOOL",
+    "order": 110,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "logType": {
+          "type": "string",
+          "description": "Type of logs to retrieve: 'audit' (for tool execution & structure compliance audit logs) or 'llm' (for direct direct cognitive LLM language prompts & replies).",
+          "enum": [
+            "audit",
+            "llm"
+          ]
+        },
+        "limit": {
+          "type": "number",
+          "description": "Number of recent log lines to retrieve (default is 10).",
+          "default": 10
+        },
+        "filter": {
+          "type": "string",
+          "description": "Optional search keyword or tool name to filter logs (e.g., 'tensorart', 'error')."
+        }
+      },
+      "required": [
+        "logType"
+      ]
+    }
+  },
+  {
+    "id": "view_system_logs",
+    "name": "View System Logs",
+    "description": "Retrieve system audit logs and cognitive LLM processing error logs to diagnose issues within the batin (inner) modules, API connections, or general system failures.",
+    "version": "1.0.0",
+    "type": "TOOL",
+    "order": 110,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "audit",
+            "llm",
+            "all"
+          ],
+          "description": "The category of logs to retrieve. 'audit' for system events, 'llm' for cognitive reasoning prompts, responses, or error traces, or 'all' for both unified.",
+          "default": "all"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Maximum number of recent log entries to retrieve.",
+          "default": 10
+        }
+      }
+    }
+  },
+  {
+    "id": "web_search",
+    "name": "Neural Web Search",
+    "description": "Searches the internet for real-time information.",
+    "version": "1.0.0",
+    "type": "TOOL",
+    "order": 10,
+    "configSchema": {
+      "fields": {
+        "serperApiKey": {
+          "type": "password",
+          "label": "Serper API Key",
+          "description": "Needed for real-time search extraction",
+          "default": ""
+        },
+        "searchProvider": {
+          "type": "select",
+          "label": "Search Provider",
+          "default": "google",
+          "options": [
+            {
+              "label": "Google (Serper)",
+              "value": "google"
+            },
+            {
+              "label": "Bing",
+              "value": "bing"
+            },
+            {
+              "label": "DuckDuckGo",
+              "value": "duckduckgo"
+            }
+          ]
+        },
+        "maxResults": {
+          "type": "number",
+          "label": "Max Results",
+          "default": 5
+        },
+        "usageGuidelines": {
+          "type": "textarea",
+          "label": "Search Context Prompt",
+          "description": "Special instructions for the search engine",
+          "default": "Extract concise, factual information relevant to the user query."
+        }
+      }
+    },
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Search query"
+        }
+      },
+      "required": [
+        "query"
+      ]
+    }
+  },
+  {
+    "id": "web_snipper",
+    "name": "Web Snipper & Memory Piper",
+    "description": "Scrapes visible text or specific CSS selector content from a target URL and pipes it directly to the Yuihime memory bank.",
+    "version": "1.0.0",
+    "type": "TOOL",
+    "order": 11,
+    "configSchema": {
+      "fields": {
+        "engine": {
+          "type": "select",
+          "label": "Scraping Engine",
+          "description": "Select preferred scraping engine: Jina Reader API (high-fidelity clean Markdown) or Local Scraper (Cheerio fallback)",
+          "options": [
+            {
+              "label": "Jina Reader API (r.jina.ai)",
+              "value": "jina"
+            },
+            {
+              "label": "Local Cheerio/Regex Parser",
+              "value": "local"
+            }
+          ],
+          "default": "jina"
+        },
+        "jinaApiKey": {
+          "type": "password",
+          "label": "Jina Reader API Key",
+          "description": "Optional Jina API Key (r.jina.ai) to boost rate limits for high-volume scanning",
+          "default": ""
+        },
+        "defaultUserAgent": {
+          "type": "input",
+          "label": "Default User-Agent",
+          "description": "The browser User-Agent header used for web requests",
+          "default": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        },
+        "maxContentLength": {
+          "type": "number",
+          "label": "Max Content Length",
+          "description": "Maximum characters to extract and store in a single snipping session",
+          "default": 12000
+        }
+      }
+    },
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "description": "The target website URL to scrape/snip."
+        },
+        "selector": {
+          "type": "string",
+          "description": "Optional CSS selector (e.g. 'article', 'div#main-content', 'p.intro') to grab precise sub-sections. Defaults to entire body content."
+        },
+        "saveToMemory": {
+          "type": "boolean",
+          "description": "Whether to write the scraped result into Yuihime memories database immediately. Defaults to true."
+        },
+        "context": {
+          "type": "string",
+          "description": "The memory context group to store the snipped content under. Defaults to 'web_default'."
+        },
+        "importance": {
+          "type": "number",
+          "description": "The subjective memory importance of this snip (0.0 to 1.0). Defaults to 0.8."
+        }
+      },
+      "required": [
+        "url"
+      ]
+    }
+  },
+  {
+    "id": "write_file",
+    "name": "Write File",
+    "description": "Write content to a file in user_data.",
+    "version": "1.0.0",
+    "type": "TOOL",
+    "order": 101,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "filename": {
+          "type": "string",
+          "description": "The target path to write/save the file. You MUST specify the full path starting with 'user_data/' (e.g. 'user_data/catatan_prompt_al.txt') or absolute '/app/user_data/' path to ensure precise resolution."
+        },
+        "content": {
+          "type": "string",
+          "description": "Text content to write"
+        }
+      },
+      "required": [
+        "filename",
+        "content"
+      ]
+    }
+  }
+]

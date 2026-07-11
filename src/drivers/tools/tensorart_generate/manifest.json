@@ -1,0 +1,47 @@
+{
+  "id": "tensorart.generate",
+  "name": "TensorArt Image Generator",
+  "description": "Generate high-quality visuals and anime art using TensorArt API's txt2img diffusion stages.",
+  "version": "1.0.0",
+  "type": "TOOL",
+  "order": 5,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "prompt": {
+        "type": "string",
+        "description": "Highly detailed vivid description of the scene or illustration to generate (e.g. 'anime girl under falling blossom petals, smiling')."
+      },
+      "negative_prompt": {
+        "type": "string",
+        "description": "Unwanted aspects of the illustration (e.g. 'lowres, bad hands, low quality, bad aesthetics')."
+      },
+      "width": {
+        "type": "integer",
+        "description": "Width of the generated visual in pixels (default: 512).",
+        "default": 512
+      },
+      "height": {
+        "type": "integer",
+        "description": "Height of the generated visual in pixels (default: 512).",
+        "default": 512
+      },
+      "model_id": {
+        "type": "string",
+        "description": "TensorArt SD model ID or check-point hash (default is high-quality general-purpose anime model).",
+        "default": "620130983637151123"
+      },
+      "cfg_scale": {
+        "type": "number",
+        "description": "Prompt adherence weight coefficient (default: 7).",
+        "default": 7
+      },
+      "steps": {
+        "type": "integer",
+        "description": "Inference iteration steps (default: 20).",
+        "default": 20
+      }
+    },
+    "required": ["prompt"]
+  }
+}

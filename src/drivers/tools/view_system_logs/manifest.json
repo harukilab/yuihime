@@ -1,0 +1,24 @@
+{
+  "id": "view_system_logs",
+  "name": "View System Logs",
+  "description": "Retrieve system audit logs and cognitive LLM processing error logs to diagnose issues within the batin (inner) modules, API connections, or general system failures.",
+  "version": "1.0.0",
+  "type": "TOOL",
+  "order": 110,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "type": {
+        "type": "string",
+        "enum": ["audit", "llm", "all"],
+        "description": "The category of logs to retrieve. 'audit' for system events, 'llm' for cognitive reasoning prompts, responses, or error traces, or 'all' for both unified.",
+        "default": "all"
+      },
+      "limit": {
+        "type": "integer",
+        "description": "Maximum number of recent log entries to retrieve.",
+        "default": 10
+      }
+    }
+  }
+}
