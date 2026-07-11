@@ -2,6 +2,12 @@ import { NeuralInterface } from "./NeuralInterface.js";
 import { Cortex } from "../cortex.js";
 import { eventBus } from "./event-bus.js";
 import { CognitiveScheduler } from "./CognitiveScheduler.js";
+import { PromptRegistry } from "../PromptRegistry.js";
+import { SettingsManager } from "./settings.js";
+
+const DEFAULT_PENDING_FEEDBACK = `[SYSTEM MESSAGE]: Koneksi saraf batin Yuihime dengan kognisi LLM sedang sangat padat atau terputus sementara 📡. Tapi jangan khawatir! Pesanmu ("\${inputPreview}") sudah aman dalam antrean tunggu kognisi Yui. Yui akan membalas secara otomatis setelah tautan saraf sinkron kembali! 🌸`;
+
+PromptRegistry.getInstance().register('multi-channel-queue:pending_feedback', DEFAULT_PENDING_FEEDBACK);
 
 export interface QueueItem {
   input: string;
@@ -347,9 +353,14 @@ export class MultiChannelQueue {
               VALUES (?, ?, ?, ?, ?, ?, 0, 'pending')
             `);
             stmt.run(id, item.input, item.senderName, item.contextId, item.chatType, item.timestamp);
-            
-            const feedbackText = `[SYSTEM MESSAGE]: Koneksi saraf batin Yuihime dengan kognisi LLM sedang sangat padat atau terputus sementara 📡. Tapi jangan khawatir! Pesanmu ("${item.input.substring(0, 30)}${item.input.length > 30 ? '...' : ''}") sudah aman dalam antrean tunggu kognisi Yui. Yui akan membalas secara otomatis setelah tautan saraf sinkron kembali! 🌸`;
-            item.onReply(feedbackText);
+
+            const queueCfg = SettingsManager.getInstance().get('multi-channel-queue') || {};
+            if (queueCfg.enablePendingFeedbackMessage === true) {
+              const preview = `${item.input.substring(0, 30)}${item.input.length > 30 ? '...' : ''}`;
+              const template = queueCfg.pendingFeedbackMessage || PromptRegistry.getInstance().get('multi-channel-queue:pending_feedback');
+              const feedbackText = template.replace(/\$\{inputPreview\}/g, preview);
+              item.onReply(feedbackText);
+            }
           } catch (dbErr) {
             console.error("[QUEUE_DB_ERROR] Gagal menyimpan pesan tertunda ke database:", dbErr);
             if (item.onError) item.onError(err);

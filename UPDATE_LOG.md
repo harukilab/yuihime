@@ -1,6 +1,15 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.25] - 2026-07-11
+### Multi-Channel Queue Pending Feedback: Prompt Centralization + Off Toggle
+- **src/core/kernel/MultiChannelQueue.ts**:
+  - Removed hardcoded pending-wait feedback message (violated Prompt Centralization SOP).
+  - Registered `multi-channel-queue:pending_feedback` prompt to `PromptRegistry` (uses `${inputPreview}` variable).
+  - Feedback is now sent only when `SettingsManager.get('multi-channel-queue').enablePendingFeedbackMessage === true`; default OFF (no message sent).
+- **src/modules/MultiChannelQueueModule.ts** (new):
+  - Added settings-only CortexModule exposing `enablePendingFeedbackMessage` (boolean, default false) and `pendingFeedbackMessage` (textarea) via `configSchema` for dynamic UI Settings rendering.
+
 ## [4.24] - 2026-07-11
 ### Offline Fallback Message Toggle
 - **ProviderGatewayModule.ts**:
