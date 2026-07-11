@@ -7,7 +7,8 @@ coverage/
 .env*
 !.env.example
 
-# Do not ignore settings files, config.toml, and local customization configs
+# Do not ignore settings files and config.toml
 !**/config.toml
-!.yuihime/
-!.yuihime/data/config.toml
+
+# Ignore local runtime data directory (generated/synced at runtime)
+.yuihime/
