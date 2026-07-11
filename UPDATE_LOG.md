@@ -1,6 +1,20 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.24] - 2026-07-11
+### Offline Fallback Message Toggle
+- **ProviderGatewayModule.ts**:
+  - Added `enableOfflineFallback` boolean (default true) to `configSchema`.
+  - When disabled via UI Settings, the hard offline fallback returns an empty `rawResult` (no spoken message) instead of the fallback text.
+
+## [4.23] - 2026-07-11
+### Prompt Centralization Fix: Offline Fallback Hardcoded Message
+- **ProviderGatewayModule.ts**:
+  - Removed hardcoded offline fallback message (violated Prompt Centralization SOP).
+  - Registered `provider-gateway:offline_fallback` and `provider-gateway:nano_nlp_offline` prompts to `PromptRegistry`.
+  - Added `configSchema` with `offlineFallbackMessage` (textarea) so the message is tunable from UI Settings.
+  - `run` now reads `offlineFallbackMessage` from module config (fallback to registry) and injects the nano-NLP response via `PromptRegistry.compile`.
+
 ## [4.22] - 2026-07-10
 ### Prompt Optimization & Absolute Core Removal of Chat Actions
 - **Prompt Registry Alignment**:

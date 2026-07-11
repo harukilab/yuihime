@@ -1,5 +1,13 @@
 import { CortexModule, ModuleType } from '../include/types';
 import { SystemRegistry } from '../core/registry';
+import { PromptRegistry } from '../core/PromptRegistry';
+
+const DEFAULT_OFFLINE_FALLBACK = `<thought>Cognitive online circuit disconnected (quota exceeded/offline). Mounting backup subconscious transmitter.</thought>Halo Kak! Saat ini sirkuit kognitif Yui sedang berdiet internet (server sedang sibuk/habis kuota), jadi Yui berkomunikasi lewat jalur batin luring dulu ya! 🌸 Tapi tenang aja, perhatian Yui ke Kakak selalu online kok! Ada yang bisa Yui temani luring?`;
+
+const DEFAULT_NANO_NLP_THOUGHT = `<thought>Online cognitive circuit failed. Subconscious offline path activated dynamically.</thought>\${localResponse}`;
+
+PromptRegistry.getInstance().register('provider-gateway:offline_fallback', DEFAULT_OFFLINE_FALLBACK);
+PromptRegistry.getInstance().register('provider-gateway:nano_nlp_offline', DEFAULT_NANO_NLP_THOUGHT);
 
 /**
  * Provider Gateway: Intelligent Gateway for LLM routing.
@@ -14,7 +22,23 @@ export const ProviderGatewayModule: CortexModule = {
     version: '2.0.0',
     type: ModuleType.CORTEX,
     phase: 'PHASE 3: EVALUATION',
-    order: 1
+    order: 1,
+    configSchema: {
+      fields: {
+        enableOfflineFallback: {
+          type: 'boolean',
+          label: 'Enable Offline Fallback Message',
+          default: true,
+          description: 'If disabled, Yui will not speak the offline fallback message when all providers fail.'
+        },
+        offlineFallbackMessage: {
+          type: 'textarea',
+          label: 'Offline Fallback Message',
+          default: DEFAULT_OFFLINE_FALLBACK,
+          description: 'Message spoken when all providers and local NLP fail. Keep the <thought> internal note in English; the spoken part may use the user language.'
+        }
+      }
+    }
   },
   run: async (input: string, state: any, context: any) => {
     if (context.bypassGateway) {
@@ -184,7 +208,7 @@ export const ProviderGatewayModule: CortexModule = {
           console.log('[GATEWAY] Successfully activated subconscious local Markov fallbacks.');
           return {
             ...context,
-            rawResult: `<thought>Sirkuit kognitif daring mengalami kegagalan. Jalur batin luring diaktifkan secara dinamis.</thought>${localResult.processedResponse}`,
+            rawResult: PromptRegistry.getInstance().compile('provider-gateway:nano_nlp_offline', { localResponse: localResult.processedResponse }),
             activeProvider: 'offline_nano_nlp',
             fallbackTriggered: true
           };
@@ -194,10 +218,20 @@ export const ProviderGatewayModule: CortexModule = {
       console.error('[GATEWAY] Emergency Local Nano NLP fallback failed:', nlpErr);
     }
 
-    const manualFallback = `<thought>Sistem kognitif daring terputus (quota exceeded/offline). Memasang sirkuit kognitif pemancar cadangan.</thought>Halo Kak! Saat ini sirkuit kognitif Yui sedang berdiet internet (server sedang sibuk/habis kuota), jadi Yui berkomunikasi lewat jalur batin luring dulu ya! 🌸 Tapi tenang aja, perhatian Yui ke Kakak selalu online kok! Ada yang bisa Yui temani luring?`;
+    const gatewayConfig = await SystemRegistry.getConfig('provider-gateway').catch(() => ({}));
+    if (gatewayConfig && gatewayConfig.enableOfflineFallback === false) {
+      console.log('[GATEWAY] Offline fallback message disabled by user settings.');
+      return {
+        ...context,
+        rawResult: '',
+        activeProvider: 'hard_offline_fallback',
+        fallbackTriggered: true
+      };
+    }
+    const offlineTemplate = (gatewayConfig && gatewayConfig.offlineFallbackMessage) || PromptRegistry.getInstance().get('provider-gateway:offline_fallback');
     return {
       ...context,
-      rawResult: manualFallback,
+      rawResult: offlineTemplate,
       activeProvider: 'hard_offline_fallback',
       fallbackTriggered: true
     };
