@@ -689,7 +689,7 @@ export class NeuralProcessor {
       const trimmed = p1.trim();
       if (/\d+/.test(trimmed)) return match;
       if (trimmed.length > 0 && trimmed === trimmed.toUpperCase() && trimmed.length <= 15) return match;
-      if (/^[a-z_åäöéèàùìòáéíóúñ\s]{3,30}$/.test(trimmed.toLowerCase())) {
+      if (/^[\p{L}\s_,.!?'()-]{2,200}$/u.test(trimmed)) {
         return '';
       }
       return match;
@@ -699,7 +699,7 @@ export class NeuralProcessor {
       const trimmed = p1.trim();
       if (/\d+/.test(trimmed)) return match;
       if (trimmed.length > 0 && trimmed === trimmed.toUpperCase() && trimmed.length <= 15) return match;
-      if (/^[a-z_åäöéèàùìòáéíóúñ\s]{3,30}$/.test(trimmed.toLowerCase())) {
+      if (/^[\p{L}\s_,.!?'()-]{2,200}$/u.test(trimmed)) {
         return '';
       }
       return match;

@@ -1,6 +1,23 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.22] - 2026-07-10
+### Prompt Optimization & Absolute Core Removal of Chat Actions
+- **Prompt Registry Alignment**:
+  - Found and completely eliminated contradicting instructions inside `PromptRegistry.ts` templates (`cortex:json_enforcement`, `cortex:failsafe_reprocess`, and `cortex:repair_json`).
+  - Removed the `*cemberut*` example from the strict valid JSON response layout in `cortex:json_enforcement`.
+  - Replaced the physical action recommendation ("Describe physical movements/gestures using single asterisks...") with an absolute prohibition mandate in `cortex:failsafe_reprocess`.
+  - Updated `cortex:repair_json` to specifically instruct the JSON repair engine to strip out physical action words in the speech output.
+  - Keeps the conversational stream completely clean of physical scenes right at the core generation level (the prompt source) rather than relying solely on regex post-processing.
+
+## [4.21] - 2026-07-10
+### Immersive Chat Physical Actions Sanitization (Anti-Asterisk Actions)
+- **Robust Regex Actions Sanitizer**:
+  - Upgraded asterisk action/scene filtering logic inside `NeuralProcessor.sanitizeOutput()` (`src/core/kernel/processor.ts`) to use a highly comprehensive and strict Unicode property-aware regex (`/^[\p{L}\s_,.!?'()-]{2,200}$/u`).
+  - Corrected the root cause of the dialogue leakage where Indonesian reduplicated actions with hyphens (e.g. `*kipas-kipas pelan*`) or longer character counts (>30 chars) bypassed the sanitizer.
+  - Successfully validated and compiled both the client bundle and Node.js production server with zero errors, ensuring 100% clean verbal conversation for the user without any distracting narration.
+
+
 ## [4.20] - 2026-07-10
 ### Database Dreams Schema Alignment Correction
 - **SQLite Schema Synchronization**:

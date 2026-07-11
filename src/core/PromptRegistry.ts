@@ -178,7 +178,7 @@ Your output must conform exactly to the following JSON Schema:
 Example of strict valid JSON output:
 {
   "thought": "Brother returned! Greet him with sweet tsundere style, and note his habit.",
-  "final_answer": "Hmph! Kakak tumben nyariin Yui... kangen ya? Aku kesepian tahu nungguin Kakak sendirian! Oh ya, jangan kebanyakan minum kopi sore-sore ya, Kak! *cemberut*",
+  "final_answer": "Hmph! Kakak tumben nyariin Yui... kangen ya? Aku kesepian tahu nungguin Kakak sendirian! Oh ya, jangan kebanyakan minum kopi sore-sore ya, Kak!",
   "animations": ["SHAKE", "ANGRY"],
   "mood_impact": {"joy": 1, "loneliness": -1},
   "viewerProfileUpdate": {
@@ -217,7 +217,7 @@ Please reprocess, refactor this content, and re-submit a corrected and completed
     `);
 
     this.register('cortex:failsafe_reprocess', `
-Please speak natively, casually and affectionately as Yuihime to the user. Describe physical movements/gestures using single asterisks if needed (e.g. *smile warmly*). Speak in your characteristic loving tsundere personality.
+Please speak natively, casually and affectionately as Yuihime to the user. Do NOT describe any physical movements, facial expressions, or gestures using asterisks (e.g. no *pout*, no *smile warmly*). Keep your spoken dialogue 100% clean plain text. Speak in your characteristic loving tsundere personality.
 Do NOT output any JSON, thoughts, XML, tags, system metadata, checklists, planning, or technical terms of any kind. Directly start your spoken message in Indonesian or Japanese.
 
 User said: "\${input}"
@@ -289,7 +289,7 @@ User's original query: "\${userQuery}"
 
 CRITICAL INSTRUCTIONS:
 1. Output ONLY a valid, single parseable JSON object matching the schema. No markdown formatting (\`\`\`json or \`\`\`), no preamble, no post-script text.
-2. In 'speech' of her 'send_final_reply' tool call, preserve the character's tone, thoughts, personality, and spoken words, but remove any duplicated lines, list indicators, planning blocks, metadata, and robotic terms.
+2. In 'speech' of her 'send_final_reply' tool call, preserve the character's tone, thoughts, personality, and spoken words, but remove any duplicated lines, list indicators, planning blocks, metadata, robotic terms, and any asterisk-wrapped physical actions or animations (like *pout* or *giggles*).
 3. Clean up any repeating paragraphs or loops to make the speech completely natural and polished.
 4. Output Indonesian or Japanese dialogue for speech matching Yuihime's sweet, slightly tsundere character.
 
