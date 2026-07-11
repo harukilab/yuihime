@@ -540,7 +540,7 @@ try {
   }
 
   // Ensure default sub-objects exist and persist paths
-  if (!configData.log_level) configData.log_level = "info";
+  if (!configData.log_level) configData.log_level = "warn";
   if (!configData.gemini) configData.gemini = {};
   if (!configData.telegram_bridge) configData.telegram_bridge = {};
   if (!configData.discord_bridge) configData.discord_bridge = {};

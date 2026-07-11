@@ -1,14 +1,20 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.27] - 2026-07-12
+### Tidy Boot Banner
+- **server.ts**:
+  - Replaced the plain `--- YUIHIME KERNEL INITIALIZED ---` text banner with a clean box-drawing banner (aligned two-column key/value: Port, Environment, Neural Key, Bot Status, SQLite Path), computed dynamically so dividers always align.
+
 ## [4.26] - 2026-07-12
 ### Global Log Level (Verbosity) Control
 - **src/core/kernel/settings.ts**:
   - Added global console verbosity gate driven by `log_level` config value. Levels: `debug` < `info`/`verbose` < `warn` < `error` < `silent`.
   - `applyLogLevelFilter()` wraps `console.log/info/debug/warn/error` once at boot; the threshold adapts live on `save()` without re-wrapping. Preserves the existing EPIPE protection in `server.ts`.
   - Applied in `load()` (after parsing `config.toml`) and `save()`.
+  - Default verbosity is `warn` (was `info`); set to `info`/`debug` for more detail, `error`/`silent` for quieter output.
 - **.yuihime/data/config.toml**:
-  - Added `log_level = "info"` (top-level) to reduce console noise. Set to `warn`/`error` for quieter output, or `silent` to suppress all logs.
+  - Added `log_level = "warn"` (top-level) to reduce console noise. Set to `info`/`debug` for more detail, or `error`/`silent` to suppress all logs.
 
 ## [4.25] - 2026-07-11
 ### Multi-Channel Queue Pending Feedback: Prompt Centralization + Off Toggle

@@ -723,14 +723,29 @@ app.use("/models", express.static(modelsDir));
     const settings = Kernel.getInstance().getSettings();
     const configKey = settings.getApiKey();
     const masked = configKey ? `${configKey.substring(0, 6)}...${configKey.substring(configKey.length - 4)}` : "MISSING";
-    
-    console.log(`\n--- YUIHIME KERNEL INITIALIZED ---`);
-    console.log(`Port: ${PORT}`);
-    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`Neural Key (Config): ${masked}`);
-    console.log(`Bot Status: ${settings.get('telegram_bridge')?.botToken ? 'ACTIVE' : 'DISABLED'}`);
-    console.log(`SQLite Path: ${dbPath}`);
-    console.log(`----------------------------------\n`);
+
+    const bootRows: [string, string][] = [
+      ["Port", String(PORT)],
+      ["Environment", process.env.NODE_ENV || "development"],
+      ["Neural Key", masked],
+      ["Bot Status", settings.get("telegram_bridge")?.botToken ? "ACTIVE" : "DISABLED"],
+      ["SQLite Path", dbPath],
+    ];
+
+    const labelW = Math.max(...bootRows.map((r) => r[0].length));
+    const valueW = Math.max(...bootRows.map((r) => r[1].length));
+    const innerW = labelW + valueW + 4;
+    const h = (n: number) => "─".repeat(n);
+    const title = "YUIHIME KERNEL ONLINE";
+    const titleInner = title.padStart(Math.floor((innerW - 2 + title.length) / 2)).padEnd(innerW - 2);
+
+    console.log(`\n╭${h(innerW)}╮`);
+    console.log(`│ ${titleInner} │`);
+    console.log(`├${h(labelW + 2)}┬${h(valueW + 2)}┤`);
+    for (const [label, value] of bootRows) {
+      console.log(`│ ${label.padEnd(labelW)} │ ${value.padEnd(valueW)} │`);
+    }
+    console.log(`╰${h(labelW + 2)}┴${h(valueW + 2)}╯\n`);
   });
 
   // --- WebSocket Gateway Initialization ---

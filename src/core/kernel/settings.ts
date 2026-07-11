@@ -31,8 +31,8 @@ let currentLogLevelThreshold = LOG_LEVELS.info;
  */
 function applyLogLevelFilter(levelRaw: string | undefined): void {
   if (typeof window !== 'undefined') return;
-  const normalized = String(levelRaw ?? 'info').toLowerCase().trim();
-  currentLogLevelThreshold = LOG_LEVELS[normalized] ?? LOG_LEVELS.info;
+  const normalized = String(levelRaw ?? 'warn').toLowerCase().trim();
+  currentLogLevelThreshold = LOG_LEVELS[normalized] ?? LOG_LEVELS.warn;
 
   if (appliedLogLevel) return;
   appliedLogLevel = true;
