@@ -1,6 +1,28 @@
 import { SettingsManager } from '../settings.js';
 import { AIConfig } from './aiTypes.js';
 
+function summarizeAiError(error: any): string {
+  const raw = error?.message || String(error);
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed?.error) {
+      const e = parsed.error;
+      const details = Array.isArray(e.details) ? e.details : [];
+      const quota = details.find((d: any) => d?.quotaMetric)?.quotaMetric || '';
+      const retry = details.find((d: any) => d?.retryDelay)?.retryDelay || '';
+      const parts = [
+        `HTTP ${e.code || ''}`.trim(),
+        e.status,
+        e.message?.split('\n')[0],
+        quota && `quota:${quota}`,
+        retry && `retry:${retry}`
+      ].filter(Boolean);
+      return parts.join(' | ');
+    }
+  } catch {}
+  return raw.split('\n')[0].slice(0, 240);
+}
+
 export async function generateContent(
   prompt: string,
   config: AIConfig & { apiKey?: string; onChunk?: (chunk: string) => void } = {}
@@ -428,7 +450,7 @@ export async function generateContent(
         } catch (error: any) {
           lastError = error;
           const errorBody = error.message || String(error);
-          console.error(`[SERVER_AI] Sirkuit ${attempt.label} gagal pada Percobaan #${retryCount + 1}:`, errorBody);
+          console.error(`[SERVER_AI] Sirkuit ${attempt.label} gagal pada Percobaan #${retryCount + 1}:`, summarizeAiError(error));
           
           const isQuotaOrRateLimit = errorBody.includes('429') || 
                                      errorBody.toLowerCase().includes('quota') || 

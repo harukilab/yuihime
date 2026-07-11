@@ -1,5 +1,51 @@
 import * as toml from 'smol-toml';
 
+// --- Global log level filtering ---
+// Levels (ascending): debug(0) < info(1) < warn(2) < error(3) < silent(4)
+const LOG_LEVELS: Record<string, number> = {
+  debug: 0,
+  verbose: 1,
+  info: 1,
+  warn: 2,
+  warning: 2,
+  error: 3,
+  silent: 4,
+  none: 4
+};
+
+const METHOD_LEVEL: Record<string, number> = {
+  debug: 0,
+  log: 1,
+  info: 1,
+  warn: 2,
+  error: 3
+};
+
+let appliedLogLevel = false;
+let currentLogLevelThreshold = LOG_LEVELS.info;
+
+/**
+ * Installs a global console verbosity gate driven by the `log_level` config value.
+ * Messages whose severity is below the configured threshold are suppressed.
+ * Safe to call multiple times; the threshold adapts live without re-wrapping.
+ */
+function applyLogLevelFilter(levelRaw: string | undefined): void {
+  if (typeof window !== 'undefined') return;
+  const normalized = String(levelRaw ?? 'info').toLowerCase().trim();
+  currentLogLevelThreshold = LOG_LEVELS[normalized] ?? LOG_LEVELS.info;
+
+  if (appliedLogLevel) return;
+  appliedLogLevel = true;
+
+  for (const method of Object.keys(METHOD_LEVEL)) {
+    const original = (console as any)[method].bind(console);
+    (console as any)[method] = (...args: any[]) => {
+      if ((METHOD_LEVEL[method] ?? 1) < currentLogLevelThreshold) return;
+      original(...args);
+    };
+  }
+}
+
 interface AppSettings {
   gemini?: {
     apiKey?: string;
@@ -169,6 +215,7 @@ export class SettingsManager {
       const content = await this.fsModule.readFile(p, 'utf-8');
       try {
         this.settings = toml.parse(content) as AppSettings;
+        applyLogLevelFilter(this.settings.log_level ?? this.settings.logLevel);
       } catch (parseError) {
         console.error('[KERNEL] config.toml is corrupted. Using empty fallback.', parseError);
         this.settings = {};
@@ -184,6 +231,7 @@ export class SettingsManager {
 
   async save(newSettings: AppSettings): Promise<void> {
     this.settings = { ...this.settings, ...newSettings };
+    applyLogLevelFilter(this.settings.log_level ?? this.settings.logLevel);
     if (typeof window !== 'undefined') {
       return;
     }

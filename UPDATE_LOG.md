@@ -1,6 +1,15 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.26] - 2026-07-12
+### Global Log Level (Verbosity) Control
+- **src/core/kernel/settings.ts**:
+  - Added global console verbosity gate driven by `log_level` config value. Levels: `debug` < `info`/`verbose` < `warn` < `error` < `silent`.
+  - `applyLogLevelFilter()` wraps `console.log/info/debug/warn/error` once at boot; the threshold adapts live on `save()` without re-wrapping. Preserves the existing EPIPE protection in `server.ts`.
+  - Applied in `load()` (after parsing `config.toml`) and `save()`.
+- **.yuihime/data/config.toml**:
+  - Added `log_level = "info"` (top-level) to reduce console noise. Set to `warn`/`error` for quieter output, or `silent` to suppress all logs.
+
 ## [4.25] - 2026-07-11
 ### Multi-Channel Queue Pending Feedback: Prompt Centralization + Off Toggle
 - **src/core/kernel/MultiChannelQueue.ts**:
