@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ModuleType } from '../include/types';
+import { ModuleType } from '../../include/types';
 
 export const useModularSettingsState = () => {
   const [settings, setSettings] = useState<any>({});

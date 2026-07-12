@@ -1,4 +1,5 @@
 import { ProviderModule, ModuleType } from '../../include/types';
+import { buildChatMessages, normalizeToolCallsToOpenAI, normalizeToolsForProvider } from '../../core/openaiTools';
 
 export const OpenAIProvider: ProviderModule = {
   metadata: {
@@ -160,11 +161,16 @@ export const OpenAIProvider: ProviderModule = {
         }
       }
 
-      const messages = [];
-      if (systemInstruction) {
-        messages.push({ role: 'system', content: systemInstruction });
-      }
-      messages.push({ role: 'user', content: promptText });
+      const providerTools = Array.isArray(context.tools) && context.tools.length > 0
+        ? context.tools
+        : (Array.isArray(context.toolMessages) && context.toolMessages.length > 0 ? [] : undefined);
+
+      const messages = buildChatMessages('openai', {
+        system: systemInstruction,
+        user: promptText,
+        assistantToolCalls: context.assistantToolCalls,
+        toolMessages: context.toolMessages
+      });
 
       const payload: any = {
         model: overriddenModel,
@@ -179,6 +185,14 @@ export const OpenAIProvider: ProviderModule = {
 
       if (isJsonFormat) {
         payload.response_format = { type: 'json_object' };
+      }
+
+      // Native OpenAI function calling: expose registered tools to the model.
+      // `providerTools` is always supplied when a tool result turn is active so the
+      // endpoint accepts the incoming `role: "tool"` messages.
+      if (providerTools !== undefined) {
+        payload.tools = normalizeToolsForProvider(context.tools || [], 'openai') || context.tools;
+        payload.tool_choice = 'auto';
       }
 
       const endpointUrl = `${baseUrl}/chat/completions`;
@@ -201,7 +215,14 @@ export const OpenAIProvider: ProviderModule = {
       }
 
       const data = await response.json();
-      const answer = data.choices?.[0]?.message?.content || "";
+      const message = data.choices?.[0]?.message || {};
+      const answer = message.content || "";
+
+      // Native tool calls -> return canonical OpenAI tool_calls shape for cortex to normalize.
+      if (Array.isArray(message.tool_calls) && message.tool_calls.length > 0) {
+        return JSON.stringify({ tool_calls: normalizeToolCallsToOpenAI(message, 'openai') });
+      }
+
       return answer;
     } catch (e: any) {
       console.error("[OPENAI_PROVIDER] Failed to generate completion:", e.message);

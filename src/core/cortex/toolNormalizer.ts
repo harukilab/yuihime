@@ -17,6 +17,9 @@ export function normalizeToolCall(tc: any): any {
   if (typeof args !== 'object' || args === null) {
     args = {};
   }
+  // Keep the canonical OpenAI-native `id` (generate one when missing) so the
+  // cortex can propagate `role: "tool"` result messages with a stable `tool_call_id`.
+  const id = tc.id || tc.tool_call_id || `call_${Math.random().toString(36).slice(2, 10)}`;
 
   // Clean / normalize tool names to actual registered IDs
   const toolAliases: { [key: string]: string } = {
@@ -90,8 +93,18 @@ export function normalizeToolCall(tc: any): any {
     if (rawPath) args.filename = rawPath;
   }
 
+  // Return an OpenAI-native tool call enriched with backward-compatible aliases
+  // (`tool`, `name`, `args`) so downstream modules (NeuralLoop, puterWrapper, executor)
+  // keep working while the canonical contract is preserved.
   return {
+    id,
+    type: 'function',
     tool: name,
-    args: args
+    name,
+    args,
+    function: {
+      name,
+      arguments: args
+    }
   };
 }

@@ -26,10 +26,27 @@ import { eventBus } from '../kernel/event-bus';
 import { stateMachine } from '../kernel/state-machine';
 import { CognitiveScheduler } from '../kernel/CognitiveScheduler';
 import { normalizeToolCall } from './toolNormalizer';
+import { buildToolResultMessages } from '../openaiTools';
 import { StreamExtractor } from './streamExtractors';
 import { wrapForPuterConsciousness } from './puterWrapper';
 import { repairJsonFormatWithLLM } from './jsonRepairer';
 import { FastTrackRunner } from './fastTrackRunner';
+
+/**
+ * Build a canonical OpenAI-native tool call object enriched with backward
+ * compatible aliases (`tool`, `name`, `args`) for downstream modules.
+ */
+function makeToolCall(name: string, args: any, id?: string): any {
+  const callId = id || `call_${Math.random().toString(36).slice(2, 10)}`;
+  return {
+    id: callId,
+    type: 'function',
+    tool: name,
+    name,
+    args,
+    function: { name, arguments: args }
+  };
+}
 
 export async function executeCortexThink(
   cortexInstance: any,
@@ -730,7 +747,7 @@ Ensure your "thought" field is extremely short (under 1 sentence, or empty). Ani
         }
       }
       if (rawToolsCall.length === 0 && parsedPayload.tool) {
-        rawToolsCall = [parsedPayload];
+        rawToolsCall = [normalizeToolCall(parsedPayload)];
         logs.push(`[CORTEX_LOOP] Detected single tool call structure (tool: ${parsedPayload.tool}). Wrapped into tool_calls list.`);
       }
 
@@ -749,14 +766,11 @@ Ensure your "thought" field is extremely short (under 1 sentence, or empty). Ani
           const hasBlockingTool = rawToolsCall.some((tc: any) => blockingTools.includes(tc.tool));
           if (!hasBlockingTool || speechText.length > 15) {
             logs.push("[CORTEX_LOOP] Speech provided alongside other tools in Turn 1. Injecting send_final_reply in parallel to avoid 2-turn latency.");
-            rawToolsCall.push({
-              tool: 'send_final_reply',
-              args: {
-                speech: speechText,
-                animations: parsedPayload.animations || ["TALK", "SMILE"],
-                mood_impact: parsedPayload.mood_impact || {}
-              }
-            });
+            rawToolsCall.push(makeToolCall('send_final_reply', {
+              speech: speechText,
+              animations: parsedPayload.animations || ["TALK", "SMILE"],
+              mood_impact: parsedPayload.mood_impact || {}
+            }));
           }
         }
       }
@@ -765,14 +779,11 @@ Ensure your "thought" field is extremely short (under 1 sentence, or empty). Ani
         logs.push("[CORTEX_LOOP] No tool call detected, compiling fallback to send_final_reply.");
         // Guna mematuhi instruksi kognisi: jika final_answer kosong (speechText kosong), jangan lakukan fail safe ke thought atau placeholder.
         const fallbackSpeech = speechText;
-        rawToolsCall = [{
-          tool: 'send_final_reply',
-          args: {
-            speech: fallbackSpeech,
-            animations: parsedPayload.animations || ["TALK", "SMILE"],
-            mood_impact: parsedPayload.mood_impact || {}
-          }
-        }];
+        rawToolsCall = [makeToolCall('send_final_reply', {
+          speech: fallbackSpeech,
+          animations: parsedPayload.animations || ["TALK", "SMILE"],
+          mood_impact: parsedPayload.mood_impact || {}
+        })];
       }
 
       if (rawToolsCall.length > 0) {
@@ -1045,6 +1056,44 @@ Ensure your "thought" field is extremely short (under 1 sentence, or empty). Ani
       stateMachine.transitionTo('IDLE');
 
       const realTools = toolsToCall.filter((tc: any) => tc.tool !== 'send_final_reply' && tc.tool !== 'send_status_update');
+
+      // Build OpenAI-native `role: "tool"` result messages and the paired assistant
+      // `tool_calls` so providers with native function calling receive tool feedback
+      // in their own channel. This complements (and does not replace) the memory
+      // integration below which serves episodic memory and dataset synthesis.
+      try {
+        const newAssistantToolCalls: any[] = [];
+        const newToolMessages: any[] = [];
+        for (let i = 0; i < toolsToCall.length; i++) {
+          const tc = toolsToCall[i];
+          const res = toolResults[i];
+          const callId = tc.id || `call_${i}_${Date.now().toString(36)}`;
+          const callName = tc.function?.name || tc.name || tc.tool;
+          const callArgs = tc.function?.arguments || tc.args || {};
+          newAssistantToolCalls.push({
+            id: callId,
+            type: 'function',
+            function: { name: callName, arguments: callArgs }
+          });
+          const content = res
+            ? (res.success
+                ? (typeof res.observation === 'object' ? JSON.stringify(res.observation) : String(res.observation))
+                : (res.error || 'Tool execution failed'))
+            : 'No result';
+          newToolMessages.push({ tool_call_id: callId, name: callName, content });
+        }
+        loopContext.assistantToolCalls = [
+          ...(Array.isArray(loopContext.assistantToolCalls) ? loopContext.assistantToolCalls : []),
+          ...newAssistantToolCalls
+        ];
+        loopContext.toolMessages = [
+          ...(Array.isArray(loopContext.toolMessages) ? loopContext.toolMessages : []),
+          ...buildToolResultMessages(newToolMessages, activeProviderId)
+        ];
+        logs.push(`[CORTEX] Built ${newToolMessages.length} native tool result message(s) for provider '${activeProviderId}'.`);
+      } catch (tmErr: any) {
+        logs.push(`[CORTEX] Warning: Failed to build native tool result messages: ${tmErr.message || tmErr}`);
+      }
 
       toolExecutionHistory.push({
         iteration,

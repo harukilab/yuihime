@@ -70,7 +70,7 @@ export const ProviderGatewayModule: CortexModule = {
           const router = new DecisionRouter();
           await router.loadFromStorage();
           
-          const resultContainsTools = resultText.includes('<tool_calls>') || resultText.includes('</tool_calls>');
+           const resultContainsTools = resultText.includes('<tool_calls>') || resultText.includes('</tool_calls>') || /"tool_calls"\s*:\s*\[/.test(resultText);
           const isSemantic = /^(siapa|bagaimana|mengapa|kenapa|gimana|apa|dimana|di mana|hitung|periksa|baca|tulis|remind|ingatkan|cari)/i.test(promptText.trim().toLowerCase());
           
           if (isSemantic || resultContainsTools) {
@@ -124,10 +124,12 @@ export const ProviderGatewayModule: CortexModule = {
       const actualModelOfProvider = context.model || providerConfig.model || (primaryProvider.metadata?.models ? primaryProvider.metadata.models[0] : 'unknown');
       try {
         console.log(`[GATEWAY] Routing primary request to: ${selectedProviderId} (Attempting...)`);
-        
+
+        const { buildOpenAITools } = await import('../core/openaiTools.js');
         const result = await primaryProvider.generate(input, {
           ...context,
-          config: providerConfig
+          config: providerConfig,
+          tools: buildOpenAITools()
         });
 
         console.log(`[GATEWAY] Provider ${selectedProviderId} response successfully captured.`);
@@ -174,9 +176,11 @@ export const ProviderGatewayModule: CortexModule = {
               apiKey: item.apiKey || settings[providerId]?.apiKey
             };
 
+            const { buildOpenAITools } = await import('../core/openaiTools.js');
             const result = await fallbackProvider.generate(input, {
               ...context,
-              config: providerConfig
+              config: providerConfig,
+              tools: buildOpenAITools()
             });
 
             console.log(`[GATEWAY_FALLBACK] Fallback Step ${providerId} succeeded!`);

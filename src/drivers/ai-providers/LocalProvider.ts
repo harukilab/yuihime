@@ -1,15 +1,17 @@
 import { ProviderModule, ModuleType } from '../../include/types';
+import { buildChatMessages, normalizeToolCallsToOpenAI, normalizeToolsForProvider } from '../../core/openaiTools';
 
 /**
- * LocalProvider: Mock for local inference or custom local gateway.
- * Can be extended to connect to Ollama or similar local APIs.
+ * LocalProvider: Connects to a locally hosted LLM (Ollama / LM Studio / etc.).
+ * Uses the chat-completions style endpoint so native function calling (`tools`)
+ * is supported, mirroring the OpenAI-compatible shape used across Yuihime.
  */
 export const LocalProvider: ProviderModule = {
   metadata: {
     id: 'local',
     name: 'Local Engine (Ollama/Custom)',
     description: 'Connection for locally hosted LLMs.',
-    version: '1.0.0',
+    version: '1.1.0',
     type: ModuleType.PROVIDER,
     order: 3,
     models: ['llama3', 'mistral', 'phi3'],
@@ -32,16 +34,38 @@ export const LocalProvider: ProviderModule = {
     const baseUrl = config.baseUrl || 'http://localhost:11434/api';
     const model = config.model || LocalProvider.metadata.models[0];
 
+    const blueprint = context.payloadBlueprint || config.payloadBlueprint;
+    let systemInstruction = context.assembledSystemPrompt || context.systemPrompt || '';
+    let promptText = prompt;
+    if (blueprint) {
+      const sysMsg = blueprint.messages.find((m: any) => m.role === 'system');
+      if (sysMsg) systemInstruction = sysMsg.content;
+      const usrMsg = blueprint.messages.find((m: any) => m.role === 'user');
+      if (usrMsg) promptText = usrMsg.content;
+    }
+
     try {
-      const response = await fetch(`${baseUrl}/generate`, {
+      const messages = buildChatMessages('local', {
+        system: systemInstruction,
+        user: promptText,
+        assistantToolCalls: context.assistantToolCalls,
+        toolMessages: context.toolMessages
+      });
+
+      const payload: any = { model, messages, stream: false };
+
+      const localTools = normalizeToolsForProvider(
+        (Array.isArray(context.tools) && context.tools.length > 0) ? context.tools : [],
+        'local'
+      );
+      if (localTools) {
+        payload.tools = localTools;
+      }
+
+      const response = await fetch(`${baseUrl}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: model,
-          prompt: prompt,
-          system: context.assembledSystemPrompt,
-          stream: false
-        })
+        body: JSON.stringify(payload)
       });
 
       if (!response.ok) {
@@ -49,7 +73,12 @@ export const LocalProvider: ProviderModule = {
       }
 
       const data = await response.json();
-      return data.response || "";
+      // Ollama returns { message: { content, tool_calls } }
+      const message = data.message || {};
+      if (Array.isArray(message.tool_calls) && message.tool_calls.length > 0) {
+        return JSON.stringify({ tool_calls: normalizeToolCallsToOpenAI(message, 'local') });
+      }
+      return message.content || data.response || "";
     } catch (e: any) {
       throw new Error(`Local Provider failed: ${e.message}. Is your local server running?`);
     }

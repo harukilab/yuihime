@@ -1,4 +1,5 @@
 import { ProviderModule, ModuleType } from '../../include/types';
+import { buildChatMessages, normalizeToolCallsToOpenAI, normalizeToolsForProvider } from '../../core/openaiTools';
 
 export const OpenRouter: ProviderModule = {
   metadata: {
@@ -86,12 +87,20 @@ export const OpenRouter: ProviderModule = {
       }
     }
 
+    const providerTools = Array.isArray(context.tools) && context.tools.length > 0
+      ? context.tools
+      : (Array.isArray(context.toolMessages) && context.toolMessages.length > 0 ? [] : undefined);
+
+    const messages = buildChatMessages('openrouter', {
+      system: systemInstruction,
+      user: promptText,
+      assistantToolCalls: context.assistantToolCalls,
+      toolMessages: context.toolMessages
+    });
+
     const payloadBody: any = {
       model: overriddenModel,
-      messages: [
-        { role: 'system', content: systemInstruction },
-        { role: 'user', content: promptText }
-      ]
+      messages: messages
     };
 
     const finalMaxTokens = blueprint?.max_tokens ?? config.maxOutputTokens ?? config.maxTokens;
@@ -101,6 +110,12 @@ export const OpenRouter: ProviderModule = {
 
     if (isJsonFormat) {
       payloadBody.response_format = { type: 'json_object' };
+    }
+
+    // Native OpenAI function calling: expose registered tools to the model
+    if (providerTools !== undefined) {
+      payloadBody.tools = normalizeToolsForProvider(context.tools || [], 'openrouter') || context.tools;
+      payloadBody.tool_choice = 'auto';
     }
 
     const response = await fetch('/api/ai/proxy', {
@@ -125,6 +140,10 @@ export const OpenRouter: ProviderModule = {
     }
 
     const data = await response.json();
-    return data.choices[0]?.message?.content || "";
+    const message = data.choices?.[0]?.message || {};
+    if (Array.isArray(message.tool_calls) && message.tool_calls.length > 0) {
+      return JSON.stringify({ tool_calls: normalizeToolCallsToOpenAI(message, 'openrouter') });
+    }
+    return message.content || "";
   }
 };

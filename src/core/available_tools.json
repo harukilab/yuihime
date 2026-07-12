@@ -55,6 +55,26 @@
     }
   },
   {
+    "id": "calculator",
+    "name": "Calculator",
+    "description": "Safely evaluate a mathematical expression (e.g., '2 * (3 + 4)', 'sqrt(144)', '12% of 250'). Use for arithmetic, percentages, rounding, or any numerical computation the user requests.",
+    "version": "1.0.0",
+    "type": "TOOL",
+    "order": 96,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "expression": {
+          "type": "string",
+          "description": "The math expression to evaluate. Supports + - * / % ^ and parentheses. Functions: sqrt, abs, pow, log, ln, sin, cos, tan, floor, ceil, round, min, max. Constants: pi, e."
+        }
+      },
+      "required": [
+        "expression"
+      ]
+    }
+  },
+  {
     "id": "code_interpreter",
     "name": "Neural Code Execution",
     "description": "Executes JavaScript or Python code snippets to solve problems.",
@@ -327,6 +347,52 @@
       "required": [
         "action"
       ]
+    }
+  },
+  {
+    "id": "file_search",
+    "name": "Memory & Knowledge Search",
+    "description": "Search Yuihime's persistent memory and knowledge base (conversation history, facts, notes, and learned information) using a natural-language query. Use this to retrieve specific past information, facts the user shared, or recalled context before answering.",
+    "version": "1.0.0",
+    "type": "TOOL",
+    "order": 97,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "The search query in natural language (e.g., 'what did we discuss about the API key', 'user favorite color')."
+        },
+        "limit": {
+          "type": "number",
+          "description": "Maximum number of results to return (default 5, max 20)."
+        },
+        "type": {
+          "type": "string",
+          "description": "Optional filter by memory type (e.g., 'knowledge', 'chat', 'note'). Omit to search everything."
+        }
+      },
+      "required": [
+        "query"
+      ]
+    }
+  },
+  {
+    "id": "get_current_time",
+    "name": "Current Time",
+    "description": "Get the current date and time, with optional IANA timezone support. Use this when the user asks about the current time, today's date, the day of the week, or needs time context for scheduling.",
+    "version": "1.0.0",
+    "type": "TOOL",
+    "order": 95,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "timezone": {
+          "type": "string",
+          "description": "Optional IANA timezone (e.g., 'Asia/Jakarta', 'UTC', 'America/New_York'). Defaults to the server's local timezone when omitted."
+        }
+      },
+      "required": []
     }
   },
   {
@@ -1059,68 +1125,6 @@
         "filename",
         "content"
       ]
-    }
-  },
-  {
-    "id": "get_current_time",
-    "name": "Current Time",
-    "description": "Get the current date and time, with optional IANA timezone support. Use this when the user asks about the current time, today's date, the day of the week, or needs time context for scheduling.",
-    "version": "1.0.0",
-    "type": "TOOL",
-    "order": 95,
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "timezone": {
-          "type": "string",
-          "description": "Optional IANA timezone (e.g., 'Asia/Jakarta', 'UTC', 'America/New_York'). Defaults to the server's local timezone when omitted."
-        }
-      },
-      "required": []
-    }
-  },
-  {
-    "id": "calculator",
-    "name": "Calculator",
-    "description": "Safely evaluate a mathematical expression (e.g., '2 * (3 + 4)', 'sqrt(144)', '12% of 250'). Use for arithmetic, percentages, rounding, or any numerical computation the user requests.",
-    "version": "1.0.0",
-    "type": "TOOL",
-    "order": 96,
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "expression": {
-          "type": "string",
-          "description": "The math expression to evaluate. Supports + - * / % ^ and parentheses. Functions: sqrt, abs, pow, log, ln, sin, cos, tan, floor, ceil, round, min, max. Constants: pi, e."
-        }
-      },
-      "required": ["expression"]
-    }
-  },
-  {
-    "id": "file_search",
-    "name": "Memory & Knowledge Search",
-    "description": "Search Yuihime's persistent memory and knowledge base (conversation history, facts, notes, and learned information) using a natural-language query. Use this to retrieve specific past information, facts the user shared, or recalled context before answering.",
-    "version": "1.0.0",
-    "type": "TOOL",
-    "order": 97,
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "query": {
-          "type": "string",
-          "description": "The search query in natural language (e.g., 'what did we discuss about the API key', 'user favorite color')."
-        },
-        "limit": {
-          "type": "number",
-          "description": "Maximum number of results to return (default 5, max 20)."
-        },
-        "type": {
-          "type": "string",
-          "description": "Optional filter by memory type (e.g., 'knowledge', 'chat', 'note'). Omit to search everything."
-        }
-      },
-      "required": ["query"]
     }
   }
 ]

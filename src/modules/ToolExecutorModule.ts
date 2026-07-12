@@ -50,19 +50,20 @@ export const ToolExecutorModule: CortexModule = {
     
     const results = [];
     for (const call of toolsToCall) {
-      const toolName = call.tool || call.name;
-      const toolArgs = call.args || call.arguments || {};
+      const toolName = call.tool || call.name || call.function?.name;
+      const toolArgs = call.args || call.arguments || call.function?.arguments || {};
+      const toolCallId = call.id || call.tool_call_id;
       
       const tool = SystemRegistry.getTool(toolName);
       if (tool) {
         try {
           const result = await tool.execute(toolArgs, context);
-          results.push({ name: toolName, success: true, result });
+          results.push({ name: toolName, tool_call_id: toolCallId, success: true, result });
         } catch (e: any) {
-          results.push({ name: toolName, success: false, error: e.message });
+          results.push({ name: toolName, tool_call_id: toolCallId, success: false, error: e.message });
         }
       } else {
-        results.push({ name: toolName, success: false, error: 'Tool not found' });
+        results.push({ name: toolName, tool_call_id: toolCallId, success: false, error: 'Tool not found' });
       }
     }
 

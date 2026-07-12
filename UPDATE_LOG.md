@@ -1,6 +1,17 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.42] - 2026-07-12
+### Refactor: Standardize tool layer to OpenAI-native contract (provider-agnostic adapter)
+- `src/core/openaiTools.ts`: removed `nativeToolCallsToXml`; added `normalizeToolCallsToOpenAI`, `normalizeToolsForProvider`, `buildToolResultMessages`, `buildChatMessages` as the single adapter layer for all provider↔OpenAI shape conversions. `buildOpenAITools` kept.
+- Providers OpenAI/Custom/OpenRouter: now return canonical OpenAI `tool_calls` JSON (not XML) and inject prior `role:"tool"` results + assistant `tool_calls` via `context.toolMessages`/`context.assistantToolCalls`.
+- `AnthropicProvider.ts`: added `tools` param (`input_schema` shape) + `tool_use` extraction + `tool_result` block injection on tool-result turns.
+- `LocalProvider.ts`: upgraded from `/generate` to chat-completions (`/chat`) with `tools` support (Ollama-compatible).
+- `ProviderGatewayModule.ts`: forwards `toolMessages`/`assistantToolCalls`; self-learning tool detection now also matches JSON `"tool_calls":[`.
+- `cortexThinkEngine.ts`: `normalizeToolCall` enriched to OpenAI-native shape (keeps `id`/`function` + backward-compatible `tool`/`name`/`args`); after each tool execution cortex builds & accumulates `role:"tool"` result messages propagated to the next LLM turn. Memory integration preserved.
+- `ToolExecutorModule.ts`: reads `call.id`/`call.function` and returns `tool_call_id`.
+- Fixed pre-existing broken import in `src/ui/modular-settings/useModularSettingsState.ts` (`../include/types` → `../../include/types`).
+
 ## [4.41] - 2026-07-12
 ### Add: file_search (RAG/retrieval) standard-agent tool + trim UPDATE_LOG
 - Added `file_search` tool (src/drivers/tools/file_search) — the standard-agent "file_search"/retrieval equivalent: hybrid keyword+tag search over Yuihime's persistent memory knowledge base, fused with importance & recency decay.

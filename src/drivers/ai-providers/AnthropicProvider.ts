@@ -1,4 +1,5 @@
 import { ProviderModule, ModuleType } from '../../include/types';
+import { buildChatMessages, normalizeToolCallsToOpenAI, normalizeToolsForProvider } from '../../core/openaiTools';
 
 export const AnthropicProvider: ProviderModule = {
   metadata: {
@@ -66,6 +67,28 @@ export const AnthropicProvider: ProviderModule = {
       }
     }
 
+    const messages = buildChatMessages('anthropic', {
+      user: promptText,
+      assistantToolCalls: context.assistantToolCalls,
+      toolMessages: context.toolMessages
+    });
+
+    const providerTools = normalizeToolsForProvider(
+      (Array.isArray(context.tools) && context.tools.length > 0) ? context.tools : [],
+      'anthropic'
+    );
+
+    const requestBody: any = {
+      model: overriddenModel,
+      max_tokens: maxTokensOut,
+      system: systemInstruction,
+      messages
+    };
+
+    if (providerTools) {
+      requestBody.tools = providerTools;
+    }
+
     const response = await fetch('/api/ai/proxy', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -77,14 +100,7 @@ export const AnthropicProvider: ProviderModule = {
           'x-api-key': apiKey || 'ENV_ANTHROPIC_KEY',
           'anthropic-version': '2023-06-01'
         },
-        body: {
-          model: overriddenModel,
-          max_tokens: maxTokensOut,
-          system: systemInstruction,
-          messages: [
-            { role: 'user', content: promptText }
-          ]
-        }
+        body: requestBody
       })
     });
 
@@ -94,6 +110,15 @@ export const AnthropicProvider: ProviderModule = {
     }
 
     const data = await response.json();
-    return data.content[0].text;
+    const content: any[] = Array.isArray(data.content) ? data.content : [];
+    const toolUseBlocks = content.filter((b: any) => b && b.type === 'tool_use');
+
+    // Native tool use -> return canonical OpenAI tool_calls shape for cortex to normalize.
+    if (toolUseBlocks.length > 0) {
+      return JSON.stringify({ tool_calls: normalizeToolCallsToOpenAI({ content }, 'anthropic') });
+    }
+
+    const textBlock = content.find((b: any) => b && b.type === 'text');
+    return textBlock?.text || data.content?.[0]?.text || '';
   }
 };

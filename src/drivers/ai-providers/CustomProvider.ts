@@ -1,4 +1,5 @@
 import { ProviderModule, ModuleType } from '../../include/types';
+import { buildChatMessages, normalizeToolCallsToOpenAI, normalizeToolsForProvider } from '../../core/openaiTools';
 
 export const CustomProvider: ProviderModule = {
   metadata: {
@@ -158,11 +159,16 @@ export const CustomProvider: ProviderModule = {
         }
       }
 
-      const messages = [];
-      if (systemInstruction) {
-        messages.push({ role: 'system', content: systemInstruction });
-      }
-      messages.push({ role: 'user', content: promptText });
+      const providerTools = Array.isArray(context.tools) && context.tools.length > 0
+        ? context.tools
+        : (Array.isArray(context.toolMessages) && context.toolMessages.length > 0 ? [] : undefined);
+
+      const messages = buildChatMessages('custom', {
+        system: systemInstruction,
+        user: promptText,
+        assistantToolCalls: context.assistantToolCalls,
+        toolMessages: context.toolMessages
+      });
 
       const payload: any = {
         model: overriddenModel,
@@ -172,6 +178,12 @@ export const CustomProvider: ProviderModule = {
 
       if (isJsonFormat) {
         payload.response_format = { type: 'json_object' };
+      }
+
+      // Native OpenAI function calling: expose registered tools to the model.
+      if (providerTools !== undefined) {
+        payload.tools = normalizeToolsForProvider(context.tools || [], 'custom') || context.tools;
+        payload.tool_choice = 'auto';
       }
 
       const endpointUrl = `${baseUrl}/chat/completions`;
@@ -193,7 +205,11 @@ export const CustomProvider: ProviderModule = {
       }
 
       const data = await response.json();
-      const answer = data.choices?.[0]?.message?.content || "";
+      const message = data.choices?.[0]?.message || {};
+      if (Array.isArray(message.tool_calls) && message.tool_calls.length > 0) {
+        return JSON.stringify({ tool_calls: normalizeToolCallsToOpenAI(message, 'custom') });
+      }
+      const answer = message.content || "";
       return answer;
     } catch (e: any) {
       console.error("[CUSTOM_PROVIDER] Failed to execute chat completion:", e.message);
