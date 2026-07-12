@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { SettingsManager } from "./src/core/kernel/settings.js";
 
 // --- Global EPIPE Protection for cron/background tasks ---
 const originalConsoleFns = {
@@ -25,6 +26,10 @@ process.stdout.on('error', (err: any) => {
 process.stderr.on('error', (err: any) => {
   if (err.code !== 'EPIPE' && err.errno !== -32) throw err;
 });
+
+// --- Apply configured log-level gate as early as possible (before async load)
+// so verbose boot logs are quieted from the very first line. ---
+try { SettingsManager.applyBootLogLevel(); } catch {}
 
 // --- Global Native Fetch Interceptor for Node.js (Relative URLs Fallback) ---
 const originalFetch = globalThis.fetch;
@@ -114,7 +119,6 @@ import { initializeMCP } from "./src/core/server/mcp.js";
 import { registerAPIRoutes, activeWSConnections, activeStreamClients, broadcastToWS, getCronAction } from "./src/core/server/apiRouter.js";
 import { Kernel } from "./src/core/kernel/core.js";
 import { AIService } from "./src/core/kernel/ai.js";
-import { SettingsManager } from "./src/core/kernel/settings.js";
 import { CronModule } from "./src/core/kernel/cron.js";
 import { NeuralInterface } from "./src/core/kernel/NeuralInterface.js";
 import { MultiChannelQueue } from "./src/core/kernel/MultiChannelQueue.js";
@@ -739,13 +743,13 @@ app.use("/models", express.static(modelsDir));
     const title = "YUIHIME KERNEL ONLINE";
     const titleInner = title.padStart(Math.floor((innerW - 2 + title.length) / 2)).padEnd(innerW - 2);
 
-    console.log(`\n╭${h(innerW)}╮`);
-    console.log(`│ ${titleInner} │`);
-    console.log(`├${h(labelW + 2)}┬${h(valueW + 2)}┤`);
+    console.warn(`\n╭${h(innerW)}╮`);
+    console.warn(`│ ${titleInner} │`);
+    console.warn(`├${h(labelW + 2)}┬${h(valueW + 2)}┤`);
     for (const [label, value] of bootRows) {
-      console.log(`│ ${label.padEnd(labelW)} │ ${value.padEnd(valueW)} │`);
+      console.warn(`│ ${label.padEnd(labelW)} │ ${value.padEnd(valueW)} │`);
     }
-    console.log(`╰${h(labelW + 2)}┴${h(valueW + 2)}╯\n`);
+    console.warn(`╰${h(labelW + 2)}┴${h(valueW + 2)}╯\n`);
   });
 
   // --- WebSocket Gateway Initialization ---

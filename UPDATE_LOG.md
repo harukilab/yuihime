@@ -1,6 +1,18 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.29] - 2026-07-12
+### Quiet Boot Logs (apply log_level gate early)
+- **src/core/kernel/settings.ts**:
+  - Added static `applyBootLogLevel()` that synchronously reads `config.toml` and applies the verbosity gate BEFORE `load()`/`kernel.boot()`, so verbose boot logs are suppressed from the first line.
+  - Made `applyBootLogLevel` static (was incorrectly an instance method, silently swallowed by the caller's try/catch).
+- **server.ts**:
+  - Moved `SettingsManager` import to the top and call `applyBootLogLevel()` right after the EPIPE console wrapper (before any boot logging).
+  - Boot banner (`YUIHIME KERNEL ONLINE` box) promoted from `console.log` to `console.warn` so it stays visible at the default `warn` level.
+- **src/core/server/apiRouter.ts**:
+  - Express routing-table dump changed from `console.log` to `console.debug` (only shown at `debug` level) to avoid ~100 lines of noise on every boot.
+- **Effect**: at `log_level = "warn"` (default), boot now shows only the setup spinner, the kernel banner, and real warnings/errors. The ~120 `[REGISTRY] Registering module` lines, per-route registration lines, CRON/server-route init lines, and the route table dump are suppressed.
+
 ## [4.28] - 2026-07-12
 ### Project Metadata Sync (package.json)
 - **package.json**: renamed `name` from `react-example` to `yuihime`, set `version` to `4.27` (matches UPDATE_LOG), and added a project `description`. This makes the `npm run dev` header (`> yuihime@4.27 dev`) reflect the actual project instead of the scaffold default.

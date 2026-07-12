@@ -700,7 +700,7 @@ export function registerAPIRoutes(app: express.Express, db: any) {
           });
         }
       });
-      console.log("[SERVER_ROUTE_INIT] Current express routing table:\n" + routes.join("\n"));
+      console.debug("[SERVER_ROUTE_INIT] Current express routing table:\n" + routes.join("\n"));
     }
   } catch (err: any) {
     console.warn("[SERVER_ROUTE_INIT] Failed to print routing table:", err.message);

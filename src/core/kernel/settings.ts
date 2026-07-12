@@ -1,4 +1,6 @@
 import * as toml from 'smol-toml';
+import * as fsSync from 'fs';
+import * as pathModule from 'path';
 
 // --- Global log level filtering ---
 // Levels (ascending): debug(0) < info(1) < warn(2) < error(3) < silent(4)
@@ -63,6 +65,22 @@ export class SettingsManager {
   private pathModule: any = null;
 
   private constructor() {}
+
+  /**
+   * Synchronously reads config.toml and applies the log-level gate as early as
+   * possible (before the async load()), so verbose boot logs are suppressed too.
+   */
+  public static applyBootLogLevel(): void {
+    if (typeof window !== 'undefined') return;
+    try {
+      const rootEnv = process.env.YUIHIME_SYSTEM_ROOT || process.env.YUIHIME_ROOT || '.yuihime';
+      const fallbackRoot = pathModule.isAbsolute(rootEnv) ? rootEnv : pathModule.join(process.cwd(), rootEnv);
+      const p = process.env.YUIHIME_CONFIG || pathModule.join(fallbackRoot, 'data', 'config.toml');
+      if (!fsSync.existsSync(p)) return;
+      const parsed = toml.parse(fsSync.readFileSync(p, 'utf-8')) as AppSettings;
+      applyLogLevelFilter(parsed.log_level ?? parsed.logLevel);
+    } catch {}
+  }
 
   public static getInstance(): SettingsManager {
     if (!SettingsManager.instance) {
