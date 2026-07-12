@@ -1,5 +1,5 @@
 {
-  "id": "messaging_integration",
+  "id": "send_message",
   "name": "Universal Dispatcher",
   "description": "Send alerts or cross-platform messages to Telegram or other connected platforms like Discord, Slack, and Webhooks.",
   "version": "1.1.0",

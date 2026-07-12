@@ -132,7 +132,7 @@
     }
   },
   {
-    "id": "edit_file_segment",
+    "id": "edit_file",
     "name": "Edit File Segment",
     "description": "Perform targeted content updates to specific lines or blocks within a file using search/replace tokens, avoiding the need to load or rewrite entire files.",
     "version": "1.0.0",
@@ -181,7 +181,7 @@
     }
   },
   {
-    "id": "emotion.adjust",
+    "id": "emotion_adjust",
     "name": "Emotion Adjustment Tool",
     "description": "Adjust the assistant's current emotion state (arousal, valence, focus, rapport).",
     "version": "0.4.0",
@@ -210,7 +210,7 @@
     }
   },
   {
-    "id": "file_manager",
+    "id": "manage_files",
     "name": "File Manager Core Utility",
     "description": "Perform robust file operations: copy, move/rename, delete files or directories, create directories, check if a path exists, get file info, or find files by wildcard patterns inside the sandbox.",
     "version": "1.0.0",
@@ -259,7 +259,7 @@
     }
   },
   {
-    "id": "file_manipulate",
+    "id": "file_operations",
     "name": "Automatic File Manipulation Hub",
     "description": "Manages sandbox files: sorts by type/date, creates zip archives, generates smart text summaries using Gemini, and converts formats.",
     "version": "1.0.0",
@@ -330,7 +330,7 @@
     }
   },
   {
-    "id": "github_integration",
+    "id": "github",
     "name": "GitHub Navigator",
     "description": "Interface with GitHub to search repositories, list issues, and fetch code metadata.",
     "version": "1.0.0",
@@ -535,7 +535,7 @@
     }
   },
   {
-    "id": "messaging_integration",
+    "id": "send_message",
     "name": "Universal Dispatcher",
     "description": "Send alerts or cross-platform messages to Telegram or other connected platforms like Discord, Slack, and Webhooks.",
     "version": "1.1.0",
@@ -593,7 +593,7 @@
     }
   },
   {
-    "id": "overlay_control",
+    "id": "control_overlay",
     "name": "Neural Overlay System",
     "description": "Controls the broadcast overlay, toggling UI elements and visual effects.",
     "version": "1.0.0",
@@ -633,7 +633,7 @@
     }
   },
   {
-    "id": "plugin-installer",
+    "id": "install_plugin",
     "name": "Neural Addon Installer",
     "description": "Installs or updates a system plugin/addon by writing its configuration and entry point.",
     "version": "1.0.0",
@@ -793,7 +793,7 @@
     }
   },
   {
-    "id": "tensorart.generate",
+    "id": "tensorart_generate",
     "name": "TensorArt Image Generator",
     "description": "Generate high-quality visuals and anime art using TensorArt API's txt2img diffusion stages.",
     "version": "1.0.0",
@@ -842,7 +842,7 @@
     }
   },
   {
-    "id": "view_logs",
+    "id": "get_logs",
     "name": "View System Logs",
     "description": "View Yuihime's system logs, audit trails, and LLM input/output details to diagnose system states, execution errors, or API issues.",
     "version": "1.0.0",
@@ -875,7 +875,7 @@
     }
   },
   {
-    "id": "view_system_logs",
+    "id": "get_system_logs",
     "name": "View System Logs",
     "description": "Retrieve system audit logs and cognitive LLM processing error logs to diagnose issues within the batin (inner) modules, API connections, or general system failures.",
     "version": "1.0.0",
@@ -963,7 +963,7 @@
     }
   },
   {
-    "id": "web_snipper",
+    "id": "web_scraper",
     "name": "Web Snipper & Memory Piper",
     "description": "Scrapes visible text or specific CSS selector content from a target URL and pipes it directly to the Yuihime memory bank.",
     "version": "1.0.0",
@@ -1059,6 +1059,68 @@
         "filename",
         "content"
       ]
+    }
+  },
+  {
+    "id": "get_current_time",
+    "name": "Current Time",
+    "description": "Get the current date and time, with optional IANA timezone support. Use this when the user asks about the current time, today's date, the day of the week, or needs time context for scheduling.",
+    "version": "1.0.0",
+    "type": "TOOL",
+    "order": 95,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "timezone": {
+          "type": "string",
+          "description": "Optional IANA timezone (e.g., 'Asia/Jakarta', 'UTC', 'America/New_York'). Defaults to the server's local timezone when omitted."
+        }
+      },
+      "required": []
+    }
+  },
+  {
+    "id": "calculator",
+    "name": "Calculator",
+    "description": "Safely evaluate a mathematical expression (e.g., '2 * (3 + 4)', 'sqrt(144)', '12% of 250'). Use for arithmetic, percentages, rounding, or any numerical computation the user requests.",
+    "version": "1.0.0",
+    "type": "TOOL",
+    "order": 96,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "expression": {
+          "type": "string",
+          "description": "The math expression to evaluate. Supports + - * / % ^ and parentheses. Functions: sqrt, abs, pow, log, ln, sin, cos, tan, floor, ceil, round, min, max. Constants: pi, e."
+        }
+      },
+      "required": ["expression"]
+    }
+  },
+  {
+    "id": "file_search",
+    "name": "Memory & Knowledge Search",
+    "description": "Search Yuihime's persistent memory and knowledge base (conversation history, facts, notes, and learned information) using a natural-language query. Use this to retrieve specific past information, facts the user shared, or recalled context before answering.",
+    "version": "1.0.0",
+    "type": "TOOL",
+    "order": 97,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "The search query in natural language (e.g., 'what did we discuss about the API key', 'user favorite color')."
+        },
+        "limit": {
+          "type": "number",
+          "description": "Maximum number of results to return (default 5, max 20)."
+        },
+        "type": {
+          "type": "string",
+          "description": "Optional filter by memory type (e.g., 'knowledge', 'chat', 'note'). Omit to search everything."
+        }
+      },
+      "required": ["query"]
     }
   }
 ]

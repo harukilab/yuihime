@@ -19,7 +19,7 @@ export const DiscordBridge = {
         enabled: {
           type: 'boolean',
           label: 'Channel Activation',
-          default: false
+          default: true
         },
         autoAcknowledge: {
           type: 'boolean',

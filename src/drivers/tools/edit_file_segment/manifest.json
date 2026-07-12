@@ -1,5 +1,5 @@
 {
-  "id": "edit_file_segment",
+  "id": "edit_file",
   "name": "Edit File Segment",
   "description": "Perform targeted content updates to specific lines or blocks within a file using search/replace tokens, avoiding the need to load or rewrite entire files.",
   "version": "1.0.0",

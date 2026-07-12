@@ -1,0 +1,18 @@
+{
+  "id": "calculator",
+  "name": "Calculator",
+  "description": "Safely evaluate a mathematical expression (e.g., '2 * (3 + 4)', 'sqrt(144)', '12% of 250'). Use for arithmetic, percentages, rounding, or any numerical computation the user requests.",
+  "version": "1.0.0",
+  "type": "TOOL",
+  "order": 96,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "expression": {
+        "type": "string",
+        "description": "The math expression to evaluate. Supports + - * / % ^ and parentheses. Functions: sqrt, abs, pow, log, ln, sin, cos, tan, floor, ceil, round, min, max. Constants: pi, e."
+      }
+    },
+    "required": ["expression"]
+  }
+}

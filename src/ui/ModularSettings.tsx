@@ -4,7 +4,7 @@ import { StorageService } from '../drivers/storage';
 import { ModuleType } from '../include/types';
 import { TabRegistry } from './tabsRegistry';
 import { CronManager } from './CronManager';
-import { ShieldAlert, LogIn, LogOut, Trash2, LineChart as ChartIcon, BarChart3, Save, RefreshCw, Layers, Cpu, Radio, Volume2, Zap, LayoutGrid, Settings2, Brain, Clock, Sparkles, MessageSquare, Palette, Monitor, Database, GitBranch, Activity, Terminal, CheckSquare, Mic, Eye, EyeOff, ClipboardList, Share2, Gamepad2, Server, Music, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, AlertTriangle, Play, Sliders, VolumeX, Search, Maximize2, Move, Heart, Info, Upload, Image as ImageIcon, Send, Globe } from 'lucide-react';
+import { ShieldAlert, LogIn, LogOut, Trash2, LineChart as ChartIcon, BarChart3, Save, RefreshCw, Layers, Cpu, Radio, Volume2, Zap, LayoutGrid, Settings2, Brain, Clock, Sparkles, MessageSquare, Palette, Monitor, Database, GitBranch, Activity, Terminal, CheckSquare, Mic, Eye, EyeOff, ClipboardList, Share2, Gamepad2, Server, Music, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, AlertTriangle, Play, Sliders, VolumeX, Search, Maximize2, Move, Heart, Info, Upload, Image as ImageIcon, Send, Globe, X } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { motion, AnimatePresence } from 'motion/react';
 import { HeuristicsTab } from './HeuristicsTab';
@@ -59,6 +59,140 @@ const CollapsibleDescription: React.FC<{ text: string }> = ({ text }) => {
         </button>
       )}
     </span>
+  );
+};
+
+const MultiSelectField: React.FC<{
+  options: { label: string; value: string }[];
+  value: string[];
+  onChange: (val: string[]) => void;
+  placeholder?: string;
+  isFetching?: boolean;
+  onFetch?: () => void;
+  customMode?: boolean;
+  onToggleCustom?: () => void;
+}> = ({ options, value, onChange, placeholder, isFetching, onFetch, customMode, onToggleCustom }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const [customValue, setCustomValue] = useState('');
+  const selected = Array.isArray(value) ? value : [];
+
+  const filteredOptions = options.filter(o =>
+    o.label.toLowerCase().includes(search.toLowerCase()) ||
+    o.value.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const toggle = (v: string) => {
+    onChange(selected.includes(v) ? selected.filter(x => x !== v) : [...selected, v]);
+  };
+
+  const removeTag = (e: React.MouseEvent, v: string) => {
+    e.stopPropagation();
+    onChange(selected.filter(x => x !== v));
+  };
+
+  const handleCustomSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (customValue) {
+      const items = customValue.split(',').map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+      onChange(items);
+    }
+  };
+
+  return (
+    <div className="relative">
+      <div className="flex gap-2">
+        <div className="flex-1">
+          {customMode ? (
+            <form onSubmit={handleCustomSubmit}>
+              <ControlledTextInput
+                value={customValue}
+                onChange={(val) => setCustomValue(val)}
+                placeholder="Comma-separated model IDs..."
+                className="w-full bg-[#111115] border border-white/5 rounded-xl px-3 py-2 text-xs text-white font-mono"
+              />
+            </form>
+          ) : (
+            <div
+              className="w-full bg-[#111115] border border-white/5 hover:border-white/10 rounded-xl px-3 py-2 text-xs text-white min-h-[38px] flex flex-wrap gap-1 cursor-pointer"
+              onClick={() => setIsOpen(!isOpen)}
+            >
+              {selected.length === 0 && (
+                <span className="text-zinc-600">{placeholder || 'Select models...'}</span>
+              )}
+              {selected.map(v => {
+                const opt = options.find(o => o.value === v);
+                return (
+                  <span key={v} className="bg-cyan-500/10 text-cyan-400 px-2 py-0.5 rounded-md text-[10px] font-mono flex items-center gap-1">
+                    {opt?.label || v}
+                    <button type="button" onClick={(e) => removeTag(e, v)} className="hover:text-white">×</button>
+                  </span>
+                );
+              })}
+            </div>
+          )}
+        </div>
+        {onFetch && (
+          <button
+            type="button"
+            onClick={onFetch}
+            disabled={isFetching}
+            className="px-3 py-2 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 rounded-xl border border-cyan-400/20 transition-all disabled:opacity-50 flex items-center justify-center shrink-0"
+          >
+            <RefreshCw size={14} className={isFetching ? 'animate-spin' : ''} />
+          </button>
+        )}
+      </div>
+
+      {isOpen && !customMode && (
+        <div className="absolute z-50 left-0 right-0 mt-1.5 bg-[#0e0e14]/95 border border-white/10 rounded-xl shadow-[0_12px_36px_rgba(0,0,0,0.7)] backdrop-blur-md overflow-hidden">
+          <div className="relative border-b border-white/5 p-2">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500" size={12} />
+            <input
+              type="text"
+              placeholder="Filter models..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full bg-black/40 border border-white/5 rounded-lg pl-8 pr-8 py-2 text-xs text-white outline-none font-sans"
+              autoFocus
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch('')}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white p-0.5"
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
+          <div className="max-h-56 overflow-y-auto py-1">
+            {filteredOptions.length > 0 ? (
+              filteredOptions.map(opt => (
+                <div
+                  key={opt.value}
+                  onClick={() => toggle(opt.value)}
+                  className={`px-3.5 py-2.5 text-xs cursor-pointer flex items-center gap-2 ${
+                    selected.includes(opt.value) ? 'bg-cyan-500/10 text-cyan-400' : 'text-zinc-400 hover:bg-white/5'
+                  }`}
+                >
+                  <div className={`w-4 h-4 rounded border flex items-center justify-center ${
+                    selected.includes(opt.value) ? 'bg-cyan-500 border-cyan-500' : 'border-white/20'
+                  }`}>
+                    {selected.includes(opt.value) && <Check size={10} className="text-black" />}
+                  </div>
+                  {opt.label}
+                </div>
+              ))
+            ) : (
+              <div className="px-3.5 py-4 text-center text-[10px] text-zinc-500 font-mono italic">
+                No matching models found
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
 
@@ -1752,7 +1886,7 @@ export const ModularSettings: React.FC<ModularSettingsProps> = ({
             [fieldName]: options
           }
         }));
-      } else if (moduleId === 'gemini' && (fieldName === 'model' || fieldName === 'fallbackModel')) {
+      } else if (moduleId === 'gemini' && (fieldName === 'model' || fieldName === 'fallbackModel' || fieldName === 'fallbackModels')) {
         const provider = SystemRegistry.getProvider(moduleId);
         const activeGeminiConfig = customConfig || settings[moduleId];
         if (provider?.getModels) {
@@ -1762,7 +1896,8 @@ export const ModularSettings: React.FC<ModularSettingsProps> = ({
              [moduleId]: { 
                ...(prev[moduleId] || {}), 
                model: models,
-               fallbackModel: models
+               fallbackModel: models,
+               fallbackModels: models
              }
            }));
         }
@@ -1783,12 +1918,12 @@ export const ModularSettings: React.FC<ModularSettingsProps> = ({
 
     return Object.entries(schema.fields).map(([key, field]: [string, any]) => {
       let currentOptions = field.options || [];
-      const hasDynamicOptions = field.dynamicOptions || ((key === 'model' || key === 'fallbackModel') && (module.metadata.type === ModuleType.PROVIDER || module.metadata.id === 'gemini'));
+      const hasDynamicOptions = field.dynamicOptions || ((key === 'model' || key === 'fallbackModel' || key === 'fallbackModels') && (module.metadata.type === ModuleType.PROVIDER || module.metadata.id === 'gemini'));
       
       if (hasDynamicOptions) {
         if (dynamicOptionsMap[module.metadata.id]?.[key]) {
           currentOptions = dynamicOptionsMap[module.metadata.id][key];
-        } else if ((key === 'model' || key === 'fallbackModel') && dynamicModels[module.metadata.id]) {
+        } else if ((key === 'model' || key === 'fallbackModel' || key === 'fallbackModels') && dynamicModels[module.metadata.id]) {
           currentOptions = dynamicModels[module.metadata.id];
         }
       }
@@ -1803,6 +1938,18 @@ export const ModularSettings: React.FC<ModularSettingsProps> = ({
               <div className="flex justify-between items-center mb-1">
                 <label className="block text-[9px] uppercase tracking-[0.2em] font-mono text-white/40">{field.label}</label>
                 {field.type === 'select' && (key === 'model' || key === 'fallbackModel' || key === 'voice') && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const fetchingKey = `${module.metadata.id}:${key}`;
+                      setCustomInputMode(prev => ({ ...prev, [fetchingKey]: !prev[fetchingKey] }));
+                    }}
+                    className="text-[8px] font-mono uppercase tracking-wider text-cyan-400 hover:text-cyan-300 bg-cyan-950/40 px-2 py-0.5 rounded border border-cyan-850/30 transition-all cursor-pointer"
+                  >
+                    {customInputMode[`${module.metadata.id}:${key}`] ? 'Use Dropdown' : 'Type Custom'}
+                  </button>
+                )}
+                {field.type === 'multiselect' && (
                   <button
                     type="button"
                     onClick={() => {
@@ -1882,6 +2029,32 @@ export const ModularSettings: React.FC<ModularSettingsProps> = ({
                     className="py-2"
                   />
                 )
+              ) : field.type === 'multiselect' ? (
+                <MultiSelectField
+                  options={(currentOptions || []).map((opt: any) => {
+                    if (typeof opt === 'string') {
+                      return { value: opt, label: opt };
+                    }
+                    return {
+                      value: String(opt.value ?? opt),
+                      label: String(opt.label ?? opt.value ?? opt)
+                    };
+                  })}
+                  value={Array.isArray(targetConfig[key]) ? targetConfig[key] : (field.default || [])}
+                  onChange={(val) => targetUpdateFn(key, val)}
+                  placeholder={
+                    currentOptions && currentOptions.length > 0
+                      ? "Select models..."
+                      : (hasDynamicOptions ? 'Retrieve sync patterns...' : 'No telemetry options loadable')
+                  }
+                  isFetching={isFetching}
+                  onFetch={() => fetchDynamicOptions(module.metadata.id, key, targetConfig)}
+                  customMode={customInputMode[`${module.metadata.id}:${key}`]}
+                  onToggleCustom={() => {
+                    const fetchingKey = `${module.metadata.id}:${key}`;
+                    setCustomInputMode(prev => ({ ...prev, [fetchingKey]: !prev[fetchingKey] }));
+                  }}
+                />
               ) : field.type === 'boolean' ? (
                 <div className="flex items-center gap-3 mt-1">
                   <button 

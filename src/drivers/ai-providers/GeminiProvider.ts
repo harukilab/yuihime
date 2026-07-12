@@ -36,41 +36,17 @@ export const GeminiProvider: ProviderModule = {
             { label: 'Gemini 1.5 Pro', value: 'gemini-1.5-pro' }
           ]
         },
-        fallbackApiKey: { 
-          type: 'password', 
-          label: 'Fallback API Key', 
-          description: 'Backup key used if the primary key exceeds quota (429) or fails.' 
-        },
-        fallbackModel: { 
-          type: 'select', 
-          label: 'Fallback Model', 
-          description: 'Backup model automatically deployed if the primary model fails.',
+        fallbackModels: {
+          type: 'multiselect',
+          label: 'Fallback Models',
+          description: 'Backup models automatically deployed if the primary model fails. You can select from available models or type custom model IDs.',
           dynamicOptions: true,
-          options: [
-            { label: 'Gemini 3.5 Flash (Recommended)', value: 'gemini-3.5-flash' },
-            { label: 'Gemini 3.1 Flash Lite', value: 'gemini-3.1-flash-lite' },
-            { label: 'Gemini 3.1 Pro (Heavy Reasoning)', value: 'gemini-3.1-pro-preview' },
-            { label: 'Gemini 2.5 Flash', value: 'gemini-2.5-flash' },
-            { label: 'Gemini 2.5 Pro', value: 'gemini-2.5-pro' },
-            { label: 'Gemini 2.0 Flash', value: 'gemini-2.0-flash' },
-            { label: 'Gemini 1.5 Flash', value: 'gemini-1.5-flash' },
-            { label: 'Gemini 1.5 Pro', value: 'gemini-1.5-pro' }
-          ]
+          default: []
         },
         apiKeysPool: {
           type: 'string',
           label: 'API Keys Pool',
           description: 'Comma-separated additional keys for dynamic rotation if the primary key fails.'
-        },
-        fallbackModelsPool: {
-          type: 'string',
-          label: 'Fallback Models Pool',
-          description: 'Comma-separated fallback models for rotative failover sequence. Example: gemini-3.5-flash, gemini-3.1-flash-lite'
-        },
-        resilienceModels: {
-          type: 'string',
-          label: 'Resilience Models Pool',
-          description: 'Comma-separated resilient deep-fallback models used if previous options fail.'
         },
         provFailoverSequence: {
           type: 'string',
@@ -85,31 +61,12 @@ export const GeminiProvider: ProviderModule = {
           default: 32768,
           label: 'Max Output Tokens Limit',
           description: 'Specifies the maximum output response token limit. Standard: 32768.'
-        },
-        legacyModels: {
-          type: 'string',
-          label: 'Legacy Models List',
-          description: 'Comma-separated list of deprecated models to be automatically redirected.',
-          default: 'gemini-1.5-flash, gemini-1.5-pro, gemini-2.0-flash, gemini-2.0-pro, gemini-2.0-flash-thinking, gemini-pro, gemini-ultra, gemini-1.0-pro'
-        },
-        legacyRedirectTarget: {
-          type: 'select',
-          label: 'Legacy Redirect Target',
-          description: 'The stable target model designated to replace deprecated models.',
-          default: 'gemini-3.5-flash',
-          dynamicOptions: true,
-          options: [
-            { label: 'Gemini 3.5 Flash', value: 'gemini-3.5-flash' },
-            { label: 'Gemini 3.1 Pro', value: 'gemini-3.1-pro-preview' },
-            { label: 'Gemini 3.1 Flash Lite', value: 'gemini-3.1-flash-lite' },
-            { label: 'Gemini 2.5 Flash', value: 'gemini-2.5-flash' }
-          ]
         }
       }
     }
   },
   getDynamicOptions: async (fieldName: string, config: any) => {
-    if (fieldName === 'model' || fieldName === 'fallbackModel' || fieldName === 'legacyRedirectTarget') {
+    if (fieldName === 'model' || fieldName === 'fallbackModels') {
       return GeminiProvider.getModels ? await GeminiProvider.getModels(config) : [];
     }
     return [];
@@ -223,7 +180,7 @@ export const GeminiProvider: ProviderModule = {
       const config = context.config?.gemini || context.config || (context.model ? context : {});
       let modelId = config.model || GeminiProvider.metadata.models[0];
       
-      // Normalize modelId to strip any provider prefixes like 'gemini:' or 'google/' and map to stable release if legacy/deprecated
+      // Normalize modelId to strip any provider prefixes like 'gemini:' or 'google/'
       if (typeof modelId === 'string') {
         let clean = modelId.replace(/^models\//, '');
         if (clean.includes(':')) {
@@ -237,14 +194,6 @@ export const GeminiProvider: ProviderModule = {
           if (parts[0] === 'google') {
             clean = parts[parts.length - 1];
           }
-        }
-        const legacyModelsStr = config.legacyModels || 'gemini-1.5-flash, gemini-1.5-pro, gemini-2.0-flash, gemini-2.0-pro, gemini-2.0-flash-thinking, gemini-pro, gemini-ultra, gemini-1.0-pro';
-        const legacyRedirectTarget = config.legacyRedirectTarget || 'gemini-3.5-flash';
-        
-        const legacyModels = legacyModelsStr.split(',').map((m: string) => m.trim()).filter((m: string) => m.length > 0);
-        
-        if (legacyModels.includes(clean)) {
-          clean = legacyRedirectTarget;
         }
         modelId = clean;
       }

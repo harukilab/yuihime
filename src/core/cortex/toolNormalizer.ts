@@ -53,12 +53,12 @@ export function normalizeToolCall(tc: any): any {
     'list_files_tool': 'list_files',
     'list_dir': 'list_files',
     'ls': 'list_files',
-    'modify_file': 'file_manipulate',
-    'file_manipulate_tool': 'file_manipulate',
+    'modify_file': 'file_operations',
+    'file_manipulate_tool': 'file_operations',
     'adjust_emotion': 'emotion_adjust',
-    'send_message': 'messaging_integration',
-    'telegram_message': 'messaging_integration',
-    'send_telegram': 'messaging_integration',
+    'send_message': 'send_message',
+    'telegram_message': 'send_message',
+    'send_telegram': 'send_message',
     'set_nickname': 'manage_identities',
     'update_identity': 'manage_identities'
   };

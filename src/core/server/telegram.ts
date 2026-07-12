@@ -448,8 +448,11 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
         chatType,
         async (response) => {
           if (response) {
-            await ctx.reply(response).catch(() => {});
-            
+            const sentAsFile = await trySendFileAttachment(ctx, response);
+            if (!sentAsFile) {
+              await ctx.reply(response).catch(() => {});
+            }
+
             // Broadcast Yui's response to the connected WebClients
             broadcastToWS({
               type: "remote_response_sent",
@@ -496,6 +499,35 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
       console.warn("[TELEGRAM] Conflict detected mid-session. Other instance took over.");
     }
   });
+
+  async function trySendFileAttachment(ctx: any, responseText: string): Promise<boolean> {
+    try {
+      const { getDynamicSandboxRoot } = await import("./apiRouter.js");
+      const { extractChannelFileAttachments } = await import("./channelFileAttachment.js");
+
+      const sandboxDir = getDynamicSandboxRoot();
+      const { attachments, remainingText } = await extractChannelFileAttachments(responseText, sandboxDir);
+
+      if (attachments.length === 0) return false;
+
+      for (const att of attachments) {
+        if (att.isImage) {
+          await ctx.replyWithPhoto({ source: att.safePath });
+        } else {
+          await ctx.replyWithDocument({ source: att.safePath });
+        }
+      }
+
+      // If there is leftover conversational text after the directive, send it as a normal reply.
+      if (remainingText) {
+        await ctx.reply(remainingText).catch(() => {});
+      }
+      return true;
+    } catch (e) {
+      console.warn("[TELEGRAM_FILE] Failed to send file attachment from response:", e);
+    }
+    return false;
+  }
 
   const launchBot = async (retryCount = 0) => {
     if (activeTelegramBot !== bot) return; // Instansi sudah digantikan

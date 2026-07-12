@@ -27,7 +27,7 @@ export const FileManipulationModule: CortexModule = {
           type: 'textarea',
           label: 'File Cognition Context Injection',
           description: 'Special prompt prepended to the sandbox files list to guide Yuihime on her file capabilities.',
-          default: '[SANDBOX PHYSICAL REALITY]: You have complete system authorization to perform automatic file executions and manipulations in the active sandbox workspace using the "file_manipulate" toolset. The files currently residing in the workspace directory are:'
+          default: '[SANDBOX PHYSICAL REALITY]: You have complete system authorization to perform automatic file executions and manipulations in the active sandbox workspace using the "file_operations" toolset. The files currently residing in the workspace directory are:'
         }
       }
     }
@@ -62,7 +62,7 @@ export const FileManipulationModule: CortexModule = {
               `- ${f.name} (${f.isDir ? 'Directory' : (f.size / 1024).toFixed(1) + ' KB'})`
             ).join('\n');
 
-            const contextPayload = `${injectionPrefix}\n${formattedFiles}\n\nUse the "file_manipulate" tool directly if the user commands file sorting, compilation, compression (zipping), parsing, indexing, summaries, or type conversions.`;
+            const contextPayload = `${injectionPrefix}\n${formattedFiles}\n\nUse the "file_operations" tool directly if the user commands file sorting, compilation, compression (zipping), parsing, indexing, summaries, or type conversions.`;
             
             console.log("[FILE_CORTEX] Successfully injected sandbox directory state into neural context.");
             return {

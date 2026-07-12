@@ -1,5 +1,5 @@
 {
-  "id": "plugin-installer",
+  "id": "install_plugin",
   "name": "Neural Addon Installer",
   "description": "Installs or updates a system plugin/addon by writing its configuration and entry point.",
   "version": "1.0.0",

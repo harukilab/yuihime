@@ -1,5 +1,5 @@
 {
-  "id": "view_system_logs",
+  "id": "get_system_logs",
   "name": "View System Logs",
   "description": "Retrieve system audit logs and cognitive LLM processing error logs to diagnose issues within the batin (inner) modules, API connections, or general system failures.",
   "version": "1.0.0",

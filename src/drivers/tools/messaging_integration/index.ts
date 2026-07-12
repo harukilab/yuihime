@@ -146,7 +146,7 @@ export const MessagingTool: ToolModule = {
   metadata: manifest as any,
   execute: async (args: any, context?: any) => {
     try {
-      const config = await SystemRegistry.getConfig('messaging_integration');
+      const config = await SystemRegistry.getConfig('send_message');
       console.log(`[MessagingTool] Processing ${args.platform} dispatch request...`);
 
       if (args.platform === 'telegram') {

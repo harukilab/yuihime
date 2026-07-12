@@ -1,5 +1,5 @@
 {
-  "id": "web_snipper",
+  "id": "web_scraper",
   "name": "Web Snipper & Memory Piper",
   "description": "Scrapes visible text or specific CSS selector content from a target URL and pipes it directly to the Yuihime memory bank.",
   "version": "1.0.0",

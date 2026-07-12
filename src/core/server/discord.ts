@@ -7,6 +7,34 @@ let db: any = null;
 export let activeDiscordClient: Client | null = null;
 export let activeDiscordToken: string | null = null;
 
+async function trySendFileAttachmentDiscord(message: any, responseText: string): Promise<boolean> {
+  try {
+    const { getDynamicSandboxRoot } = await import("./apiRouter.js");
+    const { extractChannelFileAttachments } = await import("./channelFileAttachment.js");
+
+    const sandboxDir = getDynamicSandboxRoot();
+    const { attachments, remainingText } = await extractChannelFileAttachments(responseText, sandboxDir);
+
+    if (attachments.length === 0) return false;
+
+    for (const att of attachments) {
+      if (att.isImage) {
+        await message.reply({ files: [att.safePath] });
+      } else {
+        await message.reply({ files: [{ attachment: att.safePath }] });
+      }
+    }
+
+    if (remainingText) {
+      await message.reply(remainingText).catch(() => {});
+    }
+    return true;
+  } catch (e) {
+    console.warn("[DISCORD_FILE] Failed to send file attachment from response:", e);
+  }
+  return false;
+}
+
 export async function initializeDiscord(activeDb?: any, force = false) {
   if (activeDb) {
     db = activeDb;
@@ -178,8 +206,11 @@ export async function initializeDiscord(activeDb?: any, force = false) {
         chatType,
         async (response) => {
           if (response) {
-            await message.reply(response).catch(() => {});
-            
+            const sentAsFile = await trySendFileAttachmentDiscord(message, response);
+            if (!sentAsFile) {
+              await message.reply(response).catch(() => {});
+            }
+
             // 3. Broadcast ucapan Yui ke Web UI via WebSockets
             broadcastToWS({
               type: "remote_response_sent",

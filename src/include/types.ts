@@ -41,7 +41,7 @@ export interface BaseModuleMetadata {
 export interface ModuleConfigSchema {
   fields: {
     [key: string]: {
-      type: 'string' | 'number' | 'boolean' | 'select' | 'password' | 'textarea' | 'color' | 'slider';
+      type: 'string' | 'number' | 'boolean' | 'select' | 'password' | 'textarea' | 'color' | 'slider' | 'multiselect';
       label: string;
       description?: string;
       default?: any;

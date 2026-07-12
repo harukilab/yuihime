@@ -6,12 +6,12 @@ import manifest from './manifest.json';
 export const WebSnipperTool: ToolModule = {
   metadata: manifest as any,
   execute: async (args: any) => {
-    const config = await SystemRegistry.getConfig('web_snipper');
+    const config = await SystemRegistry.getConfig('web_scraper');
     const url = args.url;
     console.log(`[SYSTEM] WebSnipper initiating request to URL: ${url}`);
     
     const execution = await StandardizedProcessor.executeStandardized(
-      'web_snipper',
+      'web_scraper',
       '1.0.0',
       { url: args.url, selector: args.selector },
       async () => {

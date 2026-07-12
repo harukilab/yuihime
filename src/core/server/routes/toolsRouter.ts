@@ -303,6 +303,26 @@ export function registerToolsRoutes(app: express.Express, db: any) {
     }
   });
 
+  app.get("/api/tools/memory-search", async (req, res) => {
+    const { query, limit, type } = req.query;
+    if (!query) {
+      return res.status(400).json({ error: "No query provided" });
+    }
+
+    try {
+      const { searchMemories } = await import('../../memorySearch.js');
+      const hits = await searchMemories(
+        String(query),
+        Math.min(Math.max(Number(limit) || 5, 1), 20),
+        type ? String(type) : undefined
+      );
+      res.json({ success: true, query, count: hits.length, results: hits });
+    } catch (error: any) {
+      console.error("[SERVER_MEMORY_SEARCH] Memory search failed:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   app.post("/api/tools/execute_js", async (req, res) => {
     const { code } = req.body;
     if (!code) return res.status(400).json({ error: "No code provided" });

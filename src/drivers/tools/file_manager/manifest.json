@@ -1,5 +1,5 @@
 {
-  "id": "file_manager",
+  "id": "manage_files",
   "name": "File Manager Core Utility",
   "description": "Perform robust file operations: copy, move/rename, delete files or directories, create directories, check if a path exists, get file info, or find files by wildcard patterns inside the sandbox.",
   "version": "1.0.0",

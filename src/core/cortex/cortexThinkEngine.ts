@@ -355,7 +355,7 @@ Ensure your "thought" field is extremely short (under 1 sentence, or empty). Ani
           instructionText = `Based on the successful tool execution results above, you can EITHER choose to call another tool if you need more actions/information to fully answer the user (such as list_files, read_file, shell_exec), OR if you have all the information required, formulate your final casual spoken response to the user. Do not repeat technical details, do not write internal thoughts, plans, or analysis blocks outside the JSON structure. Directly chat with the user in your natural, emotional, affectionate/tsundere personal character using the user's conversational language!`;
           
           const readToolRes = lastExecuted.results.find((res: any) => 
-            ['read_file', 'list_files', 'view_logs', 'view_system_logs', 'file_manager'].includes(res.tool) && res.success
+            ['read_file', 'list_files', 'get_logs', 'get_system_logs', 'manage_files'].includes(res.tool) && res.success
           );
           if (readToolRes) {
             instructionText += `\n\nCRITICAL DIRECTIVE FOR RETRIEVED CONTENTS: Since you successfully retrieved content, data, file list, or logs via '${readToolRes.tool}', you MUST share/display the exact retrieved file content, directory listing, or log data inside your 'speech' field so the user can see it! Do NOT give a false promise by saying 'Ini dia isinya...' or 'Yui sudah baca...' or 'Ini list catatan...' without actually writing out the retrieved contents or list of files in this very response. If the content, listing, or log is empty, clearly state to the user that it is currently empty.`;
@@ -1285,10 +1285,10 @@ Provide a concise validation summary. Start with [VALIDATION_SUCCESS] if everyth
             case 'shell_exec': return 'memproses sistem latar';
             case 'run_command': return 'menjalankan perintah sistem';
             case 'download_file': return 'mengunduh berkas';
-            case 'file_manager': return 'mengelola berkas batin';
+            case 'manage_files': return 'mengelola berkas batin';
             case 'emotion_adjust': return 'menyelaraskan suasana hati';
             case 'manage_pairing': return 'menyambungkan sirkuit hubungan';
-            case 'messaging_integration': return 'menghubungkan saluran sosial';
+            case 'send_message': return 'menghubungkan saluran sosial';
             default: return `memproses kemampuan ${t}`;
           }
         });

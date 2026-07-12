@@ -1,0 +1,26 @@
+{
+  "id": "file_search",
+  "name": "Memory & Knowledge Search",
+  "description": "Search Yuihime's persistent memory and knowledge base (conversation history, facts, notes, and learned information) using a natural-language query. Use this to retrieve specific past information, facts the user shared, or recalled context before answering.",
+  "version": "1.0.0",
+  "type": "TOOL",
+  "order": 97,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "query": {
+        "type": "string",
+        "description": "The search query in natural language (e.g., 'what did we discuss about the API key', 'user favorite color')."
+      },
+      "limit": {
+        "type": "number",
+        "description": "Maximum number of results to return (default 5, max 20)."
+      },
+      "type": {
+        "type": "string",
+        "description": "Optional filter by memory type (e.g., 'knowledge', 'chat', 'note'). Omit to search everything."
+      }
+    },
+    "required": ["query"]
+  }
+}

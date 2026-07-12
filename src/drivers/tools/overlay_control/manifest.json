@@ -1,5 +1,5 @@
 {
-  "id": "overlay_control",
+  "id": "control_overlay",
   "name": "Neural Overlay System",
   "description": "Controls the broadcast overlay, toggling UI elements and visual effects.",
   "version": "1.0.0",

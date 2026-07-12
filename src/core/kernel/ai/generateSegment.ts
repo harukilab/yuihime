@@ -28,7 +28,17 @@ export async function generateContent(
   config: AIConfig & { apiKey?: string; onChunk?: (chunk: string) => void } = {}
 ): Promise<string> {
   const settings = SettingsManager.getInstance();
-  const geminiSettings = settings.get('gemini') || {};
+  // Resolve effective Gemini settings from every supported storage location
+  // (flat `gemini`, the `providers.gemini` table, and the per-request `config`)
+  // so fallback models/keys configured anywhere are always honored. Previously
+  // only the flat `gemini` key was read, which silently dropped fallbacks when
+  // the config lived under `providers.gemini` or was passed via `config`.
+  const providersTable = (settings.get('providers') as any) || {};
+  const geminiSettings: any = {
+    ...(providersTable.gemini || {}),
+    ...(settings.get('gemini') || {}),
+    ...((config && typeof config === 'object') ? config : {})
+  };
   let defaultGeminiModel = '';
   try {
     const { SystemRegistry } = await import('../../registry.js');
@@ -38,41 +48,30 @@ export async function generateContent(
     }
   } catch (e) {}
 
-  const model = config.model || geminiSettings.model || defaultGeminiModel;
-  if (!model) {
-    throw new Error('Sirkuit kognitif gagal berdenyut: Silakan pilih model kognitif di panel Settings atau aktifkan Model di tab Providers.');
-  }
-  const fallbackModel = geminiSettings.fallbackModel;
-  const fallbackApiKey = geminiSettings.fallbackApiKey;
-  
-  const resolveModelIdName = (rawModel: string): string => {
-    let clean = rawModel.replace(/^models\//, '');
-    if (clean.includes(':')) {
-      const parts = clean.split(':');
-      if (parts[0] === 'gemini' || parts[0] === 'google') {
-        clean = parts[parts.length - 1];
-      }
-    }
-    if (clean.includes('/')) {
-      const parts = clean.split('/');
-      if (parts[0] === 'google') {
-        clean = parts[parts.length - 1];
-      }
-    }
-    const legacyModelsStr = geminiSettings.legacyModels || 'gemini-1.5-flash, gemini-1.5-pro, gemini-2.0-flash, gemini-2.0-pro, gemini-2.0-flash-thinking, gemini-pro, gemini-ultra, gemini-1.0-pro';
-    const legacyRedirectTarget = geminiSettings.legacyRedirectTarget || 'gemini-3.5-flash';
-    
-    const legacyModels = legacyModelsStr.split(',').map((m: string) => m.trim()).filter((m: string) => m.length > 0);
-    
-    if (legacyModels.includes(clean)) {
-      console.warn(`[SERVER_AI] Detected unsupported/legacy/deprecated model '${clean}'. Auto-redirecting to production-stable '${legacyRedirectTarget}'.`);
-      return legacyRedirectTarget;
-    }
-    return clean;
-  };
+   const model = config.model || geminiSettings.model || defaultGeminiModel;
+   if (!model) {
+     throw new Error('Sirkuit kognitif gagal berdenyut: Silakan pilih model kognitif di panel Settings atau aktifkan Model di tab Providers.');
+   }
+   const fallbackApiKey = geminiSettings.fallbackApiKey;
+   
+   const resolveModelIdName = (rawModel: string): string => {
+     let clean = rawModel.replace(/^models\//, '');
+     if (clean.includes(':')) {
+       const parts = clean.split(':');
+       if (parts[0] === 'gemini' || parts[0] === 'google') {
+         clean = parts[parts.length - 1];
+       }
+     }
+     if (clean.includes('/')) {
+       const parts = clean.split('/');
+       if (parts[0] === 'google') {
+         clean = parts[parts.length - 1];
+       }
+     }
+     return clean;
+   };
 
   const cleanModelId = resolveModelIdName(model);
-  const cleanFallbackModelId = fallbackModel ? resolveModelIdName(fallbackModel) : undefined;
 
   const runWithRetries = async (customPrompt?: string): Promise<string> => {
     const activePrompt = customPrompt || prompt;
@@ -121,7 +120,24 @@ export async function generateContent(
     };
 
     addModels(cleanModelId);
-    addModels(cleanFallbackModelId);
+    
+    const fallbackModels = Array.isArray(geminiSettings.fallbackModels) 
+      ? geminiSettings.fallbackModels 
+      : (geminiSettings.fallbackModels ? geminiSettings.fallbackModels.split(/[\n,;]+/).map((m: string) => m.trim()).filter((m: string) => m.length > 0) : []);
+    for (const fm of fallbackModels) {
+      const clean = resolveModelIdName(fm);
+      if (!allModels.includes(clean)) {
+        allModels.push(clean);
+      }
+    }
+    
+    if (geminiSettings.fallbackModel) {
+      const clean = resolveModelIdName(geminiSettings.fallbackModel);
+      if (!allModels.includes(clean)) {
+        allModels.push(clean);
+      }
+    }
+    
     addModels(geminiSettings.resilienceModels);
     addModels(geminiSettings.fallbackModelsPool);
 

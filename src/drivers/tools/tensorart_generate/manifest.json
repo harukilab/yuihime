@@ -1,5 +1,5 @@
 {
-  "id": "tensorart.generate",
+  "id": "tensorart_generate",
   "name": "TensorArt Image Generator",
   "description": "Generate high-quality visuals and anime art using TensorArt API's txt2img diffusion stages.",
   "version": "1.0.0",

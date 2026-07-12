@@ -1,5 +1,5 @@
 {
-  "id": "github_integration",
+  "id": "github",
   "name": "GitHub Navigator",
   "description": "Interface with GitHub to search repositories, list issues, and fetch code metadata.",
   "version": "1.0.0",
