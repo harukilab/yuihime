@@ -302,8 +302,9 @@ You MUST:
         /## Format Respons Khusus[\s\S]*?(?=## Eksekusi Tugas|$)/i,
         `## Format Respons Khusus (JSON MODE ACTIVE):
 Because the active cognitive vessel is in strict JSON mode, you are FORBIDDEN from using raw XML tags (such as <animations>, <mood_impact>, <tool_calls>).
-Instead, you MUST strictly output a single JSON object matching the JSON Schema. Place your main verbal dialogue speech inside the "speech" key at the root of the JSON object (or under the "send_final_reply" tool call's args if calling tools).
+Instead, you MUST strictly output a single JSON object matching the JSON Schema. Place your main verbal dialogue speech inside the "speech" key at the root of the JSON object (or under the "send_final_reply" tool call's arguments if calling tools).
 Ensure your "thought" field is extremely short (under 1 sentence, or empty). Animations and mood_impact must be mapped to their respective JSON keys.
+When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: each item is an object with "id" (unique string like "call_abc123"), "type": "function", and "function": { "name": string, "arguments": object }. The "arguments" MUST be a JSON object (never a string). Always generate a unique "id" so tool results can be paired back to each call.
 \n\n`
       );
       const jsonEnforcementDirective = PromptRegistry.getInstance().compile('cortex:json_enforcement', {});

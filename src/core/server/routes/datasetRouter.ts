@@ -452,8 +452,8 @@ export function registerDatasetRoutes(app: express.Express, db: any) {
               if (outputFormat === 'raw_text') {
                 try {
                   const sftObj = JSON.parse(rawResponse);
-                  const reply = sftObj.tool_calls?.find((t: any) => t.tool === 'send_final_reply');
-                  structuredContent = reply?.args?.speech || sftObj.speech || rawResponse;
+                  const reply = sftObj.tool_calls?.find((t: any) => (t.function?.name || t.tool) === 'send_final_reply');
+                  structuredContent = reply?.function?.arguments?.speech || reply?.args?.speech || sftObj.speech || rawResponse;
                 } catch (err) {
                   structuredContent = rawResponse;
                 }
@@ -495,9 +495,13 @@ DO NOT alter, omit, or shorten her original speech. Preserve actual physical exp
   "mood_impact": { "joy": 1 },
   "tool_calls": [
     {
-      "tool": "send_final_reply",
-      "args": {
-        "speech": "string"
+      "id": "call_01",
+      "type": "function",
+      "function": {
+        "name": "send_final_reply",
+        "arguments": {
+          "speech": "string"
+        }
       }
     }
   ]
@@ -521,11 +525,15 @@ DO NOT alter, omit, or shorten her original speech. Preserve actual physical exp
                     mood_impact: parsed.mood_impact || { joy: 1 },
                     tool_calls: parsed.tool_calls || [
                       {
-                        tool: "send_final_reply",
-                        args: {
-                          speech: rawResponse,
-                          animations: parsed.animations || ["SMILE"],
-                          mood_impact: parsed.mood_impact || { joy: 1 }
+                        id: "call_01",
+                        type: "function",
+                        function: {
+                          name: "send_final_reply",
+                          arguments: {
+                            speech: rawResponse,
+                            animations: parsed.animations || ["SMILE"],
+                            mood_impact: parsed.mood_impact || { joy: 1 }
+                          }
                         }
                       }
                     ]
@@ -550,11 +558,15 @@ DO NOT alter, omit, or shorten her original speech. Preserve actual physical exp
                     mood_impact: { joy: 1 },
                     tool_calls: [
                       {
-                        tool: "send_final_reply",
-                        args: {
-                          speech: rawResponse,
-                          animations: Array.from(new Set(animations)),
-                          mood_impact: { joy: 1 }
+                        id: "call_01",
+                        type: "function",
+                        function: {
+                          name: "send_final_reply",
+                          arguments: {
+                            speech: rawResponse,
+                            animations: Array.from(new Set(animations)),
+                            mood_impact: { joy: 1 }
+                          }
                         }
                       }
                     ]

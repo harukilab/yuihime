@@ -162,13 +162,21 @@ Your output must conform exactly to the following JSON Schema:
       "items": {
         "type": "object",
         "properties": {
-          "tool": { "type": "string", "description": "The name of the tool to execute. If you just want to talk or respond to the user, you MUST call 'send_final_reply' (or call both your task tool AND 'send_final_reply' in parallel within the list!)." },
-          "args": { 
+          "id": { "type": "string", "description": "Unique identifier for this tool call, e.g. 'call_abc123'. REQUIRED so the system can pair tool results back to the call." },
+          "type": { "type": "string", "description": "Always the literal string 'function'." },
+          "function": {
             "type": "object",
-            "description": "An object containing arguments for the specific tool. For 'send_final_reply', args must be { 'speech': '...' }."
+            "properties": {
+              "name": { "type": "string", "description": "The tool/function name to execute. If you just want to talk or respond to the user, you MUST call 'send_final_reply' (or call both your task tool AND 'send_final_reply' in parallel within the list!)." },
+              "arguments": {
+                "type": "object",
+                "description": "An OBJECT (not a string) containing arguments for the tool. For 'send_final_reply', arguments must be { 'speech': '...', 'animations': [...], 'mood_impact': {...} }."
+              }
+            },
+            "required": ["name", "arguments"]
           }
         },
-        "required": ["tool", "args"]
+        "required": ["id", "type", "function"]
       }
     }
   },
@@ -184,7 +192,16 @@ Example of strict valid JSON output:
   "viewerProfileUpdate": {
     "habits": ["Suka minum kopi di sore hari"]
   },
-  "tool_calls": []
+  "tool_calls": [
+    {
+      "id": "call_01",
+      "type": "function",
+      "function": {
+        "name": "send_final_reply",
+        "arguments": { "speech": "Hmph! Kakak tumben...", "animations": ["SMILE"] }
+      }
+    }
+  ]
 }
 [END of JSON_OBJECT CRITICAL DIRECTIVE]
     `);
@@ -205,9 +222,13 @@ Please Refactor this content into strict valid JSON. You MUST output your respon
   "animations": ["1-3 animation keywords like SMILE, waving, angry"],
   "tool_calls": [
     {
-      "tool": "The tool name to call",
-      "args": {
-        "arg_key1": "arg_value1"
+      "id": "call_01",
+      "type": "function",
+      "function": {
+        "name": "The tool/function name to call",
+        "arguments": {
+          "arg_key1": "arg_value1"
+        }
       }
     }
   ]
@@ -268,13 +289,21 @@ The output JSON object MUST conform EXACTLY to this schema:
       "items": {
         "type": "object",
         "properties": {
-          "tool": { "type": "string", "description": "The name of the tool to execute. MUST include 'send_final_reply' if responding to the user." },
-          "args": { 
+          "id": { "type": "string", "description": "Unique call id, e.g. 'call_abc123'." },
+          "type": { "type": "string", "description": "Always 'function'." },
+          "function": {
             "type": "object",
-            "description": "An object containing arguments for the specific tool. For 'send_final_reply', args must be { 'speech': '...' }. For other tools, match their exact parameter schemas."
+            "properties": {
+              "name": { "type": "string", "description": "The name of the tool/function to execute. MUST include 'send_final_reply' if responding to the user." },
+              "arguments": {
+                "type": "object",
+                "description": "An OBJECT containing arguments for the specific tool. For 'send_final_reply', arguments must be { 'speech': '...', 'animations': [...], 'mood_impact': {...} }. For other tools, match their exact parameter schemas."
+              }
+            },
+            "required": ["name", "arguments"]
           }
         },
-        "required": ["tool", "args"]
+        "required": ["id", "type", "function"]
       }
     }
   },
@@ -351,10 +380,14 @@ Your output must conform exactly to the following JSON structure:
   },
   "tool_calls": [
     {
-      "tool": "send_final_reply",
-      "args": {
-        "speech": "Your spoken reply in Indonesian or Japanese as Yuihime",
-        "animations": ["SMILE"]
+      "id": "call_01",
+      "type": "function",
+      "function": {
+        "name": "send_final_reply",
+        "arguments": {
+          "speech": "Your spoken reply in Indonesian or Japanese as Yuihime",
+          "animations": ["SMILE"]
+        }
       }
     }
   ]
@@ -376,10 +409,14 @@ Your output must conform exactly to the following JSON structure:
   },
   "tool_calls": [
     {
-      "tool": "send_final_reply",
-      "args": {
-        "speech": "Your spoken reply",
-        "animations": ["SMILE"]
+      "id": "call_01",
+      "type": "function",
+      "function": {
+        "name": "send_final_reply",
+        "arguments": {
+          "speech": "Your spoken reply",
+          "animations": ["SMILE"]
+        }
       }
     }
   ]

@@ -1,6 +1,18 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.44] - 2026-07-12
+### Align: system & supporting prompts to OpenAI-native tool_calls contract
+- `PromptRegistry.ts` (`cortex:json_enforcement` main schema, `cortex:error_correction`, `cortex:repair_json`, tiny/lite/medium presets): `tool_calls` items now documented as OpenAI-native `{id, type:"function", function:{name, arguments:object}}` with `id` required for result pairing; legacy `{tool, args}` examples replaced.
+- `cortexThinkEngine.ts` "Format Respons Khusus (JSON MODE ACTIVE)" directive now mandates OpenAI-native `tool_calls` with unique `id` and object `arguments`.
+- `datasetRouter.ts` SFT synthesis: prompt schema + parser (`t.function?.name`/`t.function?.arguments?.speech`) + both fallback `structuredOutput` blocks switched to OpenAI shape.
+- `datasetSynthesizer.ts` instruction updated to emit OpenAI-native `tool_calls`.
+- Wire-compatible: `normalizeToolCall` enriches calls to OpenAI shape while preserving `tool`/`name`/`args` aliases; NeuralLoop, api.ts middleware, processor accept both.
+
+## [4.43] - 2026-07-12
+### Fix: Duplicate fetch button in Gemini fallback models UI
+- `src/ui/ModularSettings.tsx` (`renderFields` multiselect branch): removed duplicate `onFetch` RefreshCw button from `MultiSelectField` since `renderFields` already renders a single fetch button for `hasDynamicOptions` fields. Resolves the double-button glitch in the Gemini provider "Fallback Models" section.
+
 ## [4.42] - 2026-07-12
 ### Refactor: Standardize tool layer to OpenAI-native contract (provider-agnostic adapter)
 - `src/core/openaiTools.ts`: removed `nativeToolCallsToXml`; added `normalizeToolCallsToOpenAI`, `normalizeToolsForProvider`, `buildToolResultMessages`, `buildChatMessages` as the single adapter layer for all provider↔OpenAI shape conversions. `buildOpenAITools` kept.
