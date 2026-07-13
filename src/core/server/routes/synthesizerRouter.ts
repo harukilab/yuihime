@@ -112,7 +112,7 @@ export function registerSynthesizerRoutes(app: express.Express, db: any) {
         mood_impact: mood_impact || { joy: 1 },
         tool_calls: [
           {
-            tool: "send_final_reply",
+            tool: "final_answer",
             args: {
               speech: targetSpeech || "",
               animations: animations || ["SMILE"]
@@ -163,7 +163,7 @@ export function registerSynthesizerRoutes(app: express.Express, db: any) {
         mood_impact: mood_impact || { joy: 1 },
         tool_calls: [
           {
-            tool: "send_final_reply",
+            tool: "final_answer",
             args: {
               speech: targetSpeech || "",
               animations: animations || ["SMILE"]

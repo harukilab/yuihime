@@ -1,7 +1,7 @@
 [
   {
-    "id": "send_final_reply",
-    "name": "send_final_reply",
+    "id": "final_answer",
+    "name": "final_answer",
     "description": "Mengirimkan keputusan akhir atau respons obrolan manis verbal lahiriah murni kepada Kakak (user) setelah seluruh tugas selesai dilakukan.",
     "version": "1.0.0",
     "type": "tool",
@@ -31,8 +31,8 @@
     }
   },
   {
-    "id": "send_status_update",
-    "name": "send_status_update",
+    "id": "status_update",
+    "name": "status_update",
     "description": "Mengirimkan pesan suara/teks transisi singkat atau indikator visual agar pengguna tahu Yui sedang bekerja di sela-sela berpikir.",
     "version": "1.0.0",
     "type": "tool",
@@ -201,8 +201,8 @@
     }
   },
   {
-    "id": "emotion_adjust",
-    "name": "Emotion Adjustment Tool",
+    "id": "set_emotion",
+    "name": "Set Emotion",
     "description": "Adjust the assistant's current emotion state (arousal, valence, focus, rapport).",
     "version": "0.4.0",
     "type": "TOOL",
@@ -230,8 +230,8 @@
     }
   },
   {
-    "id": "manage_files",
-    "name": "File Manager Core Utility",
+    "id": "file_manager",
+    "name": "File Manager",
     "description": "Perform robust file operations: copy, move/rename, delete files or directories, create directories, check if a path exists, get file info, or find files by wildcard patterns inside the sandbox.",
     "version": "1.0.0",
     "type": "TOOL",
@@ -254,15 +254,15 @@
         },
         "source": {
           "type": "string",
-          "description": "The source path to copy or move. You MUST specify the full path starting with 'user_data/' (e.g. 'user_data/notes.txt') or absolute '/app/user_data/' path."
+          "description": "The source path to copy or move. ALWAYS use the relative sandbox path starting with 'user_data/' (e.g. 'user_data/notes.txt'). You may also use an absolute path to the configured user_data directory, but NEVER mix formats within a single call (the source and destination must use the same base). Do not use process.cwd() relative paths like 'user_data/x.txt' expecting the repository folder."
         },
         "destination": {
           "type": "string",
-          "description": "The destination path for copy or move. You MUST specify the full path starting with 'user_data/' (e.g. 'user_data/backup/notes.txt') or absolute '/app/user_data/' path."
+          "description": "The destination path for copy or move. ALWAYS use the relative sandbox path starting with 'user_data/' (e.g. 'user_data/backup/notes.txt'). Keep this consistent with the 'source' format; both must point inside the same user_data sandbox root. The destination MUST differ from the source."
         },
         "path": {
           "type": "string",
-          "description": "Target path for delete, mkdir, exists, info, or find actions. You MUST specify the full path starting with 'user_data/' (e.g. 'user_data/documents') or absolute '/app/user_data/' path."
+          "description": "Target path for delete, mkdir, exists, info, or find actions. ALWAYS use the relative sandbox path starting with 'user_data/' (e.g. 'user_data/documents')."
         },
         "recursive": {
           "type": "boolean",
@@ -279,8 +279,8 @@
     }
   },
   {
-    "id": "file_operations",
-    "name": "Automatic File Manipulation Hub",
+    "id": "file_automation",
+    "name": "File Automation",
     "description": "Manages sandbox files: sorts by type/date, creates zip archives, generates smart text summaries using Gemini, and converts formats.",
     "version": "1.0.0",
     "type": "TOOL",
@@ -350,8 +350,8 @@
     }
   },
   {
-    "id": "file_search",
-    "name": "Memory & Knowledge Search",
+    "id": "search_memory",
+    "name": "Search Memory",
     "description": "Search Yuihime's persistent memory and knowledge base (conversation history, facts, notes, and learned information) using a natural-language query. Use this to retrieve specific past information, facts the user shared, or recalled context before answering.",
     "version": "1.0.0",
     "type": "TOOL",
@@ -465,8 +465,8 @@
     }
   },
   {
-    "id": "lua_interpreter",
-    "name": "Neural Lua Engine",
+    "id": "run_lua",
+    "name": "Run Lua",
     "description": "Executes Lua code snippets for specialized game logic or integrations.",
     "version": "1.0.0",
     "type": "TOOL",
@@ -485,8 +485,8 @@
     }
   },
   {
-    "id": "manage_cron",
-    "name": "Cron Scheduler",
+    "id": "scheduler",
+    "name": "Scheduler",
     "description": "Schedule, list, and manage recurring tasks (cron jobs) in the system. Use this to create reminders or automated background checks.",
     "version": "1.0.0",
     "type": "TOOL",
@@ -532,8 +532,8 @@
     }
   },
   {
-    "id": "manage_identities",
-    "name": "Identity & Relationship Manager",
+    "id": "update_user_profile",
+    "name": "Update User Profile",
     "description": "Used by Yui to update the current user's profile details in her memory. Use this dynamically in chats whenever they ask you to call them a different nickname, share a new personal fact, delete a fact, or when you synthesize/update your subjective perspective of them.",
     "type": "TOOL",
     "version": "1.0.0",
@@ -574,8 +574,8 @@
     }
   },
   {
-    "id": "manage_pairing",
-    "name": "Secured Persona Pairing Manager",
+    "id": "pair_account",
+    "name": "Pair Account",
     "description": "Used ONLY when an external chat client (Telegram, Discord, etc.) wants to claim an identity from the Web app (e.g., claiming to be 'Aldi'). Under the hood, this generates a secure 6-digit random code that the user MUST enter in their Web console to complete the link securely.",
     "type": "TOOL",
     "version": "1.0.0",
@@ -699,8 +699,8 @@
     }
   },
   {
-    "id": "install_plugin",
-    "name": "Neural Addon Installer",
+    "id": "install_addon",
+    "name": "Install Addon",
     "description": "Installs or updates a system plugin/addon by writing its configuration and entry point.",
     "version": "1.0.0",
     "type": "TOOL",
@@ -739,8 +739,8 @@
     }
   },
   {
-    "id": "python_interpreter",
-    "name": "Neural Python Core",
+    "id": "run_python",
+    "name": "Run Python",
     "description": "Executes Python code for data analysis and complex math.",
     "version": "1.0.0",
     "type": "TOOL",
@@ -779,8 +779,8 @@
     }
   },
   {
-    "id": "search_chat_history",
-    "name": "Search Chat History",
+    "id": "search_chat",
+    "name": "Search Chat",
     "description": "Searches all past conversational chat history and message logs across all connected and paired channels (Web, Telegram, Discord, Live Stream) associated with the current user profile or account to retrieve, recall, or summarize previous discussions.",
     "version": "1.0.0",
     "type": "TOOL",
@@ -839,8 +839,8 @@
     }
   },
   {
-    "id": "shell_exec",
-    "name": "Command Line",
+    "id": "run_command",
+    "name": "Run Command",
     "description": "Execute shell commands on the host system.",
     "version": "1.0.0",
     "type": "TOOL",
@@ -859,8 +859,8 @@
     }
   },
   {
-    "id": "tensorart_generate",
-    "name": "TensorArt Image Generator",
+    "id": "generate_image",
+    "name": "Generate Image",
     "description": "Generate high-quality visuals and anime art using TensorArt API's txt2img diffusion stages.",
     "version": "1.0.0",
     "type": "TOOL",
@@ -908,8 +908,8 @@
     }
   },
   {
-    "id": "get_logs",
-    "name": "View System Logs",
+    "id": "view_logs",
+    "name": "View Logs",
     "description": "View Yuihime's system logs, audit trails, and LLM input/output details to diagnose system states, execution errors, or API issues.",
     "version": "1.0.0",
     "type": "TOOL",
@@ -941,7 +941,7 @@
     }
   },
   {
-    "id": "get_system_logs",
+    "id": "view_system_logs",
     "name": "View System Logs",
     "description": "Retrieve system audit logs and cognitive LLM processing error logs to diagnose issues within the batin (inner) modules, API connections, or general system failures.",
     "version": "1.0.0",
@@ -1029,8 +1029,8 @@
     }
   },
   {
-    "id": "web_scraper",
-    "name": "Web Snipper & Memory Piper",
+    "id": "scrape_web",
+    "name": "Scrape Web",
     "description": "Scrapes visible text or specific CSS selector content from a target URL and pipes it directly to the Yuihime memory bank.",
     "version": "1.0.0",
     "type": "TOOL",

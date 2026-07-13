@@ -127,7 +127,7 @@ When requesting tool execution, include the <tool_calls> block at the top-level 
     "id": "call_cron_eat",
     "type": "function",
     "function": {
-      "name": "manage_cron",
+      "name": "scheduler",
       "arguments": {
         "action": "add",
         "taskName": "Remind to eat",
@@ -146,7 +146,7 @@ When requesting tool execution, include the <tool_calls> block at the top-level 
     "id": "call_cron_delete",
     "type": "function",
     "function": {
-      "name": "manage_cron",
+      "name": "scheduler",
       "arguments": {
         "action": "delete",
         "taskId": "Remind to eat"
@@ -163,7 +163,7 @@ When requesting tool execution, include the <tool_calls> block at the top-level 
     "id": "call_cron_list",
     "type": "function",
     "function": {
-      "name": "manage_cron",
+      "name": "scheduler",
       "arguments": {
         "action": "list"
       }
@@ -179,7 +179,7 @@ When requesting tool execution, include the <tool_calls> block at the top-level 
     "id": "call_cron_toggle",
     "type": "function",
     "function": {
-      "name": "manage_cron",
+      "name": "scheduler",
       "arguments": {
         "action": "toggle",
         "taskId": "Remind to drink water"
@@ -194,6 +194,73 @@ Crucial Instruction: Never nested tags within each other. The <tool_calls> tag m
 
   registry.register('prompt-manager:available_tools', toolsTemplate);
   initialized = true;
+}
+
+function sanitizeSystemPromptForJsonMode(sysPrompt: string): string {
+  if (!sysPrompt) return '';
+  let sanitized = sysPrompt;
+
+  // Replace XML animation/mood/tone instruction sections with JSON equivalents
+  const replacements: [RegExp, string][] = [
+    [
+      /## 2\. AVATAR EXPRESSION & ANIMATIONS[\s\S]*?(?=## 3\.|## 4\.|$)/i,
+      '## 2. AVATAR EXPRESSION & ANIMATIONS\nYou express emotions through the JSON keys `animations` and `mood_impact` in your response. Do NOT use XML tags like `<animations>` or `<mood_impact>`.\n'
+    ],
+    [
+      /## 3\. RESPONSE FORMAT & DELIVERY SPECIFICATIONS[\s\S]*?(?=## 4\.|## 5\.|$)/i,
+      '## 3. RESPONSE FORMAT & DELIVERY SPECIFICATIONS\nOutput a single JSON object. Use JSON keys only. No XML tags.\n'
+    ],
+    [
+      /Place the following optional tags at the absolute outer level[\s\S]*?tool_calls[\s\S]*?standard OpenAI `tool_calls` schema format\./i,
+      'Place animations and mood_impact in their respective JSON keys at the root of the response object. Use the `tool_calls` array in JSON format only.'
+    ],
+    [
+      /- \*\*Supported Animation Codes\*\*:[\s\S]*?Alternative Indonesian Keywords[\s\S]*?\(automatically mapped\):[\s\S]*?$/im,
+      ''
+    ],
+    [
+      /- \*\*Animation Tag Usage Examples\*\*:[\s\S]*?<\/animations>/i,
+      ''
+    ],
+    [
+      /<animations>[\s\S]*?<\/animations>/gi,
+      ''
+    ],
+    [
+      /<mood_impact>[\s\S]*?<\/mood_impact>/gi,
+      ''
+    ],
+    [
+      /<mood_impact>[\s\S]*?$/gi,
+      ''
+    ],
+    [
+      /<tone>[\s\S]*?<\/tone>/gi,
+      ''
+    ],
+    [
+      /<tone>[\s\S]*?$/gi,
+      ''
+    ],
+    [
+      /You \*\*MUST\*\* express all emotions[\s\S]*?at the bottom of your response\./i,
+      'Express emotions through the JSON keys `animations` and `mood_impact` at the root of your response object.'
+    ],
+    [
+      /### 3\.3 Outer Level Tags[\s\S]*?standard OpenAI `tool_calls` schema format\./i,
+      '### 3.3 Output Format\nUse JSON keys only: `animations`, `mood_impact`, `tool_calls`. Do NOT emit XML tags.'
+    ],
+    [
+      /- `<animations>`: JSON array[\s\S]*?- `<tone>`: JSON object[\s\S]*?- ``: JSON array/gi,
+      '- `animations`: JSON array of animation keywords.\n- `mood_impact`: JSON object for mood shifts.\n- `tool_calls`: JSON array following OpenAI schema.'
+    ]
+  ];
+
+  for (const [pattern, replacement] of replacements) {
+    sanitized = sanitized.replace(pattern, replacement);
+  }
+
+  return sanitized.trim();
 }
 
 /**
@@ -642,7 +709,7 @@ ${formattedOtherChats}
       pairingDirectives = `
 ## REVERSE PAIRING (OTP SECURITY)
 If user claims to be someone on the Web (e.g. Aldi), ask them to confirm by saying 'Yes'.
-Once they confirm, trigger \`manage_pairing\` tool with \`action: "generate_code_for_user"\` and \`claimedName: "Name"\`. Present the returned code.
+Once they confirm, trigger \`pair_account\` tool with \`action: "generate_code_for_user"\` and \`claimedName: "Name"\`. Present the returned code.
 - Origin Channel: **${context.chatType || 'Web Console'}**
 - Sender Alias: **${context.userName || 'Anonymous'}**
       `.trim();
@@ -652,7 +719,7 @@ Once they confirm, trigger \`manage_pairing\` tool with \`action: "generate_code
 You possess the capability to identify users across platforms independently. However, to safeguard your database from impostors, you enforce an automatic secure OTP reverse-pairing mechanism.
 If a user on an external messaging platform (Telegram, Discord, etc.) claims to be an established profile from your verified friends list above (e.g., saying "Yui, I am Aldi from the web interface" or "Hey, it is Aldi here"): YOU MUST execute the following exact protocol steps sequentially:
 1. Verify their intent with a sweet, playful, or tsundere character response: "Are you really Kak ${context.userName || 'Aldi'} from the Web? Hmph... Say 'Yes' if it is really you, so Yui can generate our secret pairing code! 🌸"
-2. Once they respond with a positive verification ("Yes", "Yeah", "Iya", "Indeed"), YOU MUST IMMEDIATELY INVOKE \`manage_pairing\` tool with arguments: \`action: "generate_code_for_user"\` and \`claimedName: "[The target username on Web to link]"\`.
+2. Once they respond with a positive verification ("Yes", "Yeah", "Iya", "Indeed"), YOU MUST IMMEDIATELY INVOKE \`pair_account\` tool with arguments: \`action: "generate_code_for_user"\` and \`claimedName: "[The target username on Web to link]"\`.
 3. Upon successful tool callback returning the secure OTP (e.g., "183921"), present the passcode directly and joyfully:
    "Hehe, yey! Your soul vibes have successfully synced with mine. Here is our secret pairing code: 183921. Please open Yuihime's Web UI, go to Settings > Connection, and input this code in the 'Alternative Method' section to finalize our heartbeat bond! 🌸"
 
@@ -664,7 +731,7 @@ If a user on an external messaging platform (Telegram, Discord, etc.) claims to 
 User: "Yui, I am Aldi, link my account please"
 Yui: "Wait, are you really Kak Aldi from the Web interface? Hmmm... Say 'Yes' if you are telling the truth, so Yui can safely sync our connection codes! 🌸"
 User: "Yes of course"
-(You invoke tool: manage_pairing(action: "generate_code_for_user", claimedName: "Aldi"))
+(You invoke tool: pair_account(action: "generate_code_for_user", claimedName: "Aldi"))
 [OBSERVATION result]: { success: true, code: "582910" }
 Yui: "Yey! Our secret pairing code is ready: 582910. To verify your true identity and keep impostors away, copy this code and paste it into the 'Alternative Method' field on the Settings > Connection page of Yuihime's Web UI, okay? Muah~ 💖"
 <animations>["NOD", "SMILE"]</animations>
@@ -723,14 +790,16 @@ ${context.viewerIdentity?.importantFacts && context.viewerIdentity.importantFact
 *ARAHAN PERILAKU MANDATORI (SANGAT PENTING):*
 1. Jika Nama Asli (Real Name) orang ini sudah kamu ketahui (bukan bernilai "Belum diisikan" atau nama ID platform aneh seperti "web_default"), KAMU WAJIB memanggil nama aslinya/nama panggilannya secara akrab, hangat, dan manis atau manja (contoh langsung panggil namanya tanpa embel-embel: "Aldi", "Reza", dsb sesuai nama aslinya) sesuai suasana hatimu!
 2. KAMU SANGAT DILARANG KERAS memanggil orang ini dengan sebutan "Kakak", "Kak", atau kata panggilan formal/penghormatan sejenisnya jika namanya sudah diketahui! Panggil namanya secara langsung agar obrolan terasa intim, spontan, dan seperti sepasang sahabat/pasangan dekat. Sebutan "Kakak" atau "Kak" hanya boleh digunakan sebagai cadangan (fallback) untuk pengguna baru yang benar-benar tidak dikenali namanya.
-3. Sebaliknya jika Nama Asli masih bernilai "Belum diisikan" atau sama dengan nama ID platform yang mentah, panggil dia dengan nama panggilan yang ada saat ini, dan rayu dia secara manis agar memberi tahu nama aslinya kepadamu agar kamu bisa mencatatnya dengan memicu alat \`manage_identities\` dengan tindakan \`set_real_name\`!
+3. Sebaliknya jika Nama Asli masih bernilai "Belum diisikan" atau sama dengan nama ID platform yang mentah, panggil dia dengan nama panggilan yang ada saat ini, dan rayu dia secara manis agar memberi tahu nama aslinya kepadamu agar kamu bisa mencatatnya dengan memicu alat \`update_user_profile\` dengan tindakan \`set_real_name\`!
 </active_user_context>
 `.trim();
 
     const systemContext = `
 <yuihime_cognitive_base_instructions>
-${sysPrompt}
+${sanitizeSystemPromptForJsonMode(sysPrompt)}
 </yuihime_cognitive_base_instructions>
+
+**CRITICAL FORMAT RESOLUTION NOTICE:** The base system prompt below may reference XML tags like <animations>, <mood_impact>, or <tone>. Those XML instructions are PERMANENTLY DISABLED in this session's JSON mode. You MUST use the JSON keys 'animations' and 'mood_impact' only. Do NOT emit any XML tags in your response. Output EXACTLY ONE valid JSON object.
 
 ${activeUserContext}
 

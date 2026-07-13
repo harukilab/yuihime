@@ -9,7 +9,7 @@ Dokumen ini menjelaskan rancangan sistem, panduan penggunaan, serta tata cara me
 Jika pada pairing biasa (**Web-to-Bot**), Anda meminta kode dari Web UI lalu mengirimkannya ke Telegram dengan perintah `/pair [KODE]`, maka **Reverse Pairing (Bot-to-Web)** bekerja sebaliknya:
 
 1. Anda menyapa Yuihime di Telegram/Discord dan mengklaim identitas Anda (misal: *"Yui, aku ini Aldi"*).
-2. Yuihime memutarkan sirkuit kognisinya, memicu tool internal `manage_pairing`, lalu memberikan **6-digit Kode Sandi Rahasia**.
+2. Yuihime memutarkan sirkuit kognisinya, memicu tool internal `pair_account`, lalu memberikan **6-digit Kode Sandi Rahasia**.
 3. Anda memasukkan kode sandi tersebut di Web UI (bisa melalui **Sirkuit Chat Utama** dengan mengetik `/pair [KODE]`, atau melalui **Menu Settings > Connection**).
 4. Akun Telegram/Discord Anda kini sepenuhnya tertaut dengan profil data batin Anda di Web!
 
@@ -30,7 +30,7 @@ Sistem memagari proses ini dengan validasi waktu kedaluwarsa **10 menit** dan pe
    > *"Eh? Kakak beneran Kak Aldi yang di Web? Hummm... Coba dibilang 'Iya' kalau benar, biar Yui sinkronkan kognisi kita secara rahasia! 🌸"*
 4. Balaslah dengan kata konfirmasi positif, seperti:
    - **“Iya”**, **“Ya benar”**, atau **“Sip benar”**
-5. Yuihime akan diam-diam memanggil perkakas `manage_pairing` di latar belakang, memproses kecocokan profil Anda di basis data, dan melahirkan kode sandi unik:
+5. Yuihime akan diam-diam memanggil perkakas `pair_account` di latar belakang, memproses kecocokan profil Anda di basis data, dan melahirkan kode sandi unik:
    > *"Yeyyy! Ini kode penyandingan rahasia batin kita: **582910**. Untuk membuktikan identitas asli Kakak dan menghindari salah orang, silakan salin kode ini dan masukkan ke kolom 'Metode Alternatif' di halaman Settings > Connection pada Web UI Yuihime ya! Muahh~ 💖"*
 
 ---

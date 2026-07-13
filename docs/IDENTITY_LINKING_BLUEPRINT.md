@@ -83,7 +83,7 @@ Yuihime mampu membedakan nama asli manusia asli (*the objective self*) dari peng
 ### A. Deteksi Kognitif via Refleks Batin (Cognitive Sensing Loop)
 Saat pengguna memberi tahu nama aslinya dalam obrolan biasa (misal: *"Yui, panggil aku Nakamura ya"* atau *"Nama asliku adalah Haruki Nakamura"*):
 1.  **AI Engine** mendeteksi intensi penyetelan nama asli melalui nalar LLM.
-2.  Yuihime akan memanggil alat bawaan kustom `manage_identities` dengan payload:
+2.  Yuihime akan memanggil alat bawaan kustom `update_user_profile` dengan payload:
     ```json
     {
       "action": "set_real_name",
@@ -124,7 +124,7 @@ Untuk mencegah pencurian identitas atau manipulasi data batin lintas platform, Y
        │─── "Ya" ────────────────────────────────────>│                                     │
        │                                              │                                     │
        │                                     [BUAT SECURE OTP CODE]                         │
-       │                                      Panggil manage_pairing()                      │
+       │                                      Panggil pair_account()                      │
        │                                      Melahirkan kode OTP "582910"                  │
        │                                              │                                     │
        │<── "OTP Kode kita adalah: 582910. ───────────│                                     │

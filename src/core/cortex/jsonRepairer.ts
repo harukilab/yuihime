@@ -4,6 +4,7 @@
  */
 
 import { PromptRegistry } from '../PromptRegistry';
+import { extractBestJsonObject } from './jsonExtract';
 
 export async function repairJsonFormatWithLLM(
   thinkSimpleFn: (prompt: string, jsonMode?: boolean) => Promise<string>,
@@ -23,11 +24,15 @@ export async function repairJsonFormatWithLLM(
     // Clean markdown code tags if any leaked from other providers
     repairedRaw = repairedRaw.replace(/```json/gi, '').replace(/```/gi, '').trim();
 
-    // Bracket isolation
-    const firstBrace = repairedRaw.indexOf('{');
-    const lastBrace = repairedRaw.lastIndexOf('}');
-    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-      repairedRaw = repairedRaw.substring(firstBrace, lastBrace + 1);
+    const bestJson = extractBestJsonObject(repairedRaw);
+    if (bestJson) {
+      repairedRaw = bestJson;
+    } else {
+      const firstBrace = repairedRaw.indexOf('{');
+      const lastBrace = repairedRaw.lastIndexOf('}');
+      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+        repairedRaw = repairedRaw.substring(firstBrace, lastBrace + 1);
+      }
     }
 
     const parsed = JSON.parse(repairedRaw);

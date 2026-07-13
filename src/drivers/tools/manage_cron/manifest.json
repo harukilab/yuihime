@@ -1,6 +1,6 @@
 {
-  "id": "manage_cron",
-  "name": "Cron Scheduler",
+  "id": "scheduler",
+  "name": "Scheduler",
   "description": "Schedule, list, and manage recurring tasks (cron jobs) in the system. Use this to create reminders or automated background checks.",
   "version": "1.0.0",
   "type": "TOOL",

@@ -13,7 +13,7 @@ export interface MemorySearchHit {
 /**
  * Lightweight hybrid retrieval over Yuihime's persistent memory knowledge base.
  * Keyword/tag overlap ranking fused with importance and recency decay.
- * This is the local equivalent of a standard agent "file_search"/retrieval tool.
+ * This is the local equivalent of a standard agent "search_memory"/retrieval tool.
  */
 export async function searchMemories(
   query: string,

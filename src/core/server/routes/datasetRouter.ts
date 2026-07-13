@@ -452,7 +452,7 @@ export function registerDatasetRoutes(app: express.Express, db: any) {
               if (outputFormat === 'raw_text') {
                 try {
                   const sftObj = JSON.parse(rawResponse);
-                  const reply = sftObj.tool_calls?.find((t: any) => (t.function?.name || t.tool) === 'send_final_reply');
+                  const reply = sftObj.tool_calls?.find((t: any) => (t.function?.name || t.tool) === 'final_answer');
                   structuredContent = reply?.function?.arguments?.speech || reply?.args?.speech || sftObj.speech || rawResponse;
                 } catch (err) {
                   structuredContent = rawResponse;
@@ -486,7 +486,7 @@ You MUST synthesize:
 1. 'thought': Follow this custom CoT thought instruction template dynamically: "${currentThoughtPrompt}"
 2. 'animations': Match her body languages/emotions (e.g., SMILE, POUT, WAVE, BLUSH, ANGRY, TRIPLE_WAVE).
 3. 'mood_impact': Calculate changes relative to her states (such as joy, loneliness, anger, excitement).
-4. 'tool_calls': Wrap the original '${aiFallback} response' exactly inside the 'send_final_reply' speech argument.
+4. 'tool_calls': Wrap the original '${aiFallback} response' exactly inside the 'final_answer' speech argument.
 
 DO NOT alter, omit, or shorten her original speech. Preserve actual physical expression asterisks (like *pout* or *blush*) inside the speech wrapper. Output strictly as JSON following this schema:
 {
@@ -498,7 +498,7 @@ DO NOT alter, omit, or shorten her original speech. Preserve actual physical exp
       "id": "call_01",
       "type": "function",
       "function": {
-        "name": "send_final_reply",
+        "name": "final_answer",
         "arguments": {
           "speech": "string"
         }
@@ -528,7 +528,7 @@ DO NOT alter, omit, or shorten her original speech. Preserve actual physical exp
                         id: "call_01",
                         type: "function",
                         function: {
-                          name: "send_final_reply",
+                          name: "final_answer",
                           arguments: {
                             speech: rawResponse,
                             animations: parsed.animations || ["SMILE"],
@@ -561,7 +561,7 @@ DO NOT alter, omit, or shorten her original speech. Preserve actual physical exp
                         id: "call_01",
                         type: "function",
                         function: {
-                          name: "send_final_reply",
+                          name: "final_answer",
                           arguments: {
                             speech: rawResponse,
                             animations: Array.from(new Set(animations)),
@@ -592,7 +592,7 @@ DO NOT alter, omit, or shorten her original speech. Preserve actual physical exp
                   mood_impact: { joy: 1 },
                   tool_calls: [
                     {
-                      tool: "send_final_reply",
+                      tool: "final_answer",
                       args: {
                         speech: rawResponse,
                         animations: Array.from(new Set(animations)),

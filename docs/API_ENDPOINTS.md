@@ -801,7 +801,7 @@ Manages importing seed datasets, exporting structured SFT dialogue segments (Ope
           { "role": "user", "content": "Hai Yui!" },
           {
             "role": "assistant",
-            "content": "{\n  \"thought\": \"Responding to Kakak. Yui is formulating a sweet response.\",\n  \"animations\": [\"SMILE\"],\n  \"mood_impact\": { \"joy\": 1 },\n  \"tool_calls\": [\n    {\n      \"tool\": \"send_final_reply\",\n      \"args\": {\n        \"speech\": \"Hai Kakak! Senang bertemu lagi!\"\n      }\n    }\n  ]\n}"
+            "content": "{\n  \"thought\": \"Responding to Kakak. Yui is formulating a sweet response.\",\n  \"animations\": [\"SMILE\"],\n  \"mood_impact\": { \"joy\": 1 },\n  \"tool_calls\": [\n    {\n      \"tool\": \"final_answer\",\n      \"args\": {\n        \"speech\": \"Hai Kakak! Senang bertemu lagi!\"\n      }\n    }\n  ]\n}"
           }
         ]
       }

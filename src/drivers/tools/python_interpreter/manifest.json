@@ -1,6 +1,6 @@
 {
-  "id": "python_interpreter",
-  "name": "Neural Python Core",
+  "id": "run_python",
+  "name": "Run Python",
   "description": "Executes Python code for data analysis and complex math.",
   "version": "1.0.0",
   "type": "TOOL",

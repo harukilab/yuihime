@@ -37,7 +37,7 @@ The synthesizer follows a pipe-and-filter pipeline to automate the synthesis of 
    ┌───────────────────────┐
    │   Parallel LLM Engine  │ ---> Fetches Gemini 2.5/2.5-Flash or GPT-4o-Mini
    └───────────────────────┘      synthesizing 'thought', 'animations', 
-               │                  and wrapping speech in 'send_final_reply'
+               │                  and wrapping speech in 'final_answer'
                ▼
    ┌───────────────────────┐
    │   Verification Gate   │ ---> Re-parses JSON, enforces schema compatibility
@@ -61,7 +61,7 @@ For every character line in the raw dataset, the program calls an LLM api to syn
 1. **Internal Monologue (`thought`)**: Explaining the character's internal logic, emotional transitions, and plan behind the response using the Indonesian language.
 2. **Body Expressions (`animations`)**: Assigning 1-3 appropriate visual keys (`SMILE`, `POUT`, `ANGRY`, `WAVE`, `BLUSH`, `SAD`, `THINK`).
 3. **Internal State adjustment (`mood_impact`)**: Calculating changes in batin dimensions (`joy`, `loneliness`, `anger`).
-4. **Tool-calling Wrap**: Moving the original textual response inside the `send_final_reply` tool arguments.
+4. **Tool-calling Wrap**: Moving the original textual response inside the `final_answer` tool arguments.
 
 ### F-3: Validation Gate & Token Conservation
 * Validate the produced JSON against YuiHime's exact schema.
@@ -96,7 +96,7 @@ class ToolCallArgs(BaseModel):
     mood_impact: Dict[str, int] = Field(description="Changes in mood like joy or loneliness.")
 
 class ToolCall(BaseModel):
-    tool: str = "send_final_reply"
+    tool: str = "final_answer"
     args: ToolCallArgs
 
 class YuihimeSftTurn(BaseModel):
@@ -123,7 +123,7 @@ You MUST synthesize:
 1. 'thought': Explain why Yui responded that way, her inner Tsundere thoughts, plans, and emotional transitions in Indonesian.
 2. 'animations': Match her body languages/emotions (e.g., SMILE, POUT, WAVE, BLUSH, ANGRY, TRIPLE_WAVE).
 3. 'mood_impact': Calculate changes relative to her states.
-4. 'tool_calls': Wrap the original 'Yui response' exactly inside the 'send_final_reply' speech argument.
+4. 'tool_calls': Wrap the original 'Yui response' exactly inside the 'final_answer' speech argument.
 
 DO NOT alter, omit, or shorten her original speech. Preserve her actual physical expression asterisks (like *pout* or *blush*) inside the speech wrapper.
 """

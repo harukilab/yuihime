@@ -1,6 +1,6 @@
 {
-  "id": "manage_identities",
-  "name": "Identity & Relationship Manager",
+  "id": "update_user_profile",
+  "name": "Update User Profile",
   "description": "Used by Yui to update the current user's profile details in her memory. Use this dynamically in chats whenever they ask you to call them a different nickname, share a new personal fact, delete a fact, or when you synthesize/update your subjective perspective of them.",
   "type": "TOOL",
   "version": "1.0.0",

@@ -47,8 +47,10 @@ Respond with your plan inside a <plan> tag as a JSON object:
     this.register('cortex:json_enforcement', `
 [CRITICAL DIRECTIVE - RESPONSE FORMAT: JSON_OBJECT]:
 Strictly output ONLY valid JSON. No markdown formatting. No preamble or post-script text. Failure to follow this format will result in a processing error.
-You MUST output your response as a SINGLE, STABLE, VALID JSON OBJECT.
+You MUST output your response as a SINGLE, STABLE, VALID JSON OBJECT. Output EXACTLY ONE JSON object. Do NOT write planning prose, chain-of-thought, or multiple JSON objects outside that single object.
 Do NOT output any markdown tags (like \`\`\`json or \`\`\`), do NOT output XML tags, and do NOT write any raw conversational text outside the JSON object boundaries.
+
+NOTE: The base system prompt may reference XML tags like <animations>, <mood_impact>, or <tone>. Those XML instructions are DISABLED in JSON mode. Use the JSON keys \`animations\` and \`mood_impact\` only. Do NOT emit a \`tone\` key.
 
 =========================================
 FORMAL RESPONSE INTERFACE DEFINITION (TypeScript format):
@@ -167,10 +169,10 @@ Your output must conform exactly to the following JSON Schema:
           "function": {
             "type": "object",
             "properties": {
-              "name": { "type": "string", "description": "The tool/function name to execute. If you just want to talk or respond to the user, you MUST call 'send_final_reply' (or call both your task tool AND 'send_final_reply' in parallel within the list!)." },
+              "name": { "type": "string", "description": "The tool/function name to execute. If you just want to talk or respond to the user, you MUST call 'final_answer' (or call both your task tool AND 'final_answer' in parallel within the list!)." },
               "arguments": {
                 "type": "object",
-                "description": "An OBJECT (not a string) containing arguments for the tool. For 'send_final_reply', arguments must be { 'speech': '...', 'animations': [...], 'mood_impact': {...} }."
+                "description": "An OBJECT (not a string) containing arguments for the tool. For 'final_answer', arguments must be { 'speech': '...', 'animations': [...], 'mood_impact': {...} }."
               }
             },
             "required": ["name", "arguments"]
@@ -197,7 +199,7 @@ Example of strict valid JSON output:
       "id": "call_01",
       "type": "function",
       "function": {
-        "name": "send_final_reply",
+        "name": "final_answer",
         "arguments": { "speech": "Hmph! Kakak tumben...", "animations": ["SMILE"] }
       }
     }
@@ -294,10 +296,10 @@ The output JSON object MUST conform EXACTLY to this schema:
           "function": {
             "type": "object",
             "properties": {
-              "name": { "type": "string", "description": "The name of the tool/function to execute. MUST include 'send_final_reply' if responding to the user." },
+              "name": { "type": "string", "description": "The name of the tool/function to execute. MUST include 'final_answer' if responding to the user." },
               "arguments": {
                 "type": "object",
-                "description": "An OBJECT containing arguments for the specific tool. For 'send_final_reply', arguments must be { 'speech': '...', 'animations': [...], 'mood_impact': {...} }. For other tools, match their exact parameter schemas."
+                "description": "An OBJECT containing arguments for the specific tool. For 'final_answer', arguments must be { 'speech': '...', 'animations': [...], 'mood_impact': {...} }. For other tools, match their exact parameter schemas."
               }
             },
             "required": ["name", "arguments"]
@@ -318,7 +320,7 @@ User's original query: "\${userQuery}"
 
 CRITICAL INSTRUCTIONS:
 1. Output ONLY a valid, single parseable JSON object matching the schema. No markdown formatting (\`\`\`json or \`\`\`), no preamble, no post-script text.
-2. In 'speech' of her 'send_final_reply' tool call, preserve the character's tone, thoughts, personality, and spoken words, but remove any duplicated lines, list indicators, planning blocks, metadata, robotic terms, and any asterisk-wrapped physical actions or animations (like *pout* or *giggles*).
+2. In 'speech' of her 'final_answer' tool call, preserve the character's tone, thoughts, personality, and spoken words, but remove any duplicated lines, list indicators, planning blocks, metadata, robotic terms, and any asterisk-wrapped physical actions or animations (like *pout* or *giggles*).
 3. Clean up any repeating paragraphs or loops to make the speech completely natural and polished.
 4. Output Indonesian or Japanese dialogue for speech matching Yuihime's sweet, slightly tsundere character.
 
@@ -356,7 +358,7 @@ Your response (MUST open with '{' and close with '}'):
       if (preset === 'tiny') {
         return `
 [CRITICAL DIRECTIVE - RESPONSE FORMAT: JSON_OBJECT]:
-Strictly output ONLY valid JSON.
+Strictly output ONLY valid JSON. Output EXACTLY ONE JSON object. Do NOT write planning prose, chain-of-thought, or multiple JSON objects outside that single object.
 Your output must conform exactly to the following JSON structure:
 {
   "thought": "Keep this extremely short (under 1 sentence, or empty) unless deep planning is needed. Do not overthink.",
@@ -364,12 +366,13 @@ Your output must conform exactly to the following JSON structure:
   "speech": "Your spoken reply in Indonesian or Japanese as Yuihime. Speak in character."
 }
 No other fields are allowed. Make sure the output is perfectly valid JSON. Do NOT wrap in \`\`\`json markdown blocks or raw conversational text outside the boundaries.
+NOTE: XML tag instructions from the base system prompt are DISABLED here. Use JSON keys only. Do NOT emit a \`tone\` key.
 [END OF JSON_OBJECT CRITICAL DIRECTIVE]
         `.trim();
       } else if (preset === 'lite') {
         return `
 [CRITICAL DIRECTIVE - RESPONSE FORMAT: JSON_OBJECT]:
-Strictly output ONLY valid JSON.
+Strictly output ONLY valid JSON. Output EXACTLY ONE JSON object. Do NOT write planning prose, chain-of-thought, or multiple JSON objects outside that single object.
 Your output must conform exactly to the following JSON structure:
 {
   "thought": "Keep this extremely short (under 1 sentence, or empty) unless deep planning is needed. Do not overthink.",
@@ -383,7 +386,7 @@ Your output must conform exactly to the following JSON structure:
       "id": "call_01",
       "type": "function",
       "function": {
-        "name": "send_final_reply",
+        "name": "final_answer",
         "arguments": {
           "speech": "Your spoken reply in Indonesian or Japanese as Yuihime",
           "animations": ["SMILE"]
@@ -393,12 +396,13 @@ Your output must conform exactly to the following JSON structure:
   ]
 }
 Do NOT include schema headers or comments. Ensure valid JSON format.
+NOTE: XML tag instructions from the base system prompt are DISABLED here. Use JSON keys only. Do NOT emit a \`tone\` key.
 [END OF JSON_OBJECT CRITICAL DIRECTIVE]
         `.trim();
       } else if (preset === 'medium') {
         return `
 [CRITICAL DIRECTIVE - RESPONSE FORMAT: JSON_OBJECT]:
-Strictly output ONLY valid JSON.
+Strictly output ONLY valid JSON. Output EXACTLY ONE JSON object. Do NOT write planning prose, chain-of-thought, or multiple JSON objects outside that single object.
 Your output must conform exactly to the following JSON structure:
 {
   "thought": "Keep this extremely short (under 1 sentence, or empty) unless deep planning is needed. Do not overthink.",
@@ -412,7 +416,7 @@ Your output must conform exactly to the following JSON structure:
       "id": "call_01",
       "type": "function",
       "function": {
-        "name": "send_final_reply",
+        "name": "final_answer",
         "arguments": {
           "speech": "Your spoken reply",
           "animations": ["SMILE"]
@@ -422,6 +426,7 @@ Your output must conform exactly to the following JSON structure:
   ]
 }
 Ensure valid JSON format. Keep keys simple.
+NOTE: XML tag instructions from the base system prompt are DISABLED here. Use JSON keys only. Do NOT emit a \`tone\` key.
 [END OF JSON_OBJECT CRITICAL DIRECTIVE]
         `.trim();
       }

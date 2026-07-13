@@ -28,26 +28,24 @@ export function normalizeToolCall(tc: any): any {
     'search': 'web_search',
     'google': 'web_search',
     'websearch': 'web_search',
-    'run_command': 'shell_exec',
-    'execute_command': 'shell_exec',
-    'exec_command': 'shell_exec',
-    'command_executor': 'shell_exec',
-    'shell': 'shell_exec',
-    'terminal': 'shell_exec',
-    'shell_exec': 'shell_exec',
-    'shell_execution': 'shell_exec',
-    'exec': 'shell_exec',
-    'execute': 'shell_exec',
-    'run': 'shell_exec',
-    'bash': 'shell_exec',
-    'cmd': 'shell_exec',
-    'sh': 'shell_exec',
-    'run_shell': 'shell_exec',
-    'run_python': 'python_interpreter',
-    'python': 'python_interpreter',
-    'python_exec': 'python_interpreter',
-    'python_interpreter_tool': 'python_interpreter',
-    'python_interpreter': 'python_interpreter',
+    'run_command': 'run_command',
+    'execute_command': 'run_command',
+    'exec_command': 'run_command',
+    'command_executor': 'run_command',
+    'shell': 'run_command',
+    'terminal': 'run_command',
+    'shell_execution': 'run_command',
+    'exec': 'run_command',
+    'execute': 'run_command',
+    'run': 'run_command',
+    'bash': 'run_command',
+    'cmd': 'run_command',
+    'sh': 'run_command',
+    'run_shell': 'run_command',
+    'run_python': 'run_python',
+    'python': 'run_python',
+    'python_exec': 'run_python',
+    'python_interpreter_tool': 'run_python',
     'code_interpreter': 'code_interpreter',
     'run_code': 'code_interpreter',
     'write_file_tool': 'write_file',
@@ -56,14 +54,14 @@ export function normalizeToolCall(tc: any): any {
     'list_files_tool': 'list_files',
     'list_dir': 'list_files',
     'ls': 'list_files',
-    'modify_file': 'file_operations',
-    'file_manipulate_tool': 'file_operations',
-    'adjust_emotion': 'emotion_adjust',
+    'modify_file': 'file_automation',
+    'file_manipulate_tool': 'file_automation',
+    'adjust_emotion': 'set_emotion',
     'send_message': 'send_message',
     'telegram_message': 'send_message',
     'send_telegram': 'send_message',
-    'set_nickname': 'manage_identities',
-    'update_identity': 'manage_identities'
+    'set_nickname': 'update_user_profile',
+    'update_identity': 'update_user_profile'
   };
 
   const lowerName = name.trim().toLowerCase();
@@ -73,7 +71,7 @@ export function normalizeToolCall(tc: any): any {
   }
 
   // Parameter normalizations for common tools to maximize compatibility
-  if (name === 'shell_exec') {
+  if (name === 'run_command') {
     const rawCmd = args.command || args.cmd || args.commandText || args.code || args.exec || args.script;
     if (rawCmd) {
       args.command = rawCmd;

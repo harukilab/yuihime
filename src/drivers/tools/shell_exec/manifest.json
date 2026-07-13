@@ -1,6 +1,6 @@
 {
-  "id": "shell_exec",
-  "name": "Command Line",
+  "id": "run_command",
+  "name": "Run Command",
   "description": "Execute shell commands on the host system.",
   "version": "1.0.0",
   "type": "TOOL",

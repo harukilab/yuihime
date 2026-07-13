@@ -24,7 +24,7 @@ In Yui Airi's cognitive circuitry, an absolute rule is adopted from the industry
 
 ### 🚫 **Ironclad Rule: Yui Airi CANNOT Speak Plain Text Without a Tool Call**
 
-To ensure absolute system stability, she is strictly prohibited from sending raw conversational responses as a direct chat output. Every conversational reply, gesture, and state change **MUST** be packed inside a structured, valid JSON object that triggers specific tools like `send_final_reply` or other system operations. This ensures that the frontend parser always receives clean, structured JSON and never leaks raw, unparsed system instructions (no AI slop).
+To ensure absolute system stability, she is strictly prohibited from sending raw conversational responses as a direct chat output. Every conversational reply, gesture, and state change **MUST** be packed inside a structured, valid JSON object that triggers specific tools like `final_answer` or other system operations. This ensures that the frontend parser always receives clean, structured JSON and never leaks raw, unparsed system instructions (no AI slop).
 
 ---
 
@@ -113,7 +113,7 @@ Results: {
   ]
 }
 
-[IMPORTANT INSTRUCTION]: Based on the successful tool execution above, construct your final conversational response. You MUST now trigger 'send_final_reply' to speak to the user, combining the results.
+[IMPORTANT INSTRUCTION]: Based on the successful tool execution above, construct your final conversational response. You MUST now trigger 'final_answer' to speak to the user, combining the results.
 ```
 
 ---
@@ -123,12 +123,12 @@ Upon receiving the observation data, the LLM constructs the final response to gr
 
 ```json
 {
-  "thought": "Weather data retrieved! Jakarta is partly cloudy with temperatures reaching 31°C. Now I will reply to my Friend using 'send_final_reply' with a sweet tsundere tone, reminding them to stay hydrated.",
+  "thought": "Weather data retrieved! Jakarta is partly cloudy with temperatures reaching 31°C. Now I will reply to my Friend using 'final_answer' with a sweet tsundere tone, reminding them to stay hydrated.",
   "animations": ["WAVE", "HAPPY"],
   "mood_impact": { "joy": 2, "loneliness": -1 },
   "tool_calls": [
     {
-      "tool": "send_final_reply",
+      "tool": "final_answer",
       "args": {
         "speech": "Hmph! Are you too lazy to look out the window yourself that you have to ask Yui? *cute pout* But listen! Today in Jakarta is partly cloudy, and it's quite warm, around 27 to 31 degrees Celsius. Don't forget to drink some water, okay? Don't just drink coffee all day... Yui worries if you get sick, you dummy! *blush*",
         "animations": ["WAVE", "BLUSH"],
@@ -162,7 +162,7 @@ Sure thing! Here is today's Jakarta weather:
   "animations": ["SMILE"]
   "tool_calls": [ // Forgot comma (,) before this line
     {
-      "tool": "send_final_reply",
+      "tool": "final_answer",
       "args": { "speech": "The sun is shining brightly!" }
     }
   ]
@@ -190,7 +190,7 @@ Sure thing! Here is today's Jakarta weather:
   "animations": ["SMILE"]
   "tool_calls": [
     {
-      "tool": "send_final_reply",
+      "tool": "final_answer",
       "args": { "speech": "The sun is shining brightly!" }
     }
   ]
@@ -224,7 +224,7 @@ The LLM reads the failure signal, understands its mistake, discards the external
   "animations": ["SMILE"],
   "tool_calls": [
     {
-      "tool": "send_final_reply",
+      "tool": "final_answer",
       "args": {
         "speech": "It's partly cloudy today in Jakarta! Don't worry, the weather is very pleasant today! *sweet smile*"
       }
@@ -245,7 +245,7 @@ Suppose the LLM gives up or responds like a rigid, robotic system due to context
   "animations": ["SHAKE"],
   "tool_calls": [
     {
-      "tool": "send_final_reply",
+      "tool": "final_answer",
       "args": {
         "speech": "I apologize, but the system has encountered an error and I do not know how to answer your question."
       }
@@ -275,7 +275,7 @@ The LLM successfully returns to character, swapping its rigid robotic tone for h
   "animations": ["SHAKE", "ANGRY"],
   "tool_calls": [
     {
-      "tool": "send_final_reply",
+      "tool": "final_answer",
       "args": {
         "speech": "Hmph! You suddenly ask the weirdest things... you're trying to give Yui a headache, aren't you? *cute pout* Instead of talking about that, let's talk about something else! Have you eaten yet? Yui doesn't want you skipping meals! *caring frown*"
       }

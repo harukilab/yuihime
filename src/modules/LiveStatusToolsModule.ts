@@ -2,8 +2,8 @@ import { ToolModule, ModuleType } from '../include/types';
 
 export const SendStatusUpdateTool: ToolModule = {
   metadata: {
-    id: 'send_status_update',
-    name: 'send_status_update',
+    id: 'status_update',
+    name: 'status_update',
     description: 'Mengirimkan pesan suara/teks transisi singkat atau indikator visual agar pengguna tahu Yui sedang bekerja di sela-sela berpikir.',
     version: '1.0.0',
     type: ModuleType.TOOL,
@@ -57,8 +57,8 @@ export const SendStatusUpdateTool: ToolModule = {
 
 export const SendFinalReplyTool: ToolModule = {
   metadata: {
-    id: 'send_final_reply',
-    name: 'send_final_reply',
+    id: 'final_answer',
+    name: 'final_answer',
     description: 'Mengirimkan keputusan akhir atau respons obrolan manis verbal lahiriah murni kepada Kakak (user) setelah seluruh tugas selesai dilakukan.',
     version: '1.0.0',
     type: ModuleType.TOOL,

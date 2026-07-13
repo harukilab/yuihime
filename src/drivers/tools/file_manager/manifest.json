@@ -1,6 +1,6 @@
 {
-  "id": "manage_files",
-  "name": "File Manager Core Utility",
+  "id": "file_manager",
+  "name": "File Manager",
   "description": "Perform robust file operations: copy, move/rename, delete files or directories, create directories, check if a path exists, get file info, or find files by wildcard patterns inside the sandbox.",
   "version": "1.0.0",
   "type": "TOOL",
@@ -15,15 +15,15 @@
       },
       "source": {
         "type": "string",
-        "description": "The source path to copy or move. You MUST specify the full path starting with 'user_data/' (e.g. 'user_data/notes.txt') or absolute '/app/user_data/' path."
+        "description": "The source path to copy or move. ALWAYS use the relative sandbox path starting with 'user_data/' (e.g. 'user_data/notes.txt'). You may also use an absolute path to the configured user_data directory, but NEVER mix formats within a single call (the source and destination must use the same base). Do not use process.cwd() relative paths like 'user_data/x.txt' expecting the repository folder."
       },
       "destination": {
         "type": "string",
-        "description": "The destination path for copy or move. You MUST specify the full path starting with 'user_data/' (e.g. 'user_data/backup/notes.txt') or absolute '/app/user_data/' path."
+        "description": "The destination path for copy or move. ALWAYS use the relative sandbox path starting with 'user_data/' (e.g. 'user_data/backup/notes.txt'). Keep this consistent with the 'source' format; both must point inside the same user_data sandbox root. The destination MUST differ from the source."
       },
       "path": {
         "type": "string",
-        "description": "Target path for delete, mkdir, exists, info, or find actions. You MUST specify the full path starting with 'user_data/' (e.g. 'user_data/documents') or absolute '/app/user_data/' path."
+        "description": "Target path for delete, mkdir, exists, info, or find actions. ALWAYS use the relative sandbox path starting with 'user_data/' (e.g. 'user_data/documents')."
       },
       "recursive": {
         "type": "boolean",

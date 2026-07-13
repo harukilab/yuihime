@@ -35,7 +35,7 @@ export class PuterAdapter {
           } catch (e) {}
         }
 
-        if (toolName === 'send_final_reply' && toolArgs?.speech) {
+        if (toolName === 'final_answer' && toolArgs?.speech) {
           finalResponse = toolArgs.speech;
           if (toolArgs.animations && Array.isArray(toolArgs.animations)) {
             extraAnimations = [...extraAnimations, ...toolArgs.animations];
@@ -102,7 +102,7 @@ export class PuterAdapter {
   static registerPuterTools(): any[] {
     return [
       {
-        name: 'send_final_reply',
+        name: 'final_answer',
         description: 'Send the final response message back to Puter user',
         parameters: {
           type: 'object',

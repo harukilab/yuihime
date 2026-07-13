@@ -18,7 +18,7 @@ export function wrapForPuterConsciousness(thinkResult: any) {
   
   if (Array.isArray(toolCalls)) {
     toolCalls = toolCalls.map(normalizeToolCall).filter(Boolean).map((tc: any) => {
-      if (tc.tool === 'send_final_reply' && finalSpeech) {
+      if (tc.tool === 'final_answer' && finalSpeech) {
         return {
           ...tc,
           args: {
@@ -35,18 +35,18 @@ export function wrapForPuterConsciousness(thinkResult: any) {
 
   // Fallback speech check if not immediately present
   if (!finalSpeech && toolCalls && toolCalls.length > 0) {
-    const finalReplyCall = toolCalls.find((tc: any) => tc.tool === 'send_final_reply');
+    const finalReplyCall = toolCalls.find((tc: any) => tc.tool === 'final_answer');
     if (finalReplyCall && finalReplyCall.args?.speech) {
       finalSpeech = finalReplyCall.args.speech;
     }
   }
 
-  // Ensure that if we have a speech but no tool_calls with send_final_reply, we wrap it
-  if (finalSpeech && (!toolCalls || toolCalls.length === 0 || !toolCalls.some((tc: any) => tc.tool === 'send_final_reply'))) {
+  // Ensure that if we have a speech but no tool_calls with final_answer, we wrap it
+  if (finalSpeech && (!toolCalls || toolCalls.length === 0 || !toolCalls.some((tc: any) => tc.tool === 'final_answer'))) {
     toolCalls = [
       ...toolCalls,
       {
-        tool: "send_final_reply",
+        tool: "final_answer",
         args: {
           speech: finalSpeech
         }

@@ -31,6 +31,7 @@ import { StreamExtractor } from './streamExtractors';
 import { wrapForPuterConsciousness } from './puterWrapper';
 import { repairJsonFormatWithLLM } from './jsonRepairer';
 import { FastTrackRunner } from './fastTrackRunner';
+import { extractBestJsonObject } from './jsonExtract';
 
 /**
  * Build a canonical OpenAI-native tool call object enriched with backward
@@ -302,12 +303,13 @@ You MUST:
         /## Format Respons Khusus[\s\S]*?(?=## Eksekusi Tugas|$)/i,
         `## Format Respons Khusus (JSON MODE ACTIVE):
 Because the active cognitive vessel is in strict JSON mode, you are FORBIDDEN from using raw XML tags (such as <animations>, <mood_impact>, <tool_calls>).
-Instead, you MUST strictly output a single JSON object matching the JSON Schema. Place your main verbal dialogue speech inside the "speech" key at the root of the JSON object (or under the "send_final_reply" tool call's arguments if calling tools).
+Instead, you MUST strictly output a single JSON object matching the JSON Schema. Place your main verbal dialogue speech inside the "speech" key at the root of the JSON object (or under the "final_answer" tool call's arguments if calling tools).
 Ensure your "thought" field is extremely short (under 1 sentence, or empty). Animations and mood_impact must be mapped to their respective JSON keys.
 When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: each item is an object with "id" (unique string like "call_abc123"), "type": "function", and "function": { "name": string, "arguments": object }. The "arguments" MUST be a JSON object (never a string). Always generate a unique "id" so tool results can be paired back to each call.
 \n\n`
       );
       const jsonEnforcementDirective = PromptRegistry.getInstance().compile('cortex:json_enforcement', {});
+      loopContext.assembledSystemPrompt += "\n\nThe base system prompt's XML tag instructions (<animations>, <mood_impact>, <tone>) are DISABLED in JSON mode. Use the JSON keys animations and mood_impact only.\n\n";
       loopContext.assembledSystemPrompt += jsonEnforcementDirective;
     }
   }
@@ -370,10 +372,10 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
         if (hasFailure) {
           instructionText = `Based on the tool execution results above (noting that some features/tools FAILED with errors), immediately formulate your casual spoken response to the user. Do NOT pretend you succeeded! Instead, as Yuihime, explain the failure or difficulty to the user in a charming, sweet, slightly apologetic and character-consistent way (e.g., 'Aduh, maaf ya Kak... Yui coba buat fotonya tapi sirkuit batin/servernya lagi agak ngambek... atau Kakak mau Yui coba lagi?'). Maintain your lovable personality, do NOT provide raw technical code details/stack traces, and ask if they want you to retry, do something else, or just keep talking!`;
         } else {
-          instructionText = `Based on the successful tool execution results above, you can EITHER choose to call another tool if you need more actions/information to fully answer the user (such as list_files, read_file, shell_exec), OR if you have all the information required, formulate your final casual spoken response to the user. Do not repeat technical details, do not write internal thoughts, plans, or analysis blocks outside the JSON structure. Directly chat with the user in your natural, emotional, affectionate/tsundere personal character using the user's conversational language!`;
+          instructionText = `Based on the successful tool execution results above, you can EITHER choose to call another tool if you need more actions/information to fully answer the user (such as list_files, read_file, run_command), OR if you have all the information required, formulate your final casual spoken response to the user. Do not repeat technical details, do not write internal thoughts, plans, or analysis blocks outside the JSON structure. Directly chat with the user in your natural, emotional, affectionate/tsundere personal character using the user's conversational language!`;
           
           const readToolRes = lastExecuted.results.find((res: any) => 
-            ['read_file', 'list_files', 'get_logs', 'get_system_logs', 'manage_files'].includes(res.tool) && res.success
+            ['read_file', 'list_files', 'view_logs', 'view_system_logs', 'file_manager'].includes(res.tool) && res.success
           );
           if (readToolRes) {
             instructionText += `\n\nCRITICAL DIRECTIVE FOR RETRIEVED CONTENTS: Since you successfully retrieved content, data, file list, or logs via '${readToolRes.tool}', you MUST share/display the exact retrieved file content, directory listing, or log data inside your 'speech' field so the user can see it! Do NOT give a false promise by saying 'Ini dia isinya...' or 'Yui sudah baca...' or 'Ini list catatan...' without actually writing out the retrieved contents or list of files in this very response. If the content, listing, or log is empty, clearly state to the user that it is currently empty.`;
@@ -474,6 +476,22 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
     } else {
        const cleanJsonStr = APIService.cleanAIOutput(rawResultStr);
 
+       if (!parsedPayload) {
+          const bestJson = extractBestJsonObject(cleanJsonStr || rawResultStr);
+          if (bestJson) {
+             try {
+                parsedPayload = JSON.parse(bestJson);
+                logs.push("[CORTEX_LOOP] Successfully parsed JSON_OBJECT using balanced-object extraction.");
+                if (parsedPayload && parsedPayload.properties && typeof parsedPayload.properties === 'object' && !Array.isArray(parsedPayload.properties)) {
+                   if (parsedPayload.properties.thought || parsedPayload.properties.tool_calls || parsedPayload.properties.tools_to_call || parsedPayload.properties.final_answer) {
+                      logs.push("[CORTEX_LOOP] Detected nested properties schema confusion, lifting properties values to root.");
+                      Object.assign(parsedPayload, parsedPayload.properties);
+                   }
+                }
+             } catch {}
+          }
+       }
+
        try {
           let repaired = cleanJsonStr;
            let directParseOk = false;
@@ -494,12 +512,11 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
           }
        } catch (err: any) {
           parseError = err?.message || String(err);
-          const firstBrace = cleanJsonStr.indexOf('{');
-          const lastBrace = cleanJsonStr.lastIndexOf('}');
-          if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+          const bestJson = extractBestJsonObject(cleanJsonStr || rawResultStr);
+          if (bestJson) {
              try {
-                parsedPayload = JSON.parse(cleanJsonStr.substring(firstBrace, lastBrace + 1));
-                logs.push("[CORTEX_LOOP] Successfully parsed JSON_OBJECT using bracket isolation.");
+                parsedPayload = JSON.parse(bestJson);
+                logs.push("[CORTEX_LOOP] Successfully parsed JSON_OBJECT using balanced-object extraction in catch fallback.");
                 if (parsedPayload && parsedPayload.properties && typeof parsedPayload.properties === 'object' && !Array.isArray(parsedPayload.properties)) {
                    if (parsedPayload.properties.thought || parsedPayload.properties.tool_calls || parsedPayload.properties.tools_to_call || parsedPayload.properties.final_answer) {
                       logs.push("[CORTEX_LOOP] Detected nested properties schema confusion, lifting properties values to root.");
@@ -507,11 +524,28 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
                    }
                 }
                 parseError = null;
-              } catch (err2: any) {
-                 parseError = err2?.message || String(err2);
-              }
-           }
-        }
+             } catch {}
+          }
+          if (!parsedPayload) {
+             const firstBrace = cleanJsonStr.indexOf('{');
+             const lastBrace = cleanJsonStr.lastIndexOf('}');
+             if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+                try {
+                   parsedPayload = JSON.parse(cleanJsonStr.substring(firstBrace, lastBrace + 1));
+                   logs.push("[CORTEX_LOOP] Successfully parsed JSON_OBJECT using bracket isolation.");
+                   if (parsedPayload && parsedPayload.properties && typeof parsedPayload.properties === 'object' && !Array.isArray(parsedPayload.properties)) {
+                      if (parsedPayload.properties.thought || parsedPayload.properties.tool_calls || parsedPayload.properties.tools_to_call || parsedPayload.properties.final_answer) {
+                         logs.push("[CORTEX_LOOP] Detected nested properties schema confusion, lifting properties values to root.");
+                         Object.assign(parsedPayload, parsedPayload.properties);
+                      }
+                   }
+                   parseError = null;
+                } catch (err2: any) {
+                   parseError = err2?.message || String(err2);
+                }
+             }
+          }
+       }
 
        if (!parsedPayload && rawResultStr && rawResultStr.trim().length > 0) {
           try {
@@ -524,7 +558,7 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
                    animations: xmlParsed.animations || ["SMILE"],
                    tool_calls: xmlParsed.tool_calls || xmlParsed.tools_to_call || []
                 };
-                logs.push("[CORTEX_LOOP] [COMPATIBILITY] Succeeded in parsing XML fallback layout before engaging LLM repairer.");
+                logs.push("[CORTEX_LOOP] [COMPATIBILITY] Succeeded in parsing XML fallback layout BEFORE engaging LLM repairer.");
              }
           } catch (xmlErr: any) {
              console.warn("[CORTEX_LOOP] XML parse pre-check failed:", xmlErr.message);
@@ -534,83 +568,51 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
              const hasBraces = rawResultStr.includes('{') || rawResultStr.includes('}');
              const hasXml = /<[a-zA-Z_]+>/i.test(rawResultStr);
              const lowerRaw = rawResultStr.toLowerCase();
-             const isPlanningThought = 
-                lowerRaw.includes("i should") || 
-                lowerRaw.includes("i will") || 
-                lowerRaw.includes("i need to") || 
-                lowerRaw.includes("user wants") || 
-                lowerRaw.includes("wants to") || 
-                lowerRaw.includes("should call") || 
-                lowerRaw.includes("calling tool") || 
-                lowerRaw.includes("tool call") || 
-                lowerRaw.includes("list_files") || 
-                lowerRaw.includes("read_file") || 
-                lowerRaw.includes("run_command") || 
-                lowerRaw.includes("web_search");
 
-             if (!hasBraces && !hasXml && !isPlanningThought && rawResultStr.trim().length > 0) {
-                parsedPayload = {
-                   thought: "Menerima respons polos non-JSON dari provider secara langsung demi menjaga kontinuitas obrolan.",
-                   final_answer: rawResultStr,
-                   animations: ["SMILE"],
-                   tool_calls: []
-                };
-                logs.push("[CORTEX_LOOP] [COMPATIBILITY] Detected raw plain text response, bypassed LLM repairer and wrapped directly.");
-             } else if (isPlanningThought) {
-                logs.push("[CORTEX_LOOP] [PLANNING_DETECTION] Detected raw text containing planning thoughts/assistant monologue instead of character speech. Routing to JSON repairer to extract intended tools.");
-             }
-          }
-       }
+             const isPlanningThought =
+                lowerRaw.includes("i should") ||
+                lowerRaw.includes("i will") ||
+                lowerRaw.includes("i need to") ||
+                lowerRaw.includes("user wants") ||
+                lowerRaw.includes("wants to") ||
+                lowerRaw.includes("should call") ||
+                lowerRaw.includes("calling tool") ||
+                lowerRaw.includes("tool call") ||
+                lowerRaw.includes("list_files") ||
+                lowerRaw.includes("read_file") ||
+                lowerRaw.includes("run_command") ||
+                lowerRaw.includes("web_search") ||
+                lowerRaw.includes("plan:") ||
+                lowerRaw.includes("response draft:") ||
+                lowerRaw.includes("revised draft:") ||
+                lowerRaw.includes("final json structure:") ||
+                lowerRaw.includes("final json:") ||
+                lowerRaw.includes("here is") ||
+                lowerRaw.includes("my draft") ||
+                lowerRaw.includes("according to the instructions") ||
+                lowerRaw.includes("scheduler") ||
+                lowerRaw.includes("final_answer");
 
-       if (!parsedPayload) {
-          logs.push("[CORTEX_LOOP] [FORMAT_ERROR] Response did not conform to JSON_OBJECT format. Engaging isolated LLM JSON format repairer...");
-          parsedPayload = await repairJsonFormatWithLLM((p: string, jm?: boolean) => cortexInstance.thinkSimple(p, jm), rawResultStr, input);
-          if (!parsedPayload) {
-             parseError = parseError || "LLM Format Repairer failed to parse output.";
-          }
-       }
+             const isTranslationOrLanguageTask =
+                lowerRaw.includes("translate") ||
+                lowerRaw.includes("terjemah") ||
+                lowerRaw.includes("arti dari") ||
+                lowerRaw.includes("bahasa inggris") ||
+                lowerRaw.includes("english") ||
+                lowerRaw.includes("kalimat") ||
+                lowerRaw.includes("word") ||
+                lowerRaw.includes("sentence");
 
-       if (!parsedPayload && rawResultStr && rawResultStr.trim().length > 0) {
-          try {
-             const xmlParsed = StandardizedProcessor.parseLLMResponse(rawResultStr);
-             if (xmlParsed && Object.keys(xmlParsed).length > 0 && (xmlParsed.thought || xmlParsed.final_answer || xmlParsed.speech || xmlParsed.opening_response)) {
-                parsedPayload = {
-                   thought: xmlParsed.thought || "Yuihime memproses intuisi batin menggunakan struktur XML.",
-                   final_answer: xmlParsed.final_answer || xmlParsed.speech || xmlParsed.opening_response || rawResultStr,
-                   animations: xmlParsed.animations || ["SMILE"],
-                   tool_calls: xmlParsed.tool_calls || []
-                };
-                logs.push("[CORTEX_LOOP] [COMPATIBILITY] Succeeded in parsing XML fallback layout using StandardizedProcessor.");
-             }
-          } catch (pErr: any) {
-             console.warn("[CORTEX_LOOP] XML fallback parsing failed:", pErr.message);
-          }
-
-          if (!parsedPayload) {
-             const lowerRaw = rawResultStr.toLowerCase().trim();
-             const lowerInput = input.toLowerCase();
-
-             // Check if the user is explicitly asking to translate, define, or teach language patterns
-             const isTranslationOrLanguageTask = 
-                lowerInput.includes("translate") || 
-                lowerInput.includes("terjemah") || 
-                lowerInput.includes("arti dari") ||
-                lowerInput.includes("bahasa inggris") ||
-                lowerInput.includes("english") ||
-                lowerInput.includes("kalimat") ||
-                lowerInput.includes("word") ||
-                lowerInput.includes("sentence");
-
-             let isPlanningThought = false;
+             let planningActionDetected = false;
 
              if (!isTranslationOrLanguageTask) {
-                const hasSystemToolNames = 
-                   lowerRaw.includes("list_files") || 
-                   lowerRaw.includes("read_file") || 
-                   lowerRaw.includes("run_command") || 
+                const hasSystemToolNames =
+                   lowerRaw.includes("list_files") ||
+                   lowerRaw.includes("read_file") ||
+                   lowerRaw.includes("run_command") ||
                    lowerRaw.includes("web_search") ||
-                   lowerRaw.includes("manage_cron") ||
-                   lowerRaw.includes("send_final_reply");
+                   lowerRaw.includes("scheduler") ||
+                   lowerRaw.includes("final_answer");
 
                 const hasPlanningAction =
                    lowerRaw.includes("i should use") ||
@@ -624,45 +626,45 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
                    lowerRaw.includes("i need to use");
 
                 if (hasSystemToolNames && hasPlanningAction) {
-                   isPlanningThought = true;
+                   planningActionDetected = true;
                 }
 
-                if (!isPlanningThought) {
-                   const isAssistantTalkingToSelf = 
+                if (!planningActionDetected) {
+                   const isAssistantTalkingToSelf =
                       (lowerRaw.includes("user wants") || lowerRaw.includes("al wants") || lowerRaw.includes("the user is asking")) &&
                       (lowerRaw.includes("i should") || lowerRaw.includes("i will") || lowerRaw.includes("i need to"));
-                   
-                   const isSelfReferencingAI = 
-                      lowerRaw.includes("as an ai assistant") || 
+
+                   const isSelfReferencingAI =
+                      lowerRaw.includes("as an ai assistant") ||
                       lowerRaw.includes("based on my instructions") ||
                       lowerRaw.includes("according to my system instructions");
 
                    if (isAssistantTalkingToSelf || isSelfReferencingAI) {
-                      isPlanningThought = true;
+                      planningActionDetected = true;
                    }
                 }
              }
 
-             if (isPlanningThought) {
-                logs.push("[CORTEX_LOOP] [LAST_RESORT] Detected planning leak. Attempting deterministic zero-token monologue stripping...");
+             if (planningActionDetected) {
+                logs.push("[CORTEX_LOOP] [PLANNING_DETECTION] Detected raw text containing planning thoughts/assistant monologue instead of character speech. Attempting deterministic zero-token extraction BEFORE engaging LLM repairer...");
                 
                 const lines = rawResultStr.split('\n');
                 const filteredLines = lines.filter(line => {
                    const trimmedLine = line.trim().toLowerCase();
                    if (!trimmedLine) return false;
 
-                   const isMonologue = 
-                      trimmedLine.startsWith("i should") || 
-                      trimmedLine.startsWith("i will") || 
-                      trimmedLine.startsWith("i need to") || 
-                      trimmedLine.startsWith("i can") || 
-                      trimmedLine.startsWith("user wants") || 
-                      trimmedLine.startsWith("al wants") || 
-                      trimmedLine.startsWith("the user is") || 
-                      trimmedLine.startsWith("let's") || 
-                      trimmedLine.startsWith("let me") || 
-                      trimmedLine.startsWith("calling") || 
-                      trimmedLine.startsWith("running") || 
+                   const isMonologue =
+                      trimmedLine.startsWith("i should") ||
+                      trimmedLine.startsWith("i will") ||
+                      trimmedLine.startsWith("i need to") ||
+                      trimmedLine.startsWith("i can") ||
+                      trimmedLine.startsWith("user wants") ||
+                      trimmedLine.startsWith("al wants") ||
+                      trimmedLine.startsWith("the user is") ||
+                      trimmedLine.startsWith("let's") ||
+                      trimmedLine.startsWith("let me") ||
+                      trimmedLine.startsWith("calling") ||
+                      trimmedLine.startsWith("running") ||
                       trimmedLine.startsWith("using tool") ||
                       trimmedLine.startsWith("tool call") ||
                       trimmedLine.startsWith("based on my") ||
@@ -672,12 +674,20 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
                       trimmedLine.startsWith("first, i") ||
                       trimmedLine.startsWith("next, i") ||
                       trimmedLine.startsWith("then, i") ||
+                      trimmedLine.startsWith("plan:") ||
+                      trimmedLine.startsWith("response draft:") ||
+                      trimmedLine.startsWith("revised draft:") ||
+                      trimmedLine.startsWith("final json structure:") ||
+                      trimmedLine.startsWith("final json:") ||
+                      trimmedLine.startsWith("here is") ||
+                      trimmedLine.startsWith("my draft") ||
+                      trimmedLine.startsWith("according to the instructions") ||
                       trimmedLine.includes("list_files") ||
                       trimmedLine.includes("read_file") ||
                       trimmedLine.includes("run_command") ||
                       trimmedLine.includes("web_search") ||
-                      trimmedLine.includes("manage_cron") ||
-                      trimmedLine.includes("send_final_reply");
+                      trimmedLine.includes("scheduler") ||
+                      trimmedLine.includes("final_answer");
 
                    return !isMonologue;
                 });
@@ -685,12 +695,22 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
                 const cleanSpeech = filteredLines.map(l => l.trim()).filter(Boolean).join('\n\n').trim();
 
                 if (cleanSpeech && cleanSpeech.length > 5) {
-                   parsedPayload = {
-                      thought: "Menerima respons polos setelah menyaring keluar monolog perencanaan internal secara deterministik.",
-                      final_answer: cleanSpeech,
-                      animations: ["SMILE"]
-                   };
-                   logs.push("[CORTEX_LOOP] [MONOLOGUE_STRIPPER] Successfully stripped planning monologue lines. Extracted clean dialogue without LLM call!");
+                   const extractedFromSpeech = extractBestJsonObject(cleanSpeech);
+                   if (extractedFromSpeech) {
+                      try {
+                         parsedPayload = JSON.parse(extractedFromSpeech);
+                         logs.push("[CORTEX_LOOP] [MONOLOGUE_STRIPPER] Extracted balanced JSON object from cleaned speech before engaging LLM repairer.");
+                      } catch {}
+                   }
+                   if (!parsedPayload) {
+                      parsedPayload = {
+                         thought: "Menerima respons polos setelah menyaring keluar monolog perencanaan internal secara deterministik.",
+                         final_answer: cleanSpeech,
+                         animations: ["SMILE"],
+                         tool_calls: []
+                      };
+                      logs.push("[CORTEX_LOOP] [MONOLOGUE_STRIPPER] Successfully stripped planning monologue lines. Extracted clean dialogue without LLM call!");
+                   }
                 } else {
                    logs.push("[CORTEX_LOOP] [MONOLOGUE_STRIPPER] Stripped text is empty or too short. Engaging failsafe reprocess...");
                    try {
@@ -701,7 +721,8 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
                       parsedPayload = {
                          thought: "Menerima respons polos setelah memproses penyeimbang batin failsafe.",
                          final_answer: failsafeSpeech,
-                         animations: ["SMILE"]
+                         animations: ["SMILE"],
+                         tool_calls: []
                       };
                    } catch (err: any) {
                       console.error("[CORTEX_LOOP] Failsafe reprocess failed:", err.message);
@@ -709,17 +730,34 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
                 }
              }
 
-             if (!parsedPayload) {
+             if (!parsedPayload && !planningActionDetected && !hasBraces && !hasXml && rawResultStr.trim().length > 0) {
                 parsedPayload = {
                    thought: "Menerima respons polos non-JSON dari provider neural secara langsung demi menjaga kontinuitas obrolan.",
                    final_answer: rawResultStr,
-                   animations: ["SMILE"]
+                   animations: ["SMILE"],
+                   tool_calls: []
+                };
+                logs.push("[CORTEX_LOOP] [COMPATIBILITY] Detected raw plain text response, bypassed LLM repairer and wrapped directly.");
+             } else if (!parsedPayload) {
+                parsedPayload = {
+                   thought: "Menerima respons polos non-JSON dari provider neural secara langsung demi menjaga kontinuitas obrolan.",
+                   final_answer: rawResultStr,
+                   animations: ["SMILE"],
+                   tool_calls: []
                 };
                 logs.push("[CORTEX_LOOP] [COMPATIBILITY] Succeeded in wrapping raw dialogue text into standard payload structures.");
              }
           }
        }
-    }
+
+       if (!parsedPayload) {
+          logs.push("[CORTEX_LOOP] [FORMAT_ERROR] Response did not conform to JSON_OBJECT format. Engaging isolated LLM JSON format repairer...");
+          parsedPayload = await repairJsonFormatWithLLM((p: string, jm?: boolean) => cortexInstance.thinkSimple(p, jm), rawResultStr, input);
+          if (!parsedPayload) {
+             parseError = parseError || "LLM Format Repairer failed to parse output.";
+          }
+       }
+     }
 
     if (parsedPayload) {
       let rebuiltResponseStr = "";
@@ -761,13 +799,13 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
       const speechText = (parsedPayload.speech || parsedPayload.final_answer || parsedPayload.response || "").trim();
 
       if (rawToolsCall.length > 0) {
-        const hasFinalReply = rawToolsCall.some((tc: any) => tc.tool === 'send_final_reply');
+        const hasFinalReply = rawToolsCall.some((tc: any) => tc.tool === 'final_answer');
         if (!hasFinalReply && speechText.length > 0) {
           const blockingTools = ['web_search', 'execute_sql', 'cloudsql_execute_sql', 'search'];
           const hasBlockingTool = rawToolsCall.some((tc: any) => blockingTools.includes(tc.tool));
           if (!hasBlockingTool || speechText.length > 15) {
-            logs.push("[CORTEX_LOOP] Speech provided alongside other tools in Turn 1. Injecting send_final_reply in parallel to avoid 2-turn latency.");
-            rawToolsCall.push(makeToolCall('send_final_reply', {
+            logs.push("[CORTEX_LOOP] Speech provided alongside other tools in Turn 1. Injecting final_answer in parallel to avoid 2-turn latency.");
+            rawToolsCall.push(makeToolCall('final_answer', {
               speech: speechText,
               animations: parsedPayload.animations || ["TALK", "SMILE"],
               mood_impact: parsedPayload.mood_impact || {}
@@ -777,10 +815,10 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
       }
 
       if (rawToolsCall.length === 0) {
-        logs.push("[CORTEX_LOOP] No tool call detected, compiling fallback to send_final_reply.");
+        logs.push("[CORTEX_LOOP] No tool call detected, compiling fallback to final_answer.");
         // Guna mematuhi instruksi kognisi: jika final_answer kosong (speechText kosong), jangan lakukan fail safe ke thought atau placeholder.
         const fallbackSpeech = speechText;
-        rawToolsCall = [makeToolCall('send_final_reply', {
+        rawToolsCall = [makeToolCall('final_answer', {
           speech: fallbackSpeech,
           animations: parsedPayload.animations || ["TALK", "SMILE"],
           mood_impact: parsedPayload.mood_impact || {}
@@ -792,7 +830,7 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
       }
 
       loopContext.rawResult = rebuiltResponseStr;
-      const finalReplyCall = rawToolsCall.find((tc: any) => tc.tool === 'send_final_reply');
+      const finalReplyCall = rawToolsCall.find((tc: any) => tc.tool === 'final_answer');
       
       loopContext.processedResponse = finalReplyCall && finalReplyCall.args?.speech ? finalReplyCall.args.speech : speechText;
       loopContext.thought = finalThought;
@@ -912,7 +950,7 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
           indonesianStatus = "Yui sedang berselancar mencari informasi terbaru untuk Kakak... 🌐✨";
         } else if (toolNames.includes("execute_sql") || toolNames.includes("cloudsql_execute_sql")) {
           indonesianStatus = "Yui sedang menelusuri data dalam pangkalan batin batin... 🗄️🔍";
-        } else if (toolNames.includes("execute_bash") || toolNames.includes("run_command") || toolNames.includes("shell_exec")) {
+        } else if (toolNames.includes("execute_bash") || toolNames.includes("run_command")) {
           indonesianStatus = "Yui sedang memproses instruksi sistem di balik layar... ⚙️💻";
         } else {
           indonesianStatus = `Yui sedang memproses kemampuan: [${toolNames}]... 🌸`;
@@ -982,7 +1020,7 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
 
             const toolExecutorConfig = settings['tool-executor'] || {};
             const generalTimeoutMs = toolExecutorConfig.timeoutMs !== undefined ? Number(toolExecutorConfig.timeoutMs) : 60000;
-            const isShell = ['run_command', 'shell', 'execute_shell', 'shell_exec'].includes(tc.name || tc.tool);
+            const isShell = ['run_command', 'shell', 'execute_shell'].includes(tc.name || tc.tool);
             const activeTimeoutMs = isShell
               ? (toolExecutorConfig.shellTimeoutMs !== undefined ? Number(toolExecutorConfig.shellTimeoutMs) : 120000)
               : generalTimeoutMs;
@@ -1056,7 +1094,7 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
       eventBus.emit('EXECUTING_COMPLETED', { results: toolResults });
       stateMachine.transitionTo('IDLE');
 
-      const realTools = toolsToCall.filter((tc: any) => tc.tool !== 'send_final_reply' && tc.tool !== 'send_status_update');
+      const realTools = toolsToCall.filter((tc: any) => tc.tool !== 'final_answer' && tc.tool !== 'status_update');
 
       // Build OpenAI-native `role: "tool"` result messages and the paired assistant
       // `tool_calls` so providers with native function calling receive tool feedback
@@ -1249,13 +1287,13 @@ Provide a concise validation summary. Start with [VALIDATION_SUCCESS] if everyth
       const finalReplyResult = toolResults.find(res => res.observation && res.observation.isFinalReply);
       if (finalReplyResult) {
         if (realTools.length === 0) {
-          logs.push("[CORTEX] send_final_reply executed successfully. Stopping cognitive loop iteration.");
+          logs.push("[CORTEX] final_answer executed successfully. Stopping cognitive loop iteration.");
           processedResponse = finalReplyResult.observation.speech;
           animations = finalReplyResult.observation.animations || animations;
           moodImpact = finalReplyResult.observation.mood_impact || moodImpact;
           break;
         } else {
-          logs.push("[CORTEX] send_final_reply executed, but real tools are running in parallel. Continuing loop to process observations.");
+          logs.push("[CORTEX] final_answer executed, but real tools are running in parallel. Continuing loop to process observations.");
           processedResponse = finalReplyResult.observation.speech;
           animations = finalReplyResult.observation.animations || animations;
           moodImpact = finalReplyResult.observation.mood_impact || moodImpact;
@@ -1321,8 +1359,8 @@ Provide a concise validation summary. Start with [VALIDATION_SUCCESS] if everyth
     if (uniqueNotFound.length > 0 || uniqueFailedList.length > 0 || uniqueSucceeded.length > 0) {
       let explanation = "";
       
-      // Filter out pseudo-tools send_final_reply and send_status_update
-      const userFacingSucceeded = uniqueSucceeded.filter(t => t !== 'send_final_reply' && t !== 'send_status_update');
+      // Filter out pseudo-tools final_answer and status_update
+      const userFacingSucceeded = uniqueSucceeded.filter(t => t !== 'final_answer' && t !== 'status_update');
       
       const translateToolsToActivities = (tools: string[]) => {
         return tools.map(t => {
@@ -1332,12 +1370,11 @@ Provide a concise validation summary. Start with [VALIDATION_SUCCESS] if everyth
             case 'list_files': return 'memeriksa isi folder';
             case 'web_search': return 'mencari info di internet';
             case 'search': return 'mencari info';
-            case 'shell_exec': return 'memproses sistem latar';
             case 'run_command': return 'menjalankan perintah sistem';
             case 'download_file': return 'mengunduh berkas';
-            case 'manage_files': return 'mengelola berkas batin';
-            case 'emotion_adjust': return 'menyelaraskan suasana hati';
-            case 'manage_pairing': return 'menyambungkan sirkuit hubungan';
+            case 'file_manager': return 'mengelola berkas batin';
+            case 'set_emotion': return 'menyelaraskan suasana hati';
+            case 'pair_account': return 'menyambungkan sirkuit hubungan';
             case 'send_message': return 'menghubungkan saluran sosial';
             default: return `memproses kemampuan ${t}`;
           }

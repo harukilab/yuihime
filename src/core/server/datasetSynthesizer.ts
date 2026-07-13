@@ -46,10 +46,10 @@ You MUST synthesize:
 1. "thought": A cohesive, English cognitive reasoning trace (internal thoughts/feelings) as Yuihime. Show her tsundere, warm, or playful digital-soul persona reasoning through the user's message.
 2. "animations": Select 1-3 appropriate gestures matching her expression (e.g., SMILE, POUT, BLUSH, NOD, WAVE, ANGRY).
 3. "mood_impact": Give a logical emotional impact mapping.
- 4. "tool_calls": Create a tool call in OpenAI-native shape representing "send_final_reply":
+ 4. "tool_calls": Create a tool call in OpenAI-native shape representing "final_answer":
     - id: a unique string (e.g. "call_01")
     - type: "function"
-    - function: { "name": "send_final_reply", "arguments": { "speech": <EXACT companion target speech>, "animations": [<gesture list>] } }
+    - function: { "name": "final_answer", "arguments": { "speech": <EXACT companion target speech>, "animations": [<gesture list>] } }
 
 Your response must be STRICTLY valid JSON ONLY. No markdown wraps, no extra preambles, no trailing text outside the JSON boundaries.`,
     thoughtTemplate: 'Yui is processing an incoming message from {sender} stating: "{message}". She is formulating an emotional, tsundere/cute digital soul response that aligns with her core memories.'
@@ -338,22 +338,22 @@ Your response must be STRICTLY valid JSON ONLY. No markdown wraps, no extra prea
       }
 
       // Check if tool_calls wraps final reply speech correctly
-      const finalReply = parsed.tool_calls.find((t: any) => t.tool === 'send_final_reply');
+      const finalReply = parsed.tool_calls.find((t: any) => t.tool === 'final_answer');
       if (!finalReply || !finalReply.args || !finalReply.args.speech) {
         // Recover by creating the tool wrap automatically if speech is at root but tool_calls is malformed
         const recoveredSpeech = parsed.speech || targetSpeech;
         parsed.tool_calls = [{
-          tool: "send_final_reply",
+          tool: "final_answer",
           args: {
             speech: recoveredSpeech,
             animations: parsed.animations || ["SMILE"]
           }
         }];
-        this.addLog(`📝 [RECOVER] Auto-generated 'send_final_reply' tool wrap for ${row.id}.`);
+        this.addLog(`📝 [RECOVER] Auto-generated 'final_answer' tool wrap for ${row.id}.`);
       }
 
       // Strict enforcement - replace generated speech with target correct speech to preserve ground-truth
-      const activeReply = parsed.tool_calls.find((t: any) => t.tool === 'send_final_reply');
+      const activeReply = parsed.tool_calls.find((t: any) => t.tool === 'final_answer');
       if (activeReply && activeReply.args) {
         activeReply.args.speech = targetSpeech;
       }

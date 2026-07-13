@@ -1,6 +1,6 @@
 {
-  "id": "file_operations",
-  "name": "Automatic File Manipulation Hub",
+  "id": "file_automation",
+  "name": "File Automation",
   "description": "Manages sandbox files: sorts by type/date, creates zip archives, generates smart text summaries using Gemini, and converts formats.",
   "version": "1.0.0",
   "type": "TOOL",

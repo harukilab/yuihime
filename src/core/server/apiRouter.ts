@@ -505,43 +505,55 @@ export const verifySandboxPath = async (targetPath: string, action?: string, con
     }
   }
 
+  // Normalize prefix aliases ('.yuihime/' and the apiCustomSystemRoot base name) into bare segments
+  let classPath = cleanedPath;
+  if (classPath.startsWith('./')) {
+    classPath = classPath.substring(2);
+  }
+  const rootBaseName = path.basename(apiCustomSystemRoot);
+  if (classPath.startsWith(rootBaseName + '/')) {
+    classPath = classPath.substring(rootBaseName.length + 1);
+  } else if (classPath.startsWith('.yuihime/')) {
+    classPath = classPath.substring('.yuihime/'.length);
+  }
+
+  // Cross-mode contract: the "user_data/..." prefix ALWAYS maps to the configured sandbox
+  // user_data root (dynamicSandboxRoot), regardless of YOLO mode. This keeps the tool schema
+  // instruction ("use user_data/file.txt") consistent so the LLM never accidentally targets
+  // process.cwd()/user_data (a different folder) in half/full mode.
+  const isUserDataRef = classPath.startsWith('user_data/') || classPath === 'user_data';
+  const resolveUserDataRef = (): string =>
+    path.resolve(dynamicSandboxRoot, isUserDataRef && classPath !== 'user_data' ? classPath.substring('user_data/'.length) : '');
+
   // Determine initial resolved path based on YOLO mode
   let resolvedPath: string;
 
   if (yoloMode === 'full') {
     // Stage 2 when YOLO is ON (FULL): allow everything "all in os" - resolve relative to system cwd
-    resolvedPath = path.resolve(process.cwd(), targetPath);
+    resolvedPath = isUserDataRef ? resolveUserDataRef() : path.resolve(process.cwd(), targetPath);
   } else if (yoloMode === 'half') {
-    // In half mode, resolve files relative to system process root (cwd), allowing work outside the repository, but with checks!
-    resolvedPath = path.resolve(process.cwd(), targetPath);
+    // In half mode, resolve files relative to system process root (cwd), allowing work outside
+    // the repository, but keep the "user_data/..." contract anchored to the sandbox root.
+    if (isUserDataRef) {
+      resolvedPath = resolveUserDataRef();
+    } else if (path.isAbsolute(cleanedPath)) {
+      resolvedPath = path.resolve(cleanedPath);
+    } else {
+      resolvedPath = path.resolve(process.cwd(), targetPath);
+    }
   } else {
     // Standard sandboxed / off mode: Jail path resolution
     if (path.isAbsolute(cleanedPath)) {
       resolvedPath = path.resolve(cleanedPath);
+    } else if (isUserDataRef) {
+      resolvedPath = resolveUserDataRef();
     } else {
-      let classPath = cleanedPath;
-      if (classPath.startsWith('./')) {
-        classPath = classPath.substring(2);
-      }
-      
-      const rootBaseName = path.basename(apiCustomSystemRoot);
-      if (classPath.startsWith(rootBaseName + '/')) {
-        classPath = classPath.substring(rootBaseName.length + 1);
-      } else if (classPath.startsWith('.yuihime/')) {
-        classPath = classPath.substring('.yuihime/'.length);
-      }
-      
-      if (classPath.startsWith('user_data/') || classPath === 'user_data') {
-        const subPath = classPath === 'user_data' ? '' : classPath.substring('user_data/'.length);
-        resolvedPath = path.resolve(dynamicSandboxRoot, subPath);
+      const systemDirs = ['agent', 'addons', 'data', 'models'];
+      const firstPart = classPath.split('/')[0];
+      if (systemDirs.includes(firstPart)) {
+        resolvedPath = path.resolve(apiCustomSystemRoot, classPath);
       } else {
-        const systemDirs = ['agent', 'addons', 'data', 'models'];
-        const firstPart = classPath.split('/')[0];
-        if (systemDirs.includes(firstPart)) {
-          resolvedPath = path.resolve(apiCustomSystemRoot, classPath);
-        } else {
-          resolvedPath = path.resolve(dynamicSandboxRoot, classPath);
-        }
+        resolvedPath = path.resolve(dynamicSandboxRoot, classPath);
       }
     }
 

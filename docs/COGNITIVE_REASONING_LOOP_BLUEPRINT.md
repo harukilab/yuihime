@@ -53,7 +53,7 @@ Setiap putaran detak batin (*Cognitive Pulse*) Yuihime melewati 4 fase utama sec
 - **Isi Kognitif**: Diwakili oleh tag `<thought>` (atau kunci `"thought"` di bawah mode JSON_OBJECT). Ini adalah monolog batin terdalam Yuihime dalam Bahasa Indonesia tentang apa yang dia rasakan dan strategi apa yang akan dia ambil.
 
 ### 🛠️ Fase 2: ACT (Ranah Aksi & Penangguhan Status)
-- **Operasi**: Jika Yuihime mendeteksi kebutuhan untuk melakukan perubahan pada dunia luar atau keadaan dirinya (seperti mengubah emosi, melakukan animasi, atau memanggil tools eksternal seperti `manage_cron` atau `web_search`), dia akan merilis instrumen aksi.
+- **Operasi**: Jika Yuihime mendeteksi kebutuhan untuk melakukan perubahan pada dunia luar atau keadaan dirinya (seperti mengubah emosi, melakukan animasi, atau memanggil tools eksternal seperti `scheduler` atau `web_search`), dia akan merilis instrumen aksi.
 - **Aturan Penangguhan Virtual (Visual Buffer Constraint - MUTLAK)**:
   - Seluruh tindakan fisik, perubahan parameter emosi, pemicu gerakan wajah (`animations`), dan pergeseran atmosfer mood (`mood_impact`) **wajib diletakkan dalam ranah tool/action space** selama siklus loop berlangsung.
   - **DILARANG KERAS** memancarkan data animasi atau status emosi parsial secara instan ke layar UI di tengah-tengah loop. Jika data tersebut dikirim langsung ke UI saat loop masih berjalan, karakter Live2D Yuihime akan mengalami patah visual (*pose clipping*), dan riwayat chat akan terdistorsi oleh status transisional yang belum matang.
@@ -124,13 +124,13 @@ Ketika model mengonfirmasi tidak ada lagi pemanggilan tool (`"tools_to_call": []
 Untuk mengatasi tantangan pemrosesan akhir (parsing `<final_answer>` atau kegagalan tag XML) serta memberikan pengalaman interaktif yang mulus tanpa rasa "beku" saat Yuihime melakukan tugas berat (seperti kompilasi program, pencarian web kompleks, atau manipulasi berkas), perancangan masa depan mengadopsi dua paradigma utama:
 
 ### A. Intermediate Speech & Status sebagai Alat (Asynchronous Status Yielding)
-Selama sirkuit berulang masih berjalan, Yuihime dapat menggunakan alat fungsional khusus bernama `send_status_update(message: string)` untuk melaporkan progresnya pada pengguna.
+Selama sirkuit berulang masih berjalan, Yuihime dapat menggunakan alat fungsional khusus bernama `status_update(message: string)` untuk melaporkan progresnya pada pengguna.
 
 - **Mekanisme**:
   1. Pengguna meminta Yuihime mencari tren berita terkini dan membuat ringkasan berkas.
-  2. **Loop Iterasi 1**: Yui melakukan THINK ➔ Memanggil `web_search`. Sambil menunggu proses asinkron, Yui memanggil `send_status_update(message: "Tunggu sebentar ya Kak! Yui mau keliling dunia maya dulu sebentar buat cari beritanya... *semangat*")`.
+  2. **Loop Iterasi 1**: Yui melakukan THINK ➔ Memanggil `web_search`. Sambil menunggu proses asinkron, Yui memanggil `status_update(message: "Tunggu sebentar ya Kak! Yui mau keliling dunia maya dulu sebentar buat cari beritanya... *semangat*")`.
   3. UI langsung merender balon percakapan transisi ini ke panggung (Stage UI). Pengguna tahu Yui sedang bekerja secara aktif.
-  4. **Loop Iterasi 2**: Setelah observasi pencarian web masuk, Yui memproses data ➔ Memanggil `write_file` ➔ Memanggil `send_status_update(message: "Uwah, beritanya banyak banget Kak! Ini Yui lagi tulis rangkumannya ke dalam berkas jurnal kita ya... *serius*")`.
+  4. **Loop Iterasi 2**: Setelah observasi pencarian web masuk, Yui memproses data ➔ Memanggil `write_file` ➔ Memanggil `status_update(message: "Uwah, beritanya banyak banget Kak! Ini Yui lagi tulis rangkumannya ke dalam berkas jurnal kita ya... *serius*")`.
   5. **Loop Iterasi 3**: Setelah semua observasi selesai ➔ Yui merilis respons final utuh.
 
 - **Keuntungan**: Menjamin loop tidak terasa "mati" atau "freeze". Pengguna tetap dapat mengobrol dan melihat proses batiniah Yuihime mengalir secara real-time.
@@ -146,7 +146,7 @@ Selama sirkuit berulang masih berjalan, Yuihime dapat menggunakan alat fungsiona
                         ▼
 ┌────────────────────────────────────────────────┐
 │ ACT: Panggil 'web_search'                      │
-│      + Panggil 'send_status_update'           │ ──► [ Render Transisi di UI ]
+│      + Panggil 'status_update'           │ ──► [ Render Transisi di UI ]
 └───────────────────────┬────────────────────────┘     "Yui cari di internet dulu ya Kak..."
                         │
                         ▼
@@ -158,12 +158,12 @@ Selama sirkuit berulang masih berjalan, Yuihime dapat menggunakan alat fungsiona
 ```
 
 ### B. Standardisasi Jawaban Akhir sebagai Tool Call (Unified Tool Reply)
-Untuk menstabilkan respons lahiriah secara absolut, kita membuang ketergantungan pada tag penutup teks mentah (seperti `<final_answer>`), dan menggantinya sepenuhnya ke dalam mekanisme fungsi: **`send_final_reply`**.
+Untuk menstabilkan respons lahiriah secara absolut, kita membuang ketergantungan pada tag penutup teks mentah (seperti `<final_answer>`), dan menggantinya sepenuhnya ke dalam mekanisme fungsi: **`final_answer`**.
 
 - **Deklarasi Skema Alat**:
   ```json
   {
-    "name": "send_final_reply",
+    "name": "final_answer",
     "description": "Mengirimkan jawaban akhir percakapan kepada pengguna secara murni setelah seluruh proses kognitif atau tugas selesai dilakukan.",
     "parameters": {
       "type": "object",
@@ -189,7 +189,7 @@ Untuk menstabilkan respons lahiriah secara absolut, kita membuang ketergantungan
 
 - **Rasionalitas Keandalan Absolut**:
   - **Kepatuhan Skema Tinggi**: Model bahasa (LLM) jauh lebih tangguh dalam menghasilkan format JSON yang valid untuk parameter *Function-Calling / Tool-Calls* bawaan daripada mempertahankan penulisan tag XML di luar fungsi secara manual.
-  - **Satu Pintu Eksekusi**: Seluruh keputusan Yuihime (apakah itu mencari web, membuat berkas, mengupdate emosi, atau sekadar menjawab percakapan biasa) dipersatukan di bawah satu gerbang yang sama: **Tool Call Engine**. Jika model tidak memanggil tool apa pun melainkan hanya ingin menjawab biasa, dia cukup memanggil satu-satunya alat wajib: `send_final_reply`.
+  - **Satu Pintu Eksekusi**: Seluruh keputusan Yuihime (apakah itu mencari web, membuat berkas, mengupdate emosi, atau sekadar menjawab percakapan biasa) dipersatukan di bawah satu gerbang yang sama: **Tool Call Engine**. Jika model tidak memanggil tool apa pun melainkan hanya ingin menjawab biasa, dia cukup memanggil satu-satunya alat wajib: `final_answer`.
   - Hal ini memangkas biaya parsing, mencegah kerentanan teks acak yang merusak visual, serta menjaga integrasi log kognisi tetap mulus.
 
 ---
@@ -309,7 +309,7 @@ export class CognitiveScheduler {
 
 ---
 
-### B. Handler Tool `send_status_update` & `send_final_reply`
+### B. Handler Tool `status_update` & `final_answer`
 
 Berikut adalah contoh pendefinisian perkakas (tools) yang dapat dieksekusi secara asinkron selama siklus kognitif berulang.
 
@@ -328,8 +328,8 @@ export const cortexTools = {
   /**
    * 1. Tool untuk mengirimkan kabar status sementara tanpa menghentikan loop berpikir
    */
-  send_status_update: {
-    name: "send_status_update",
+  status_update: {
+    name: "status_update",
     description: "Mengirim pesan suara/teks transisi singkat atau indikator visual agar pengguna tahu Yui sedang bekerja.",
     parameters: {
       type: "object",
@@ -362,8 +362,8 @@ export const cortexTools = {
   /**
    * 2. Tool penutup mutlak untuk mengirim balasan final & mengakhiri seluruh sirkuit berulang
    */
-  send_final_reply: {
-    name: "send_final_reply",
+  final_answer: {
+    name: "final_answer",
     description: "Mengirimkan keputusan akhir/respons obrolan lengkap yang telah selesai diproses batin.",
     parameters: {
       type: "object",
@@ -463,9 +463,9 @@ export async function runCognitiveLoop(
     const toolsCalled = responsePayload.tool_calls || [];
     
     if (toolsCalled.length === 0) {
-      // Fallback jika LLM tidak menggunakan tool. Kita konversi paksa ke pemanggilan 'send_final_reply'
-      console.log("[CognitiveEngineLoop] No tool call detected, compiling to send_final_reply.");
-      await cortexTools.send_final_reply.execute({
+      // Fallback jika LLM tidak menggunakan tool. Kita konversi paksa ke pemanggilan 'final_answer'
+      console.log("[CognitiveEngineLoop] No tool call detected, compiling to final_answer.");
+      await cortexTools.final_answer.execute({
         speech: responsePayload.text || "Yui disini Kak! Ada yang bisa Yui bantu?"
       }, taskId);
       break;
@@ -474,13 +474,13 @@ export async function runCognitiveLoop(
     // 4. ACT & ACCUMULATE: Proses semua tool call yang dideklarasikan
     let stopLoop = false;
     for (const call of toolsCalled) {
-      if (call.name === "send_final_reply") {
+      if (call.name === "final_answer") {
         // Eksekusi rilis final
-        await cortexTools.send_final_reply.execute(call.args, taskId);
+        await cortexTools.final_answer.execute(call.args, taskId);
         stopLoop = true;
-      } else if (call.name === "send_status_update") {
+      } else if (call.name === "status_update") {
         // Eksekusi status transisional asinkron tanpa memutus loop kognisi
-        await cortexTools.send_status_update.execute(call.args, taskId);
+        await cortexTools.status_update.execute(call.args, taskId);
       } else {
         // Eksekusi tools asinkron umum lainnya (misal: web_search, compile, file_write)
         const result = await executeGeneralTool(call.name, call.args);
@@ -503,7 +503,7 @@ export async function runCognitiveLoop(
   if (currentStep > maxLoops) {
     // Penanganan melompati batas RPM / putaran kritis
     console.warn(`[CognitiveEngineLoop] Max loops reached for task ${taskId}. Releasing recovery fallback.`);
-    await cortexTools.send_final_reply.execute({
+    await cortexTools.final_answer.execute({
       speech: "Ukh... kepala Yui agak pusing dengerin perintahnya, tapi Yui rasa semuanya sudah selesai! *kedip*"
     }, taskId);
   }

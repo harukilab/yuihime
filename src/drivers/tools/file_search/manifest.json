@@ -1,6 +1,6 @@
 {
-  "id": "file_search",
-  "name": "Memory & Knowledge Search",
+  "id": "search_memory",
+  "name": "Search Memory",
   "description": "Search Yuihime's persistent memory and knowledge base (conversation history, facts, notes, and learned information) using a natural-language query. Use this to retrieve specific past information, facts the user shared, or recalled context before answering.",
   "version": "1.0.0",
   "type": "TOOL",

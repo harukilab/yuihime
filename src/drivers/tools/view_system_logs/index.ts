@@ -122,7 +122,7 @@ export const ViewSystemLogsTool: ToolModule = {
     } catch (globalErr: any) {
       return {
         success: false,
-        error: globalErr.message || 'Unknown error occurred while get_system_logs executed.'
+        error: globalErr.message || 'Unknown error occurred while view_system_logs executed.'
       };
     }
   }

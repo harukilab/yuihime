@@ -2048,7 +2048,6 @@ export const ModularSettings: React.FC<ModularSettingsProps> = ({
                       : (hasDynamicOptions ? 'Retrieve sync patterns...' : 'No telemetry options loadable')
                   }
                   isFetching={isFetching}
-                  onFetch={() => fetchDynamicOptions(module.metadata.id, key, targetConfig)}
                   customMode={customInputMode[`${module.metadata.id}:${key}`]}
                   onToggleCustom={() => {
                     const fetchingKey = `${module.metadata.id}:${key}`;

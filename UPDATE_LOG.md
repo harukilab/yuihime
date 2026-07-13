@@ -1,6 +1,26 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.48] - 2026-07-13
+### Rename: Standardize all tool ids to snake_case agent names
+- Renamed 17 driver tool ids + 2 core pseudo-tools to standard snake_case agent names across manifests, LiveStatusToolsModule.ts, cortexThinkEngine.ts, PromptRegistry.ts, toolNormalizer.ts, PuterAdapter.ts, puterWrapper.ts, NeuralLoopModule.ts, dataset synthesizer/routers, build-info.json, docs, and local .yuihime/agent prompts.
+- Highlights: send_final_reply->final_answer, send_status_update->status_update, manage_files->file_manager, file_operations->file_automation, file_search->search_memory, lua_interpreter->run_lua, manage_cron->scheduler, manage_identities->update_user_profile, manage_pairing->pair_account, install_plugin->install_addon, python_interpreter->run_python, search_chat_history->search_chat, shell_exec->run_command, tensorart_generate->generate_image, get_logs->view_logs, get_system_logs->view_system_logs, web_scraper->scrape_web, emotion_adjust->set_emotion.
+- Total registered tools stays 31; folder names unchanged (dispatch by manifest id); available_tools.json regenerated at boot; npm run build clean.
+
+## [4.47] - 2026-07-13
+### Config: Half mode with confirmation for outside-whitelist ops
+- `config.toml` `[sandbox_paths]`: reverted `yolo_mode` `full` -> `half` and set `auto_acc_user_data` = `false`.
+- Resulting policy: `user_data` (plus `.yuihime` system root / `data`) is whitelisted -> no confirmation; any file change action resolving OUTSIDE the whitelist (e.g. `/home/userland/Documents`, `/tmp`) now triggers the 3-level confirmation (Acc / Always Acc / Tolak) via `requestFileOperationConfirmation` in `apiRouter.ts:597`.
+
+## [4.46] - 2026-07-13
+### Config: Enable unrestricted file tool access (YOLO full)
+- `config.toml` `[sandbox_paths] yolo_mode`: changed `half` -> `full`. All file tools (`manage_files`, read/write/edit/delete/move/copy, find) now resolve absolute paths to anywhere on the filesystem with no Path Jail and no confirmation prompt. The `user_data/...` relative contract still maps to the configured sandbox root (see 4.45). Restart server to fully reload.
+
+## [4.45] - 2026-07-13
+### Fix: manage_files resolved `user_data/...` to wrong folder in half/full YOLO mode
+- `src/core/server/apiRouter.ts` (`verifySandboxPath`): the `user_data/...` path contract now always resolves to the configured sandbox `user_data` root (`dynamicSandboxRoot`) across `off`/`half`/`full` modes. Previously `half`/`full` resolved relative `user_data/...` against `process.cwd()` (e.g. `/home/userland/YuiHime/user_data`), differing from an absolute destination that points at the real sandbox, causing Yui to silently copy/move the wrong file.
+- `src/drivers/tools/file_manager/manifest.json`: clarified `source`/`destination`/`path` descriptions to mandate the consistent `user_data/...` relative format and warn against mixing formats or self-copying.
+
 ## [4.44] - 2026-07-12
 ### Align: system & supporting prompts to OpenAI-native tool_calls contract
 - `PromptRegistry.ts` (`cortex:json_enforcement` main schema, `cortex:error_correction`, `cortex:repair_json`, tiny/lite/medium presets): `tool_calls` items now documented as OpenAI-native `{id, type:"function", function:{name, arguments:object}}` with `id` required for result pairing; legacy `{tool, args}` examples replaced.

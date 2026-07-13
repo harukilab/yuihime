@@ -1,6 +1,6 @@
 {
-  "id": "search_chat_history",
-  "name": "Search Chat History",
+  "id": "search_chat",
+  "name": "Search Chat",
   "description": "Searches all past conversational chat history and message logs across all connected and paired channels (Web, Telegram, Discord, Live Stream) associated with the current user profile or account to retrieve, recall, or summarize previous discussions.",
   "version": "1.0.0",
   "type": "TOOL",

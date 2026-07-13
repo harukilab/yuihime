@@ -6,14 +6,14 @@ import manifest from './manifest.json';
 export const FileManipulationTool: ToolModule = {
   metadata: manifest as any,
   execute: async (args) => {
-    const config = await SystemRegistry.getConfig('file_operations');
+    const config = await SystemRegistry.getConfig('file_automation');
     const defaultZip = config.defaultArchiveName || 'archive_sync';
     const summaryPrompt = config.summaryInstruction || 'Buatlah ringkasan kognitif yang padat, informatif, dan terstruktur rapi dari dokumen berikut dalam bahasa Indonesia yang anggun:';
 
     console.log(`[FILE_HUB] Executing action: ${args.action} on target: ${args.target || 'N/A'}`);
 
     const execution = await StandardizedProcessor.executeStandardized(
-      'file_operations',
+      'file_automation',
       '1.0.0',
       { ...args },
       async () => {

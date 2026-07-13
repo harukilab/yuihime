@@ -207,8 +207,8 @@ export const NeuralLoopModule: CortexModule = {
     const toolsPresent = Array.isArray(toolsToCall) && toolsToCall.length > 0;
 
     // Sanitize the final answer for speech/display
-    // If tools are present and include send_final_reply, extract the speech from its arguments
-    const finalReplyCall = toolsToCall.find((tc: any) => (tc.name || tc.tool) === 'send_final_reply');
+    // If tools are present and include final_answer, extract the speech from its arguments
+    const finalReplyCall = toolsToCall.find((tc: any) => (tc.name || tc.tool) === 'final_answer');
     const dialogue = toolsPresent
       ? ((finalReplyCall && finalReplyCall.args?.speech) ? finalReplyCall.args.speech : (parsed.opening_response || parsed.final_answer || ""))
       : (parsed.final_answer || input);

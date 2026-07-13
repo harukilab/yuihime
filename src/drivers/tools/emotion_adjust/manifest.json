@@ -1,6 +1,6 @@
 {
-  "id": "emotion_adjust",
-  "name": "Emotion Adjustment Tool",
+  "id": "set_emotion",
+  "name": "Set Emotion",
   "description": "Adjust the assistant's current emotion state (arousal, valence, focus, rapport).",
   "version": "0.4.0",
   "type": "TOOL",
