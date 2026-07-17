@@ -3,7 +3,7 @@ import { ModuleType } from '../../include/types';
 import { SystemRegistry } from '../../core/registry';
 import { 
   ChevronLeft, ChevronRight, ChevronDown, ChevronUp,
-  Sparkles, Cpu, Radio, Brain, Zap, Terminal, Plus, Trash2, 
+  Sparkles, Cpu, Radio, Brain, Zap, Terminal, Plus, Trash2, Clock, 
   RefreshCw, Search, Layers, Volume2, Mic, Eye, Palette, 
   ClipboardList, Database, Send, MessageSquare, Share2, Server 
 } from 'lucide-react';
@@ -95,6 +95,14 @@ export const ModulesTab: React.FC<ModulesTabProps> = ({
   const [newToolActionType, setNewToolActionType] = useState<string>('code');
   const [newToolActionCode, setNewToolActionCode] = useState<string>('// JS Sandbox code (access args, return object)\nconst { targetUrl } = args;\nreturn { status: "success", targetUrl };');
   const [newToolParams, setNewToolParams] = useState<Array<{ name: string; type: 'string' | 'number' | 'boolean'; required: boolean; description: string }>>([]);
+
+  // Helper to patch nested gemini settings used by the Orchestrator
+  const updateGeminiSetting = (field: string, value: any) => {
+    setSettings((prev: any) => ({
+      ...prev,
+      gemini: { ...(prev.gemini || {}), [field]: value }
+    }));
+  };
 
   // Fetch custom tools
   const fetchCustomTools = async () => {
@@ -626,6 +634,141 @@ export const ModulesTab: React.FC<ModulesTabProps> = ({
                 )}
               </div>
             )}
+
+            {/* Parallel Multi-Provider Mode */}
+            <div className="bg-[#0e0e14]/55 border border-white/5 p-6 rounded-2xl space-y-6">
+              <div>
+                <h4 className="text-sm font-bold text-white tracking-wide font-sans flex items-center gap-2">
+                  <Zap size={16} className="text-cyan-400" />
+                  Parallel Multi-Provider Mode
+                </h4>
+                <p className="text-[10px] text-zinc-400 font-mono mt-1 leading-relaxed uppercase">
+                  Fire multiple providers concurrently and use the fastest successful response. Improves latency resilience. Concurrency is capped (default 3, max 8) to avoid API rate-limit storms.
+                </p>
+              </div>
+              <div className="flex flex-col gap-4">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={!!(settings.gemini?.parallelProviders)}
+                    onChange={(e) => updateGeminiSetting('parallelProviders', e.target.checked)}
+                    className="accent-cyan-500 w-4 h-4 cursor-pointer"
+                  />
+                  <span className="text-[11px] text-white/80 font-mono">Enable parallel provider requests</span>
+                </label>
+                <div className="flex items-center gap-3">
+                  <span className="text-[11px] text-white/80 font-mono whitespace-nowrap">Max concurrency</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={8}
+                    value={Number(settings.gemini?.parallelConcurrency) || 3}
+                    onChange={(e) => updateGeminiSetting('parallelConcurrency', Math.max(1, Math.min(8, Number(e.target.value) || 3)))}
+                    className="w-20 bg-[#07070a]/60 border border-white/10 rounded-lg px-2 py-1 text-[11px] text-white font-mono focus:outline-none focus:border-cyan-500/40"
+                  />
+                  <span className="text-[9px] text-zinc-500 font-mono">(1-8)</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Key Reset Rule Scheduler */}
+            <div className="bg-[#0e0e14]/55 border border-white/5 p-6 rounded-2xl space-y-6">
+              <div>
+                <h4 className="text-sm font-bold text-white tracking-wide font-sans flex items-center gap-2">
+                  <Clock size={16} className="text-cyan-400" />
+                  API Key Reset Schedule (Quota Rule)
+                </h4>
+                <p className="text-[10px] text-zinc-400 font-mono mt-1 leading-relaxed uppercase">
+                  Automatically clears cooled keys when a provider resets its quota. e.g. Google AI Studio free tier resets at 00:00 UTC daily. Rules apply to all providers listed.
+                </p>
+              </div>
+
+              {(() => {
+                const rules: any[] = settings.gemini?.keyResetRules || [];
+                const updateRules = (next: any[]) => updateGeminiSetting('keyResetRules', next);
+                return (
+                  <div className="space-y-3">
+                    {rules.length === 0 && (
+                      <p className="text-zinc-[#555] text-[11px] font-mono">No reset rules configured.</p>
+                    )}
+                    {rules.map((rule: any, idx: number) => (
+                      <div key={idx} className="bg-[#07070a]/60 border border-white/5 p-4 rounded-xl flex flex-wrap items-center gap-3">
+                        <input
+                          type="text"
+                          value={rule.provider || ''}
+                          placeholder="provider"
+                          onChange={(e) => {
+                            const copy = [...rules];
+                            copy[idx] = { ...copy[idx], provider: e.target.value };
+                            updateRules(copy);
+                          }}
+                          className="w-28 bg-[#0e0e14]/60 border border-white/10 rounded-lg px-2 py-1 text-[11px] text-white font-mono focus:outline-none focus:border-cyan-500/40"
+                        />
+                        <select
+                          value={rule.type || 'daily-utc'}
+                          onChange={(e) => {
+                            const copy = [...rules];
+                            copy[idx] = { ...copy[idx], type: e.target.value };
+                            updateRules(copy);
+                          }}
+                          className="bg-[#0e0e14]/60 border border-white/10 rounded-lg px-2 py-1 text-[11px] text-white font-mono focus:outline-none focus:border-cyan-500/40"
+                        >
+                          <option value="daily-utc">daily-utc</option>
+                          <option value="interval">interval</option>
+                        </select>
+                        {rule.type === 'daily-utc' ? (
+                          <label className="flex items-center gap-2 text-[11px] text-white/80 font-mono">
+                            at UTC hour
+                            <input
+                              type="number"
+                              min={0}
+                              max={23}
+                              value={Number(rule.atHour ?? 0)}
+                              onChange={(e) => {
+                                const copy = [...rules];
+                                copy[idx] = { ...copy[idx], atHour: Math.max(0, Math.min(23, Number(e.target.value) || 0)) };
+                                updateRules(copy);
+                              }}
+                              className="w-16 bg-[#0e0e14]/60 border border-white/10 rounded-lg px-2 py-1 text-[11px] text-white font-mono focus:outline-none focus:border-cyan-500/40"
+                            />
+                          </label>
+                        ) : (
+                          <label className="flex items-center gap-2 text-[11px] text-white/80 font-mono">
+                            every (ms)
+                            <input
+                              type="number"
+                              min={60000}
+                              value={Number(rule.everyMs ?? 86400000)}
+                              onChange={(e) => {
+                                const copy = [...rules];
+                                copy[idx] = { ...copy[idx], everyMs: Math.max(60000, Number(e.target.value) || 86400000) };
+                                updateRules(copy);
+                              }}
+                              className="w-32 bg-[#0e0e14]/60 border border-white/10 rounded-lg px-2 py-1 text-[11px] text-white font-mono focus:outline-none focus:border-cyan-500/40"
+                            />
+                          </label>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => updateRules(rules.filter((_, i) => i !== idx))}
+                          className="ml-auto p-1 text-red-400/70 hover:text-red-400 bg-white/5 hover:bg-red-500/10 rounded cursor-pointer"
+                          title="Remove rule"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => updateRules([...rules, { provider: settings.provider || 'gemini', type: 'daily-utc', atHour: 0 }])}
+                      className="px-4 py-1.5 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 text-[10px] uppercase tracking-wider font-mono font-bold rounded-xl border border-cyan-500/20 transition-all cursor-pointer flex items-center gap-1.5"
+                    >
+                      <Plus size={12} /> Add Reset Rule
+                    </button>
+                  </div>
+                );
+              })()}
+            </div>
 
             {/* Dynamic AI Resilience Pipeline Fallback Setup */}
             <div className="bg-[#0e0e14]/55 border border-white/5 p-6 rounded-2xl space-y-6">

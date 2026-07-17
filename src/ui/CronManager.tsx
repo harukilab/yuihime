@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Play, Pause, Plus, Trash2, Clock, Activity, Edit2, Check, X, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Play, Pause, Plus, Trash2, Clock, Activity, Edit2, Check, X, AlertTriangle, RefreshCw, FileText } from 'lucide-react';
 
 interface CronTask {
   id: string;
@@ -8,7 +8,13 @@ interface CronTask {
   enabled: boolean;
   repeating: boolean;
   lastRun?: number;
+  prompt?: string;
+  context_id?: string;
+  chat_type?: string;
+  sender_name?: string;
 }
+
+const DEFAULT_PROMPT_HINT = 'Leave empty to use default: [CRON_SIGNAL]: <Task Name>. Please process this scheduled request now.';
 
 export const CronManager: React.FC = () => {
   const [tasks, setTasks] = useState<CronTask[]>([]);
@@ -21,9 +27,17 @@ export const CronManager: React.FC = () => {
   const [formName, setFormName] = useState('');
   const [formSchedule, setFormSchedule] = useState('5m');
   const [formRepeating, setFormRepeating] = useState(true);
+  const [formPrompt, setFormPrompt] = useState('');
+  const [formContextId, setFormContextId] = useState<string | undefined>(undefined);
+  const [formChatType, setFormChatType] = useState<string | undefined>(undefined);
+  const [formSenderName, setFormSenderName] = useState<string | undefined>(undefined);
+  const [formEnabled, setFormEnabled] = useState(true);
 
   // Delete Confirm State
   const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
+
+  // Expand prompt preview in list
+  const [expandedPromptId, setExpandedPromptId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchTasks();
@@ -69,13 +83,21 @@ export const CronManager: React.FC = () => {
 
     try {
       const isEditing = formId !== null;
-      const payload = {
+      const payload: Record<string, unknown> = {
         id: isEditing ? formId : `task_${Date.now()}`,
         name: formName.trim(),
         schedule: formSchedule.trim(),
-        enabled: true,
-        repeating: formRepeating
+        enabled: isEditing ? formEnabled : true,
+        repeating: formRepeating,
+        prompt: formPrompt
       };
+
+      // Preserve channel targeting on edit
+      if (isEditing) {
+        if (formContextId) payload.context_id = formContextId;
+        if (formChatType) payload.chat_type = formChatType;
+        if (formSenderName) payload.sender_name = formSenderName;
+      }
 
       const res = await fetch('/api/cron', {
         method: 'POST',
@@ -101,6 +123,11 @@ export const CronManager: React.FC = () => {
     setFormName(task.name);
     setFormSchedule(task.schedule);
     setFormRepeating(task.repeating);
+    setFormPrompt(task.prompt || '');
+    setFormContextId(task.context_id);
+    setFormChatType(task.chat_type);
+    setFormSenderName(task.sender_name);
+    setFormEnabled(task.enabled);
     setIsFormOpen(true);
   };
 
@@ -109,6 +136,11 @@ export const CronManager: React.FC = () => {
     setFormName('');
     setFormSchedule('5m');
     setFormRepeating(true);
+    setFormPrompt('');
+    setFormContextId(undefined);
+    setFormChatType(undefined);
+    setFormSenderName(undefined);
+    setFormEnabled(true);
     setIsFormOpen(true);
   };
 
@@ -117,6 +149,11 @@ export const CronManager: React.FC = () => {
     setFormName('');
     setFormSchedule('5m');
     setFormRepeating(true);
+    setFormPrompt('');
+    setFormContextId(undefined);
+    setFormChatType(undefined);
+    setFormSenderName(undefined);
+    setFormEnabled(true);
     setErrorMsg(null);
   };
 
@@ -148,6 +185,12 @@ export const CronManager: React.FC = () => {
       console.error('Failed to trigger task', e);
       setErrorMsg('Connection error.');
     }
+  };
+
+  const promptPreview = (task: CronTask) => {
+    const p = (task.prompt || '').trim();
+    if (!p) return null;
+    return p.length > 120 ? `${p.slice(0, 120)}…` : p;
   };
 
   if (loading && tasks.length === 0) {
@@ -227,6 +270,24 @@ export const CronManager: React.FC = () => {
               </span>
             </div>
 
+            {/* Prompt */}
+            <div className="flex flex-col gap-1.5 text-left">
+              <label className="text-zinc-400 font-semibold flex items-center gap-1.5">
+                <FileText size={12} className="text-cyan-500/80" />
+                Task Prompt
+              </label>
+              <textarea
+                rows={5}
+                placeholder="e.g. Check the weather and send a short morning greeting to Kakak in a tsundere style."
+                value={formPrompt}
+                onChange={(e) => setFormPrompt(e.target.value)}
+                className="w-full bg-[#0d0d12] border border-white/5 rounded-xl px-3 py-2.5 text-zinc-200 placeholder:text-zinc-600 outline-none focus:border-cyan-500/30 focus:ring-1 focus:ring-cyan-500/10 transition-all font-sans resize-y min-h-[96px] leading-relaxed"
+              />
+              <span className="text-[10px] text-zinc-500 leading-relaxed font-sans">
+                {DEFAULT_PROMPT_HINT}
+              </span>
+            </div>
+
             {/* Repeating Toggle */}
             <div className="flex items-center justify-between border-t border-b border-white/5 py-3">
               <div className="flex flex-col text-left">
@@ -293,69 +354,105 @@ export const CronManager: React.FC = () => {
 
       {/* TASKS LIST */}
       <div className="grid grid-cols-1 gap-2.5">
-        {tasks.map(task => (
-          <div 
-            key={task.id} 
-            className="p-3.5 bg-zinc-950/20 border border-white/5 hover:border-white/10 rounded-2xl flex justify-between items-center group transition-all duration-200"
-          >
-            <div className="flex flex-col text-left gap-0.5 max-w-[70%]">
-              <div className="flex items-center gap-2">
-                <span className="font-heading font-semibold text-gray-200 leading-tight text-xs tracking-wide">
-                  {task.name}
-                </span>
-                {!task.repeating && (
-                  <span className="text-[9px] bg-indigo-550/20 text-indigo-300 border border-indigo-500/10 px-1.5 py-0.5 rounded-full select-none font-bold tracking-wide uppercase">
-                    Oneshot
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center flex-wrap gap-x-3 gap-y-1 mt-1 text-[10px] text-zinc-500">
-                <span className="flex items-center gap-1 font-mono font-medium">
-                  <Activity size={11} className={task.enabled ? 'text-emerald-500' : 'text-zinc-600'} />
-                  {task.schedule}
-                </span>
-                {task.lastRun ? (
-                  <span className="font-sans">
-                    Last run: {new Date(task.lastRun).toLocaleTimeString()}
-                  </span>
-                ) : (
-                  <span className="text-zinc-600 italic">Never run</span>
-                )}
-              </div>
-            </div>
+        {tasks.map(task => {
+          const preview = promptPreview(task);
+          const isExpanded = expandedPromptId === task.id;
+          const fullPrompt = (task.prompt || '').trim();
 
-            <div className="flex items-center gap-2 shrink-0">
-              <button 
-                onClick={() => triggerTask(task.id)}
-                title="Trigger Now"
-                className="p-2 bg-cyan-600/15 text-cyan-400 border border-cyan-500/20 hover:bg-cyan-600/25 rounded-xl transition-all duration-200 cursor-pointer active:scale-90"
-              >
-                <RefreshCw size={13} />
-              </button>
-              <button 
-                onClick={() => toggleTask(task)}
-                title={task.enabled ? "Disable Task" : "Enable Task"}
-                className={`p-2 rounded-xl border transition-all duration-200 cursor-pointer active:scale-90 ${task.enabled ? 'bg-emerald-600/15 text-emerald-400 border-emerald-500/20 hover:bg-emerald-600/25' : 'bg-zinc-800/15 text-zinc-400 border-white/5 hover:bg-zinc-800/30'}`}
-              >
-                {task.enabled ? <Pause size={13} /> : <Play size={13} />}
-              </button>
-              <button 
-                onClick={() => startEdit(task)}
-                title="Edit Task"
-                className="p-2 bg-indigo-650/15 text-indigo-400 border border-indigo-550/20 hover:bg-indigo-650/25 rounded-xl transition-all duration-200 cursor-pointer active:scale-90"
-              >
-                <Edit2 size={13} />
-              </button>
-              <button 
-                onClick={() => setDeletingTaskId(task.id)}
-                title="Delete Task"
-                className="p-2 bg-red-650/15 text-red-400 border border-red-550/20 hover:bg-red-650/25 rounded-xl transition-all duration-200 cursor-pointer active:scale-90"
-              >
-                <Trash2 size={13} />
-              </button>
+          return (
+            <div 
+              key={task.id} 
+              className="p-3.5 bg-zinc-950/20 border border-white/5 hover:border-white/10 rounded-2xl flex flex-col gap-2 group transition-all duration-200"
+            >
+              <div className="flex justify-between items-center gap-2">
+                <div className="flex flex-col text-left gap-0.5 max-w-[70%] min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-heading font-semibold text-gray-200 leading-tight text-xs tracking-wide">
+                      {task.name}
+                    </span>
+                    {!task.repeating && (
+                      <span className="text-[9px] bg-indigo-550/20 text-indigo-300 border border-indigo-500/10 px-1.5 py-0.5 rounded-full select-none font-bold tracking-wide uppercase">
+                        Oneshot
+                      </span>
+                    )}
+                    {fullPrompt && (
+                      <span className="text-[9px] bg-cyan-550/15 text-cyan-300/90 border border-cyan-500/15 px-1.5 py-0.5 rounded-full select-none font-bold tracking-wide uppercase">
+                        Custom Prompt
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center flex-wrap gap-x-3 gap-y-1 mt-1 text-[10px] text-zinc-500">
+                    <span className="flex items-center gap-1 font-mono font-medium">
+                      <Activity size={11} className={task.enabled ? 'text-emerald-500' : 'text-zinc-600'} />
+                      {task.schedule}
+                    </span>
+                    {task.lastRun ? (
+                      <span className="font-sans">
+                        Last run: {new Date(task.lastRun).toLocaleTimeString()}
+                      </span>
+                    ) : (
+                      <span className="text-zinc-600 italic">Never run</span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <button 
+                    onClick={() => triggerTask(task.id)}
+                    title="Trigger Now"
+                    className="p-2 bg-cyan-600/15 text-cyan-400 border border-cyan-500/20 hover:bg-cyan-600/25 rounded-xl transition-all duration-200 cursor-pointer active:scale-90"
+                  >
+                    <RefreshCw size={13} />
+                  </button>
+                  <button 
+                    onClick={() => toggleTask(task)}
+                    title={task.enabled ? "Disable Task" : "Enable Task"}
+                    className={`p-2 rounded-xl border transition-all duration-200 cursor-pointer active:scale-90 ${task.enabled ? 'bg-emerald-600/15 text-emerald-400 border-emerald-500/20 hover:bg-emerald-600/25' : 'bg-zinc-800/15 text-zinc-400 border-white/5 hover:bg-zinc-800/30'}`}
+                  >
+                    {task.enabled ? <Pause size={13} /> : <Play size={13} />}
+                  </button>
+                  <button 
+                    onClick={() => startEdit(task)}
+                    title="Edit Task & Prompt"
+                    className="p-2 bg-indigo-650/15 text-indigo-400 border border-indigo-550/20 hover:bg-indigo-650/25 rounded-xl transition-all duration-200 cursor-pointer active:scale-90"
+                  >
+                    <Edit2 size={13} />
+                  </button>
+                  <button 
+                    onClick={() => setDeletingTaskId(task.id)}
+                    title="Delete Task"
+                    className="p-2 bg-red-650/15 text-red-400 border border-red-550/20 hover:bg-red-650/25 rounded-xl transition-all duration-200 cursor-pointer active:scale-90"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Prompt preview row */}
+              <div className="text-left">
+                {fullPrompt ? (
+                  <button
+                    type="button"
+                    onClick={() => setExpandedPromptId(isExpanded ? null : task.id)}
+                    className="w-full text-left bg-black/30 border border-white/5 hover:border-cyan-500/15 rounded-xl px-3 py-2 transition-all cursor-pointer"
+                  >
+                    <div className="flex items-start gap-1.5">
+                      <FileText size={11} className="text-cyan-500/70 mt-0.5 shrink-0" />
+                      <p className={`text-[10px] text-zinc-400 font-sans leading-relaxed whitespace-pre-wrap ${isExpanded ? '' : 'line-clamp-2'}`}>
+                        {isExpanded ? fullPrompt : preview}
+                      </p>
+                    </div>
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-1.5 px-1 text-[10px] text-zinc-600 italic font-sans">
+                    <FileText size={10} className="opacity-50" />
+                    Default prompt (based on task name)
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
 
         {tasks.length === 0 && !loading && (
           <div className="text-center py-7 text-zinc-600 italic font-mono text-xs border border-dashed border-white/5 rounded-2xl select-none">

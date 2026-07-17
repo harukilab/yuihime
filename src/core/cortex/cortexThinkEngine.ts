@@ -375,7 +375,7 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
           instructionText = `Based on the successful tool execution results above, you can EITHER choose to call another tool if you need more actions/information to fully answer the user (such as list_files, read_file, run_command), OR if you have all the information required, formulate your final casual spoken response to the user. Do not repeat technical details, do not write internal thoughts, plans, or analysis blocks outside the JSON structure. Directly chat with the user in your natural, emotional, affectionate/tsundere personal character using the user's conversational language!`;
           
           const readToolRes = lastExecuted.results.find((res: any) => 
-            ['read_file', 'list_files', 'view_logs', 'view_system_logs', 'file_manager'].includes(res.tool) && res.success
+            ['read_file', 'list_files', 'view_logs', 'search_chat', 'file_manager'].includes(res.tool) && res.success
           );
           if (readToolRes) {
             instructionText += `\n\nCRITICAL DIRECTIVE FOR RETRIEVED CONTENTS: Since you successfully retrieved content, data, file list, or logs via '${readToolRes.tool}', you MUST share/display the exact retrieved file content, directory listing, or log data inside your 'speech' field so the user can see it! Do NOT give a false promise by saying 'Ini dia isinya...' or 'Yui sudah baca...' or 'Ini list catatan...' without actually writing out the retrieved contents or list of files in this very response. If the content, listing, or log is empty, clearly state to the user that it is currently empty.`;
@@ -939,6 +939,22 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
     });
 
     if (toolsToCall.length > 0) {
+      // LLM-configurable iteration ceiling: the model may request more turns via
+      // `max_iterations_override` inside a tool call's arguments. It is capped by the
+      // `tool-executor.maxIterationsCeiling` config key and never lowers the current max.
+      try {
+        const ceiling = settings['tool-executor']?.maxIterationsCeiling !== undefined
+          ? Number(settings['tool-executor'].maxIterationsCeiling)
+          : 5;
+        for (const tc of toolsToCall) {
+          const override = tc?.args?.max_iterations_override ?? tc?.function?.arguments?.max_iterations_override;
+          if (typeof override === 'number' && override > maxIterations && override <= ceiling) {
+            maxIterations = Math.floor(override);
+            logs.push(`[CORTEX] max_iterations_override accepted: extended loop to ${maxIterations} (ceiling ${ceiling}).`);
+          }
+        }
+      } catch (_) {}
+
       stateMachine.transitionTo('EXECUTING');
       eventBus.emit('EXECUTING_STARTED', { tools: toolsToCall });
       
@@ -991,17 +1007,43 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
 
         let res: any;
         if (tool) {
+          let execStart = Date.now();
           try {
+            // Reserved control metadata: `_meta` lets the LLM request per-call
+            // execution tweaks (e.g. timeout_ms). It is NEVER forwarded to the tool.
+            let metaTimeoutMs: number | undefined;
             if (tool.metadata && tool.metadata.parameters) {
               const schema = tool.metadata.parameters;
-              let parsedArgs = tc.args || {};
+              let parsedArgs: any = tc.args || {};
               if (typeof parsedArgs === 'string') {
                 try {
                   parsedArgs = JSON.parse(parsedArgs);
                 } catch (_) {}
               }
+              if (typeof parsedArgs !== 'object' || parsedArgs === null) parsedArgs = {};
+
+              if (parsedArgs._meta && typeof parsedArgs._meta === 'object') {
+                const m = parsedArgs._meta as any;
+                if (typeof m.timeout_ms === 'number' && m.timeout_ms > 0) {
+                  metaTimeoutMs = Math.min(m.timeout_ms, 600000);
+                  logs.push(`[CORTEX] Tool '${tool.metadata.id}' _meta.timeout_ms override: ${metaTimeoutMs}ms`);
+                }
+                const stripped = { ...parsedArgs };
+                delete stripped._meta;
+                parsedArgs = stripped;
+              }
+
               APIService.validateSchema(schema, parsedArgs, tool.metadata.id);
               tc.args = parsedArgs;
+            } else if (tc.args && typeof tc.args === 'object' && (tc.args as any)._meta) {
+              // No schema: still strip reserved _meta so it never reaches the tool.
+              const stripped = { ...(tc.args as any) };
+              const m = stripped._meta as any;
+              if (m && typeof m.timeout_ms === 'number' && m.timeout_ms > 0) {
+                metaTimeoutMs = Math.min(m.timeout_ms, 600000);
+              }
+              delete stripped._meta;
+              tc.args = stripped;
             }
 
             if (signal?.aborted) {
@@ -1021,9 +1063,11 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
             const toolExecutorConfig = settings['tool-executor'] || {};
             const generalTimeoutMs = toolExecutorConfig.timeoutMs !== undefined ? Number(toolExecutorConfig.timeoutMs) : 60000;
             const isShell = ['run_command', 'shell', 'execute_shell'].includes(tc.name || tc.tool);
-            const activeTimeoutMs = isShell
-              ? (toolExecutorConfig.shellTimeoutMs !== undefined ? Number(toolExecutorConfig.shellTimeoutMs) : 120000)
-              : generalTimeoutMs;
+            const activeTimeoutMs = (metaTimeoutMs !== undefined)
+              ? metaTimeoutMs
+              : (isShell
+                ? (toolExecutorConfig.shellTimeoutMs !== undefined ? Number(toolExecutorConfig.shellTimeoutMs) : 120000)
+                : generalTimeoutMs);
 
             let attempts = 0;
             const maxAttempts = (toolExecutorConfig.retryLimit !== undefined ? Number(toolExecutorConfig.retryLimit) : 2) + 1;
@@ -1061,10 +1105,10 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
               signal.removeEventListener("abort", abortListener);
             }
 
-            res = { tool: tc.name || tc.tool, observation: toolRes, success: true };
+            res = { tool: tc.name || tc.tool, observation: toolRes, success: true, durationMs: Date.now() - execStart };
           } catch (err: any) {
             console.error(`[CORTEX] Tool schema validation or execution failed for ${tc.name || tc.tool}:`, err.message);
-            res = { tool: tc.name || tc.tool, error: `Execution failed: ${err.message}`, success: false };
+            res = { tool: tc.name || tc.tool, error: `Execution failed: ${err.message}`, success: false, durationMs: Date.now() - execStart };
           }
         } else {
           res = { tool: tc.name || tc.tool, error: 'Tool not found', success: false, notFound: true };
@@ -1114,11 +1158,19 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
             type: 'function',
             function: { name: callName, arguments: callArgs }
           });
-          const content = res
-            ? (res.success
-                ? (typeof res.observation === 'object' ? JSON.stringify(res.observation) : String(res.observation))
-                : (res.error || 'Tool execution failed'))
-            : 'No result';
+          // Canonical tool output envelope: { success, data, error, metadata }.
+          // Legacy shapes (stdout/stderr/content) are preserved inside `data`.
+          const envelope = {
+            success: !!res?.success,
+            data: res?.success ? res.observation : null,
+            error: res?.success ? null : (res?.error || 'Tool execution failed'),
+            metadata: {
+              tool: callName,
+              duration_ms: typeof res?.durationMs === 'number' ? res.durationMs : -1,
+              timestamp: new Date().toISOString()
+            }
+          };
+          const content = JSON.stringify(envelope);
           newToolMessages.push({ tool_call_id: callId, name: callName, content });
         }
         loopContext.assistantToolCalls = [

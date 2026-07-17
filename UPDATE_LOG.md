@@ -1,6 +1,54 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.53] - 2026-07-17
+### Refactor: AGI module registration cleanup & doc sync
+- Removed the manual registration block (21 AGI modules + EmotionEngine) in `src/core/RegistryInitializer.ts`; modules now auto-register via Vite glob (browser) and filesystem scan (server) per AGENTS.md §2 (Plug-and-Play, no manual registration).
+- Fixed orphaned modules (`adaptive-learning`, `dream-integrator`, `dream-simulation`) that were missing from the manual list — now consistently loaded server & browser (verified 24/24 AGI modules register).
+- Consolidated duplicated default prompt literals into a single source of truth: `YuiAGIDaemon.getDefaultPrompts()`; `YUIAGICoreModule` and `HighOrderMetacognitionModule` now reference it instead of duplicating prompt text.
+- Added `DreamModule` export alias in `DreamModule.ts` to match the file name (AGENTS.md §8); `DreamSimulationModule` retained for compatibility.
+- Updated `MODULES.md`: added all 24 `src/modules/agi/` modules to Cognitive group (Kelompok 3) and filled missing `DreamIntegratorModule`/`MemoryConsolidationModule` entries.
+
+## [4.53] - 2026-07-17
+### Feature: Editable cron task prompts in Web UI
+- Added `prompt` column to `cron_tasks` (schema + migration) so each scheduled task can store a custom instruction.
+- `/api/cron` POST accepts/saves `prompt`; GET already returns full rows.
+- `getCronAction` now runs the custom prompt when set; falls back to default `[CRON_SIGNAL]: <name>...` when empty.
+- `CronManager` form: Task Prompt textarea on create/edit; list shows custom-prompt badge + expandable preview; edit preserves channel targeting.
+- Scheduler tool (`manage_cron` / `scheduler`): new optional `prompt` parameter for add/edit.
+
+## [4.52] - 2026-07-17
+### Fix: Web UI blank white screen (TensorArt Node imports in browser bundle)
+- Root cause: `src/drivers/tools/tensorart_generate/index.ts` used static top-level imports from `fs`/`path`/`os`/`fs/promises`. Vite rewrote them to browser-external proxies that throw on property access during module evaluation.
+- Because `RegistryInitializer` loads all tools via `import.meta.glob(..., { eager: true })` into the client graph, that throw aborted React mount (`#root` stayed empty → pure white page, CSS never applied).
+- Fix: remove static Node imports; lazy-load filesystem helpers only on the server runtime (`loadNodeFs()`), so browser eager-glob evaluation stays safe. TensorArt execute path behavior unchanged.
+
+## [4.51] - 2026-07-13
+### Tool System Standardization (consolidation, canonical envelope, LLM-configurable loop)
+- Consolidated 3 duplicate tools: `view_system_logs`→`view_logs` (added `type: "all"` + `offset`), `search_memory`→`search_chat` (added `scope` + `offset`), `file_automation`→`file_manager` (added sort/archive/summarize/convert actions + configSchema). Deleted retired tool directories.
+- Added alias map + parameter normalization for retired IDs in `src/core/cortex/toolNormalizer.ts`.
+- Cortex loop now strips reserved `_meta` (e.g. `timeout_ms`) from tool args and applies per-call timeout overrides; added `max_iterations_override` support capped by `tool-executor.maxIterationsCeiling` (new config key).
+- Enforced canonical tool output envelope `{success, data, error, metadata}` for LLM tool-result messages, with per-tool `duration_ms` timing.
+- Added centralized PromptRegistry templates (`tools:syntax_openai`, `tools:syntax_pagination`, `tools:output_format`, `tools:_meta`); `PromptManager` now references them instead of hardcoded XML.
+- Added pagination params: `read_file` (limit/offset/line_start/line_end), `list_files`/`view_logs`/`search_chat` (limit/offset) with backend support in `toolsRouter.ts`.
+- Standardized TensorArt tool: removed unsupported params (`negative_prompt`, `cfg_scale`, `steps`, `model_id`), added LLM-controlled `timeoutMs`/`pollIntervalMs`, wrapped returns in canonical envelope `{status, data, error, metadata}`, added `action` dispatch (`generate`/`list_tools`/`upload_file`), dynamic `toolName` + full `inputs` array, optional `sendToChat` auto-delivery via Telegram/Discord, and smart base URL routing for `ak_tusi` keys.
+
+## [4.50] - 2026-07-13
+### Config: TensorArt API key populated in settings and env
+- Added `TENSORART_API_KEY` to `.env` with the active TensorArt access key.
+- Added `[tensorart]` section with `apiKey` to `.yuihime/data/config.toml`.
+- Tool `TensorArtGenerateTool` now resolves the key from `settings.tensorart.apiKey`, `process.env.TENSORART_API_KEY`, and `~/.tensor_access_key`.
+
+## [4.49] - 2026-07-13
+### Fix: TensorArt tool migration to OpenAPI
+- Migrated `src/drivers/tools/tensorart_generate/index.ts` from deprecated TAMS API (`tams-api.tensor.art/v1/jobs`) to official TensorArt OpenAPI (`openapi.tensor.art/openworks/v1`).
+- Updated auth header from `Bearer` to `Echo-Access-Key` per OpenAPI spec.
+- Added fallback access key resolution from `~/.tensor_access_key` alongside settings and env.
+- Switched task lifecycle to `POST /task` + `POST /task/query` with `taskIds` polling.
+- Mapped inputs to `anime_lab_wai_illustrious` tool (STRING prompt + INTEGER width/height/count).
+- Fixed output parsing to handle actual OpenAPI response format where image URLs come as STRING outputs (`type: "STRING"`, `value: "url"`), not just FILE outputs.
+- Added auto-download after generation success, saving image to `/tmp/yuihime-tensorart/tensorart_<taskId>.png` and returning `localPath`.
+
 ## [4.48] - 2026-07-13
 ### Rename: Standardize all tool ids to snake_case agent names
 - Renamed 17 driver tool ids + 2 core pseudo-tools to standard snake_case agent names across manifests, LiveStatusToolsModule.ts, cortexThinkEngine.ts, PromptRegistry.ts, toolNormalizer.ts, PuterAdapter.ts, puterWrapper.ts, NeuralLoopModule.ts, dataset synthesizer/routers, build-info.json, docs, and local .yuihime/agent prompts.

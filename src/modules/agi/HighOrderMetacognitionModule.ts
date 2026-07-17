@@ -4,15 +4,8 @@ import { YuiAGIDaemon } from './YuiAGIDaemon';
 
 let promptRegistered = false;
 
-const defaultReflectionSandboxPrompt = `
-[YUIAGI - METACOGNITIVE REFLECTION ACTIVE]
-Self-Metacognitive Reflection Filter (Thinking about Thinking / Self-Critique) Activated:
-- Hallucination Risk Index: \${hallucinationRisk}%. Integrity Status: \dots \${integrityStatus}.
-- Detected Cognitive Bias Correction: \${biasResolution}.
-- Model Synchronization (Local Model vs Cloud Model Equilibrium): \${modelMatchDegree}%.
-
-Align your recollections honestly, eliminate all forms of informational contradiction, and ensure your inner character consistency is 100% harmonized before presenting the final response layout to the user!
-`.trim();
+// Default prompt template sourced from YuiAGIDaemon (single source of truth).
+const defaultReflectionSandboxPrompt = YuiAGIDaemon.getInstance().getDefaultPrompts().reflection;
 
 /**
  * Ensures metacognitive prompt templates are registered in the Prompts Coordinator.

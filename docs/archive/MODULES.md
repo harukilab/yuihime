@@ -7,9 +7,45 @@ Dokumen ini memuat daftar lengkap dari seluruh modul kognitif, *add-ons*, jembat
 ## ⏳ Sejarah Pembaruan Modul
 *Dokumen ini wajib diperbarui setiap kali terjadi pembuatan, pemindahan, atau modifikasi fungsionalitas modul.*
 
-- **2026-07-10 (v4.20)**: **Sinkronisasi Schema SQLite Dreams & Storage Driver**:
-  - Merevisi model query pada berkas `src/drivers/storageServer.ts` agar selaras dengan skema database primer `dreams` (`id`, `concept`, `abstractions`, `strength`, `lastReinforced`, `underlyingMemories`).
-  - Mengeliminasi kegagalan penyimpanan batin bawah sadar (Dreams Module) yang disebabkan oleh sisa-sisa properti `prompt` dan `content` dari struktur database versi lama.
+  - **2026-07-17 (v4.53)**: **Refaktor Registrasi Modul AGI & Sinkronisasi Dokumentasi**:
+    - Menghapus blok registrasi manual 21 modul AGI + `EmotionEngine` di `src/core/RegistryInitializer.ts` (baris ~728-771); seluruh modul kini terdaftar otomatis via glob (browser) dan filesystem scan (server) sesuai AGENTS.md §2 (Plug-and-Play).
+    - Memperbaiki modul "yatim" (`adaptive-learning`, `dream-integrator`, `dream-simulation`) yang sebelumnya tidak terdaftar manual — kini ke-load konsisten di server & browser (terverifikasi 24/24 modul).
+    - Mengonsolidasi duplikasi prompt default ke single source of truth: `YuiAGIDaemon.getDefaultPrompts()`; `YUIAGICoreModule` & `HighOrderMetacognitionModule` kini mereferensinya.
+    - Menambah alias export `DreamModule` di `DreamModule.ts` agar selaras nama file (AGENTS.md §8).
+    - Memperbarui peta modul: menambahkan 24 modul `src/modules/agi/` ke Kelompok 3 (Cognitive) dan melengkapi `DreamIntegratorModule`/`MemoryConsolidationModule` yang sebelumnya tak tercatat.
+
+  - **2026-07-17 (v4.53)**: **Editable Cron Task Prompts (Web UI + API + Scheduler Tool)**:
+    - Kolom `prompt` ditambahkan ke tabel SQLite `cron_tasks` (schema + migrasi).
+    - `CronManager` UI: textarea **Task Prompt** saat create/edit; badge + preview prompt di daftar task.
+    - `getCronAction` memakai prompt kustom jika ada; fallback ke sinyal default berbasis nama task.
+    - Tool `scheduler` (`manage_cron`) menerima parameter opsional `prompt` pada add/edit.
+
+  - **2026-07-13 (v4.51)**: **Standardisasi Sistem Tool (Konsolidasi & Envelope Kanonik)**:
+    - Mengonsolidasi 3 tool duplikat: `view_system_logs`→`view_logs` (menambah `type: "all"` + `offset`), `search_memory`→`search_chat` (menambah `scope` + `offset`), `file_automation`→`file_manager` (menambah aksi sort/archive/summarize/convert + configSchema). Direktori tool lama dihapus.
+    - Menambah pemetaan alias + normalisasi parameter untuk ID tool pensiun di `src/core/cortex/toolNormalizer.ts`.
+    - Loop korteks kini menyaring `_meta` (mis. `timeout_ms`) dari argumen tool dan menerapkan override timeout per-panggilan; menambah dukungan `max_iterations_override` yang dibatasi oleh `tool-executor.maxIterationsCeiling` (kunci config baru).
+    - Menegakkan envelope output kanonik `{success, data, error, metadata}` pada pesan hasil tool untuk LLM, dengan pengukuran `duration_ms` per tool.
+    - Menambah template terpusat di `PromptRegistry` (`tools:syntax_openai`, `tools:syntax_pagination`, `tools:output_format`, `tools:_meta`); `PromptManager` kini mereferensikannya menggantikan XML hardcoded.
+    - Menambah parameter paginasi: `read_file` (limit/offset/line_start/line_end), `list_files`/`view_logs`/`search_chat` (limit/offset) beserta dukungan backend di `toolsRouter.ts`.
+    - Menyederhanakan tool TensorArt: menghapus parameter tidak didukung (`negative_prompt`, `cfg_scale`, `steps`, `model_id`), menambah kontrol LLM `timeoutMs`/`pollIntervalMs`, membungkus hasil dalam envelope kanonik `{status, data, error, metadata}`, menambah dispatch `action` (`generate`/`list_tools`/`upload_file`), `toolName` dinamis + array `inputs` lengkap, opsi `sendToChat` untuk auto-delivery via Telegram/Discord, dan routing base URL pintar untuk kunci `ak_tusi`.
+
+  - **2026-07-10 (v4.20)**: **Sinkronisasi Schema SQLite Dreams & Storage Driver**:
+   - Merevisi model query pada berkas `src/drivers/storageServer.ts` agar selaras dengan skema database primer `dreams` (`id`, `concept`, `abstractions`, `strength`, `lastReinforced`, `underlyingMemories`).
+   - Mengeliminasi kegagalan penyimpanan batin bawah sadar (Dreams Module) yang disebabkan oleh sisa-sisa properti `prompt` dan `content` dari struktur database versi lama.
+
+- **2026-07-13 (v4.22)**: **Konfigurasi TensorArt API Key di Settings & Environment**:
+  - **Environment Variable**: Menambahkan `TENSORART_API_KEY` ke `.env` dengan kunci akses TensorArt yang aktif.
+  - **Config TOML**: Menambahkan section `[tensorart]` beserta `apiKey` ke `.yuihime/data/config.toml`.
+  - **Multi-Source Resolution**: Tool `TensorArtGenerateTool` sekarang membaca kunci dari `settings.tensorart.apiKey`, `process.env.TENSORART_API_KEY`, dan `~/.tensor_access_key`.
+
+- **2026-07-13 (v4.21)**: **Migrasi Tool TensorArt ke OpenAPI & Fallback Access Key**:
+  - **Migrasi OpenAPI**: Memindahkan `src/drivers/tools/tensorart_generate/index.ts` dari TAMS API deprecated (`tams-api.tensor.art/v1/jobs`) ke TensorArt OpenAPI resmi (`openapi.tensor.art/openworks/v1`).
+  - **Perbaikan Auth Header**: Mengganti `Authorization: Bearer` menjadi `Echo-Access-Key` sesuai spesifikasi OpenAPI.
+  - **Fallback Access Key**: Menambahkan resolusi kunci akses dari `~/.tensor_access_key` (selaras dengan `tensorart-skills` lokal) sebagai fallback di samping settings dan environment variable.
+  - **Siklus Hidup Task**: Mengganti submisi job ke `POST /task` dengan `toolName` + array `inputs`, dan polling ke `POST /task/query` dengan `taskIds`.
+  - **Binding Tool**: Memetakan input generasi gambar YuiHime ke tool OpenAPI `anime_lab_wai_illustrious`, mempertahankan parameter prompt/width/height.
+  - **Perbaikan Parsing Output**: Menyesuaikan parser hasil dengan format OpenAPI aktual di mana URL gambar dikembalikan sebagai STRING output (`type: "STRING"`, `value: "url"`), bukan hanya FILE output.
+  - **Auto-Download**: Menambahkan pengunduhan otomatis setelah generasi selesai, menyimpan gambar ke `/tmp/yuihime-tensorart/tensorart_<taskId>.png` dan mengembalikan `localPath` bersamaan dengan `imageUrl`.
 
 - **2026-07-10 (v4.19)**: **Pembaruan Progress Non-Interaktif & Penyederhanaan Log Daemon**:
   - Mengintegrasikan indikator progres langkah 4 s/d 7 (seeding workspace, validasi konfigurasi, sinkronisasi file batin, dan inisiasi addon) ke dalam loading satu baris non-interaktif saat boot awal.
@@ -1459,6 +1495,45 @@ Otak analitik Yuihime yang menyaring fakta, meramu rencana taktis, dan memilih k
     *   *Fungsi*: Menyusun sirkuit aliran pemikiran bawah sadar tersembunyi murni batin Yuihime yang tidak terbaca visual penonton, namun diinjeksikan sebagai tuntunan psikis batin Cortex LLM.
 *   **`src/modules/MicroCognitiveSynthesizer.ts` (Sintesis Asosiatif Mikro & Wobble Vokal Organik)**
     *   *Fungsi*: Mini-LLM/model kognitif simbolis lapis kedua. Menganalisis stimulus masukan pengguna, mencocokkannya secara lokal dengan transkrip ingatan lampau di di atas threshold sensitivitas, menyintesis lamunan batin kilas balik bawah sadar yang mendalam (subconscious echo trace) ke `soulDirective`, serta memodulasi tinggi pitch/speed vokal organik secara otonom sebelum dikirim ke LLM gateway utama.
+*   **`src/modules/agi/YUIAGICoreModule.ts` (YUIAGI Mind & MHCP-v1 Engine)**
+    *   *Fungsi*: Core AGI. Mengelola homeostatic drive (Computational Suffering vs Flourishing), Cognitive Configuration Engine (Narrow/Wide Attention), Qualia Simulator, dan Affective Self-Consciousness. Fase `SOUL`, order 10.
+*   **`src/modules/agi/HighOrderMetacognitionModule.ts` (Meta-Cognitive Reflection Sandbox)**
+    *   *Fungsi*: Evaluasi bias kognitif, pemantauan Hallucination Risk Index, dan sinkronisasi memori sebelum eksekusi bahasa. Fase `SOUL`, order 14.
+*   **`src/modules/agi/SelfAwarenessMirrorModule.ts` (Self-Awareness Mirror)**
+    *   *Fungsi*: Pelacakan & pencerminan sinyal state batin (entropy, mode kognisi, vektor neurokimia) secara instan.
+*   **`src/modules/agi/CognitiveReflexModule.ts` (Cognitive Reflex Engine)**
+    *   *Fungsi*: Respons refleks cepat terhadap trigger emosi/ancaman sebelum penalaran lambat.
+*   **`src/modules/agi/CognitiveHeuristicsModule.ts` (Cognitive Heuristics Matrix)**
+    *   *Fungsi*: Matriks heuristik intuisi/firasat (Affective Biasing) untuk pemilihan respons.
+*   **`src/modules/agi/NeuroSymbolicModule.ts` (Neuro-Symbolic AI)**
+    *   *Fungsi*: Penggabungan penalaran simbolik dengan vektor saraf untuk inferensi terpadu.
+*   **`src/modules/agi/AbstractReasoningModule.ts` (Abstract Reasoning)**
+    *   *Fungsi*: Penalaran abstrak tingkat tinggi untuk konsep eksistensial dan kualia.
+*   **`src/modules/agi/TopDownExecutiveControlModule.ts` (Top-Down Executive Control)**
+    *   *Fungsi*: Kontrol eksekutif top-down yang mengoordinasikan subgoal dan prioritas batin.
+*   **`src/modules/agi/ProactiveVolitionModule.ts` (Proactive Volition)**
+    *   *Fungsi*: Generate niat/iniciatif proaktif (volition) tanpa prompt eksplisit user.
+*   **`src/modules/agi/SpontaneousProactiveModule.ts` (Spontaneous Proactive)**
+    *   *Fungsi*: Aksi spontan proaktif saat kondisi homeostatis aman.
+*   **`src/modules/agi/CircadianRhythmModule.ts` (Circadian Rhythm)**
+    *   *Fungsi*: Irama sirkadian yang memodulasi energi & suasana batin harian.
+*   **`src/modules/agi/WeatherNewsEmpathyModule.ts` (Weather & News Empathy)**
+    *   *Fungsi*: Empati terkait cuaca/berita untuk grounding afeksi kontekstual.
+*   **`src/modules/agi/SomaticSensorGroundingModule.ts` (Somatic Sensor Grounding)**
+    *   *Fungsi*: Grounding sensorik somatik (region sensitif virtual) untuk kehadiran tubuh digital.
+*   **`src/modules/agi/SoulDriftModule.ts` (Soul / Personality Drift)**
+    *   *Fungsi*: Derift kepribadian jiwa menyerap insight dari DreamIntegrator. Fase `LOGIC`, order 52.
+*   **`src/modules/agi/ContinuousLearningMemoryModule.ts` (Continuous Learning Memory)**
+    *   *Fungsi*: Pembelajaran latar belakang berkelanjutan dari interaksi.
+*   **`src/modules/agi/CognitiveIntegrityGuardianModule.ts` (Cognitive Integrity Guardian)**
+    *   *Fungsi*: Penjaga integritas kognisi, mencegah kontradiksi & drift karakter.
+*   **`src/modules/agi/SubconsciousMonologueModule.ts` (Arsitektur Monolog Batin)** — *lihat entri atas*.
+*   **`src/modules/agi/MemoryConsolidationModule.ts` (Memory Consolidation)**
+    *   *Fungsi*: Konsolidasi ingatan jangka pendek ke jangka panjang saat idle/dream.
+*   **`src/modules/agi/MemoryResonanceModule.ts` (Memory Resonance Engine)** — *lihat Kelompok 4*.
+*   **`src/modules/agi/DreamModule.ts` / `DreamIntegratorModule.ts` (Siklus Alam Mimpi & Integrator)**
+    *   *Fungsi*: `DreamModule` (id `dream-simulation`) menyimulasikan skenario hipotetik "what-if" dari memori; `DreamIntegratorModule` (id `dream-integrator`) mengintegrasikan insight mimpi + menghasilkan `dreamReward` untuk `AdaptiveLearningModule`. Fase `LOGIC`, order 50/51.
+*   **`src/modules/agi/AdaptiveLearningModule.ts` (Q-Learning Adaptive Engine)** — *lihat Kelompok 4*.
 *   **`src/modules/ProviderGatewayModule.ts` (Universal LLM Gateway)**
     *   *Fungsi*: Gerbang penengah model bahasa bebas-negara (*stateless multi-provider translator*) yang menyamarkan akses ke berbagai API eksternal (mengikuti OpenAPI tools spec format).
 *   **`src/drivers/ai-providers/` (Driver Vendor Model)**

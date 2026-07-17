@@ -8,13 +8,19 @@
   "parameters": {
     "type": "object",
     "properties": {
+      "action": {
+        "type": "string",
+        "description": "Operation mode: 'generate' (default), 'list_tools', or 'upload_file'.",
+        "default": "generate"
+      },
       "prompt": {
         "type": "string",
         "description": "Highly detailed vivid description of the scene or illustration to generate (e.g. 'anime girl under falling blossom petals, smiling')."
       },
-      "negative_prompt": {
+      "toolName": {
         "type": "string",
-        "description": "Unwanted aspects of the illustration (e.g. 'lowres, bad hands, low quality, bad aesthetics')."
+        "description": "TensorArt tool/model name (default: anime_lab_wai_illustrious). Use list_tools to discover available tools.",
+        "default": "anime_lab_wai_illustrious"
       },
       "width": {
         "type": "integer",
@@ -26,20 +32,38 @@
         "description": "Height of the generated visual in pixels (default: 512).",
         "default": 512
       },
-      "model_id": {
+      "inputs": {
+        "type": "array",
+        "description": "Full inputs array for the TensorArt tool. Each element: {type: 'STRING'|'INTEGER'|'FILE'|..., value: ...}. Overrides prompt/width/height when provided.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": ["STRING", "INTEGER", "NUMBER", "BOOLEAN", "ARRAY", "OBJECT", "FILE"]
+            },
+            "value": {}
+          }
+        }
+      },
+      "filePath": {
         "type": "string",
-        "description": "TensorArt SD model ID or check-point hash (default is high-quality general-purpose anime model).",
-        "default": "620130983637151123"
+        "description": "Local file path to upload (required for action: 'upload_file')."
       },
-      "cfg_scale": {
-        "type": "number",
-        "description": "Prompt adherence weight coefficient (default: 7).",
-        "default": 7
-      },
-      "steps": {
+      "timeoutMs": {
         "type": "integer",
-        "description": "Inference iteration steps (default: 20).",
-        "default": 20
+        "description": "Override default timeout for this generation call (ms).",
+        "default": 120000
+      },
+      "pollIntervalMs": {
+        "type": "integer",
+        "description": "Interval between status polling checks (ms).",
+        "default": 3000
+      },
+      "retryLimit": {
+        "type": "integer",
+        "description": "Max retries on transient failure.",
+        "default": 0
       }
     },
     "required": ["prompt"]

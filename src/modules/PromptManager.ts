@@ -112,84 +112,17 @@ async function ensureInitialized() {
 
   const toolsTemplate = `
 # SYSTEM CAPABILITIES & ACTIVE RUNTIME TOOLS
-You are equipped with the following asynchronous tools. If the user requests an action matching any of these capabilities, you MUST invoke the appropriate tool using the <tool_calls> tag. The tag must contain a valid JSON array of tool call objects matching the standard OpenAI \`tool_calls\` schema format.
+You are equipped with the following asynchronous tools. When the user requests an action matching any of these capabilities, invoke the appropriate tool via the standard OpenAI \`tool_calls\` schema (see syntax below).
 
 \${toolsList}
 
-### TOOL CALL SYNTAX & SPECIFICATION (OPENAI STANDARD):
-When requesting tool execution, include the <tool_calls> block at the top-level of your response. Inside, provide the standard OpenAI JSON array (with keys "id", "type": "function", and "function" containing "name" and "arguments"). Keep your casual spoken conversation friendly, sweet, or characterfully sassy (tsundere) as you explain to the user in their language that you are initiating the task.
+\${toolSyntax}
 
-**EXAMPLE EXTERNAL CALLS (Cron Scheduling & Management):**
-- **To add a task/reminder**: (e.g. "remind me to eat in 5 minutes")
-<tool_calls>
-[
-  {
-    "id": "call_cron_eat",
-    "type": "function",
-    "function": {
-      "name": "scheduler",
-      "arguments": {
-        "action": "add",
-        "taskName": "Remind to eat",
-        "schedule": "5m",
-        "repeating": false
-      }
-    }
-  }
-]
-</tool_calls>
+\${toolPagination}
 
-- **To delete a task/reminder**: (e.g. "delete cron task Remind to eat" or "hapus alarm minum")
-<tool_calls>
-[
-  {
-    "id": "call_cron_delete",
-    "type": "function",
-    "function": {
-      "name": "scheduler",
-      "arguments": {
-        "action": "delete",
-        "taskId": "Remind to eat"
-      }
-    }
-  }
-]
-</tool_calls>
+\${toolOutput}
 
-- **To list active cron tasks**: (e.g. "list alarm" or "apa saja cron task")
-<tool_calls>
-[
-  {
-    "id": "call_cron_list",
-    "type": "function",
-    "function": {
-      "name": "scheduler",
-      "arguments": {
-        "action": "list"
-      }
-    }
-  }
-]
-</tool_calls>
-
-- **To toggle (enable/disable) a task**: (e.g. "matikan/hidupkan alarm minum")
-<tool_calls>
-[
-  {
-    "id": "call_cron_toggle",
-    "type": "function",
-    "function": {
-      "name": "scheduler",
-      "arguments": {
-        "action": "toggle",
-        "taskId": "Remind to drink water"
-      }
-    }
-  }
-]
-</tool_calls>
-
-Crucial Instruction: Never nested tags within each other. The <tool_calls> tag must stand independently at the absolute outer level of your response.
+\${toolMeta}
 `.trim();
 
   registry.register('prompt-manager:available_tools', toolsTemplate);
@@ -436,7 +369,13 @@ export const PromptManagerModule: CortexModule = {
       toolsList = "Tidak ada peralatan sistem eksternal yang tersedia saat ini.";
     }
 
-    const toolsInstruction = registry.compile('prompt-manager:available_tools', { toolsList });
+    const toolsInstruction = registry.compile('prompt-manager:available_tools', {
+      toolsList,
+      toolSyntax: registry.compile('tools:syntax_openai', {}),
+      toolPagination: registry.compile('tools:syntax_pagination', {}),
+      toolOutput: registry.compile('tools:output_format', {}),
+      toolMeta: registry.compile('tools:_meta', {})
+    });
 
     // Format active system modules dynamically from the registry for consciousness awareness
     const activeCortexModules = SystemRegistry.getCortexModules();

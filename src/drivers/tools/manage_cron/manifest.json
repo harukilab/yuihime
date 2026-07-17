@@ -1,8 +1,8 @@
 {
   "id": "scheduler",
   "name": "Scheduler",
-  "description": "Schedule, list, and manage recurring tasks (cron jobs) in the system. Use this to create reminders or automated background checks.",
-  "version": "1.0.0",
+  "description": "Classic cron-style scheduler: schedule + command (prompt). Create/list/edit/toggle/delete recurring jobs. ALWAYS set prompt to the full instruction Yui must execute when the job fires (the command body). taskName is only a short label.",
+  "version": "1.1.0",
   "type": "TOOL",
   "order": 105,
   "parameters": {
@@ -15,11 +15,11 @@
       },
       "taskName": { 
         "type": "string", 
-        "description": "Name of the task" 
+        "description": "Short human label for the job (like a crontab comment). Not a substitute for prompt." 
       },
       "schedule": { 
         "type": "string", 
-        "description": "Schedule string (e.g., '1m' for every minute, '1h' for every hour, or a standard cron expression like '0 * * * *')" 
+        "description": "When to run: interval (e.g. 5m, 1h) or standard cron (e.g. 0 7 * * *)" 
       },
       "taskId": {
         "type": "string",
@@ -28,6 +28,18 @@
       "repeating": {
         "type": "boolean",
         "description": "Whether the task should repeat or be deleted after one-time execution"
+      },
+      "prompt": {
+        "type": "string",
+        "description": "REQUIRED for add when possible. Full command/instruction executed when the job fires (like a crontab command). Include deliverable, style, and target user. Example: 'Generate a fresh AI image prompt and short caption for Al, then send it in this chat.'"
+      },
+      "command": {
+        "type": "string",
+        "description": "Alias of prompt — the job command body (crontab-style)."
+      },
+      "instruction": {
+        "type": "string",
+        "description": "Alias of prompt — the full scheduled instruction."
       },
       "targetChannel": {
         "type": "string",

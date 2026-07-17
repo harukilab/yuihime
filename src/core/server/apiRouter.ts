@@ -10,7 +10,7 @@ import * as toml from "smol-toml";
 
 import { AIService } from "../kernel/ai.js";
 import { SettingsManager } from "../kernel/settings.js";
-import { CronModule } from "../kernel/cron.js";
+import { CronModule, resolveCronJobPrompt } from "../kernel/cron.js";
 import { NeuralInterface } from "../kernel/NeuralInterface.js";
 import { MultiChannelQueue } from "../kernel/MultiChannelQueue.js";
 import { eventBus } from "../kernel/event-bus.js";
@@ -128,6 +128,7 @@ export const broadcastToWS = (payload: any) => {
 
 // --- Server-Side Cron Action Builder ---
 export const getCronAction = (id: string, name: string, repeating: boolean, db: any) => async () => {
+  let taskName = name;
   console.log(`[CRON] Executing Task: ${name} (${id})`);
   
   // CUSTOM OVERRIDES FOR BUILT-IN SYSTEM TASKS
@@ -156,12 +157,17 @@ export const getCronAction = (id: string, name: string, repeating: boolean, db: 
   let contextId = 'live_stream';
   let chatType = 'Live Chat';
   let senderName = 'System';
+  let storedPrompt = '';
+  let storedAction: string | null = null;
   try {
-    const task: any = db.prepare("SELECT context_id, chat_type, sender_name FROM cron_tasks WHERE id = ?").get(id);
+    const task: any = db.prepare("SELECT context_id, chat_type, sender_name, prompt, action, name FROM cron_tasks WHERE id = ?").get(id);
     if (task) {
       contextId = task.context_id || contextId;
       chatType = task.chat_type || chatType;
       senderName = task.sender_name || senderName;
+      storedPrompt = task.prompt || '';
+      storedAction = typeof task.action === 'string' ? task.action : null;
+      if (task.name) taskName = task.name;
     }
   } catch (e: any) {
     console.error("[CRON_ERROR] Failed to fetch task info:", e);
@@ -172,7 +178,7 @@ export const getCronAction = (id: string, name: string, repeating: boolean, db: 
   db.prepare(`
     INSERT INTO memories (id, type, content, importance, speaker, context, timestamp)
     VALUES (?, 'system', ?, 0.8, 'System', ?, ?)
-  `).run(memoryId, `[SYSTEM_SIGNAL]: ${name} triggered.`, contextId, Date.now());
+  `).run(memoryId, `[SYSTEM_SIGNAL]: ${taskName} triggered.`, contextId, Date.now());
 
   if (repeating) {
     db.prepare("UPDATE cron_tasks SET lastRun = ? WHERE id = ?").run(Date.now(), id);
@@ -183,9 +189,15 @@ export const getCronAction = (id: string, name: string, repeating: boolean, db: 
 
   // Process thinking and dispatch response on the server side
   try {
-    console.log(`[CRON_THINK] Running neural processor for cron task: ${name} on channel: ${chatType}:${contextId}`);
-    
-    const prompt = `[CRON_SIGNAL]: ${name}. Please process this scheduled request now.`;
+    console.log(`[CRON_THINK] Running neural processor for cron task: ${taskName} on channel: ${chatType}:${contextId}`);
+
+    // Classic cron model: schedule + command. Command = prompt (job body).
+    const prompt = resolveCronJobPrompt({
+      id,
+      name: taskName,
+      prompt: storedPrompt,
+      action: storedAction,
+    });
     
     const reply = await NeuralInterface.processNeuralInput(
        prompt,

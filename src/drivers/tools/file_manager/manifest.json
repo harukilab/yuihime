@@ -2,16 +2,32 @@
   "id": "file_manager",
   "name": "File Manager",
   "description": "Perform robust file operations: copy, move/rename, delete files or directories, create directories, check if a path exists, get file info, or find files by wildcard patterns inside the sandbox.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "TOOL",
   "order": 102,
+  "configSchema": {
+    "fields": {
+      "defaultArchiveName": {
+        "type": "input",
+        "label": "Default Archive Name",
+        "description": "Default name used when zipping files (archive action).",
+        "default": "archive_sync"
+      },
+      "summaryInstruction": {
+        "type": "textarea",
+        "label": "Summary Extraction Context",
+        "description": "Custom tuning prompt for summarizing text documents (summarize action).",
+        "default": "Buatlah ringkasan kognitif yang padat, informatif, dan terstruktur rapi dari dokumen berikut dalam bahasa Indonesia yang anggun:"
+      }
+    }
+  },
   "parameters": {
     "type": "object",
     "properties": {
       "action": {
         "type": "string",
-        "description": "The file action to perform: \"copy\", \"move\", \"delete\", \"mkdir\", \"exists\", \"info\", or \"find\"",
-        "enum": ["copy", "move", "delete", "mkdir", "exists", "info", "find"]
+        "description": "The file action to perform: \"copy\", \"move\", \"delete\", \"mkdir\", \"exists\", \"info\", \"find\" for direct ops, or \"sort\", \"archive\", \"summarize\", \"convert\" for automated batch ops.",
+        "enum": ["copy", "move", "delete", "mkdir", "exists", "info", "find", "sort", "archive", "summarize", "convert"]
       },
       "source": {
         "type": "string",
@@ -32,6 +48,28 @@
       "pattern": {
         "type": "string",
         "description": "Wildcard pattern to search for, e.g., \"*.txt\", \"*.png\" (only applicable for \"find\" action)"
+      },
+      "target": {
+        "type": "string",
+        "description": "Target file or directory path for automation actions (sort/archive/summarize/convert). Use a full path starting with 'user_data/'."
+      },
+      "files": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "List of file paths to process (required for \"archive\" action). Use full paths starting with 'user_data/'."
+      },
+      "archiveName": {
+        "type": "string",
+        "description": "Output name for the zip/tar archive when using the \"archive\" action (e.g. \"my_backup.zip\")."
+      },
+      "sortBy": {
+        "type": "string",
+        "description": "Sorting criteria for the \"sort\" action: \"type\", \"size\", \"date\", or \"name\".",
+        "enum": ["type", "size", "date", "name"]
+      },
+      "targetFormat": {
+        "type": "string",
+        "description": "Target format for the \"convert\" action: \"json\", \"toml\", \"markdown\" (e.g. transform CSV to JSON)."
       }
     },
     "required": ["action"]

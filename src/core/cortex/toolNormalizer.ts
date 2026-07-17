@@ -56,6 +56,12 @@ export function normalizeToolCall(tc: any): any {
     'ls': 'list_files',
     'modify_file': 'file_automation',
     'file_manipulate_tool': 'file_automation',
+    'file_automation': 'file_manager',
+    'view_system_logs': 'view_logs',
+    'view_system_log': 'view_logs',
+    'search_memory': 'search_chat',
+    'memory_search': 'search_chat',
+    'chat_search': 'search_chat',
     'adjust_emotion': 'set_emotion',
     'send_message': 'send_message',
     'telegram_message': 'send_message',
@@ -89,6 +95,22 @@ export function normalizeToolCall(tc: any): any {
   } else if (name === 'read_file') {
     const rawPath = args.filename || args.filePath || args.path || args.file;
     if (rawPath) args.filename = rawPath;
+  } else if (name === 'search_chat') {
+    // Memory-search legacy param `type` (memory-type filter) maps to `memoryType`.
+    if (args.memoryType === undefined && args.type !== undefined) {
+      args.memoryType = args.type;
+    }
+    // Default scope to 'chat' unless explicitly requested.
+    if (args.scope === undefined) {
+      args.scope = 'chat';
+    }
+  } else if (name === 'file_manager') {
+    // Legacy file_automation param aliases.
+    const rawTarget = args.target || args.path || args.source;
+    if (rawTarget && args.target === undefined) args.target = rawTarget;
+    if (Array.isArray(args.files) === false && typeof args.file === 'string') {
+      args.files = [args.file];
+    }
   }
 
   // Return an OpenAI-native tool call enriched with backward-compatible aliases

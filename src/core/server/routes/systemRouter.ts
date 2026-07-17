@@ -6,7 +6,7 @@ import { exec } from "child_process";
 import { promisify } from "util";
 import * as toml from "smol-toml";
 import { SettingsManager } from "../../kernel/settings.js";
-import { CronModule } from "../../kernel/cron.js";
+import { CronModule, extractCronPromptFromArgs, normalizeCronPromptForSave } from "../../kernel/cron.js";
 import { MultiChannelQueue } from "../../kernel/MultiChannelQueue.js";
 import { broadcastToWS, getCronAction } from "../apiRouter.js";
 import { NeuralInterface } from "../../kernel/NeuralInterface.js";
@@ -541,6 +541,14 @@ export function registerSystemRoutes(app: express.Express, db: any) {
 
   app.post("/api/cron", (req, res) => {
     const { id, name, schedule, enabled, repeating, context_id, chat_type, sender_name } = req.body;
+    // Accept prompt / command / instruction aliases (crontab-style command body)
+    const rawPrompt = extractCronPromptFromArgs(req.body);
+    const final_prompt = normalizeCronPromptForSave({
+      id,
+      name,
+      prompt: rawPrompt,
+      action: typeof req.body?.action === 'string' ? req.body.action : null,
+    });
     
     let final_context_id = context_id || 'live_stream';
     let final_chat_type = chat_type || 'Live Chat';
@@ -615,8 +623,8 @@ export function registerSystemRoutes(app: express.Express, db: any) {
     }
 
     db.prepare(`
-      INSERT INTO cron_tasks (id, name, schedule, enabled, repeating, context_id, chat_type, sender_name)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO cron_tasks (id, name, schedule, enabled, repeating, context_id, chat_type, sender_name, prompt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         name = excluded.name,
         schedule = excluded.schedule,
@@ -624,12 +632,14 @@ export function registerSystemRoutes(app: express.Express, db: any) {
         repeating = excluded.repeating,
         context_id = COALESCE(excluded.context_id, cron_tasks.context_id),
         chat_type = COALESCE(excluded.chat_type, cron_tasks.chat_type),
-        sender_name = COALESCE(excluded.sender_name, cron_tasks.sender_name)
+        sender_name = COALESCE(excluded.sender_name, cron_tasks.sender_name),
+        prompt = excluded.prompt
     `).run(
       id, name, schedule, enabled ? 1 : 0, repeating ? 1 : 0,
       final_context_id,
       final_chat_type,
-      final_sender_name
+      final_sender_name,
+      final_prompt
     );
     
     const cron = CronModule.getInstance();

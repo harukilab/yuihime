@@ -10,16 +10,32 @@
     "properties": {
       "query": {
         "type": "string",
-        "description": "Optional keyword, text phrase, or topic to search for in past messages."
+        "description": "Optional keyword, text phrase, or topic to search for in past messages and/or memory."
+      },
+      "scope": {
+        "type": "string",
+        "description": "What to search across: 'chat' (conversational history across paired channels), 'memory' (persistent knowledge base & recalled facts), or 'all' (both merged).",
+        "enum": ["chat", "memory", "all"],
+        "default": "chat"
       },
       "platform": {
         "type": "string",
-        "description": "Optional platform filter to limit searches to. Allowed: 'web', 'telegram', 'discord', 'all'. Default is 'all'.",
+        "description": "Optional platform filter to limit chat searches to. Allowed: 'web', 'telegram', 'discord', 'all'. Default is 'all'.",
         "enum": ["web", "telegram", "discord", "all"]
+      },
+      "memoryType": {
+        "type": "string",
+        "description": "Optional memory-type filter when scope includes 'memory' (e.g., 'knowledge', 'chat', 'note'). Omit to search everything."
       },
       "limit": {
         "type": "number",
-        "description": "Maximum number of past messages to retrieve. Default is 20."
+        "description": "Maximum number of results to retrieve. Default is 20.",
+        "default": 20
+      },
+      "offset": {
+        "type": "number",
+        "description": "Number of results to skip before collecting the page (default 0). Use together with 'limit' to paginate.",
+        "default": 0
       }
     },
     "required": []

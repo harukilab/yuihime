@@ -233,15 +233,31 @@
     "id": "file_manager",
     "name": "File Manager",
     "description": "Perform robust file operations: copy, move/rename, delete files or directories, create directories, check if a path exists, get file info, or find files by wildcard patterns inside the sandbox.",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "type": "TOOL",
     "order": 102,
+    "configSchema": {
+      "fields": {
+        "defaultArchiveName": {
+          "type": "input",
+          "label": "Default Archive Name",
+          "description": "Default name used when zipping files (archive action).",
+          "default": "archive_sync"
+        },
+        "summaryInstruction": {
+          "type": "textarea",
+          "label": "Summary Extraction Context",
+          "description": "Custom tuning prompt for summarizing text documents (summarize action).",
+          "default": "Buatlah ringkasan kognitif yang padat, informatif, dan terstruktur rapi dari dokumen berikut dalam bahasa Indonesia yang anggun:"
+        }
+      }
+    },
     "parameters": {
       "type": "object",
       "properties": {
         "action": {
           "type": "string",
-          "description": "The file action to perform: \"copy\", \"move\", \"delete\", \"mkdir\", \"exists\", \"info\", or \"find\"",
+          "description": "The file action to perform: \"copy\", \"move\", \"delete\", \"mkdir\", \"exists\", \"info\", \"find\" for direct ops, or \"sort\", \"archive\", \"summarize\", \"convert\" for automated batch ops.",
           "enum": [
             "copy",
             "move",
@@ -249,7 +265,11 @@
             "mkdir",
             "exists",
             "info",
-            "find"
+            "find",
+            "sort",
+            "archive",
+            "summarize",
+            "convert"
           ]
         },
         "source": {
@@ -271,67 +291,25 @@
         "pattern": {
           "type": "string",
           "description": "Wildcard pattern to search for, e.g., \"*.txt\", \"*.png\" (only applicable for \"find\" action)"
-        }
-      },
-      "required": [
-        "action"
-      ]
-    }
-  },
-  {
-    "id": "file_automation",
-    "name": "File Automation",
-    "description": "Manages sandbox files: sorts by type/date, creates zip archives, generates smart text summaries using Gemini, and converts formats.",
-    "version": "1.0.0",
-    "type": "TOOL",
-    "order": 15,
-    "configSchema": {
-      "fields": {
-        "defaultArchiveName": {
-          "type": "input",
-          "label": "Default Archive Name",
-          "description": "Default name used when zipping files",
-          "default": "archive_sync"
-        },
-        "summaryInstruction": {
-          "type": "textarea",
-          "label": "Summary Extraction Context",
-          "description": "Custom tuning prompt for summarizing text documents",
-          "default": "Buatlah ringkasan kognitif yang padat, informatif, dan terstruktur rapi dari dokumen berikut dalam bahasa Indonesia yang anggun:"
-        }
-      }
-    },
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "action": {
-          "type": "string",
-          "description": "Action to execute: \"sort\", \"archive\", \"summarize\", or \"convert\"",
-          "enum": [
-            "sort",
-            "archive",
-            "summarize",
-            "convert"
-          ]
         },
         "target": {
           "type": "string",
-          "description": "The target file or directory path. You MUST specify the full path starting with 'user_data/' (e.g. 'user_data/report.csv') or absolute '/app/user_data/' path."
+          "description": "Target file or directory path for automation actions (sort/archive/summarize/convert). Use a full path starting with 'user_data/'."
         },
         "files": {
           "type": "array",
           "items": {
             "type": "string"
           },
-          "description": "List of file paths to process. You MUST specify full paths starting with 'user_data/' (required for \"archive\" action)."
+          "description": "List of file paths to process (required for \"archive\" action). Use full paths starting with 'user_data/'."
         },
         "archiveName": {
           "type": "string",
-          "description": "Output name for the zip/tar archive (e.g. \"my_backup.zip\")"
+          "description": "Output name for the zip/tar archive when using the \"archive\" action (e.g. \"my_backup.zip\")."
         },
         "sortBy": {
           "type": "string",
-          "description": "Sorting criteria: \"type\" (move to folders documents/images/code), \"size\", \"date\", or \"name\"",
+          "description": "Sorting criteria for the \"sort\" action: \"type\", \"size\", \"date\", or \"name\".",
           "enum": [
             "type",
             "size",
@@ -341,39 +319,11 @@
         },
         "targetFormat": {
           "type": "string",
-          "description": "The format to convert the target file to: \"json\", \"toml\", \"markdown\" (e.g. transform CSV to JSON, or JSON to TOML)"
+          "description": "Target format for the \"convert\" action: \"json\", \"toml\", \"markdown\" (e.g. transform CSV to JSON)."
         }
       },
       "required": [
         "action"
-      ]
-    }
-  },
-  {
-    "id": "search_memory",
-    "name": "Search Memory",
-    "description": "Search Yuihime's persistent memory and knowledge base (conversation history, facts, notes, and learned information) using a natural-language query. Use this to retrieve specific past information, facts the user shared, or recalled context before answering.",
-    "version": "1.0.0",
-    "type": "TOOL",
-    "order": 97,
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "query": {
-          "type": "string",
-          "description": "The search query in natural language (e.g., 'what did we discuss about the API key', 'user favorite color')."
-        },
-        "limit": {
-          "type": "number",
-          "description": "Maximum number of results to return (default 5, max 20)."
-        },
-        "type": {
-          "type": "string",
-          "description": "Optional filter by memory type (e.g., 'knowledge', 'chat', 'note'). Omit to search everything."
-        }
-      },
-      "required": [
-        "query"
       ]
     }
   },
@@ -460,7 +410,16 @@
     "order": 103,
     "parameters": {
       "type": "object",
-      "properties": {},
+      "properties": {
+        "limit": {
+          "type": "number",
+          "description": "Maximum number of file entries to return (default: all)."
+        },
+        "offset": {
+          "type": "number",
+          "description": "Number of file entries to skip before collecting the page (default 0)."
+        }
+      },
       "required": []
     }
   },
@@ -487,8 +446,8 @@
   {
     "id": "scheduler",
     "name": "Scheduler",
-    "description": "Schedule, list, and manage recurring tasks (cron jobs) in the system. Use this to create reminders or automated background checks.",
-    "version": "1.0.0",
+    "description": "Classic cron-style scheduler: schedule + command (prompt). Create/list/edit/toggle/delete recurring jobs. ALWAYS set prompt to the full instruction Yui must execute when the job fires (the command body). taskName is only a short label.",
+    "version": "1.1.0",
     "type": "TOOL",
     "order": 105,
     "parameters": {
@@ -507,11 +466,11 @@
         },
         "taskName": {
           "type": "string",
-          "description": "Name of the task"
+          "description": "Short human label for the job (like a crontab comment). Not a substitute for prompt."
         },
         "schedule": {
           "type": "string",
-          "description": "Schedule string (e.g., '1m' for every minute, '1h' for every hour, or a standard cron expression like '0 * * * *')"
+          "description": "When to run: interval (e.g. 5m, 1h) or standard cron (e.g. 0 7 * * *)"
         },
         "taskId": {
           "type": "string",
@@ -520,6 +479,18 @@
         "repeating": {
           "type": "boolean",
           "description": "Whether the task should repeat or be deleted after one-time execution"
+        },
+        "prompt": {
+          "type": "string",
+          "description": "REQUIRED for add when possible. Full command/instruction executed when the job fires (like a crontab command). Include deliverable, style, and target user. Example: 'Generate a fresh AI image prompt and short caption for Al, then send it in this chat.'"
+        },
+        "command": {
+          "type": "string",
+          "description": "Alias of prompt — the job command body (crontab-style)."
+        },
+        "instruction": {
+          "type": "string",
+          "description": "Alias of prompt — the full scheduled instruction."
         },
         "targetChannel": {
           "type": "string",
@@ -771,6 +742,22 @@
         "filename": {
           "type": "string",
           "description": "The path to the file. You MUST specify the full path starting with 'user_data/' (e.g. 'user_data/catatan_prompt_al.txt') or absolute '/app/user_data/' path to ensure precise resolution."
+        },
+        "limit": {
+          "type": "number",
+          "description": "Maximum number of characters to return (default: whole file). Use with 'offset' for character-based pagination."
+        },
+        "offset": {
+          "type": "number",
+          "description": "Character offset to start reading from (default 0)."
+        },
+        "line_start": {
+          "type": "number",
+          "description": "Optional 1-based inclusive starting line to read from."
+        },
+        "line_end": {
+          "type": "number",
+          "description": "Optional 1-based inclusive ending line to read to."
         }
       },
       "required": [
@@ -790,11 +777,21 @@
       "properties": {
         "query": {
           "type": "string",
-          "description": "Optional keyword, text phrase, or topic to search for in past messages."
+          "description": "Optional keyword, text phrase, or topic to search for in past messages and/or memory."
+        },
+        "scope": {
+          "type": "string",
+          "description": "What to search across: 'chat' (conversational history across paired channels), 'memory' (persistent knowledge base & recalled facts), or 'all' (both merged).",
+          "enum": [
+            "chat",
+            "memory",
+            "all"
+          ],
+          "default": "chat"
         },
         "platform": {
           "type": "string",
-          "description": "Optional platform filter to limit searches to. Allowed: 'web', 'telegram', 'discord', 'all'. Default is 'all'.",
+          "description": "Optional platform filter to limit chat searches to. Allowed: 'web', 'telegram', 'discord', 'all'. Default is 'all'.",
           "enum": [
             "web",
             "telegram",
@@ -802,9 +799,19 @@
             "all"
           ]
         },
+        "memoryType": {
+          "type": "string",
+          "description": "Optional memory-type filter when scope includes 'memory' (e.g., 'knowledge', 'chat', 'note'). Omit to search everything."
+        },
         "limit": {
           "type": "number",
-          "description": "Maximum number of past messages to retrieve. Default is 20."
+          "description": "Maximum number of results to retrieve. Default is 20.",
+          "default": 20
+        },
+        "offset": {
+          "type": "number",
+          "description": "Number of results to skip before collecting the page (default 0). Use together with 'limit' to paginate.",
+          "default": 0
         }
       },
       "required": []
@@ -868,13 +875,19 @@
     "parameters": {
       "type": "object",
       "properties": {
+        "action": {
+          "type": "string",
+          "description": "Operation mode: 'generate' (default), 'list_tools', or 'upload_file'.",
+          "default": "generate"
+        },
         "prompt": {
           "type": "string",
           "description": "Highly detailed vivid description of the scene or illustration to generate (e.g. 'anime girl under falling blossom petals, smiling')."
         },
-        "negative_prompt": {
+        "toolName": {
           "type": "string",
-          "description": "Unwanted aspects of the illustration (e.g. 'lowres, bad hands, low quality, bad aesthetics')."
+          "description": "TensorArt tool/model name (default: anime_lab_wai_illustrious). Use list_tools to discover available tools.",
+          "default": "anime_lab_wai_illustrious"
         },
         "width": {
           "type": "integer",
@@ -886,20 +899,46 @@
           "description": "Height of the generated visual in pixels (default: 512).",
           "default": 512
         },
-        "model_id": {
+        "inputs": {
+          "type": "array",
+          "description": "Full inputs array for the TensorArt tool. Each element: {type: 'STRING'|'INTEGER'|'FILE'|..., value: ...}. Overrides prompt/width/height when provided.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "STRING",
+                  "INTEGER",
+                  "NUMBER",
+                  "BOOLEAN",
+                  "ARRAY",
+                  "OBJECT",
+                  "FILE"
+                ]
+              },
+              "value": {}
+            }
+          }
+        },
+        "filePath": {
           "type": "string",
-          "description": "TensorArt SD model ID or check-point hash (default is high-quality general-purpose anime model).",
-          "default": "620130983637151123"
+          "description": "Local file path to upload (required for action: 'upload_file')."
         },
-        "cfg_scale": {
-          "type": "number",
-          "description": "Prompt adherence weight coefficient (default: 7).",
-          "default": 7
-        },
-        "steps": {
+        "timeoutMs": {
           "type": "integer",
-          "description": "Inference iteration steps (default: 20).",
-          "default": 20
+          "description": "Override default timeout for this generation call (ms).",
+          "default": 120000
+        },
+        "pollIntervalMs": {
+          "type": "integer",
+          "description": "Interval between status polling checks (ms).",
+          "default": 3000
+        },
+        "retryLimit": {
+          "type": "integer",
+          "description": "Max retries on transient failure.",
+          "default": 0
         }
       },
       "required": [
@@ -919,53 +958,30 @@
       "properties": {
         "logType": {
           "type": "string",
-          "description": "Type of logs to retrieve: 'audit' (for tool execution & structure compliance audit logs) or 'llm' (for direct direct cognitive LLM language prompts & replies).",
+          "description": "Type of logs to retrieve: 'audit' (tool execution & structure compliance audit logs), 'llm' (direct cognitive LLM language prompts & replies), or 'all' (unified audit + llm logs merged by timestamp).",
           "enum": [
             "audit",
-            "llm"
-          ]
+            "llm",
+            "all"
+          ],
+          "default": "audit"
         },
         "limit": {
           "type": "number",
-          "description": "Number of recent log lines to retrieve (default is 10).",
+          "description": "Maximum number of recent log lines to retrieve (default is 10, max 100).",
           "default": 10
+        },
+        "offset": {
+          "type": "number",
+          "description": "Number of log lines to skip before collecting the page (default 0). Use together with 'limit' to paginate.",
+          "default": 0
         },
         "filter": {
           "type": "string",
           "description": "Optional search keyword or tool name to filter logs (e.g., 'tensorart', 'error')."
         }
       },
-      "required": [
-        "logType"
-      ]
-    }
-  },
-  {
-    "id": "view_system_logs",
-    "name": "View System Logs",
-    "description": "Retrieve system audit logs and cognitive LLM processing error logs to diagnose issues within the batin (inner) modules, API connections, or general system failures.",
-    "version": "1.0.0",
-    "type": "TOOL",
-    "order": 110,
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "type": {
-          "type": "string",
-          "enum": [
-            "audit",
-            "llm",
-            "all"
-          ],
-          "description": "The category of logs to retrieve. 'audit' for system events, 'llm' for cognitive reasoning prompts, responses, or error traces, or 'all' for both unified.",
-          "default": "all"
-        },
-        "limit": {
-          "type": "integer",
-          "description": "Maximum number of recent log entries to retrieve.",
-          "default": 10
-        }
-      }
+      "required": []
     }
   },
   {

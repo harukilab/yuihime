@@ -33,6 +33,12 @@ export const ToolExecutorModule: CortexModule = {
           default: 2,
           description: 'Number of times Yui can retry executing a tool if it fails or times out.'
         },
+        maxIterationsCeiling: {
+          type: 'number',
+          label: 'Max Iterations Ceiling',
+          default: 5,
+          description: 'Hard cap for the cognitive loop iterations. The LLM may request more turns via max_iterations_override in tool arguments, but never beyond this ceiling.'
+        },
         enableManualCheck: {
           type: 'boolean',
           label: 'Enable Manual Tool Verification',

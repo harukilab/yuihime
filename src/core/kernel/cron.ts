@@ -10,7 +10,91 @@ export interface CronTask {
   context_id?: string;
   chat_type?: string;
   sender_name?: string;
+  /** Job body / command (like crontab command). Executed as the LLM instruction when the job fires. */
+  prompt?: string;
   lastRunMinuteStamp?: string;
+}
+
+/** Built-in system jobs that do not run as chat prompts. */
+export const SYSTEM_CRON_IDS = new Set([
+  'memory-consolidation',
+  'puter-hourly-check',
+]);
+
+export function isSystemCronTask(id: string | undefined | null): boolean {
+  if (!id) return false;
+  return SYSTEM_CRON_IDS.has(id) || id.startsWith('file_auto_') || id.startsWith('fa_');
+}
+
+/**
+ * Pick the stored job command from API/tool args.
+ * Accepts common aliases so agent tools can pass command/instruction/message.
+ */
+export function extractCronPromptFromArgs(args: Record<string, any> | null | undefined): string | undefined {
+  if (!args || typeof args !== 'object') return undefined;
+  for (const key of ['prompt', 'command', 'instruction', 'message', 'body', 'job', 'script']) {
+    if (typeof args[key] === 'string') return args[key];
+  }
+  return undefined;
+}
+
+/**
+ * Resolve the instruction to run when a cron fires.
+ * Model mirrors classic cron: schedule + command (prompt).
+ * Priority: explicit prompt → legacy action text → job name as command.
+ */
+export function resolveCronJobPrompt(opts: {
+  id?: string;
+  name?: string;
+  prompt?: string | null;
+  action?: string | null;
+}): string {
+  const explicit = (opts.prompt || '').trim();
+  if (explicit) return explicit;
+
+  const legacy = typeof opts.action === 'string' ? opts.action.trim() : '';
+  if (legacy && !legacy.startsWith('function') && !legacy.startsWith('()')) {
+    return legacy;
+  }
+
+  const name = (opts.name || 'Scheduled job').trim();
+  return [
+    '[SCHEDULED_JOB]',
+    `Job: ${name}`,
+    '',
+    'This is a scheduled cron job firing in the background. Execute the request described by the job name fully and autonomously.',
+    'If the job name refers to periodic checks, system maintenance, or background tasks, perform them completely using available tools and internal systems.',
+    'Deliver a complete, useful result to the user on this channel — do not only acknowledge the schedule.',
+  ].join('\n');
+}
+
+/**
+ * Normalize prompt before save so cognitive jobs never store an empty command.
+ * System jobs keep an empty prompt (they use internal handlers).
+ */
+export function normalizeCronPromptForSave(opts: {
+  id?: string;
+  name?: string;
+  prompt?: string | null;
+  action?: string | null;
+  isNew?: boolean;
+}): string {
+  if (isSystemCronTask(opts.id)) return (opts.prompt || '').trim();
+
+  const explicit = (opts.prompt || '').trim();
+  if (explicit) return explicit;
+
+  const legacy = typeof opts.action === 'string' ? opts.action.trim() : '';
+  if (legacy && !legacy.startsWith('function') && !legacy.startsWith('()')) {
+    return legacy;
+  }
+
+  const name = (opts.name || '').trim();
+  if (!name) return '';
+
+  // Persist name as the job command so list/edit UIs show the real payload
+  // (same spirit as crontab storing the command line, not only a label).
+  return name;
 }
 
 export class CronModule {

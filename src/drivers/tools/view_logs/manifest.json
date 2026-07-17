@@ -10,19 +10,25 @@
     "properties": {
       "logType": {
         "type": "string",
-        "description": "Type of logs to retrieve: 'audit' (for tool execution & structure compliance audit logs) or 'llm' (for direct direct cognitive LLM language prompts & replies).",
-        "enum": ["audit", "llm"]
+        "description": "Type of logs to retrieve: 'audit' (tool execution & structure compliance audit logs), 'llm' (direct cognitive LLM language prompts & replies), or 'all' (unified audit + llm logs merged by timestamp).",
+        "enum": ["audit", "llm", "all"],
+        "default": "audit"
       },
       "limit": {
         "type": "number",
-        "description": "Number of recent log lines to retrieve (default is 10).",
+        "description": "Maximum number of recent log lines to retrieve (default is 10, max 100).",
         "default": 10
+      },
+      "offset": {
+        "type": "number",
+        "description": "Number of log lines to skip before collecting the page (default 0). Use together with 'limit' to paginate.",
+        "default": 0
       },
       "filter": {
         "type": "string",
         "description": "Optional search keyword or tool name to filter logs (e.g., 'tensorart', 'error')."
       }
     },
-    "required": ["logType"]
+    "required": []
   }
 }

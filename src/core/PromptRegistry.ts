@@ -326,10 +326,69 @@ CRITICAL INSTRUCTIONS:
 
 Your response (MUST open with '{' and close with '}'):
     `);
+    this.registerDefaultToolPrompts();
+  }
+
+  private registerDefaultToolPrompts() {
+    // Canonical OpenAI-native tool_call syntax reference (used by PromptManager).
+    this.register('tools:syntax_openai', `
+### TOOL CALL SYNTAX & SPECIFICATION (OPENAI STANDARD)
+When you need to invoke a tool, emit a "tool_calls" array at the root of your JSON response following the standard OpenAI \`tool_calls\` schema. Each item MUST be an object with a unique "id", "type": "function", and "function": { "name": string, "arguments": object }.
+- "id": a unique string per call (e.g. "call_abc123") so results can be paired back.
+- "arguments": MUST be a JSON object (never a JSON string). Match each tool's parameter schema exactly.
+Example:
+\`\`\`json
+{
+  "tool_calls": [
+    {
+      "id": "call_01",
+      "type": "function",
+      "function": { "name": "read_file", "arguments": { "filename": "user_data/notes.txt" } }
+    }
+  ]
+}
+\`\`\`
+    `);
+
+    // Pagination conventions for list/read/search tools.
+    this.register('tools:syntax_pagination', `
+### PAGINATION CONVENTIONS
+File, log, and search tools accept standard pagination parameters:
+- "limit": maximum number of items/characters to return in this page.
+- "offset": number of items/characters to skip before collecting the page (default 0).
+- "line_start" / "line_end": optional 1-based inclusive line range for file reads.
+When a result reports "totalAvailable" greater than the returned page, request the next page by increasing "offset" by "limit" until you have collected everything needed. Never assume the first page is complete.
+    `);
+
+    // Canonical output envelope the model should expect back from tools.
+    this.register('tools:output_format', `
+### TOOL OUTPUT ENVELOPE
+Every tool result you receive is wrapped in a canonical envelope:
+\`\`\`json
+{
+  "success": boolean,
+  "data": any,
+  "error": string | null,
+  "metadata": { "tool": string, "duration_ms": number, "timestamp": string }
+}
+\`\`\`
+Read the actual payload from "data". If "success" is false, inspect "error" and decide whether to retry, call a different tool, or explain the failure to the user in character.
+    `);
+
+    // Reserved _meta control channel the LLM may embed inside tool arguments.
+    this.register('tools:_meta', `
+### RESERVED CONTROL METADATA (_meta)
+You may optionally embed a reserved "_meta" object inside a tool's "arguments" to tune execution for that single call. It is stripped before the tool runs and never appears in results.
+- "_meta.timeout_ms": override the per-call execution timeout in milliseconds (e.g. 120000 for a slow command).
+- "_meta.priority": hint the scheduler (e.g. "high").
+Example:
+\`\`\`json
+{ "name": "run_command", "arguments": { "command": "npm run build", "_meta": { "timeout_ms": 180000 } } }
+\`\`\`
+    `);
   }
 
   /**
-   * Registers a prompt template.
    * @param id Unique identifier for the prompt (e.g., 'dream-simulation:main')
    * @param template The template string
    * @param overwrite If true, overwrites existing template

@@ -287,17 +287,70 @@ MultiChannelQueue.getInstance().setDatabase(db);
 
   const heartbeatPath = path.join(process.cwd(), 'docs', 'HEARTBEAT.md');
   if (existsSync(heartbeatPath)) {
-    const heartbeatContent = readFileSync(heartbeatPath, 'utf-8');
-    if (heartbeatContent.includes('Hourly') || heartbeatContent.includes('hourly')) {
-      try {
+    try {
+      const heartbeatContent = readFileSync(heartbeatPath, 'utf-8');
+      const lines = heartbeatContent.split('\n');
+      let currentSection = '';
+      let currentBullets: string[] = [];
+
+      const sectionScheduleMap: Record<string, string> = {
+        'hourly': '0 * * * *',
+        'every hour': '0 * * * *',
+        'every 15 minutes': '*/15 * * * *',
+        '15 minutes': '*/15 * * * *',
+        'daily': '0 0 * * *',
+        'every day': '0 0 * * *',
+      };
+
+      const processSection = (section: string, bullets: string[]) => {
+        if (!section || bullets.length === 0) return;
+        const sectionLower = section.toLowerCase();
+        let schedule = '0 * * * *';
+        for (const [key, value] of Object.entries(sectionScheduleMap)) {
+          if (sectionLower.includes(key)) {
+            schedule = value;
+            break;
+          }
+        }
+        const taskId = `hb_${section.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')}`;
+        const taskName = section.trim();
+        const prompt = bullets.join('\n');
+
         db.prepare(`
-          INSERT INTO cron_tasks (id, name, schedule, enabled, repeating, context_id, chat_type, sender_name)
-          VALUES ('puter-hourly-check', 'Puter Hourly Check', '0 * * * *', 0, 1, 'live_stream', 'Live Chat', 'System')
-          ON CONFLICT(id) DO NOTHING
-        `).run();
-      } catch (e: any) {
-        console.warn("[SERVER] Failed to seed default puter hourly check task:", e.message);
+          INSERT INTO cron_tasks (id, name, schedule, enabled, repeating, context_id, chat_type, sender_name, prompt)
+          VALUES (?, ?, ?, 1, 1, 'live_stream', 'Live Chat', 'System', ?)
+          ON CONFLICT(id) DO UPDATE SET
+            schedule = excluded.schedule,
+            name = excluded.name,
+            prompt = excluded.prompt,
+            enabled = 1,
+            repeating = 1
+        `).run(taskId, taskName, schedule, prompt);
+      };
+
+      for (const line of lines) {
+        const sectionMatch = line.match(/^##\s+(.+)/i);
+        if (sectionMatch) {
+          processSection(currentSection, currentBullets);
+          currentSection = sectionMatch[1].trim();
+          currentBullets = [];
+        } else if (line.trim().startsWith('- ') && currentSection) {
+          currentBullets.push(line.trim().substring(2).trim());
+        }
       }
+      processSection(currentSection, currentBullets);
+
+      db.prepare(`
+        INSERT INTO cron_tasks (id, name, schedule, enabled, repeating, context_id, chat_type, sender_name, prompt)
+        VALUES ('puter-hourly-check', 'Puter Hourly Check', '0 * * * *', 1, 1, 'live_stream', 'Live Chat', 'System', ?)
+        ON CONFLICT(id) DO UPDATE SET
+          schedule = excluded.schedule,
+          prompt = excluded.prompt,
+          enabled = 1,
+          repeating = 1
+      `).run('Perform hourly health checks: Check Puter connection status, verify kernel responsiveness, and log system metrics.');
+    } catch (e: any) {
+      console.warn("[SERVER] Failed to sync HEARTBEAT.md to cron tasks:", e.message);
     }
   }
 

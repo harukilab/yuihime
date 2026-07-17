@@ -121,6 +121,21 @@ Align your recollections honestly, eliminate all forms of informational contradi
     return this.state;
   }
 
+  /**
+   * Single source of truth for all default AGI prompt templates.
+   * Modules MUST reference these instead of duplicating prompt literals,
+   * so prompt edits never drift between the daemon and cortex modules.
+   */
+  public getDefaultPrompts() {
+    return {
+      therapeutic: this.defaultTherapeutic,
+      analytical: this.defaultAnalytical,
+      entropy: this.defaultEntropy,
+      mirror: this.defaultMirror,
+      reflection: this.defaultReflection
+    };
+  }
+
   public updateState(updates: Partial<AGIDaemonState>) {
     this.state = { ...this.state, ...updates };
     this.saveState().catch(() => {});

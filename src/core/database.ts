@@ -196,6 +196,7 @@ export function setupSchema(db: any) {
         name TEXT,
         schedule TEXT,
         action TEXT,
+        prompt TEXT,
         enabled INTEGER,
         repeating INTEGER DEFAULT 0,
         lastRun INTEGER,
@@ -333,7 +334,8 @@ export function setupSchema(db: any) {
           { name: 'repeating', type: 'INTEGER DEFAULT 0' },
           { name: 'context_id', type: 'TEXT' },
           { name: 'chat_type', type: 'TEXT' },
-          { name: 'sender_name', type: 'TEXT' }
+          { name: 'sender_name', type: 'TEXT' },
+          { name: 'prompt', type: 'TEXT' }
         ];
         for (const col of alterCols) {
           if (!columnNames.includes(col.name)) {
@@ -343,6 +345,26 @@ export function setupSchema(db: any) {
               console.warn(`Migration warn: failed to alter cron_tasks and add ${col.name}:`, alterError.message);
             }
           }
+        }
+
+        // Backfill empty prompts for cognitive jobs so schedule+command is never incomplete
+        // (classic cron always stores a command; agents often only set a descriptive name).
+        try {
+          const refreshed = db.prepare(`PRAGMA table_info(cron_tasks)`).all() as any[];
+          const names = refreshed.map((c: any) => c.name);
+          if (names.includes('prompt')) {
+            db.prepare(`
+              UPDATE cron_tasks
+              SET prompt = name
+              WHERE (prompt IS NULL OR trim(prompt) = '')
+                AND name IS NOT NULL AND trim(name) != ''
+                AND id NOT IN ('memory-consolidation', 'puter-hourly-check')
+                AND id NOT LIKE 'file_auto_%'
+                AND id NOT LIKE 'fa_%'
+            `).run();
+          }
+        } catch (backfillErr: any) {
+          console.warn('Migration warn: cron prompt backfill skipped:', backfillErr.message);
         }
       }
       if (table === 'pairing_codes') {
@@ -688,12 +710,13 @@ export class CronRepository {
 
   static saveTask(db: any, task: any) {
     return db.prepare(`
-      INSERT INTO cron_tasks (id, name, schedule, action, enabled, repeating, lastRun, nextRun, context_id, chat_type, sender_name)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO cron_tasks (id, name, schedule, action, prompt, enabled, repeating, lastRun, nextRun, context_id, chat_type, sender_name)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         name = excluded.name,
         schedule = excluded.schedule,
         action = excluded.action,
+        prompt = excluded.prompt,
         enabled = excluded.enabled,
         repeating = excluded.repeating,
         lastRun = excluded.lastRun,
@@ -706,6 +729,7 @@ export class CronRepository {
       task.name,
       task.schedule,
       task.action,
+      task.prompt || '',
       task.enabled ? 1 : 0,
       task.repeating ? 1 : 0,
       task.lastRun || 0,

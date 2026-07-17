@@ -154,3 +154,6 @@ export const DreamSimulationModule: CortexModule = {
     }
   }
 };
+
+// Alias export matching the file name (AGENTS.md §8: file/module naming convention).
+export const DreamModule = DreamSimulationModule;

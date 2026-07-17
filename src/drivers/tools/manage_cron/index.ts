@@ -1,5 +1,9 @@
 import { ToolModule } from '../../../include/types';
 import manifest from './manifest.json';
+import {
+  extractCronPromptFromArgs,
+  normalizeCronPromptForSave,
+} from '../../../core/kernel/cron';
 
 export const CronTool: ToolModule = {
   metadata: manifest as any,
@@ -69,6 +73,30 @@ export const CronTool: ToolModule = {
           const schedule = args.schedule || '5m';
           const enabled = true;
           const repeating = args.repeating ?? false;
+          // Crontab model: schedule + command(prompt). Accept prompt/command/instruction aliases.
+          const rawFromArgs = extractCronPromptFromArgs(args);
+          const promptProvided = typeof rawFromArgs === 'string';
+          let final_prompt = '';
+          if (args.action === 'edit' && !promptProvided) {
+            // Preserve existing command body when edit omits prompt
+            try {
+              const existing = db.prepare("SELECT prompt, action FROM cron_tasks WHERE id = ?").get(id) as any;
+              final_prompt = normalizeCronPromptForSave({
+                id,
+                name: args.taskName || existing?.name || taskName,
+                prompt: existing?.prompt,
+                action: existing?.action,
+              });
+            } catch {
+              final_prompt = normalizeCronPromptForSave({ id, name: taskName, prompt: '' });
+            }
+          } else {
+            final_prompt = normalizeCronPromptForSave({
+              id,
+              name: taskName,
+              prompt: rawFromArgs ?? '',
+            });
+          }
 
           let final_context_id = context?.contextId || 'live_stream';
           let final_chat_type = args.targetChannel || context?.chatType || 'Live Chat';
@@ -143,8 +171,8 @@ export const CronTool: ToolModule = {
           }
 
           db.prepare(`
-            INSERT INTO cron_tasks (id, name, schedule, enabled, repeating, context_id, chat_type, sender_name)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO cron_tasks (id, name, schedule, enabled, repeating, context_id, chat_type, sender_name, prompt)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
               name = excluded.name,
               schedule = excluded.schedule,
@@ -152,12 +180,14 @@ export const CronTool: ToolModule = {
               repeating = excluded.repeating,
               context_id = COALESCE(excluded.context_id, cron_tasks.context_id),
               chat_type = COALESCE(excluded.chat_type, cron_tasks.chat_type),
-              sender_name = COALESCE(excluded.sender_name, cron_tasks.sender_name)
+              sender_name = COALESCE(excluded.sender_name, cron_tasks.sender_name),
+              prompt = excluded.prompt
           `).run(
             id, taskName, schedule, enabled ? 1 : 0, repeating ? 1 : 0,
             final_context_id,
             final_chat_type,
-            final_sender_name
+            final_sender_name,
+            final_prompt
           );
 
           if (enabled && getCronAction) {
@@ -289,6 +319,7 @@ export const CronTool: ToolModule = {
           }
         }
         
+        const rawPrompt = extractCronPromptFromArgs(args);
         const res = await localFetch('/api/cron', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -298,6 +329,10 @@ export const CronTool: ToolModule = {
             schedule: args.schedule || '5m',
             enabled: true,
             repeating: args.repeating ?? false,
+            // Always send command body; API normalizes empty → name-based prompt
+            prompt: typeof rawPrompt === 'string' ? rawPrompt : '',
+            command: typeof args.command === 'string' ? args.command : undefined,
+            instruction: typeof args.instruction === 'string' ? args.instruction : undefined,
             context_id: context?.contextId || 'live_stream',
             chat_type: args.targetChannel || context?.chatType || 'Live Chat',
             sender_name: context?.userName || 'Penonton'

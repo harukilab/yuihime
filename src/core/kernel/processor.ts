@@ -1,6 +1,7 @@
 import { AIService } from "./ai.js";
 import { SystemRegistry } from '../registry.js';
 import { SettingsManager } from './settings.js';
+import { keyPool, ApiKeyPool } from './keyPool.js';
 import { ChatCompletionMessage } from '../../include/types.js';
 
 export class NeuralProcessor {
@@ -34,26 +35,44 @@ export class NeuralProcessor {
     // Define fallback sequence (Step 3: Provider Failover - Configurable dynamically via settings)
     const geminiConf = (settings.gemini || {}) as any;
     let fallbackProviders = [primaryProviderId];
-    
+
     if (geminiConf.provFailoverSequence) {
       fallbackProviders = geminiConf.provFailoverSequence
         .split(',')
         .map((s: string) => s.trim().toLowerCase())
         .filter((s: string) => s.length > 0);
     }
-    
+
     fallbackProviders = [primaryProviderId, ...fallbackProviders]
       .filter((v, i, a) => v && a.indexOf(v) === i);
 
     let lastError: any = null;
 
+    // Parallel execution mode: fire multiple providers concurrently and take the
+    // first successful response (fastest-wins). Controlled by setting parallelProviders
+    // or options.parallel. Concurrency is capped to avoid thundering-herd API abuse.
+    const parallelEnabled = options.parallel ?? geminiConf.parallelProviders ?? false;
+    const maxConcurrency = Math.max(1, Math.min(Number(geminiConf.parallelConcurrency) || 3, 8));
+
+    if (parallelEnabled && fallbackProviders.length > 1) {
+      console.log(`[NEURAL_GATEWAY] Parallel mode ON (concurrency=${maxConcurrency}) across ${fallbackProviders.length} providers...`);
+      try {
+        const result = await this.runProvidersInParallel(fallbackProviders, messages, options, settings, maxConcurrency);
+        if (result !== undefined) return result;
+      } catch (e: any) {
+        lastError = e;
+        console.error(`[NEURAL_GATEWAY_PARALLEL_FAIL] ${e?.message || e}`);
+      }
+    }
+
+    // Sequential fallback (default) — try one provider at a time
     for (const providerId of fallbackProviders) {
       try {
         const provider = SystemRegistry.getProvider(providerId);
         if (!provider) continue;
 
         console.log(`[NEURAL_GATEWAY] Attempting request via provider: ${providerId}`);
-        
+
         // Multi-Step Fallback within the provider
         const result = await this.executeWithResilience(provider, messages, options);
         return result;
@@ -61,7 +80,7 @@ export class NeuralProcessor {
         lastError = e;
         const errorMsg = e.message || String(e);
         console.error(`[NEURAL_GATEWAY_ERROR] ${providerId}: ${errorMsg}`);
-        
+
         // Standardization of error message as per rule 5
         if (!errorMsg.startsWith('[NEURAL_GATEWAY_ERROR]')) {
           lastError = new Error(`[NEURAL_GATEWAY_ERROR] ${providerId}: ${errorMsg}`);
@@ -80,16 +99,16 @@ export class NeuralProcessor {
         const providerId = item.provider;
         const modelId = item.model;
         const customApiKey = item.apiKey;
-        
+
         try {
           const provider = SystemRegistry.getProvider(providerId);
           if (!provider) {
             console.warn(`[NEURAL_GATEWAY] Fallback Provider ${providerId} not found in registry.`);
             continue;
           }
-          
+
           console.log(`[NEURAL_GATEWAY] Custom fallback step: ${providerId} (${modelId})`);
-          
+
           const specificConfig = {
             ...options,
             ...settings,
@@ -97,7 +116,7 @@ export class NeuralProcessor {
             model: modelId || settings[providerId]?.model,
             apiKey: customApiKey || settings[providerId]?.apiKey
           };
-          
+
           const result = await provider.generate(messages, specificConfig);
           return result;
         } catch (e: any) {
@@ -113,6 +132,76 @@ export class NeuralProcessor {
   }
 
   /**
+   * Fire multiple providers concurrently with bounded concurrency.
+   * Returns the first successful (fastest) result, or throws an aggregated error
+   * if every provider fails. Provider order is preserved for tie-breaking — an
+   * earlier-listed provider that finishes at the same tick wins.
+   */
+  private async runProvidersInParallel(
+    providerIds: string[],
+    messages: ChatCompletionMessage[],
+    options: any,
+    settings: any,
+    maxConcurrency: number
+  ): Promise<string> {
+    const errors: string[] = [];
+    let settled = false;
+    let resolveFirst: ((v: string) => void) | null = null;
+    let rejectAll: ((e: any) => void) | null = null;
+
+    const done = new Promise<string>((resolve, reject) => {
+      resolveFirst = resolve;
+      rejectAll = reject;
+    });
+
+    // Bounded concurrency runner
+    let cursor = 0;
+    const worker = async () => {
+      while (cursor < providerIds.length) {
+        const idx = cursor++;
+        if (settled) return;
+        const providerId = providerIds[idx];
+        try {
+          const provider = SystemRegistry.getProvider(providerId);
+          if (!provider) {
+            errors.push(`${providerId}: provider not found`);
+            continue;
+          }
+          console.log(`[NEURAL_GATEWAY_PARALLEL] Dispatching provider: ${providerId}`);
+          const result = await this.executeWithResilience(provider, messages, options);
+          if (settled) return; // a faster provider already won
+          if (!settled) {
+            settled = true;
+            resolveFirst!(result);
+          }
+        } catch (e: any) {
+          const errorMsg = e?.message || String(e);
+          console.error(`[NEURAL_GATEWAY_PARALLEL_ERROR] ${providerId}: ${errorMsg}`);
+          errors.push(`${providerId}: ${errorMsg}`);
+        }
+      }
+    };
+
+    const workers = [];
+    const concurrency = Math.min(maxConcurrency, providerIds.length);
+    for (let i = 0; i < concurrency; i++) workers.push(worker());
+
+    // Do NOT block on workers: as soon as the first provider succeeds, `done`
+    // resolves and the caller returns immediately (fastest-wins). Workers keep
+    // running in the background. If every provider fails, resolve/reject `done`
+    // once all workers have settled.
+    Promise.all(workers).then(() => {
+      if (settled) return;
+      const aggregated = errors.length
+        ? `[NEURAL_GATEWAY_ERROR] All parallel providers failed. ` + errors.join(' | ')
+        : "[NEURAL_GATEWAY_ERROR] All parallel providers failed.";
+      rejectAll!(new Error(aggregated));
+    });
+
+    return done;
+  }
+
+  /**
    * Internal resilience logic for a specific provider
    * Handles Step 1 (Key Recovery) and Step 2 (Model Resilience)
    */
@@ -120,37 +209,83 @@ export class NeuralProcessor {
     const providerId = provider.metadata.id;
     const settings = SettingsManager.getInstance().getAll();
     const providerConfig = settings[providerId] || {};
-    
+
     // Step 2: Model Resilience - Priority list of models
     const primaryModel = options.model || providerConfig.model || (provider.metadata.models ? provider.metadata.models[0] : null);
     const modelsToTry = [primaryModel].filter(Boolean);
 
     let lastProviderError: any = null;
 
+    // Precise detection of model-level failures only.
+    // AVOID naive substring matching (e.g. 'model') which caused false-positive
+    // failover on unrelated errors such as network/timeout/5xx.
+    const isModelLevelError = (rawMsg: string): boolean => {
+      const msg = rawMsg.toLowerCase();
+      // Explicit HTTP status codes tied to bad/invalid model selection
+      if (/\b404\b/.test(msg) || /\b400\b/.test(msg)) return true;
+      // Known model-not-found / unsupported model phrases
+      const modelPhrases = [
+        'model not found',
+        'model does not exist',
+        'unknown model',
+        'invalid model',
+        'unsupported model',
+        'the model',
+        'does not support',
+        'model has been deprecated',
+        'is not a supported model'
+      ];
+      return modelPhrases.some((p) => msg.includes(p));
+    };
+
+    // Step 1: API Key Recovery — register the provider's key set for rotation.
+    // Supports both a single `apiKey` and an `apiKeys` array. A provider with
+    // only one key behaves exactly as before.
+    const primaryKey = providerConfig.apiKey || (settings.apiKey as string) || '';
+    keyPool.configure(providerId, providerConfig, settings);
+
     for (const modelId of modelsToTry) {
-      try {
-        const config = { ...options, ...settings, model: modelId };
-        
-        // Step 1: API Key Recovery (if multiple keys or fallback mechanism exists)
-        // Here we just use the provided key, but can be extended to cycle keys if configured
-        const result = await provider.generate(messages, config);
-        return result;
-      } catch (e: any) {
-        lastProviderError = e;
-        const msg = (e.message || String(e)).toLowerCase();
-        
-        // If it's 404 (Model Not Found) or 400 (Bad Model Params), we try next model
-        const shouldTryNextModel = msg.includes('404') || msg.includes('not found') || msg.includes('model') || msg.includes('400');
-        if (shouldTryNextModel) {
-          console.warn(`[NEURAL_RESILIENCE] Model ${modelId} failed, trying next model...`);
-          continue;
+      let lastModelError: any = null;
+      // Try up to all configured keys once per model before giving up on the model.
+      const keyCount = Math.max(1, (providerConfig.apiKeys?.length || 0) || (primaryKey ? 1 : 1));
+
+      for (let keyAttempt = 0; keyAttempt < keyCount; keyAttempt++) {
+        const activeKey = keyPool.next(providerId, primaryKey, modelId);
+        try {
+          const config = { ...options, ...settings, model: modelId, apiKey: activeKey };
+
+          const result = await provider.generate(messages, config);
+          return result;
+        } catch (e: any) {
+          lastModelError = e;
+          lastProviderError = e;
+          const msg = e.message || String(e);
+
+          // Genuine model-selection error -> do NOT waste keys, jump to next model.
+          if (isModelLevelError(msg)) {
+            console.warn(`[NEURAL_RESILIENCE] Model ${modelId} not available, trying next model...`);
+            break;
+          }
+
+          // Quota / auth / rate-limit error -> cool down this key and try the next one.
+          const keyErrKind = ApiKeyPool.classifyError(msg);
+          if (keyErrKind !== 'none') {
+            keyPool.reportFailure(providerId, activeKey, modelId, msg);
+            console.warn(`[NEURAL_RESILIENCE] Key error (${keyErrKind}) on ${providerId}. Rotating key...`);
+            continue; // try next key for the same model
+          }
+
+          // Other errors (network/5xx/context-length) -> bubble up to provider failover.
+          throw e;
         }
-        
-        // If it's 429 (Quota) or 401 (Auth), we might want to fail the whole provider to hit next Step 3
-        throw e;
+      }
+
+      // If we exhausted all keys for this model, remember the last error and move on.
+      if (lastModelError && isModelLevelError(lastModelError.message || String(lastModelError))) {
+        continue; // already logged above
       }
     }
-    
+
     throw lastProviderError;
   }
 

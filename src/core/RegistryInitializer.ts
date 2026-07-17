@@ -725,50 +725,9 @@ export function initializeCortexModules(): Promise<void> {
     }
   }
 
-    // Register Explicit Hard-coded modules (Core Modules that might not be in generic glob)
-    const { MemoryConsolidationModule } = await import('../modules/agi/MemoryConsolidationModule');
-    const { CognitiveReflexModule } = await import('../modules/agi/CognitiveReflexModule');
-    const { MemoryResonanceModule } = await import('../modules/agi/MemoryResonanceModule');
-    const { SoulDriftModule } = await import('../modules/agi/SoulDriftModule');
-    const { SubconsciousMonologueModule } = await import('../modules/agi/SubconsciousMonologueModule');
-    const { CognitiveHeuristicsModule } = await import('../modules/agi/CognitiveHeuristicsModule');
-    const { MicroCognitiveSynthesizer } = await import('../modules/agi/MicroCognitiveSynthesizer');
-    const { YUIAGICoreModule } = await import('../modules/agi/YUIAGICoreModule');
-    const { SelfAwarenessMirrorModule } = await import('../modules/agi/SelfAwarenessMirrorModule');
-    const { NeuroSymbolicModule } = await import('../modules/agi/NeuroSymbolicModule');
-    const { ContinuousLearningMemoryModule } = await import('../modules/agi/ContinuousLearningMemoryModule');
-    const { TopDownExecutiveControlModule } = await import('../modules/agi/TopDownExecutiveControlModule');
-    const { ProactiveVolitionModule } = await import('../modules/agi/ProactiveVolitionModule');
-    const { HighOrderMetacognitionModule } = await import('../modules/agi/HighOrderMetacognitionModule');
-    const { SomaticSensorGroundingModule } = await import('../modules/agi/SomaticSensorGroundingModule');
-    const { CognitiveIntegrityGuardianModule } = await import('../modules/agi/CognitiveIntegrityGuardianModule');
-    const { EmotionEngine } = await import('../modules/EmotionEngine');
-    const { SpontaneousProactiveModule } = await import('../modules/agi/SpontaneousProactiveModule');
-    const { CircadianRhythmModule } = await import('../modules/agi/CircadianRhythmModule');
-    const { WeatherNewsEmpathyModule } = await import('../modules/agi/WeatherNewsEmpathyModule');
-    const { AbstractReasoningModule } = await import('../modules/agi/AbstractReasoningModule');
-
-    SystemRegistry.register(MemoryConsolidationModule);
-    SystemRegistry.register(CognitiveReflexModule);
-    SystemRegistry.register(MemoryResonanceModule);
-    SystemRegistry.register(SoulDriftModule);
-    SystemRegistry.register(SubconsciousMonologueModule);
-    SystemRegistry.register(CognitiveHeuristicsModule);
-    SystemRegistry.register(MicroCognitiveSynthesizer);
-    SystemRegistry.register(YUIAGICoreModule);
-    SystemRegistry.register(SelfAwarenessMirrorModule);
-    SystemRegistry.register(NeuroSymbolicModule);
-    SystemRegistry.register(ContinuousLearningMemoryModule);
-    SystemRegistry.register(TopDownExecutiveControlModule);
-    SystemRegistry.register(ProactiveVolitionModule);
-    SystemRegistry.register(HighOrderMetacognitionModule);
-    SystemRegistry.register(SomaticSensorGroundingModule);
-    SystemRegistry.register(CognitiveIntegrityGuardianModule);
-    SystemRegistry.register(EmotionEngine);
-    SystemRegistry.register(SpontaneousProactiveModule);
-    SystemRegistry.register(CircadianRhythmModule);
-    SystemRegistry.register(WeatherNewsEmpathyModule);
-    SystemRegistry.register(AbstractReasoningModule);
+    // NOTE: All Cortex/AGI modules are auto-discovered via glob (browser) and
+    // filesystem scan (server) above. Manual registration is intentionally avoided
+    // per AGENTS.md §2 (Plug-and-Play, no manual registration edits).
 
     // Dynamically scan and load plugins from the addons directory
     if (typeof window === 'undefined') {

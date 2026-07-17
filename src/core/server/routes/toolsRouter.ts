@@ -627,12 +627,28 @@ export function registerToolsRoutes(app: express.Express, db: any) {
   });
 
   app.get("/api/tools/files/read", async (req, res) => {
-    const { filename } = req.query;
+    const { filename, limit, offset, line_start, line_end } = req.query as Record<string, string>;
     if (!filename) return res.status(400).json({ error: "No filename provided" });
 
     try {
       const safePath = await resolveSystemRootPath(filename as string, 'read');
-      const content = await fs.readFile(safePath, "utf-8");
+      let content = await fs.readFile(safePath, "utf-8");
+
+      // Line-based pagination (1-based inclusive).
+      if (line_start !== undefined || line_end !== undefined) {
+        const lines = content.split(/\r?\n/);
+        const start = line_start !== undefined ? Math.max(1, parseInt(line_start, 10)) : 1;
+        const end = line_end !== undefined ? parseInt(line_end, 10) : lines.length;
+        content = lines.slice(start - 1, end).join('\n');
+      } else {
+        // Character-based pagination.
+        const charLimit = limit !== undefined ? Math.max(1, parseInt(limit, 10)) : undefined;
+        const charOffset = offset !== undefined ? Math.max(0, parseInt(offset, 10)) : 0;
+        if (charLimit !== undefined || charOffset > 0) {
+          content = content.substring(charOffset, charLimit !== undefined ? charOffset + charLimit : undefined);
+        }
+      }
+
       res.json({
         success: true,
         content,
@@ -650,10 +666,11 @@ export function registerToolsRoutes(app: express.Express, db: any) {
   });
 
   app.get("/api/tools/files/list", async (req, res) => {
+    const { limit, offset } = req.query as Record<string, string>;
     try {
       const sandboxDir = getDynamicSandboxRoot();
       await fs.mkdir(sandboxDir, { recursive: true });
-      
+
       const getFilesRecursively = async (dir: string): Promise<string[]> => {
         const entries = await fs.readdir(dir, { withFileTypes: true });
         const files = await Promise.all(entries.map(async (entry) => {
@@ -682,13 +699,21 @@ export function registerToolsRoutes(app: express.Express, db: any) {
         };
       });
 
+      const totalAvailable = detailedFiles.length;
+      const charLimit = limit !== undefined ? Math.max(1, parseInt(limit, 10)) : undefined;
+      const charOffset = offset !== undefined ? Math.max(0, parseInt(offset, 10)) : 0;
+      const pagedDetailed = detailedFiles.slice(charOffset, charLimit !== undefined ? charOffset + charLimit : undefined);
+      const pagedCleaned = cleanedFiles.slice(charOffset, charLimit !== undefined ? charOffset + charLimit : undefined);
+
       res.json({
         success: true,
+        totalAvailable,
+        offset: charOffset,
         physicalFolder: sandboxDir.replace(/\\/g, '/'),
         absoluteFolder: sandboxDir.replace(/\\/g, '/'),
         workspaceFolder: path.relative(process.cwd(), sandboxDir).replace(/\\/g, '/'),
-        files: cleanedFiles,
-        detailedFiles
+        files: pagedCleaned,
+        detailedFiles: pagedDetailed
       });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
