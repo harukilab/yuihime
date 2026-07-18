@@ -590,7 +590,6 @@ async function startServer() {
     try {
       const pathsToTry = [
         path.join(process.cwd(), "dist", "build-info.json"),
-        path.join(process.cwd(), "src", "share", "prompts", "build-info.json"),
         path.join(process.cwd(), "build-info.json")
       ];
       

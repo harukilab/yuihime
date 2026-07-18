@@ -859,4 +859,61 @@ export function registerSystemRoutes(app: express.Express, db: any) {
 
   // --- External Tools APIs (Shell, Files, Search) ---
   // Routes will be injected here
+
+  // --- Persona / Cognitive Markdown APIs (read/write .yuihime/agent/*.md) ---
+  const allowedMarkdownFiles = new Set([
+    'character.md', 'lore.md', 'system_prompt.md',
+    'IDENTITY.md', 'SOUL.md', 'MEMORY.md', 'USER.md', 'TOOLS.md', 'HEARTBEAT.md'
+  ]);
+
+  function resolveAgentMarkdownPath(filename: string): string | null {
+    if (!allowedMarkdownFiles.has(filename)) return null;
+    const agentDir = process.env.YUIHIME_AGENT_PATH || path.join(apiCustomSystemRoot, "agent");
+    return path.join(agentDir, filename);
+  }
+
+  app.get("/api/system/markdown/:filename", async (req, res) => {
+    try {
+      const filename = req.params.filename;
+      const targetPath = resolveAgentMarkdownPath(filename);
+      if (!targetPath) {
+        return res.status(400).json({ error: "Invalid markdown filename." });
+      }
+      if (!existsSync(targetPath)) {
+        const fallbackDir = path.join(process.cwd(), "src", "share", "prompts");
+        const fallbackPath = path.join(fallbackDir, filename);
+        if (existsSync(fallbackPath)) {
+          const content = readFileSync(fallbackPath, "utf-8");
+          return res.json({ content, source: "fallback" });
+        }
+        return res.status(404).json({ error: "Markdown file not found." });
+      }
+      const content = readFileSync(targetPath, "utf-8");
+      res.json({ content, source: "agent" });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || "Failed to load markdown." });
+    }
+  });
+
+  app.post("/api/system/markdown/:filename", async (req, res) => {
+    try {
+      const filename = req.params.filename;
+      const { content } = req.body;
+      const targetPath = resolveAgentMarkdownPath(filename);
+      if (!targetPath) {
+        return res.status(400).json({ error: "Invalid markdown filename." });
+      }
+      if (typeof content !== "string") {
+        return res.status(400).json({ error: "Request body must include 'content' string." });
+      }
+      const agentDir = path.dirname(targetPath);
+      if (!existsSync(agentDir)) {
+        mkdirSync(agentDir, { recursive: true });
+      }
+      writeFileSync(targetPath, content, "utf-8");
+      res.json({ success: true, path: targetPath });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || "Failed to save markdown." });
+    }
+  });
 }

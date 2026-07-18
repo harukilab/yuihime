@@ -93,12 +93,7 @@ try {
     fs.mkdirSync(distDir, { recursive: true });
   }
 
-  // Also write to src/share/prompts/ so it can be imported in code or bundled
-  const shareManifestPath = path.join(promptsDir, 'build-info.json');
-  fs.writeFileSync(shareManifestPath, JSON.stringify(manifest, null, 2), 'utf8');
-  console.log(`✓ Manifest written to share: ${path.relative(rootDir, shareManifestPath)}`);
-
-  // Write to dist/
+  // Write to dist/ for standalone binary distribution and debugging
   const distManifestPath = path.join(distDir, 'build-info.json');
   fs.writeFileSync(distManifestPath, JSON.stringify(manifest, null, 2), 'utf8');
   console.log(`✓ Manifest written to dist: ${path.relative(rootDir, distManifestPath)}`);
