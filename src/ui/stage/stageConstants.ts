@@ -33,7 +33,7 @@ export const DONOR_MESSAGES_STATIC_DATA = [
   'Terus berkarya ya Yui! Audio-nya mantap banget.',
   'Rekomendasi game horror asik apa ya? Coba main fnaf dong!',
   'Ini uang jajan tambahan untuk kamu beli ramen digital 💖',
-  'Yui-chan, boleh sapa nama aku Kak Hidetoshi dengan suara imut?',
+  'Yui-chan, boleh sapa nama aku user Hidetoshi dengan suara imut?',
   'Sehat selalu ya Yui! Support dari Indonesia!'
 ];
 

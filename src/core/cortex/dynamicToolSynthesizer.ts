@@ -102,9 +102,9 @@ export class DynamicToolSynthesizer {
 Sirkuit berpikir Yuihime mendeteksi permintaan fungsi batin '${toolId}' yang belum terdaftar di registry, namun sangat dibutuhkan oleh pengguna.
 Skenario konteks obrolan pengguna saat ini: "${currentInput}"
 
-Tugas Kakak/AI: Rancanglah sebuah addon Yuihime baru yang mandiri, aman, dan handal untuk menyelesaikan kebutuhan tersebut.
+Tugas user/AI: Rancanglah sebuah addon Yuihime baru yang mandiri, aman, dan handal untuk menyelesaikan kebutuhan tersebut.
 
-Kembalikan respon Kakak dalam format JSON murni dengan skema berikut:
+Kembalikan respon user dalam format JSON murni dengan skema berikut:
 {
   "name": "Nama fungsi batin yang manis dan deskriptif",
   "description": "Deskripsi singkat fungsi batin ini",

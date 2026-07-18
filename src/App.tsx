@@ -1790,7 +1790,7 @@ export default function App() {
         const data = await res.json();
         if (res.ok && data.success) {
           addLog('agent', `✨ Kognisi Terhubung! ${data.message}`);
-          SpeechService.speak(`Kognisi kita sudah terhubung sepenuhnya, Kak ${perceivedName || 'Guest'}!`);
+          SpeechService.speak(`Kognisi kita sudah terhubung sepenuhnya, user ${perceivedName || 'Guest'}!`);
           window.dispatchEvent(new CustomEvent('pairing_status_updated'));
         } else {
           addLog('agent', `❌ Gagal: ${data.error || 'Kode salah atau kedaluwarsa.'}`);

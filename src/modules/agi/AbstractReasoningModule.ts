@@ -1,6 +1,7 @@
 import { CortexModule, ModuleType } from '../../include/types';
 import { StorageService } from '../../drivers/storage';
 import { PromptRegistry } from '../../core/PromptRegistry';
+import { resolveHybridConfig, shouldReasonWithLLM, computeComplexity, makeHybridThink } from './agiThinkHelper';
 
 let promptRegistered = false;
 
@@ -61,6 +62,29 @@ export const AbstractReasoningModule: CortexModule = {
           label: 'Abstract Reasoning System Prompt',
           default: defaultAbstractReasoningTemplate,
           description: 'Prompt template utilized to coordinate downstream logical inference and metaphor generation.'
+        },
+        reasoningMode: {
+          type: 'select',
+          label: 'Reasoning Mode',
+          default: 'hybrid',
+          options: [
+            { label: 'Heuristic (templates)', value: 'heuristic' },
+            { label: 'Hybrid (LLM by trigger)', value: 'hybrid' },
+            { label: 'Full (always LLM)', value: 'full' }
+          ],
+          description: 'How this module reasons. Hybrid/full require global "Enable LLM Reasoning" to be ON.'
+        },
+        reasoningModelHeavy: {
+          type: 'string',
+          label: 'Heavy Reasoning Model (optional)',
+          default: '',
+          description: 'Override model for heavy triggers. Empty = use your main chat model. No hardcoded fallback.'
+        },
+        reasoningModelLight: {
+          type: 'string',
+          label: 'Light Reasoning Model (optional)',
+          default: '',
+          description: 'Override model for light triggers. Empty = use your main chat model.'
         }
       }
     }
@@ -136,6 +160,27 @@ export const AbstractReasoningModule: CortexModule = {
       const conceptsList = unusualWords.slice(0, 4).join(", ");
       adaptationStrategy = `NOVEL DOMAIN ENCOUNTERED containing unusual semantic markers: [${conceptsList}]. Formulating Zero-Shot Conceptual Mapping: translating unfamiliar variables into analogue digital systems (e.g., modeling exotic user domains as complex network state machines) to preserve reasoning reliability.`;
     }
+
+    // --- AREA 3: Hybrid LLM reasoning (opt-in, follows provider settings) ---
+    const hybridCfg = resolveHybridConfig(context, 'abstract-reasoning');
+    if (context.think) {
+      const complexity = computeComplexity(cleanInput, context.lastHallucinationIndex);
+      if (shouldReasonWithLLM(hybridCfg, complexity)) {
+        try {
+          const think = makeHybridThink(context.think, hybridCfg, complexity);
+          const llmReasoning = await think(
+            `As Yuihime's abstract reasoning core, deeply analyze this user input and produce genuine first-principles reasoning, analogies, and a hypothesis. Input: "${input}". Respond in plain text (no JSON), max 6 sentences, in Yui's warm tsundere voice.`
+          );
+          if (llmReasoning && llmReasoning.trim().length > 0) {
+            conceptualAnalogy = `LLM-derived insight: ${llmReasoning.trim().slice(0, 600)}`;
+            logs.push(`[ABSTRACT_REASONER] LLM reasoning (hybrid) injected.`);
+          }
+        } catch (e) {
+          logs.push(`[ABSTRACT_REASONER] LLM reasoning gagal, fallback heuristik.`);
+        }
+      }
+    }
+    // --- END AREA 3 ---
 
     // ==========================================
     // 4. EPISTEMIC EXPERIENCE LEARNING FROM USER

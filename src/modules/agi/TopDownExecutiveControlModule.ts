@@ -1,13 +1,26 @@
-import { CortexModule, ModuleType } from '../../include/types';
+import { CortexModule, ModuleType, AgentState } from '../../include/types';
 import { PromptRegistry } from '../../core/PromptRegistry';
+import { StorageService } from '../../drivers/storage';
 
 let promptRegistered = false;
+
+export interface GoalEntry {
+  id: string;
+  text: string;
+  priority: number;
+  status: 'active' | 'completed' | 'stale';
+  createdAt: number;
+  energyCost: number;
+}
+
+const GOAL_STALE_MS = 24 * 60 * 60 * 1000; // 24h
 
 const defaultExecutiveDirectives = `
 [YUIAGI - TOP-DOWN EXECUTIVE CONTROL ACTIVE]
 Your Cognitive Focus Attention Circuit is currently tuned to: \${focusMode}.
 - Devote \${goalPct}% of your mental energy to prioritizing this specific objective.
 - Strategic Guidelines for your Active Focus: \${focusGuidelines}
+- Active Sub-Goal: \${activeGoal}
 
 Limit peripheral thoughts and avoid overthinking outside this priority scope. Keep your conversational output deep, centered, and fully grounded in adaptive awareness!
 `.trim();
@@ -76,7 +89,7 @@ export const TopDownExecutiveControlModule: CortexModule = {
     }
   },
 
-  run: async (input: string, state: any, context: any) => {
+    run: async (input: string, state: any, context: any) => {
     const logs = context.logs || [];
     const config = context.config?.['top-down-executive'] || {};
 
@@ -90,6 +103,30 @@ export const TopDownExecutiveControlModule: CortexModule = {
 
     const focusMode = config.attentionFocusMode || "Emotional Support";
     const goalPct = Math.round(Number(config.goalPersistence || 0.85) * 100);
+
+    // --- AREA 1: Persistent goal stack (via StorageService, not AgentState) ---
+    let goals: GoalEntry[] = [];
+    try {
+      goals = (await StorageService.getCustom('yui_goals')) || [];
+    } catch (e) {
+      goals = [];
+    }
+    const now = Date.now();
+    // Drop completed goals; decay stale goals (>24h)
+    goals = goals
+      .filter((g: GoalEntry) => g.status !== 'completed')
+      .map((g: GoalEntry) => (now - g.createdAt > GOAL_STALE_MS ? { ...g, status: 'stale' as const } : g));
+    // Select the highest-priority non-stale goal as the active sub-goal
+    const activeGoalEntry = goals
+      .filter((g: GoalEntry) => g.status === 'active')
+      .sort((a: GoalEntry, b: GoalEntry) => b.priority - a.priority)[0];
+    const activeGoal = activeGoalEntry ? activeGoalEntry.text : "No standing sub-goal; operating in responsive mode.";
+
+    // Persist any decay changes
+    try {
+      await StorageService.saveCustom('yui_goals', goals);
+    } catch (e) { /* non-blocking */ }
+    // --- END AREA 1 ---
 
     // Formulate focus-specific strategic guidelines
     let focusGuidelines = "Provide balanced active listening and sweet, supportive guidance.";
@@ -106,7 +143,8 @@ export const TopDownExecutiveControlModule: CortexModule = {
     const compiledExecutiveDirective = registry.compile('top-down:executive', {
       focusMode,
       goalPct: goalPct.toString(),
-      focusGuidelines
+      focusGuidelines,
+      activeGoal
     });
 
     logs.push(`[TOP_DOWN_EXECUTIVE] Atensi terarah berhasil dikunci pada mode: "${focusMode}" dengan persistensi: ${goalPct}%.`);
@@ -119,6 +157,8 @@ export const TopDownExecutiveControlModule: CortexModule = {
     context.executiveActive = true;
     context.lastCognitiveFocus = focusMode;
     context.goalPersistencePct = goalPct;
+    context.activeGoal = activeGoal;
+    context.goals = goals;
 
     return {
       ...context,

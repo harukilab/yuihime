@@ -102,7 +102,7 @@ export const MemoryResonanceModule: CortexModule = {
       if (t > 70 && a > 50) return "Close Trusted Companion";
       if (t > 40 && a > 40) return "Warm Close Acquaintance";
       if (t < 30) return "Stranger / Under Observation";
-      return "Casual Friend";
+      return "Casual user";
     };
 
     // Current user's social bucketing

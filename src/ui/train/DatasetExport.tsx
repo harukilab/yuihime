@@ -16,7 +16,7 @@ export const DatasetExport: React.FC<DatasetExportProps> = ({
   const [exportOutputFormat, setExportOutputFormat] = useState<'json_cot' | 'raw_text'>('json_cot');
   const [exportThoughtTemplate, setExportThoughtTemplate] = useState<string>('Responding to {sender} regarding "{message}". {character} is formulating a sweet response to capture their feelings.');
   const [exportCustomRegexes, setExportCustomRegexes] = useState<string>('');
-  const [exportUserFallback, setExportUserFallback] = useState<string>("Kakak, Penonton, Subscriber, Chatter, Kawan");
+  const [exportUserFallback, setExportUserFallback] = useState<string>("user, Penonton, Subscriber, Chatter, Kawan");
   const [exportAiFallback, setExportAiFallback] = useState<string>("Yui");
   const [exportRelationVerb, setExportRelationVerb] = useState<string>("berkata");
   const [exportSmartSynthesize, setExportSmartSynthesize] = useState<boolean>(false);
@@ -257,7 +257,7 @@ export const DatasetExport: React.FC<DatasetExportProps> = ({
                   type="text"
                   value={exportUserFallback}
                   onChange={(e) => setExportUserFallback(e.target.value)}
-                  placeholder="e.g. Brother, Chatter, Friend"
+                  placeholder="e.g. Brother, Chatter, user"
                   className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white font-mono focus:border-amber-500/50 outline-none transition-all"
                 />
                 <CollapsibleText text="List of alternate random names used in datasets if sender's real name isn't found. This keeps training generic." />

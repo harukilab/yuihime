@@ -218,7 +218,7 @@ export const MessagingTool: ToolModule = {
           console.error(`[MessagingTool] Gagal mengirim pesan ke Chat ID ${resolved.tg_id} via Telegraf:`, tgSendErr.message || tgSendErr);
           return {
             success: false,
-            error: `Gagal mengirimkan pesan Telegram ke Chat ID ${resolved.tg_id}: ${tgSendErr.message || tgSendErr}. Pastikan Kakak sudah mengirimkan perintah /start ke bot Telegram Yuihime dan tidak memblokir bot tersebut.`
+            error: `Gagal mengirimkan pesan Telegram ke Chat ID ${resolved.tg_id}: ${tgSendErr.message || tgSendErr}. Pastikan user sudah mengirimkan perintah /start ke bot Telegram Yuihime dan tidak memblokir bot tersebut.`
           };
         }
 

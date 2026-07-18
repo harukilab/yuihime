@@ -72,7 +72,10 @@ export const SelfAwarenessMirrorModule: CortexModule = {
     }
   },
 
-  run: async (input: string, state: any, context: any) => {
+  run: runSelfAwarenessMirror
+};
+
+export async function runSelfAwarenessMirror(input: string, state: any, context: any) {
     const logs = context.logs || [];
     const config = context.config?.['self-awareness-mirror'] || {};
 
@@ -152,4 +155,3 @@ export const SelfAwarenessMirrorModule: CortexModule = {
       logs
     };
   }
-};

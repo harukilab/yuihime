@@ -3,7 +3,7 @@ import { LearningEngine } from '../learning';
 import type { Cortex } from '../cortex';
 
 /**
- * Executes a self-directed background thinking cycle (Zenith Manifestation).
+ * Executes a self-directed background thinking cycle (Cortex Background Loop).
  *
  * Use when:
  * - The Cortex pulse fires periodically in the background.
@@ -31,7 +31,7 @@ export async function executeCortexSelfDirectedThought(cortex: Cortex): Promise<
   // guna mendukung pengiriman pesan langsung multi-saluran (Telegram, dsb) secara mandiri.
   /*
   if (lastMemory && (lastMemory.type as string) === 'system' && lastMemory.context === 'cron_trigger') {
-      console.log(`[ZENITH_MANIFEST] Proactive Trigger: System Signal detected - "${lastMemory.content}"`);
+      console.log(`[CORTEX_BG_LOOP] Proactive Trigger: System Signal detected - "${lastMemory.content}"`);
       
       // Wake up first if asleep
       if (state.status === 'sleeping') {
@@ -67,7 +67,7 @@ export async function executeCortexSelfDirectedThought(cortex: Cortex): Promise<
   const enableOfflineTraining = yuiAgiConfig.enableOfflineTraining !== undefined ? !!yuiAgiConfig.enableOfflineTraining : true;
 
   if (enableOfflineTraining && Math.random() > 0.6 && memories.length >= 5) {
-    console.log("[ZENITH_MANIFEST] Memulai siklus Latihan Sinapsis Saraf Bawah Sadar (Offline Background Training)...");
+    console.log("[CORTEX_BG_LOOP] Memulai siklus Latihan Sinapsis Saraf Bawah Sadar (Offline Background Training)...");
     try {
       const currentKnowledge = state.knowledge || [];
       const updatedStrategies = await LearningEngine.optimize(cortex, memories, state);
@@ -80,9 +80,9 @@ export async function executeCortexSelfDirectedThought(cortex: Cortex): Promise<
       await StorageService.saveStrategies(updatedStrategies);
       await StorageService.saveKnowledge(updatedKnowledge);
 
-      console.log(`[ZENITH_MANIFEST] ✓ Latihan Sinapsis Bawah Sadar Luring Berhasil. Mengasimilasi ${updatedStrategies.length} strategi komunikasi & ${updatedKnowledge.length} asosiasi pengetahuan baru.`);
+      console.log(`[CORTEX_BG_LOOP] ✓ Latihan Sinapsis Bawah Sadar Luring Berhasil. Mengasimilasi ${updatedStrategies.length} strategi komunikasi & ${updatedKnowledge.length} asosiasi pengetahuan baru.`);
     } catch (learnErr) {
-      console.error("[ZENITH_MANIFEST] Latihan Bawah Sadar Terganggu:", learnErr);
+      console.error("[CORTEX_BG_LOOP] Latihan Bawah Sadar Terganggu:", learnErr);
     }
   }
 
@@ -98,7 +98,7 @@ export async function executeCortexSelfDirectedThought(cortex: Cortex): Promise<
 
   if (sleepModeEnabled && silentDurationSeconds > sleepModeTimeout) {
      if (state.status !== 'sleeping') {
-       console.log(`[ZENITH_MANIFEST] Entering Sleep Mode on server. Inactivity duration: ${silentDurationSeconds}s`);
+       console.log(`[CORTEX_BG_LOOP] Entering Sleep Mode on server. Inactivity duration: ${silentDurationSeconds}s`);
        state.status = 'sleeping';
        await StorageService.saveAgentState({ status: 'sleeping' });
      }
@@ -106,14 +106,14 @@ export async function executeCortexSelfDirectedThought(cortex: Cortex): Promise<
   }
 
   if (state.status === 'sleeping' && silentDurationSeconds <= sleepModeTimeout) {
-     console.log(`[ZENITH_MANIFEST] Waking up Sleep Mode on server. Inactivity duration: ${silentDurationSeconds}s`);
+     console.log(`[CORTEX_BG_LOOP] Waking up Sleep Mode on server. Inactivity duration: ${silentDurationSeconds}s`);
      state.status = 'idle';
      await StorageService.saveAgentState({ status: 'idle' });
   }
 
   // Ambil konfigurasi dinamis untuk spontaneous proactive
   const spConfig = settings?.['spontaneous-proactive'] || settings?.agent || {};
-  const enableSpontaneousSpam = spConfig.enableSpontaneousSpam !== undefined ? !!spConfig.enableSpontaneousSpam : true;
+  const enableSpontaneousSpam = spConfig.enableSpontaneousSpam !== undefined ? !!spConfig.enableSpontaneousSpam : false;
 
   if (!enableSpontaneousSpam) {
     return; // Hentikan pemicuan pesan spontan jika dinonaktifkan oleh pengguna
@@ -128,13 +128,13 @@ export async function executeCortexSelfDirectedThought(cortex: Cortex): Promise<
   const requiredSilence = isLastSpeakerAgent ? cooldownInterval : idleDurationThreshold;
 
   if (silentDurationSeconds > requiredSilence) {
-     console.log(`[ZENITH_MANIFEST] Autonomous pulse detected ${Math.round(silentDurationSeconds)}s of silence. Required threshold: ${requiredSilence}s`);
+     console.log(`[CORTEX_BG_LOOP] Autonomous pulse detected ${Math.round(silentDurationSeconds)}s of silence. Required threshold: ${requiredSilence}s`);
      
      const loneliness = state.mood.loneliness !== undefined ? state.mood.loneliness : 15;
      const playfulness = state.mood.playfulness !== undefined ? state.mood.playfulness : 30;
      
      if (loneliness > 45 || playfulness > 60 || Math.random() <= triggerChance) {
-       console.log(`[ZENITH_MANIFEST] Triggers autonomous message initiative! Loneliness: ${loneliness}, Playfulness: ${playfulness}, Trigger Chance: ${triggerChance}`);
+       console.log(`[CORTEX_BG_LOOP] Triggers autonomous message initiative! Loneliness: ${loneliness}, Playfulness: ${playfulness}, Trigger Chance: ${triggerChance}`);
        
        const timeOfDay = (() => {
          const hour = new Date().getHours();

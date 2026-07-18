@@ -119,7 +119,7 @@ export function registerDatasetRoutes(app: express.Express, db: any) {
         limit = 100, 
         smartSynthesize = false, 
         systemPrompt = "You am Yuihime, a protective companion digital soul running on Perfect Giftia OS. Output strictly valid JSON.",
-        userFallback = "Kakak",
+        userFallback = "user",
         aiFallback = "Yui",
         relationVerb = "berkata",
         format = "openai",
@@ -226,7 +226,7 @@ export function registerDatasetRoutes(app: express.Express, db: any) {
 
         // If still no sender extracted, query our dynamic fallbacks pool
         if (!sender) {
-          const fallbacks = (fallbackUser || "Kakak")
+          const fallbacks = (fallbackUser || "user")
             .split(',')
             .map(x => x.trim())
             .filter(Boolean);
@@ -397,7 +397,7 @@ export function registerDatasetRoutes(app: express.Express, db: any) {
             if (sole.role === 'assistant') {
               cleanMessages.unshift({ role: 'user', content: `Bicaralah atau berikan refleksi tentang: ${context}`, senderName: 'User' });
             } else {
-              cleanMessages.push({ role: 'assistant', content: `*mengangguk tersenyum mendengar ucapanmu*`, senderName: 'Yui' });
+              cleanMessages.push({ role: 'assistant', content: `mengangguk tersenyum mendengar ucapanmu`, senderName: 'Yui' });
             }
           } else {
             continue;

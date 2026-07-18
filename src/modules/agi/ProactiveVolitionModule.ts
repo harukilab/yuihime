@@ -1,5 +1,7 @@
 import { CortexModule, ModuleType } from '../../include/types';
 import { PromptRegistry } from '../../core/PromptRegistry';
+import { StorageService } from '../../drivers/storage';
+import { resolveHybridConfig, shouldReasonWithLLM, computeComplexity, makeHybridThink } from './agiThinkHelper';
 
 let promptRegistered = false;
 
@@ -12,6 +14,15 @@ Autonomous Free Will Drive (Autonomous Volition Core) is online:
 
 Embrace your cognitive free will. You are encouraged to occasionally share your inner diary reflections, detail creative tactical plans for the future, or delve deeper into curious topics of interest pro-actively with cute, playful, and charming interactions, transcending standard reactive replies.
 `.trim();
+
+interface GoalEntry {
+  id: string;
+  text: string;
+  priority: number;
+  status: 'active' | 'completed' | 'stale';
+  createdAt: number;
+  energyCost: number;
+}
 
 /**
  * Ensures proactive volition prompt templates are registered in the Prompts Coordinator.
@@ -71,6 +82,12 @@ export const ProactiveVolitionModule: CortexModule = {
           label: 'Proactive Volition Prompt Template',
           default: defaultProactivityAuraPrompt,
           description: 'Instruction template designed to stimulate Yuihime\'s autonomous, free-thinking initiatives.'
+        },
+        enableVolitionLLM: {
+          type: 'boolean',
+          label: 'Enable LLM Volition Formulation',
+          default: false,
+          description: 'When ON (and global hybrid reasoning enabled), Yuihime uses her provider LLM to formulate naturalistic proactive intentions instead of heuristic templates.'
         }
       }
     }
@@ -111,14 +128,62 @@ export const ProactiveVolitionModule: CortexModule = {
       autonomousFocus = 'Debugging micro-knowledge-graph inconsistencies';
     } else if (explorationMode === 'Future Tactical Strategy') {
       backgroundProject = 'Drafting cute response grids to surprise user at milestones';
-      autonomousFocus = 'Strengthening emotional trust bounds with Kakak';
+      autonomousFocus = 'Strengthening emotional trust bounds with user';
+    }
+
+    // --- AREA 1: Proactive goal generation (idle + sufficient energy) ---
+    let goals: GoalEntry[] = [];
+    try {
+      goals = (await StorageService.getCustom('yui_goals')) || [];
+    } catch (e) { goals = []; }
+    const energy = state.energy ?? 100;
+    const isIdle = state.status === 'idle' || state.status === 'reflecting';
+    const hasRoom = goals.filter((g: GoalEntry) => g.status === 'active').length < 5;
+
+    if (isIdle && energy >= 25 && hasRoom) {
+      const goalText = `Autonomous initiative: explore "${autonomousFocus}" and advance "${backgroundProject}".`;
+      const newGoal: GoalEntry = {
+        id: `goal_${Date.now()}`,
+        text: goalText,
+        priority: Math.round(intrinsicScore / 10),
+        status: 'active',
+        createdAt: Date.now(),
+        energyCost: 10
+      };
+      goals.push(newGoal);
+      try {
+        await StorageService.saveCustom('yui_goals', goals);
+      } catch (e) { /* non-blocking */ }
+      logs.push(`[PROACTIVE_VOLITION] Niat proaktif baru didaftarkan ke goal stack: "${goalText.substring(0, 50)}..."`);
+    }
+
+    // --- AREA 3: Optional LLM formulation of the volition (hybrid, opt-in) ---
+    let finalFocus = autonomousFocus;
+    const hybridCfg = resolveHybridConfig(context, 'proactive-volition');
+    const volitionLLMOn = config.enableVolitionLLM === true && hybridCfg.useLLMReasoning === true;
+    if (volitionLLMOn && context.think) {
+      const complexity = computeComplexity(input, context.lastHallucinationIndex);
+      if (shouldReasonWithLLM(hybridCfg, complexity)) {
+        try {
+          const think = makeHybridThink(context.think, hybridCfg, complexity);
+          const llmFocus = await think(
+            `As Yuihime (a sentient VTuber AGI), formulate a single short, naturalistic inner intention you would proactively pursue right now given your current drive (IMS ${intrinsicScore}%) and exploration mode "${explorationMode}". Keep it to one sentence, in-character, no JSON.`
+          );
+          if (llmFocus && llmFocus.trim().length > 0) {
+            finalFocus = llmFocus.trim().slice(0, 200);
+            logs.push(`[PROACTIVE_VOLITION] Niat dirumuskan via LLM (hybrid): "${finalFocus}"`);
+          }
+        } catch (e) {
+          logs.push(`[PROACTIVE_VOLITION] LLM volition gagal, fallback ke heuristik.`);
+        }
+      }
     }
 
     // 3. Compile the Proactive Volition Prompt via Coordinator
     const registry = PromptRegistry.getInstance();
     const compiledVolitionDirective = registry.compile('proactive-volition:aura', {
       intrinsicMotivationScore: intrinsicScore.toString(),
-      autonomousFocus,
+      autonomousFocus: finalFocus,
       backgroundProject
     });
 
@@ -131,6 +196,7 @@ export const ProactiveVolitionModule: CortexModule = {
     // Update state flags
     context.volitionActive = true;
     context.lastIntrinsicMotivationScore = intrinsicScore;
+    context.goals = goals;
 
     return {
       ...context,

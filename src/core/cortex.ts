@@ -27,6 +27,7 @@ import { wrapForPuterConsciousness } from './cortex/puterWrapper';
 import { repairJsonFormatWithLLM } from './cortex/jsonRepairer';
 import { FastTrackRunner } from './cortex/fastTrackRunner';
 import { executeCortexThink } from './cortex/cortexThinkEngine';
+import { eventBus } from './kernel/event-bus';
 
 export { normalizeToolCall } from './cortex/toolNormalizer';
 export { PartialJsonFinalAnswerExtractor, StreamExtractor } from './cortex/streamExtractors';
@@ -49,6 +50,8 @@ export class Cortex {
   }
 
   constructor() {
+    (Cortex as any)._latestInstance = this;
+    Cortex.registerAutoDreamListener();
     Cortex.ensureInitialized().catch(e => console.error('[Cortex] Failed to ensure initialized:', e));
   }
 
@@ -94,9 +97,60 @@ export class Cortex {
     return SystemRegistry.getModule<T>(id);
   }
 
+  /**
+   * Background autonomous dream trigger (Area 5). Runs the DreamModule's
+   * simulation cycle without any user input. Guarded by the module's own
+   * cooldown (state.lastDreamCycle) so it cannot loop infinitely.
+   */
+  public async triggerAutoDream(payload?: any): Promise<void> {
+    try {
+      if (typeof window !== 'undefined') return; // server-side only
+      const state: any = (global as any).__yuiAgentState || {
+        status: 'reflecting',
+        energy: 20,
+        mood: {},
+        systemHealth: {},
+        lastDreamCycle: 0,
+        relation: {}
+      };
+      const memories = await StorageService.getMemories();
+      const currentDreams = await StorageService.getDreams();
+
+      // Run the dream simulation module directly via the registry
+      const result = await SystemRegistry.runCortexPhase('LOGIC' as any, 'SIMULATE_DREAM', state as any, {
+        memories,
+        dreams: currentDreams,
+        systemConfig: this.config,
+        think: (p: string) => this.thinkSimple(p),
+        autoDream: true,
+        autoDreamReason: payload?.reason || 'autonomous'
+      });
+      console.log(`[CORTEX_BG_LOOP] Auto-dream cycle completed. Insight: ${(result.dreamInsight || 'n/a').substring(0, 60)}`);
+    } catch (e: any) {
+      console.error('[CORTEX_BG_LOOP] Auto-dream cycle failed:', e?.message || e);
+    }
+  }
+
+  private static autoDreamListenerRegistered = false;
+  private static registerAutoDreamListener() {
+    if (Cortex.autoDreamListenerRegistered) return;
+    Cortex.autoDreamListenerRegistered = true;
+    try {
+      eventBus.on('AGI:AUTO_DREAM', (payload: any) => {
+        // Defer to avoid blocking the emitting module's run()
+        setTimeout(() => {
+          const instance = (Cortex as any)._latestInstance as Cortex | undefined;
+          instance?.triggerAutoDream(payload).catch(() => {});
+        }, 0);
+      });
+    } catch (e) {
+      console.warn('[Cortex] Could not register auto-dream listener:', e);
+    }
+  }
+
   public startAutonomousPulse(intervalMs: number = 30000) {
     if (this.pulseInterval) return;
-    console.log(`[ZENITH_MANIFEST] Pulse synchronized at ${intervalMs}ms`);
+    console.log(`[CORTEX_BG_LOOP] Pulse synchronized at ${intervalMs}ms`);
     this.currentInterval = intervalMs;
     
     this.pulseInterval = setInterval(async () => {
@@ -181,7 +235,7 @@ export class Cortex {
     return dreams;
   }
 
-  async thinkSimple(prompt: string, jsonMode: boolean = false): Promise<string> {
+  async thinkSimple(prompt: string, jsonMode: boolean = false, modelOverride?: string): Promise<string> {
     await Cortex.ensureInitialized();
     const gateway = SystemRegistry.getModule<any>('provider-gateway');
     const settings = await this.getSettings();
@@ -190,12 +244,19 @@ export class Cortex {
       throw new Error("Neural Gateway is missing. Critical failure in thinkSimple.");
     }
 
+    // Honor an explicit model override (e.g. a heavier reasoning model picked by
+    // the hybrid trigger). Empty/undefined => gateway uses the user's main
+    // chat model from settings[provider].model. No hardcoded fallback model.
+    const providerKey = settings.provider;
+    const providerConfig = { ...(settings[providerKey] || {}) };
+    if (modelOverride && modelOverride.length > 0) {
+      providerConfig.model = modelOverride;
+    }
+    providerConfig.isJson = jsonMode;
+
     const simpleSettings = {
       ...settings,
-      [settings.provider]: {
-        ...(settings[settings.provider] || {}),
-        isJson: jsonMode
-      }
+      [providerKey]: providerConfig
     };
 
     const resultContext = await gateway.run(prompt, {} as AgentState, { 

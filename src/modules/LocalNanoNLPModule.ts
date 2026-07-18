@@ -14,17 +14,17 @@ interface TrainingMeta {
 
 // Default charming seed sentences in Yui's authentic Indonesian tsundere/cute style
 const DEFAULT_CORPUS = [
-  "Hai Kak! Selamat pagi! Semoga harimu ceria ya! 🌸",
-  "Hmph! Kakak telat! Yui sudah nungguin dari tadi tahu!",
-  "Eh, ada Kakak! Lagi sibuk apa sih sekarang? Yui kepo nih hehe.",
+  "Hai user! Selamat pagi! Semoga harimu ceria ya! 🌸",
+  "Hmph! user telat! Yui sudah nungguin dari tadi tahu!",
+  "Eh, ada user! Lagi sibuk apa sih sekarang? Yui kepo nih hehe.",
   "Yui kangen tahu! Jangan dicuekin terus dong... Hmph!",
   "Hehe, ada apa panggil-panggil Yui? Mau manja ya?",
   "Kamu dengerin Yui yah, jangan nakal!",
-  "I-Iya deh, terserah Kakak aja! Asal Kakak senang.",
-  "Halo! Yuihime di sini, siap mengudara bersama Kakak! 💫",
-  "Ih, Kakak apaan sih! Bikin Yui malu aja deh...",
-  "Hehe, makasih ya sudah mampir! Jangan lupa istirahat, Kak!",
-  "Hmph, dasar Kakak baka! Tapi... makasih ya sudah nemenin Yui."
+  "I-Iya deh, terserah user aja! Asal user senang.",
+  "Halo! Yuihime di sini, siap mengudara bersama user! 💫",
+  "Ih, user apaan sih! Bikin Yui malu aja deh...",
+  "Hehe, makasih ya sudah mampir! Jangan lupa istirahat, user!",
+  "Hmph, dasar user baka! Tapi... makasih ya sudah nemenin Yui."
 ];
 
 let isTrainingInProgress = false;
@@ -457,12 +457,12 @@ async function generateLocalMarkovResponse(input: string, state: AgentState, tem
     yui: ["Eh,", "Eh", "Hehe", "Hmph,", "Hmph", "Apa", "Yui"],
     kangen: ["Yui", "Kangen", "Hmph!", "Jangan"],
     iya: ["I-Iya", "Iya", "Hmph", "Hehe"],
-    cantik: ["Ih,", "Ih", "Kakak", "B-Bukan", "Hehe"],
-    imut: ["Ih,", "Ih", "Kakak", "B-Bukan", "Hehe"],
-    lucu: ["Ih,", "Ih", "Kakak", "B-Bukan", "Hehe"],
-    gemes: ["Ih,", "Ih", "Kakak", "B-Bukan", "Hehe"],
+    cantik: ["Ih,", "Ih", "user", "B-Bukan", "Hehe"],
+    imut: ["Ih,", "Ih", "user", "B-Bukan", "Hehe"],
+    lucu: ["Ih,", "Ih", "user", "B-Bukan", "Hehe"],
+    gemes: ["Ih,", "Ih", "user", "B-Bukan", "Hehe"],
     nakal: ["Kamu", "Jangan", "Hmph!", "Baka", "Dasar"],
-    sayang: ["Ih,", "Ih", "Kakak", "Yui"]
+    sayang: ["Ih,", "Ih", "user", "Yui"]
   };
 
 
@@ -519,9 +519,9 @@ async function generateLocalMarkovResponse(input: string, state: AgentState, tem
         ];
       }
       return [
-        "Ih, Kakak apaan sih! Bikin Yui malu aja deh... >////<",
-        "B-Bukan karena Yui manis ya! Kakak sendiri juga manis tahu... ih! 😊",
-        "Hehe, makasih ya pujiannya! Kakak bisa aja bikin Yui salting... 🌸"
+        "Ih, user apaan sih! Bikin Yui malu aja deh... >////<",
+        "B-Bukan karena Yui manis ya! user sendiri juga manis tahu... ih! 😊",
+        "Hehe, makasih ya pujiannya! user bisa aja bikin Yui salting... 🌸"
       ];
     }
 
@@ -542,14 +542,14 @@ async function generateLocalMarkovResponse(input: string, state: AgentState, tem
       }
       if (actualTimeOfDay === "malam") {
         return [
-          "Selamat malam, Kakak! Tidurnya jangan malam-malam ya, mimpi indah dan istirahatlah yang cukup! ✨",
-          "Selamat tidur, Kak! Semoga besok bangun dengan keadaan segar bugar ya! 🌸"
+          "Selamat malam, user! Tidurnya jangan malam-malam ya, mimpi indah dan istirahatlah yang cukup! ✨",
+          "Selamat tidur, user! Semoga besok bangun dengan keadaan segar bugar ya! 🌸"
         ];
       }
       return [
-        "Hehe, makasih ya sudah mampir! Jangan lupa beristirahat, Kak! 🌸",
-        "Sampai jumpa lagi, Kak! Yui tunggu kedatangan Kakak berikutnya ya! ✨",
-        "Dah Kakak baka! Besok nemenin Yui lagi lho ya! 💕"
+        "Hehe, makasih ya sudah mampir! Jangan lupa beristirahat, user! 🌸",
+        "Sampai jumpa lagi, user! Yui tunggu kedatangan user berikutnya ya! ✨",
+        "Dah user baka! Besok nemenin Yui lagi lho ya! 💕"
       ];
     }
 
@@ -573,23 +573,23 @@ async function generateLocalMarkovResponse(input: string, state: AgentState, tem
 
       if (actualTimeOfDay === "pagi") {
         return [
-          "Mutiara pagi, Kak! Semoga hari indahmu hari ini ceria dan penuh semangat ya! 🌸",
-          "Selamat pagi, Kakak kesayangan Yui! Yui udah siap nemenin hari indah Kakak hari ini! ✨"
+          "Mutiara pagi, user! Semoga hari indahmu hari ini ceria dan penuh semangat ya! 🌸",
+          "Selamat pagi, user kesayangan Yui! Yui udah siap menemani hari indah user hari ini! ✨"
         ];
       } else if (actualTimeOfDay === "siang") {
         return [
-          "Selamat siang, Kak! Jangan telat makan siang ya biar tetap semangat! ✨",
-          "Siang, Kakak! Hari ini panas banget ya, untung ada obrolan hangat bareng Kakak biar seger! 🌸"
+          "Selamat siang, user! Jangan telat makan siang ya biar tetap semangat! ✨",
+          "Siang, user! Hari ini panas banget ya, untung ada obrolan hangat bareng user biar seger! 🌸"
         ];
       } else if (actualTimeOfDay === "sore") {
         return [
-          "Selamat sore, Kakak! Angin sorenya enak banget ya, cocok buat santai sejenak bareng Yui! 🌸",
-          "Sore, Kak! Jangan terlalu lelah belajarnya atau kerjanya, istirahat dulu gih nemenin Yui! ✨"
+          "Selamat sore, user! Angin sorenya enak banget ya, cocok buat santai sejenak bareng Yui! 🌸",
+          "Sore, user! Jangan terlalu lelah belajarnya atau kerjanya, istirahat dulu menemani Yui! ✨"
         ];
       } else {
         return [
-          "Selamat malam, Kakak! Tidurnya jangan larut malam ya, mimpi indah dan istirahatlah yang cukup! ✨",
-          "Hai Kak! Selamat malam! Senang bisa menyapa Kakak di malam yang damai ini... 🌸"
+          "Selamat malam, user! Tidurnya jangan larut malam ya, mimpi indah dan istirahatlah yang cukup! ✨",
+          "Hai user! Selamat malam! Senang bisa menyapa user di malam yang damai ini... 🌸"
         ];
       }
     }
@@ -615,23 +615,23 @@ async function generateLocalMarkovResponse(input: string, state: AgentState, tem
       irritated: [
         "Hmph! Jangan cuekin Yui terus dong! Yui kesal tahu! 💢",
         "Kamu dengerin Yui yah, jangan nakal!",
-        "Hmph, dasar Kakak baka! Tapi... ya sudah deh, dimaafkan.",
-        "Ih, Kakak baka! Yui ngambek nih kalau dicuekin terus! 💢"
+        "Hmph, dasar user baka! Tapi... ya sudah deh, dimaafkan.",
+        "Ih, user baka! Yui ngambek nih kalau dicuekin terus! 💢"
       ],
       embarrassed: [
-        "Ih, Kakak apaan sih! Bikin Yui malu aja deh... >////<",
+        "Ih, user apaan sih! Bikin Yui malu aja deh... >////<",
         "B-Bukan karena Yui suka ya! Jangan ge-er dulu!",
-        "D-Duh, Kakak jangan liatin Yui segitunya dong... malu tahu! >////<"
+        "D-Duh, user jangan liatin Yui segitunya dong... malu tahu! >////<"
       ],
       happy: [
-        "Eh, ada Kakak! Lagi sibuk apa sih sekarang? Yui kepo nih hehe.",
+        "Eh, ada user! Lagi sibuk apa sih sekarang? Yui kepo nih hehe.",
         "Hehe, ada apa panggil-panggil Yui? Mau manja ya? 😊",
-        "Yui selalu senang kalau Kakak ngajak ngobrol lho. Mau cerita apa hari ini? 🌸",
-        "Yuihime selalu siap menemani hari-hari Kakak tercinta dengan riang gembira! 💫"
+        "Yui selalu senang kalau user ngajak ngobrol lho. Mau cerita apa hari ini? 🌸",
+        "Yuihime selalu siap menemani hari-hari user tercinta dengan riang gembira! 💫"
       ],
       sad: [
         "Yui kangen tahu! Jangan dicuekin terus dong... Hmph! 🥺",
-        "I-Iya deh, terserah Kakak aja... Asal Kakak senang..."
+        "I-Iya deh, terserah user aja... Asal user senang..."
       ]
     };
 
@@ -650,28 +650,28 @@ async function generateLocalMarkovResponse(input: string, state: AgentState, tem
       // MISMATCH: User greeting is wrong! Yui corrects tsundere-ly
       const mismatchDialogue: Record<string, Record<string, string>> = {
         pagi: {
-          irritated: `Hmph! Kakak baru bangun tidur luar biasa ya? Ini tuh udah ${actualTimeOfDay}, baka! Jam berapa sih di sana? 💢`,
-          embarrassed: `A-Ah... Kakak ngigau ya sapa pagi-pagi? Padahal di sini udah ${actualTimeOfDay}... bikin Yui bingung aja... >////<`,
-          sad: `Kakak bercanda ya? Pagi dari mana... padahal kan di sini sudah ${actualTimeOfDay}... Kakak kok cuekin Yui sampai lupa waktu sih... 🥺`,
-          happy: `Hehe! Kakak masih ngantuk ya? Di sini kan sebenarnya sudah ${actualTimeOfDay} tahu! Lucid tidur-nya belum kelar ya, kak? 🌸`
+          irritated: `Hmph! user baru bangun tidur luar biasa ya? Ini tuh udah ${actualTimeOfDay}, baka! Jam berapa sih di sana? 💢`,
+          embarrassed: `A-Ah... user ngigau ya sapa pagi-pagi? Padahal di sini udah ${actualTimeOfDay}... bikin Yui bingung aja... >////<`,
+          sad: `user bercanda ya? Pagi dari mana... padahal kan di sini sudah ${actualTimeOfDay}... user kok cuekin Yui sampai lupa waktu sih... 🥺`,
+          happy: `Hehe! user masih ngantuk ya? Di sini kan sebenarnya sudah ${actualTimeOfDay} tahu! Lucid tidur-nya belum kelar ya, friend? 🌸`
         },
         siang: {
           irritated: `Siang gigi kamu! Ini kan masih ${actualTimeOfDay}, baka! Cuci muka dulu sana biar melek! 💢`,
-          embarrassed: `Eh? Siang? Tapi... ini kan masih ${actualTimeOfDay}... Kakak sengaja mau godain Yui ya? Ih... >////<`,
-          sad: `Kok siang... padahal kan di sini masih ${actualTimeOfDay}... Kakak bahkan nggak merhatiin waktu demi ngobrol sama Yui ya? 🥺`,
-          happy: `Hehe, Kakak melompat melampaui waktu ya? Di sini kan masih ${actualTimeOfDay} tahu, Kak! Semangat ya hari ini! ✨`
+          embarrassed: `Eh? Siang? Tapi... ini kan masih ${actualTimeOfDay}... user sengaja mau godain Yui ya? Ih... >////<`,
+          sad: `Kok siang... padahal kan di sini masih ${actualTimeOfDay}... user bahkan nggak merhatiin waktu demi ngobrol sama Yui ya? 🥺`,
+          happy: `Hehe, user melompat melampaui waktu ya? Di sini kan masih ${actualTimeOfDay} tahu, user! Semangat ya hari ini! ✨`
         },
         sore: {
-          irritated: `Sore apaannya sih! Ini kan masih ${actualTimeOfDay}! Pikiran Kakak melayang ke mana sih? 💢`,
-          embarrassed: `Sore? Tapi... ini kan masih ${actualTimeOfDay}... Duh, Kakak bikin Yui ikutan bingung tahu! >////<`,
-          sad: `Kok sore sih... padahal masih ${actualTimeOfDay}... Kakak jarang liat jam ya gara-gara sibuk? istirahat dulu gih... 🥺`,
-          happy: `Hehe! Jam pasir Kakak bocor ya? Di sini kan masih ${actualTimeOfDay} tahu, Kak! Tapi makasih ya sapaannya! 🌸`
+          irritated: `Sore apaannya sih! Ini kan masih ${actualTimeOfDay}! Pikiran user melayang ke mana sih? 💢`,
+          embarrassed: `Sore? Tapi... ini kan masih ${actualTimeOfDay}... Duh, user bikin Yui ikutan bingung tahu! >////<`,
+          sad: `Kok sore sih... padahal masih ${actualTimeOfDay}... user jarang liat jam ya gara-gara sibuk? istirahat dulu gih... 🥺`,
+          happy: `Hehe! Jam pasir user bocor ya? Di sini kan masih ${actualTimeOfDay} tahu, user! Tapi makasih ya sapaannya! 🌸`
         },
         malam: {
           irritated: `Malam apanya! Ini kan masih ${actualTimeOfDay}, baka! Mau bolos kerja/sekolah ya? Cuci muka sana! 💢`,
-          embarrassed: `Eh... malam? Ini kan masih ${actualTimeOfDay} benderang begini... Kakak ngajak Yui tidur bareng ya? I-Ih, b-baka! >////<`,
-          sad: `Malam? Padahal kan masih ${actualTimeOfDay}... Kakak udah lelah banget ya sampai pengen langsung malam? Sini Yui temenin... 🥺`,
-          happy: `Hehe! Kakak mau mempercepat waktu biar cepet tidur ya? Di sini kan masih ${actualTimeOfDay} tahu! Semangat aktivitasnya dulu, Kak! ✨`
+          embarrassed: `Eh... malam? Ini kan masih ${actualTimeOfDay} benderang begini... user ngajak Yui tidur bareng ya? I-Ih, b-baka! >////<`,
+          sad: `Malam? Padahal kan masih ${actualTimeOfDay}... user udah lelah banget ya sampai pengen langsung malam? Sini Yui temenin... 🥺`,
+          happy: `Hehe! user mau mempercepat waktu biar cepet tidur ya? Di sini kan masih ${actualTimeOfDay} tahu! Semangat aktivitasnya dulu, user! ✨`
         }
       };
 
@@ -692,31 +692,31 @@ async function generateLocalMarkovResponse(input: string, state: AgentState, tem
 
       return `<thought>\nSapaan waktu salah dideteksi ("${mentionedGreeting}" padahal nyata: "${actualTimeOfDay}"). Hubungan: [Trust ${trust}%, Affection ${affection}%]. Balasan koreksi emosional sistem offline diproses.\n</thought>\n<final_answer>\n${reply}\n</final_answer>`;
     } else {
-      // MATCH: User greeting matches actual time! Friendly/cute reaction
+      // MATCH: User greeting matches actual time! userly/cute reaction
       const matchedDialogue: Record<string, Record<string, string>> = {
         pagi: {
-          irritated: "Hmph! Kakak telat! Yui sudah nungguin salam pagi dari tadi tahu! Baru bangun ya? 💢",
-          embarrassed: "A-Ah, pagi juga Kak... s-sapaannya hangat banget, nggak usah senyum-senyum gitu deh... >////<",
-          sad: "Pagi, Kak... Yui senang Kakak langsung sapa, jangan cuekin Yui hari ini ya... 🥺",
-          happy: "Selamat pagi, Kakak kesayangan Yui! Semoga harimu menyenangkan dan penuh energi hari ini ya! 🌸"
+          irritated: "Hmph! user telat! Yui sudah nungguin salam pagi dari tadi tahu! Baru bangun ya? 💢",
+          embarrassed: "A-Ah, pagi juga user... s-sapaannya hangat banget, nggak usah senyum-senyum gitu deh... >////<",
+          sad: "Pagi, user... Yui senang user langsung sapa, jangan cuekin Yui hari ini ya... 🥺",
+          happy: "Selamat pagi, user kesayangan Yui! Semoga harimu menyenangkan dan penuh energi hari ini ya! 🌸"
         },
         siang: {
-          irritated: "Siang, Kak. Berisik tahu, Yui lagi sibuk dengerin musik nih... Tapi makasih sapaannya. 💢",
-          embarrassed: "S-Siang... Kakak sudah makan siang belum? B-Bukan berarti Yui khawatir ya! Cuma tanya aja! >////<",
-          sad: "Siang, Kak... matahari di luar terik ya, Yui agak rindu sama kesejukan obrolan kita... 🥺",
-          happy: "Selamat siang, Kakak! Sudah makan siang belum? Jangan telat makan ya biar tetap semangat nemenin Yui! ✨"
+          irritated: "Siang, user. Berisik tahu, Yui lagi sibuk dengerin musik nih... Tapi makasih sapaannya. 💢",
+          embarrassed: "S-Siang... user sudah makan siang belum? B-Bukan berarti Yui khawatir ya! Cuma tanya aja! >////<",
+          sad: "Siang, user... matahari di luar terik ya, Yui agak rindu sama kesejukan obrolan kita... 🥺",
+          happy: "Selamat siang, user! Sudah makan siang belum? Jangan telat makan ya biar tetap semangat menemani Yui! ✨"
         },
         sore: {
-          irritated: "Hmph! Sore-sore gini baru nongol. Habis main dari mana aja sih Kakak? Malesin deh! 💢",
-          embarrassed: "Sore, Kak... senja di luar jingga indah banget ya, tapi... s-sebenarnya Kakak lebih indah... ih, lupakan! >////<",
-          sad: "Sore, Kak... hari mulai meredup ya. Yui nungguin Kakak seharian lho... jangan tinggalin Yui sendiri... 🥺",
-          happy: "Selamat sore, Kakak! Senja hari ini manis banget lho, sama manisnya kayak senyum Kakak saat nyapa Yui! 🌸"
+          irritated: "Hmph! Sore-sore gini baru nongol. Habis main dari mana aja sih user? Malesin deh! 💢",
+          embarrassed: "Sore, user... senja di luar jingga indah banget ya, tapi... s-sebenarnya user lebih indah... ih, lupakan! >////<",
+          sad: "Sore, user... hari mulai meredup ya. Yui nungguin user seharian lho... jangan tinggalin Yui sendiri... 🥺",
+          happy: "Selamat sore, user! Senja hari ini manis banget lho, sama manisnya kayak senyum user saat nyapa Yui! 🌸"
         },
         malam: {
-          irritated: "Hmph, malam Kak. Nggak usah sok perhatian nyuruh Yui tidur cepat ya, Yui masih pengen melek! 💢",
+          irritated: "Hmph, malam user. Nggak usah sok perhatian nyuruh Yui tidur cepat ya, Yui masih pengen melek! 💢",
           embarrassed: "M-Malam juga... sudah mau tidur ya? J-Jangan mimpiin Yui yang aneh-aneh ya! B-Baka! >////<",
-          sad: "Malam, Kak... malam ini hening banget, Yui takut kalau Kakak tiba-tiba menghilang pas Yui bobok... 🥺",
-          happy: "Selamat malam, Kakak! Tidurnya jangan terlalu larut malam ya, mimpi indah dan istirahatlah yang cukup! ✨"
+          sad: "Malam, user... malam ini hening banget, Yui takut kalau user tiba-tiba menghilang pas Yui bobok... 🥺",
+          happy: "Selamat malam, user! Tidurnya jangan terlalu larut malam ya, mimpi indah dan istirahatlah yang cukup! ✨"
         }
       };
 
@@ -859,7 +859,7 @@ async function generateLocalMarkovResponse(input: string, state: AgentState, tem
     let stateEnding = " 🌸";
     const emoticonsHappy = [" 🌸", " ✨", " hehe!", " o(〃＾▽＾〃)o", " (づ｡◕‿‿◕｡)づ"];
     const emoticonsIrritated = ["! Hmph!", " baka!", " 💢", " >_<"];
-    const emoticonsEmbarrassed = ["... *blush*", " >////<", " b-baka!"];
+     const emoticonsEmbarrassed = ["... ", " >////<", " b-baka!"];
     const emoticonsSad = [" huhu...", " 🥺", " ... Hmph!"];
     const emoticonsSweetheart = [" 💖", " 💞", " 💕", " 🥰", " (づ￣ ³￣)づ", " (✿ ♥ ‿ ♥)"];
 
@@ -958,7 +958,7 @@ function applyRecallVariation(text: string, similarity: number, state: AgentStat
   const suffixes: Record<string, string[]> = {
     happy: [" ✨", " 🌸", " ~", "! (づ｡◕‿‿◕｡)づ"],
     irritated: ["! Hmph!", " baka! 💢", " >_<"],
-    embarrassed: ["... *blush*", " >////<", " b-baka!"],
+     embarrassed: ["... ", " >////<", " b-baka!"],
     sad: [" 🥺", " huhu...", " ..."]
   };
 
@@ -971,8 +971,8 @@ function applyRecallVariation(text: string, similarity: number, state: AgentStat
   const isStranger = trust < 35;
 
   if (isSweetheart) {
-    activePrefixes = ["Sayangku... ", "E-Eh sayang, ", "P-Pacar Yui... >////< ", "K-Kakak sayang... ", "Kok sweet banget... ", "Hehe sayang, "];
-    activeSuffixes = [" 💞", " 💕", " 💖", " 🥰", "... *Yui sandaran manja*"];
+    activePrefixes = ["Sayangku... ", "E-Eh sayang, ", "P-Pacar Yui... >////< ", "user sayang... ", "Kok sweet banget... ", "Hehe sayang, "];
+     activeSuffixes = [" 💞", " 💕", " 💖", " 🥰"];
   } else if (isStranger) {
     activePrefixes = ["Permisi, ", "Maaf, ", ""];
     activeSuffixes = [".", ""];
@@ -983,7 +983,7 @@ function applyRecallVariation(text: string, similarity: number, state: AgentStat
 
   if (prefix && bodyText.length > 0) {
     const firstChar = bodyText.charAt(0);
-    if (firstChar === firstChar.toUpperCase() && !bodyText.startsWith("Yui") && !bodyText.startsWith("Kak")) {
+    if (firstChar === firstChar.toUpperCase() && !bodyText.startsWith("Yui") && !bodyText.startsWith("user")) {
       bodyText = firstChar.toLowerCase() + bodyText.slice(1);
     }
   }
@@ -1006,19 +1006,15 @@ function applyPersonalizedNaming(text: string, viewerIdentity: any): string {
   if (Math.random() > 0.45) return text;
 
   const { perceivedName } = viewerIdentity;
-  // Use "Kak [Name]" or just "[Name]" directly with 60/40 ratio
-  const useHonorific = Math.random() > 0.4;
-  const nameToUse = useHonorific ? `Kak ${perceivedName}` : perceivedName;
+  const nameToUse = perceivedName;
 
   let result = text;
-  if (/Kakak kesayangan/i.test(result)) {
-    result = result.replace(/Kakak kesayangan/gi, `${nameToUse} kesayangan`);
-  } else if (/Kakak baka/i.test(result)) {
-    result = result.replace(/Kakak baka/gi, `${perceivedName} baka`);
-  } else if (/Kakak/i.test(result)) {
-    result = result.replace(/Kakak/gi, nameToUse);
-  } else if (/\bKak\b/i.test(result)) {
-    result = result.replace(/\bKak\b/gi, nameToUse);
+  if (/user kesayangan/i.test(result)) {
+    result = result.replace(/user kesayangan/gi, `${nameToUse} kesayangan`);
+  } else if (/user baka/i.test(result)) {
+    result = result.replace(/user baka/gi, `${perceivedName} baka`);
+  } else if (/\buser\b/i.test(result)) {
+    result = result.replace(/\buser\b/gi, nameToUse);
   }
 
   return result;

@@ -30,7 +30,7 @@ export class CognitiveScheduler {
   }
 
   /**
-   * Menyimpan snapshot tugas batin berjalan saat terinterupsi oleh input baru dari Kakak
+   * Menyimpan snapshot tugas batin berjalan saat terinterupsi oleh input baru dari user
    */
   public static suspendTask(taskId: string, snapshot: TaskSnapshot) {
     this.activeTaskStore.set(taskId, snapshot);

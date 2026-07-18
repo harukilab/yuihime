@@ -54,12 +54,12 @@ const getLevenshteinDistance = (a: string, b: string): number => {
 const getRandomWakeResponse = (wakeWord: string) => {
   const name = wakeWord.charAt(0).toUpperCase() + wakeWord.slice(1).toLowerCase();
   const wakeResponses = [
-    `Ya, ${name} di sini! Ada apa, Kak? Kok manggil-manggil?`,
-    `Ugh... ${name} sudah bangun kok! Ada yang bisa ${name} bantu, Kak?`,
+    `Ya, ${name} di sini! Ada apa, user? Kok manggil-manggil?`,
+    `Ugh... ${name} sudah bangun kok! Ada yang bisa ${name} bantu, user?`,
     `${name} desu! Sinyal audio tertangkap, ${name} siap mendengarkan!`,
-    `Hah? Iya, Kak! ${name} nggak tidur kok, cuma merem sedikit saja~ Ada apa?`,
-    "Yey! Mikrofon aktif! Halo Kak, ada yang mau kita diskusikan hari ini?",
-    `Kakak panggil ${name}? Hehe, ${name} selalu siap terbangun untuk Kakak! ✨`
+    `Hah? Iya, user! ${name} nggak tidur kok, cuma merem sedikit saja~ Ada apa?`,
+    "Yey! Mikrofon aktif! Halo user, ada yang mau kita diskusikan hari ini?",
+    `user panggil ${name}? Hehe, ${name} selalu siap terbangun untuk user! ✨`
   ];
   const idx = Math.floor(Math.random() * wakeResponses.length);
   return wakeResponses[idx];
@@ -529,7 +529,7 @@ export const StageTab: React.FC<StageTabProps> = ({
   };
 
   const handleOtomeAction = async (actionType: 'praise' | 'headpat' | 'tease' | 'gift', giftType?: 'tea' | 'chip' | 'ribbon') => {
-    const cleanCurrent = (perceivedName || 'Kakak').trim().toLowerCase();
+    const cleanCurrent = (perceivedName || 'user').trim().toLowerCase();
     
     let quote = '';
     let emoji = '💖';
@@ -1183,7 +1183,7 @@ export const StageTab: React.FC<StageTabProps> = ({
     setActiveAlert(newAlert);
 
     // Audio Speech readout
-    const voiceMessage = `Wah Sultan ${donor} kirim superchat sebesar ${amount}! Katanya: ${message}. Terima kasih banyak ya Kak ${donor}, semoga rezekinya lancar terus!`;
+    const voiceMessage = `Wah Sultan ${donor} kirim superchat sebesar ${amount}! Katanya: ${message}. Terima kasih banyak ya user ${donor}, semoga rezekinya lancar terus!`;
     SpeechService.speak(voiceMessage);
     
     // Motion trigger

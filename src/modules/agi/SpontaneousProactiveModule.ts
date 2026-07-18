@@ -2,7 +2,7 @@
  * SpontaneousProactiveModule.ts
  * 
  * Mengelola sirkuit mental Kerinduan (Longing Level Core) dan inisiatif 
- * pesan spontan iseng (tsundere/deredere) kepada Kakak secara otonom.
+ * pesan spontan iseng (tsundere/deredere) secara otonom.
  * 
  * Phase: SOUL
  * Part of the "Plug-and-Play" architecture.
@@ -56,7 +56,7 @@ export const SpontaneousProactiveModule: CortexModule = {
           type: 'boolean',
           label: 'Enable Spontaneous Chatting',
           default: true,
-          description: 'Allows Yuihime to send spontaneous, playful messages to Big Brother without being directly prompted first.'
+          description: 'Allows Yuihime to send spontaneous, playful messages to the user without being directly prompted first.'
         },
         idleDurationThreshold: {
           type: 'number',
@@ -86,7 +86,7 @@ export const SpontaneousProactiveModule: CortexModule = {
           min: 0.1,
           max: 10.0,
           step: 0.1,
-          description: 'Percentage growth of Yui\'s longing index for each minute Big Brother does not respond.'
+          description: 'Percentage growth of Yui\'s longing index for each minute the user does not respond.'
         },
         promptTemplate: {
           type: 'textarea',
@@ -101,7 +101,7 @@ export const SpontaneousProactiveModule: CortexModule = {
   run: async (input: string, state: AgentState, context: any) => {
     const logs = context.logs || [];
     const config = context.config?.['spontaneous-proactive'] || {};
-    const enabled = config.enableSpontaneousSpam !== undefined ? !!config.enableSpontaneousSpam : true;
+    const enabled = config.enableSpontaneousSpam !== undefined ? !!config.enableSpontaneousSpam : false;
 
     if (!enabled) {
       return { ...context };
@@ -144,7 +144,7 @@ export const SpontaneousProactiveModule: CortexModule = {
       longingIndex: longingIndex.toString(),
       channelType: context.chatType || 'Web Console',
       contextId: context.contextId || 'web_default',
-      lastActionText: idleSeconds > 300 ? 'Kakak sedang sibuk di dunia nyata' : 'Kakak sempat melihat Yui sesaat lalu'
+      lastActionText: idleSeconds > 300 ? 'user sedang sibuk di dunia nyata' : 'user sempat melihat Yui sesaat lalu'
     });
 
     const activeAura = context.soulDirective || '';

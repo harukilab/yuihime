@@ -269,7 +269,7 @@ export function registerIdentitiesRoutes(app: express.Express, db: any) {
           success: true, 
           alreadyLinked: true, 
           claimedName: identity.perceivedName,
-          message: `Akun platform Kakak saat ini sudah tertaut rapat dengan profil '${identity.perceivedName}'!` 
+          message: `Akun platform user saat ini sudah tertaut rapat dengan profil '${identity.perceivedName}'!` 
         });
       }
 
@@ -347,7 +347,7 @@ export function registerIdentitiesRoutes(app: express.Express, db: any) {
         db.prepare("UPDATE identities SET perceivedName = ? WHERE id = ?").run(perceivedName.trim(), identity.id);
         return res.json({ 
           success: true, 
-          message: `Sinyal kognitif Yui diperbarui! Nama panggilan Kakak dalam memori Yui berhasil diubah menjadi: ${perceivedName.trim()} 🌸` 
+          message: `Sinyal kognitif Yui diperbarui! Nama panggilan user dalam memori Yui berhasil diubah menjadi: ${perceivedName.trim()} 🌸` 
         });
       }
 
@@ -358,7 +358,7 @@ export function registerIdentitiesRoutes(app: express.Express, db: any) {
         db.prepare("UPDATE identities SET realName = ? WHERE id = ?").run(realName.trim(), identity.id);
         return res.json({ 
           success: true, 
-          message: `Sinyal kognitif batin Yui diperbarui! Nama asli Kakak sekarang terekam dengan indah sebagai: ${realName.trim()} 🌸` 
+          message: `Sinyal kognitif batin Yui diperbarui! Nama asli user sekarang terekam dengan indah sebagai: ${realName.trim()} 🌸` 
         });
       }
 
@@ -371,7 +371,7 @@ export function registerIdentitiesRoutes(app: express.Express, db: any) {
           facts.push(fact.trim());
           db.prepare("UPDATE identities SET importantFacts = ? WHERE id = ?").run(JSON.stringify(facts), identity.id);
         }
-        return res.json({ success: true, message: `Fakta baru tentang Kakak berhasil direkam dalam memori Yui! 🌸` });
+        return res.json({ success: true, message: `Fakta baru tentang user berhasil direkam dalam memori Yui! 🌸` });
       }
 
       if (action === 'remove_fact') {
@@ -389,7 +389,7 @@ export function registerIdentitiesRoutes(app: express.Express, db: any) {
           return res.status(400).json({ success: false, error: "yuiPerspective wajib diisikan." });
         }
         db.prepare("UPDATE identities SET yuiPerspective = ? WHERE id = ?").run(yuiPerspective, identity.id);
-        return res.json({ success: true, message: `Sudut pandang batin subjektif Yui tentang Kakak berhasil diperbarui! 🌸` });
+        return res.json({ success: true, message: `Sudut pandang batin subjektif Yui tentang user berhasil diperbarui! 🌸` });
       }
 
       return res.status(400).json({ success: false, error: `Action '${action}' tidak valid.` });

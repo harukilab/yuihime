@@ -182,6 +182,16 @@ export async function executeCortexThink(
 
   const workflow = await StorageService.getWorkflow();
 
+  // Hybrid reasoning entry point shared across all cortex phases. Modules may
+  // call `think(prompt, { model })` to invoke the user's provider gateway with
+  // an optional model override (empty => user's main chat model). Never passes
+  // a hardcoded model — the gateway resolves the provider's settings.
+  const buildThinkFn = (): (prompt: string, opts?: { model?: string; jsonMode?: boolean }) => Promise<string> => {
+    return (prompt: string, opts?: { model?: string; jsonMode?: boolean }) =>
+      cortexInstance.thinkSimple(prompt, opts?.jsonMode ?? false, opts?.model);
+  };
+  const think = buildThinkFn();
+
   logs.push("[PHASE 1] Initializing Input Aggregation...");
   const settings = await cortexInstance.getSettings();
   const preContext = await SystemRegistry.runCortexPhase('PHASE 1: AGGREGATION', input, state, {
@@ -190,7 +200,8 @@ export async function executeCortexThink(
     allIdentities,
     config: settings,
     contextId,
-    chatType
+    chatType,
+    think
   });
 
   let currentPlan = preContext.currentPlan !== undefined ? preContext.currentPlan : state.currentPlan;
@@ -222,7 +233,7 @@ export async function executeCortexThink(
   }
 
   logs.push("[PHASE SOUL] Processing Emotional State...");
-  const soulContext = await SystemRegistry.runCortexPhase('SOUL' as any, input, state, preContext);
+  const soulContext = await SystemRegistry.runCortexPhase('SOUL' as any, input, state, { ...preContext, think });
   
   let resolvedPersona = activePersona;
   if (!resolvedPersona) {
@@ -243,7 +254,8 @@ export async function executeCortexThink(
     currentPlan,
     contextId,
     chatType,
-    userName
+    userName,
+    think
   });
 
   let finalAnswer: string | null = null;
@@ -275,7 +287,7 @@ export async function executeCortexThink(
   // UPDATE: Mode Berpikir Cepat (Bypass Multi-Turn Reasoning) tidak lagi membatasi turn/iterasi ke 1 (maxIterations tetap 3).
   // Sebagai gantinya, mode ini mengaktifkan eksekusi paralel multi-proses / multi-node untuk seluruh tool calls secara simultan.
   let maxIterations = 3;
-  let loopContext = { ...augContext, config: settings };
+  let loopContext = { ...augContext, config: settings, think };
 
   if (!state.systemHealth) {
     state.systemHealth = { latency: 0, successRate: 1.0, tasksCompleted: 0 };
@@ -353,6 +365,35 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
 
     logs.push(`[CORTEX_LOOP] Turn Iteration ${iteration} starting...`);
 
+    // --- AREA 2: Looped AGI reflection (opt-in, default OFF) ---
+    // Re-runs HighOrderMetacognition / SelfAwarenessMirror per iteration so they
+    // audit the *current* loop state (tool history) instead of guessing upfront.
+    // Guarded by config flag to keep the default path unchanged.
+    const agiReflectCfg = (settings as any)?.['yuiagi-reasoning'] || {};
+    const enableLoopedReflection = agiReflectCfg.enableLoopedReflection === true;
+    if (enableLoopedReflection && iteration >= 1) {
+      try {
+        logs.push(`[AGI_REFLECT] Running looped self-reflection (iteration ${iteration})...`);
+        const reflectContext = await SystemRegistry.runCortexPhase('AGI_REFLECT' as any, input, state, {
+          ...loopContext,
+          toolExecutionHistory,
+          iteration,
+          config: settings,
+          think
+        });
+        // Merge reflective directives back into the loop context
+        loopContext = {
+          ...loopContext,
+          ...reflectContext,
+          soulDirective: [loopContext.soulDirective, reflectContext.soulDirective]
+            .filter(Boolean).join('\n\n')
+        };
+      } catch (reflectErr: any) {
+        logs.push(`[AGI_REFLECT] Non-blocking reflection failure: ${reflectErr?.message || reflectErr}`);
+      }
+    }
+    // --- END AREA 2 ---
+
     if (iteration > 1 && toolExecutionHistory.length > 0) {
       const lastExecuted = toolExecutionHistory[toolExecutionHistory.length - 1];
       if (lastExecuted && lastExecuted.results) {
@@ -370,7 +411,7 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
 
         let instructionText = "";
         if (hasFailure) {
-          instructionText = `Based on the tool execution results above (noting that some features/tools FAILED with errors), immediately formulate your casual spoken response to the user. Do NOT pretend you succeeded! Instead, as Yuihime, explain the failure or difficulty to the user in a charming, sweet, slightly apologetic and character-consistent way (e.g., 'Aduh, maaf ya Kak... Yui coba buat fotonya tapi sirkuit batin/servernya lagi agak ngambek... atau Kakak mau Yui coba lagi?'). Maintain your lovable personality, do NOT provide raw technical code details/stack traces, and ask if they want you to retry, do something else, or just keep talking!`;
+          instructionText = `Based on the tool execution results above (noting that some features/tools FAILED with errors), immediately formulate your casual spoken response to the user. Do NOT pretend you succeeded! Instead, as Yuihime, explain the failure or difficulty to the user in a charming, sweet, slightly apologetic and character-consistent way (e.g., 'Aduh, maaf ya user... Yui coba buat fotonya tapi sirkuit batin/servernya lagi agak ngambek... atau user mau Yui coba lagi?'). Maintain your lovable personality, do NOT provide raw technical code details/stack traces, and ask if they want you to retry, do something else, or just keep talking!`;
         } else {
           instructionText = `Based on the successful tool execution results above, you can EITHER choose to call another tool if you need more actions/information to fully answer the user (such as list_files, read_file, run_command), OR if you have all the information required, formulate your final casual spoken response to the user. Do not repeat technical details, do not write internal thoughts, plans, or analysis blocks outside the JSON structure. Directly chat with the user in your natural, emotional, affectionate/tsundere personal character using the user's conversational language!`;
           
@@ -963,7 +1004,7 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
         const toolNames = toolsToCall.map((tc: any) => tc.tool || tc.name).join(", ");
         let indonesianStatus = "Yui sedang memproses sesuatu...";
         if (toolNames.includes("web_search") || toolNames.includes("search")) {
-          indonesianStatus = "Yui sedang berselancar mencari informasi terbaru untuk Kakak... 🌐✨";
+          indonesianStatus = "Yui sedang berselancar mencari informasi terbaru untuk user... 🌐✨";
         } else if (toolNames.includes("execute_sql") || toolNames.includes("cloudsql_execute_sql")) {
           indonesianStatus = "Yui sedang menelusuri data dalam pangkalan batin batin... 🗄️🔍";
         } else if (toolNames.includes("execute_bash") || toolNames.includes("run_command")) {
@@ -1461,11 +1502,11 @@ Explain what you did or found in a completely natural, non-technical, cute way. 
         explanation = generatedSpeech;
       } else {
         if (uniqueNotFound.length > 0) {
-          explanation += `Hmph! Kakak minta Yui buat ${readableNotFound.join(', ')}, tapi sirkuit batin Yui belum dipasang modul itu tahu! 🙄 Hubungi admin/pencipta Yui dulu biar dipasang ya... `;
+          explanation += `Hmph! user minta Yui buat ${readableNotFound.join(', ')}, tapi sirkuit batin Yui belum dipasang modul itu tahu! 🙄 Hubungi admin/pencipta Yui dulu biar dipasang ya... `;
         }
         
         if (uniqueFailedList.length > 0) {
-          explanation += `Aduh... maaf ya Kak, Yui sempat nyoba buat ${readableFailed.join(', ')} Kakak barusan, tapi sirkuit batin Yui lagi agak ngambek/error nih... 🥺 Kakak jangan marah ya, Yui udah berusaha maksimal kok! `;
+          explanation += `Aduh... maaf ya user, Yui sempat nyoba buat ${readableFailed.join(', ')} user barusan, tapi sirkuit batin Yui lagi agak ngambek/error nih... 🥺 user jangan marah ya, Yui udah berusaha maksimal kok! `;
         }
         
         if (userFacingSucceeded.length > 0 && uniqueFailedList.length === 0 && uniqueNotFound.length === 0) {
@@ -1484,9 +1525,9 @@ Explain what you did or found in a completely natural, non-technical, cute way. 
           }
 
           if (searchResultsText) {
-            explanation += `Yui sudah berselancar mencari informasi terbaru untuk Kakak! 🌐✨ Berdasarkan hasil pencarian yang Yui temukan:\n\n${searchResultsText.slice(0, 1000)}\n\nSemoga membantu ya Kak! 💕`;
+            explanation += `Yui sudah berselancar mencari informasi terbaru untuk user! 🌐✨ Berdasarkan hasil pencarian yang Yui temukan:\n\n${searchResultsText.slice(0, 1000)}\n\nSemoga membantu ya user! 💕`;
           } else {
-            explanation += `Yui sudah selesai membantu Kakak untuk ${readableSucceeded.join(', ')}! 💕 Semuanya berhasil berjalan dengan lancar kok. Ada hal lain yang bisa Yui bantu untuk Kakak tersayang? Yui selalu siap menemani Kakak! ✨`;
+            explanation += `Yui sudah selesai membantu user untuk ${readableSucceeded.join(', ')}! 💕 Semuanya berhasil berjalan dengan lancar kok. Ada hal lain yang bisa Yui bantu untuk user tersayang? Yui selalu siap menemani user! ✨`;
           }
         } else if (userFacingSucceeded.length > 0) {
           explanation += `Tapi untungnya, untuk tugas ${readableSucceeded.join(', ')} berhasil Yui selesaikan dengan mulus kok! 💕 `;
@@ -1568,11 +1609,11 @@ Explain what you did or found in a completely natural, non-technical, cute way. 
 
   if (!isIntentionalEmpty && (!finalAnswer || finalAnswer.length < 5)) {
     logs.push("[KERNEL_FAIL_SAFE] Critical: Reprocessing LLM retry failed to produce a valid response. Falling back to cute in-character error response.");
-    finalAnswer = "Aduh... maaf ya Kak, sirkuit batin Yui sempat agak pusing barusan saat memproses permintaan Kakak... 🥺 Tapi Yui tetap di sini kok! Ada yang bisa Yui bantu lagi? 💕";
+    finalAnswer = "Aduh... maaf ya user, sirkuit batin Yui sempat agak pusing barusan saat memproses permintaan user... 🥺 Tapi Yui tetap di sini kok! Ada yang bisa Yui bantu lagi? 💕";
   }
 
   eventBus.emit('OUTPUT_EMITTED', { response: finalAnswer });
-  const postContext = await SystemRegistry.runCortexPhase('PHASE 4: EXECUTION', finalAnswer || "Aduh... maaf ya Kak, sirkuit batin Yui sempat agak pusing barusan... 🥺 Tapi Yui tetap di sini kok! 💕", state, {
+  const postContext = await SystemRegistry.runCortexPhase('PHASE 4: EXECUTION', finalAnswer || "Aduh... maaf ya user, sirkuit batin Yui sempat agak pusing barusan... 🥺 Tapi Yui tetap di sini kok! 💕", state, {
     ...augContext,
     rawResult: loopContext.parsedData || { final_answer: finalAnswer }
   });
@@ -1586,12 +1627,12 @@ Explain what you did or found in a completely natural, non-technical, cute way. 
   const logicContext = await SystemRegistry.runCortexPhase('LOGIC', finalAnswer || "", state, {
     ...postContext,
     systemConfig: cortexInstance.getConfig(),
-    think: (p: string) => cortexInstance.thinkSimple(p)
+    think: (p: string, opts?: { model?: string; jsonMode?: boolean }) => cortexInstance.thinkSimple(p, opts?.jsonMode ?? false, opts?.model)
   });
 
   stateMachine.transitionTo('IDLE');
   
-  const rawDialogueSource = logicContext.processedResponse || finalAnswer || "Aduh... Yui bingung mau bilang apa nih Kak... 🥺 Tapi Yui tetap sayang Kakak kok! 💕";
+  const rawDialogueSource = logicContext.processedResponse || finalAnswer || "Aduh... Yui bingung mau bilang apa nih user... 🥺 Tapi Yui tetap sayang user kok! 💕";
   const finalCleanRes = APIService.cleanAIOutput(StandardizedProcessor.sanitizeOutput(rawDialogueSource, isProactiveRun));
   eventBus.emit('OUTPUT_EMITTED', { response: finalCleanRes });
 
@@ -1648,7 +1689,7 @@ Explain what you did or found in a completely natural, non-technical, cute way. 
     logs.push(`[KERNEL_FAIL_SAFE] Captured critical loop exception: ${err?.message || String(err)}`);
     logs.push(`[KERNEL_FAIL_SAFE] Initiating safe cognitive fallback response...`);
     
-    const failsafeAnswer = "Aduh... maaf ya Kak, sirkuit batin Yui sempat agak pusing barusan saat memproses batin... 🥺 Tapi Yui tetap aman kok di sini menemani Kakak! Ada hal lain yang mau kita obrolin? Yui selalu di sini buat Kakak! 💕";
+    const failsafeAnswer = "Aduh... maaf ya user, sirkuit batin Yui sempat agak pusing barusan saat memproses batin... 🥺 Tapi Yui tetap aman kok di sini menemani user! Ada hal lain yang mau kita obrolin? Yui selalu di sini buat user! 💕";
     
     const recoveryResult = { 
       response: failsafeAnswer,

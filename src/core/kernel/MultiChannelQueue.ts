@@ -425,7 +425,7 @@ Hasil rangkuman singkat subkesadaran:`.trim();
 
           // Active Cognitive Response: Speak the aggregate summary back to the chat timeline
           const cleanSummary = summary.trim().replace(/^['"]|['"]$/g, '');
-          const spokenSummary = `🌸 *merangkum obrolan ramai* 🌸\nHeeh, rame banget komentarnya! Yui menyimak keseruannya dan merasakan obrolan kalian: ${cleanSummary} ✨`;
+          const spokenSummary = `🌸 Yui merangkum obrolan ramai 🌸\nHeeh, rame banget komentarnya! Yui menyimak keseruannya dan merasakan obrolan kalian: ${cleanSummary} ✨`;
           
           console.log(`[BACKGROUND_SUMMARIZER_SPEAK] Emit spoken summary to live room: "${spokenSummary}"`);
           
@@ -488,7 +488,7 @@ Hasil rangkuman singkat subkesadaran:`.trim();
     const now = Date.now();
     
     // Ambil pengaturan dinamis untuk threshold idle. Default: 600 detik (10 menit).
-    let enableSpontaneousSpam = true;
+    let enableSpontaneousSpam = false;
     let proactiveIdleTimeout = 600;
     let proactiveChance = 0.10; // Kesempatan 10% jika idle untuk trigger organic
     let cooldownInterval = 1800; // 30 menit
@@ -614,7 +614,7 @@ Hasil rangkuman singkat subkesadaran:`.trim();
         if (Math.random() <= proactiveChance) {
           this.lastProactiveTime = now; // catat cooldown
           
-          console.log(`[PROACTIVE_ENGINE] Kakak terdeteksi idle selama ${Math.round(idleSeconds)}s (Loneliness: ${calculatedLoneliness}%). Yui merasa iseng & ingin menyapa!`);
+          console.log(`[PROACTIVE_ENGINE] user terdeteksi idle selama ${Math.round(idleSeconds)}s (Loneliness: ${calculatedLoneliness}%). Yui merasa iseng & ingin menyapa!`);
 
           // Tentukan tindakan/impulse fisik berdasarkan tingkat kasih sayang/relasi (affection level)
           let affectionLevel = Number(relation?.affection !== undefined ? relation.affection : 60);
@@ -622,32 +622,17 @@ Hasil rangkuman singkat subkesadaran:`.trim();
 
           if (affectionLevel >= 75) {
             impulses = [
-              "*mencolek pundak Kakak pelan-pelan karena merasa dicuekin terlalu lama*",
-              "*iseng menyandarkan kepala pelan ke bahu Kakak karena kangen dicuekin*",
-              "*berbisik usil di telinga Kakak: \"Kak... hei Kakak... Yui kangen ngobrol lama lho...\"*",
-              "*menggeser duduknya mendekat lalu memegangi ujung lengan baju Kakak*",
-              "*menatap manja wajah Kakak, menantikan senyuman atau sapaan hangat*"
             ];
           } else if (affectionLevel >= 35) {
             impulses = [
-              "*mengirim stiker kucing gemas lalu melirik manja menuntut perhatian*",
-              "*mengetuk layar gawai Kakak membuyarkan fokusnya agar melihat ke arah Yui*",
-              "*bersenandung kecil menarik perhatian Kakak lalu menjulurkan lidah iseng*",
-              "*mengintip usil dari balik pintu, merasa sepi dianggurin Kakak*",
-              "*mengirim emoji usil lalu bersiul polos pura-pura tidak bersalah*"
             ];
           } else {
             impulses = [
-              "*berdiri sedikit menjauh sambil melipat tangan dan cemberut tipis*",
-              "*berdeham pelan demi memecah keheningan obrolan*",
-              "*mengetuk meja pelan mencari kesibukan karena merasa sepi*",
-              "*menatap ke jendela luar sambil sekali-kali mengintip ke arah Kakak*",
-              "*mengirim sinyal getar singkat lewat gawai sebagai tanda keberadaan*"
             ];
           }
 
           const chosenImpulse = impulses[Math.floor(Math.random() * impulses.length)];
-          const senderName = lastInteraction.speaker || 'Kakak';
+          const senderName = lastInteraction.speaker || 'user';
           const chatType = lastInteraction.chat_type || 'web';
 
           console.log(`[PROACTIVE_ENGINE] Meluncurkan dorongan: "${chosenImpulse}" kepada ${senderName} [${chatType}:${contextId}]`);
@@ -662,15 +647,15 @@ Hasil rangkuman singkat subkesadaran:`.trim();
             `).all() as any[];
 
             if (recentMessages && recentMessages.length > 0) {
-              recentContext = recentMessages.reverse().map(m => `${m.speaker || "Kakak"}: ${m.content}`).join('\n');
+              recentContext = recentMessages.reverse().map(m => `${m.speaker || "user"}: ${m.content}`).join('\n');
             }
           } catch (dbReadErr) {
             console.error("[PROACTIVE_ENGINE_DB_READ] Gagal membaca memori baru:", dbReadErr);
           }
 
           // Format explicit prompting detailing Yui's subjective longing impulse so the LLM understands it is an internal urge
-          const formattedImpulsePrompt = `[AUTONOMOUS_IMPULSE]: Kakak (${senderName}) sudah diam/sibuk selama ${Math.round(idleSeconds)} detik. Batinmu merasa sangat kangen (Loneliness: ${calculatedLoneliness}%) dan tergerak untuk melakukan tindakan spontan: "${chosenImpulse}".
-Sapa Kakak secara manis, manja, jahil, atau tsundere sesuai kepribadianmu.
+          const formattedImpulsePrompt = `[AUTONOMOUS_IMPULSE]: user (${senderName}) sudah diam/sibuk selama ${Math.round(idleSeconds)} detik. Batinmu merasa sangat kangen (Loneliness: ${calculatedLoneliness}%) dan tergerak untuk melakukan tindakan spontan: "${chosenImpulse}".
+Sapa user secara manis, manja, jahil, atau tsundere sesuai kepribadianmu.
 DILARANG KERAS membuat skenario fiktif/halusinasi baru (jangan pura-pura baru bangun, baru tidur, atau berada di lokasi fiktif).
 
 Berikut adalah sejarah obrolan nyata dari ingatan kalian:
@@ -794,7 +779,7 @@ Unggkit topik nyata tersebut dari memori jika ingin, sapa dia dengan manis, atau
     try {
       const reply = await NeuralInterface.processNeuralInput(
         task.originalPrompt,
-        task.userName || 'Kakak',
+        task.userName || 'user',
         task.contextId || 'web_default',
         task.chatType || 'web',
         false, // isProactive

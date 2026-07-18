@@ -1,6 +1,15 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.54] - 2026-07-18
+### Feature: Penguatan Agensi AGI (Mode Hybrid) — Area 1, 2, 3, 5
+- `context.think` sekarang tersedia di semua phase (`PHASE 1`, `SOUL`, `PHASE 2`, loop `AGI_REFLECT`, `LOGIC`) dan menerima `opts.model` (empty = model utama user). `Cortex.thinkSimple` mendukung override model tanpa hardcoded fallback (AGENTS.md §5).
+- Area 1: Goal stack persisten via `StorageService.getCustom('yui_goals')` — `TopDownExecutiveControlModule` (executive selection) & `ProactiveVolitionModule` (generate niat saat idle + optional LLM volition). Tidak membesar `AgentState`.
+- Area 2: Phase `AGI_REFLECT` baru dijalankan di dalam ReAct loop (`cortexThinkEngine.ts`), opt-in via `enableLoopedReflection` (default OFF). `AGIReflectModules.ts` reuse run `HighOrderMetacognition` & `SelfAwarenessMirror` per iterasi.
+- Area 3: Hybrid LLM reasoning di `AbstractReasoningModule`, `NeuroSymbolicModule`, `HighOrderMetacognitionModule`, `ProactiveVolitionModule`. Master switch `useLLMReasoning` (default OFF) + trigger complexity otomatis (panjang + keyword abstrak + hallucinationRisk). Ikut `settings.provider` user.
+- Area 5: Auto-dream otonom via `eventBus.emit('AGI:AUTO_DREAM')` dari `YUIAGICoreModule` saat suffering>75/energi<20, cooldown 30m (`state.lastDreamCycle`). `Cortex` menjalankan `DreamModule` di background tanpa input user.
+- Shared helper: `src/modules/agi/agiThinkHelper.ts` (computeComplexity, shouldReasonWithLLM, resolveHybridConfig, makeHybridThink).
+
 ## [4.53] - 2026-07-17
 ### Refactor: AGI module registration cleanup & doc sync
 - Removed the manual registration block (21 AGI modules + EmotionEngine) in `src/core/RegistryInitializer.ts`; modules now auto-register via Vite glob (browser) and filesystem scan (server) per AGENTS.md §2 (Plug-and-Play, no manual registration).

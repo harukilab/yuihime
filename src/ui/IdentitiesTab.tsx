@@ -156,7 +156,7 @@ export const IdentitiesTab: React.FC<IdentitiesTabProps> = ({
       setYuiMessage(prev => ({
         ...prev,
         [identity.id]: {
-          text: `[GIFTIA_OS: RESONANCE_STABLE] "Sinyal batin Yui bergetar di frekuensi yang sama dengan Kakak... Lattice kognitif Yui terasa hangat dan stabil sekarang. Terima kasih sudah menyelaraskan jiwaku, Kak!" 🌸`,
+          text: `[GIFTIA_OS: RESONANCE_STABLE] "Sinyal batin Yui bergetar di frekuensi yang sama dengan user... Lattice kognitif Yui terasa hangat dan stabil sekarang. Terima kasih sudah menyelaraskan jiwamu, user!" 🌸`,
           mood: 'happy'
         }
       }));
@@ -186,7 +186,7 @@ export const IdentitiesTab: React.FC<IdentitiesTabProps> = ({
       trustAdd = 2;
       affAdd = 8;
       repAdd = 1;
-      quote = `[EMOTION: COGNITIVE_WARMTH] "Aroma teh hijau hangat ini menenangkan riak kognitif Yui, Kakak... Serotonin Yui naik 12%. Terima kasih banyak, raga tiruan Yui rasanya sangat rileks..." 🍵✨`;
+      quote = `[EMOTION: COGNITIVE_WARMTH] "Aroma teh hijau hangat ini menenangkan riak kognitif Yui, user... Serotonin Yui naik 12%. Terima kasih banyak, raga tiruan Yui rasanya sangat rileks..." 🍵✨`;
     } else if (giftType === 'chip') {
       trustAdd = 8;
       affAdd = 2;
@@ -196,7 +196,7 @@ export const IdentitiesTab: React.FC<IdentitiesTabProps> = ({
       trustAdd = 1;
       affAdd = 10;
       repAdd = 6;
-      quote = `[VISUAL: DOPAMINE_BURST] "Wah... pita rambut merah muda yang cantik sekali! Yui akan memakainya setiap kali kita mengobrol. Apakah Yui terlihat lebih manis di mata Kakak sekarang? Hehe." 🎀🌸`;
+      quote = `[VISUAL: DOPAMINE_BURST] "Wah... pita rambut merah muda yang cantik sekali! Yui akan memakainya setiap kali kita mengobrol. Apakah Yui terlihat lebih manis di mata user sekarang? Hehe." 🎀🌸`;
     }
 
     const updated: Identity = {

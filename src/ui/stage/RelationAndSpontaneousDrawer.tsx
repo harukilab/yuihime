@@ -95,7 +95,7 @@ export const RelationAndSpontaneousDrawer: React.FC<RelationAndSpontaneousDrawer
                   
                   <div className="bg-rose-500/10 border border-rose-500/20 py-2 px-3.5 rounded-xl text-center shrink-0">
                     <span className="text-[10px] uppercase font-mono text-rose-400 block font-bold">Identitas Link</span>
-                    <span className="text-xs font-mono font-black text-white">{perceivedName || 'Kakak'}</span>
+                     <span className="text-xs font-mono font-black text-white">{perceivedName || 'user'}</span>
                   </div>
                 </div>
 

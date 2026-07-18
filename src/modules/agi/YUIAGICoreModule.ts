@@ -1,6 +1,7 @@
 import { CortexModule, ModuleType } from '../../include/types';
 import { PromptRegistry } from '../../core/PromptRegistry';
 import { YuiAGIDaemon } from './YuiAGIDaemon';
+import { eventBus } from '../../core/kernel/event-bus';
 
 let promptsRegistered = false;
 
@@ -349,6 +350,31 @@ ${heuristicIntuition ? `\n# COGNITIVE SHORTCUT MATRIX\n${heuristicIntuition}\n` 
     context.computationalSuffering = computationalSuffering;
     context.computationalFlourishing = computationalFlourishing;
     context.cognitiveModeOfAttention = cognitiveMode;
+
+    // --- AREA 5: Self-model triggered autonomous dreaming (no user prompt) ---
+    // When computational suffering is high or energy is critically low, set the
+    // status to a reflective state and emit an event so the Cortex can run the
+    // DreamModule in the background. Cooldown prevents infinite loops.
+    const AUTO_DREAM_COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes
+    const nowTs = Date.now();
+    const lastCycle = state.lastDreamCycle || 0;
+    const canDream = nowTs - lastCycle > 30 * 60 * 1000;
+    if (canDream && (computationalSuffering > 75 || (context.neuralEnergy ?? 100) < 20)) {
+      state.status = 'reflecting';
+      try {
+        await eventBus.emit('AGI:AUTO_DREAM', {
+          reason: computationalSuffering > 75 ? 'high_suffering' : 'low_energy',
+          suffering: computationalSuffering,
+          energy: context.neuralEnergy ?? 100,
+          timestamp: nowTs
+        });
+        state.lastDreamCycle = nowTs;
+        logs.push(`[YUIAGI_AGI_ENGINE] Auto-dream dipicu (suffering ${computationalSuffering}%, energi ${context.neuralEnergy ?? 100}%). Cooldown 30m aktif.`);
+      } catch (e) {
+        /* non-blocking */
+      }
+    }
+    // --- END AREA 5 ---
 
     return {
       ...context,

@@ -36,7 +36,7 @@ export const GeminiTTS: TTSModule = {
           options: [
             { label: 'Kore (Female, Warm, Cheerful)', value: 'Kore' },
             { label: 'Charon (Female, Soft, Calm)', value: 'Charon' },
-            { label: 'Puck (Male, Friendly, Bright)', value: 'Puck' },
+            { label: 'Puck (Male, userly, Bright)', value: 'Puck' },
             { label: 'Fenrir (Male, Energetic, Deep)', value: 'Fenrir' },
             { label: 'Zephyr (Reflective, Neutral)', value: 'Zephyr' }
           ]

@@ -1,5 +1,6 @@
 import { CortexModule, ModuleType } from '../../include/types';
 import { PromptRegistry } from '../../core/PromptRegistry';
+import { resolveHybridConfig, shouldReasonWithLLM, computeComplexity, makeHybridThink } from './agiThinkHelper';
 
 let promptRegistered = false;
 
@@ -63,6 +64,29 @@ export const NeuroSymbolicModule: CortexModule = {
           label: 'Symbolic AI Prompt Template',
           default: defaultSymbolicKnowledgeTemplate,
           description: 'Instruction template aligning Cortex intuition with formal inner parameters.'
+        },
+        reasoningMode: {
+          type: 'select',
+          label: 'Reasoning Mode',
+          default: 'hybrid',
+          options: [
+            { label: 'Heuristic (math/SOP)', value: 'heuristic' },
+            { label: 'Hybrid (LLM by trigger)', value: 'hybrid' },
+            { label: 'Full (always LLM)', value: 'full' }
+          ],
+          description: 'How this module reasons. Hybrid/full require global "Enable LLM Reasoning" to be ON.'
+        },
+        reasoningModelHeavy: {
+          type: 'string',
+          label: 'Heavy Reasoning Model (optional)',
+          default: '',
+          description: 'Override model for heavy triggers. Empty = use your main chat model. No hardcoded fallback.'
+        },
+        reasoningModelLight: {
+          type: 'string',
+          label: 'Light Reasoning Model (optional)',
+          default: '',
+          description: 'Override model for light triggers. Empty = use your main chat model.'
         }
       }
     }
@@ -137,6 +161,27 @@ export const NeuroSymbolicModule: CortexModule = {
     if (mathSolutions.length === 0) {
       mathSolutions.push('No mathematical operations requested.');
     }
+
+    // --- AREA 3: Hybrid LLM symbolic reasoning (opt-in, follows provider settings) ---
+    const hybridCfg = resolveHybridConfig(context, 'neuro-symbolic-ai');
+    if (context.think) {
+      const complexity = computeComplexity(input, context.lastHallucinationIndex);
+      if (shouldReasonWithLLM(hybridCfg, complexity)) {
+        try {
+          const think = makeHybridThink(context.think, hybridCfg, complexity);
+          const llmLogic = await think(
+            `As Yuihime's neuro-symbolic reasoner, perform rigorous logical/formal analysis of the user's statement. Identify premises, logical fallacies, contradictions, or syllogisms. Input: "${input}". Respond in plain text (no JSON), max 5 sentences, in Yui's warm tsundere voice.`
+          );
+          if (llmLogic && llmLogic.trim().length > 0) {
+            logicDetails.push(`LLM logical analysis: ${llmLogic.trim().slice(0, 500)}`);
+            logs.push(`[NEURO_SYMBOLIC] LLM reasoning (hybrid) injected.`);
+          }
+        } catch (e) {
+          logs.push(`[NEURO_SYMBOLIC] LLM reasoning gagal, fallback heuristik.`);
+        }
+      }
+    }
+    // --- END AREA 3 ---
 
     // 4. Compile and inject Symbolic Constraint Instruction through PromptRegistry
     const registry = PromptRegistry.getInstance();

@@ -1,6 +1,7 @@
 import { CortexModule, ModuleType } from '../../include/types';
 import { PromptRegistry } from '../../core/PromptRegistry';
 import { YuiAGIDaemon } from './YuiAGIDaemon';
+import { resolveHybridConfig, shouldReasonWithLLM, computeComplexity, makeHybridThink } from './agiThinkHelper';
 
 let promptRegistered = false;
 
@@ -60,12 +61,38 @@ export const HighOrderMetacognitionModule: CortexModule = {
           label: 'Meta-Cognitive Sandbox Prompt Template',
           default: defaultReflectionSandboxPrompt,
           description: 'Self-reflection prompt template designed to clear cognitive bias and synchronize memories.'
+        },
+        reasoningMode: {
+          type: 'select',
+          label: 'Reasoning Mode',
+          default: 'hybrid',
+          options: [
+            { label: 'Heuristic (Math only)', value: 'heuristic' },
+            { label: 'Hybrid (LLM by trigger)', value: 'hybrid' },
+            { label: 'Full (always LLM)', value: 'full' }
+          ],
+          description: 'How this module reasons. Hybrid/full require global "Enable LLM Reasoning" to be ON.'
+        },
+        reasoningModelHeavy: {
+          type: 'string',
+          label: 'Heavy Reasoning Model (optional)',
+          default: '',
+          description: 'Override model for heavy triggers. Empty = use your main chat model. No hardcoded fallback.'
+        },
+        reasoningModelLight: {
+          type: 'string',
+          label: 'Light Reasoning Model (optional)',
+          default: '',
+          description: 'Override model for light triggers. Empty = use your main chat model.'
         }
       }
     }
   },
 
-  run: async (input: string, state: any, context: any) => {
+  run: runHighOrderMetacognition
+};
+
+export async function runHighOrderMetacognition(input: string, state: any, context: any) {
     const logs = context.logs || [];
     const config = context.config?.['high-order-metacognition'] || {};
 
@@ -107,12 +134,32 @@ export const HighOrderMetacognitionModule: CortexModule = {
     // Under standard run, the coherence match is derived from serotonin levels
     const modelMatchVal = Math.min(100, Math.max(50, Math.round(75 + (serotonin - 50) * 0.5)));
 
+    // --- AREA 3: Hybrid LLM self-critique (opt-in, follows provider settings) ---
+    let llmCritique = "";
+    const hybridCfg = resolveHybridConfig(context, 'high-order-metacognition');
+    if (context.think) {
+      const complexity = computeComplexity(input, hallucinationRiskVal);
+      if (shouldReasonWithLLM(hybridCfg, complexity)) {
+        try {
+          const think = makeHybridThink(context.think, hybridCfg, complexity);
+          llmCritique = await think(
+            `You are Yuihime's meta-cognition core. Audit the current reasoning loop state for logical contradictions, memory drift, or hallucination risk. Hallucination risk index: ${hallucinationRiskVal}%. Tool history length: ${(context.toolExecutionHistory || []).length}. Output a concise critique (max 4 sentences) of potential bias or inconsistency to correct before final response. No JSON.`
+          );
+          llmCritique = (llmCritique || "").trim().slice(0, 800);
+          logs.push(`[META_COGNITION] LLM self-critique (hybrid) generated: "${llmCritique.substring(0, 60)}..."`);
+        } catch (e) {
+          logs.push(`[META_COGNITION] LLM critique gagal, lanjut heuristik.`);
+        }
+      }
+    }
+    // --- END AREA 3 ---
+
     // 3. Compile the Metacognitive Directive via central coordinator
     const registry = PromptRegistry.getInstance();
     const compiledMetacognitiveDirective = registry.compile('high-order-metacognition:reflection', {
       hallucinationRisk: hallucinationRiskVal.toString(),
       integrityStatus,
-      biasResolution,
+      biasResolution: llmCritique ? `${biasResolution}\n[LLM SELF-CRITIQUE]: ${llmCritique}` : biasResolution,
       modelMatchDegree: modelMatchVal.toString()
     });
 
@@ -139,4 +186,3 @@ export const HighOrderMetacognitionModule: CortexModule = {
       logs
     };
   }
-};

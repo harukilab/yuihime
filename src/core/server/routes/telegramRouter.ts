@@ -212,7 +212,7 @@ export function registerTelegramRoutes(app: express.Express, db: any) {
       } catch (tgSendErr: any) {
         console.error(`[SERVER_MSG] Telegraf sendMessage failed:`, tgSendErr.message || tgSendErr);
         return res.status(502).json({
-          error: `Gagal mengirimkan pesan Telegram ke Chat ID ${tg_id}: ${tgSendErr.message || tgSendErr}. Pastikan Kakak sudah mengirimkan perintah /start ke bot Telegram Yuihime dan tidak memblokir bot tersebut.`
+          error: `Gagal mengirimkan pesan Telegram ke Chat ID ${tg_id}: ${tgSendErr.message || tgSendErr}. Pastikan user sudah mengirimkan perintah /start ke bot Telegram Yuihime dan tidak memblokir bot tersebut.`
         });
       }
 

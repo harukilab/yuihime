@@ -278,7 +278,7 @@ export const CronManager: React.FC = () => {
               </label>
               <textarea
                 rows={5}
-                placeholder="e.g. Check the weather and send a short morning greeting to Kakak in a tsundere style."
+                placeholder="e.g. Check the weather and send a short morning greeting to user in a tsundere style."
                 value={formPrompt}
                 onChange={(e) => setFormPrompt(e.target.value)}
                 className="w-full bg-[#0d0d12] border border-white/5 rounded-xl px-3 py-2.5 text-zinc-200 placeholder:text-zinc-600 outline-none focus:border-cyan-500/30 focus:ring-1 focus:ring-cyan-500/10 transition-all font-sans resize-y min-h-[96px] leading-relaxed"

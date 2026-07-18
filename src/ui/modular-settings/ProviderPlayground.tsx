@@ -66,7 +66,7 @@ export const ProviderPlayground: React.FC<ProviderPlaygroundProps> = ({
   const [imgResultUrl, setImgResultUrl] = useState('');
 
   // States: Puter Txt2Speech
-  const [ttsText, setTtsText] = useState('Selamat pagi Kakak manis! Tetap ceria menjalani hari ini bersama Yuihime ya!');
+  const [ttsText, setTtsText] = useState('Selamat pagi user manis! Tetap ceria menjalani hari ini bersama Yuihime ya!');
   const [ttsVoice, setTtsVoice] = useState('id-ID-1');
   const [ttsResultUrl, setTtsResultUrl] = useState('');
   const [puterSpeechProviders, setPuterSpeechProviders] = useState<any[]>([]);

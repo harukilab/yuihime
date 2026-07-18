@@ -205,7 +205,7 @@ async function handleChat(message: string) {
 
   if (!apiConnected) {
     console.log(`\n${YELLOW}[Standalone Mode] Menstimulasi respon batin luring Yuihime...${RESET}`);
-    console.log(`${CYAN}Yuihime:${RESET} "Kakak! Maaf sirkuit utama batin Yui sedang offline (server mati). Tolong nyalakan dulu servernya agar Yui bisa berpikir jernih ya! Tapi tenang, Yui tetap menyayangi Kakak!"\n`);
+    console.log(`${CYAN}Yuihime:${RESET} "user! Maaf sirkuit utama batin Yui sedang offline (server mati). Tolong nyalakan dulu servernya agar Yui bisa berpikir jernih ya! Tapi tenang, Yui tetap menyayangi user!"\n`);
     return;
   }
 
@@ -294,7 +294,7 @@ async function startRepl() {
     switch (baseCmd) {
       case "exit":
       case "quit":
-        console.log(`\n${GREEN}Sampai jumpa lagi Kakak! Sirkuit batin Yui tetap siaga.${RESET}\n`);
+        console.log(`\n${GREEN}Sampai jumpa lagi user! Sirkuit batin Yui tetap siaga.${RESET}\n`);
         process.exit(0);
         break;
 

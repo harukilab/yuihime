@@ -13,7 +13,7 @@ export const SendStatusUpdateTool: ToolModule = {
       properties: {
         message: {
           type: "string",
-          description: "Ucapan transisi manis yang diucapkan asisten (misal: 'Yui cari datanya dulu ya Kak!~')"
+          description: "Ucapan transisi manis yang diucapkan asisten (misal: 'Yui cari datanya dulu ya user!~')"
         },
         animation: {
           type: "string",
@@ -59,7 +59,7 @@ export const SendFinalReplyTool: ToolModule = {
   metadata: {
     id: 'final_answer',
     name: 'final_answer',
-    description: 'Mengirimkan keputusan akhir atau respons obrolan manis verbal lahiriah murni kepada Kakak (user) setelah seluruh tugas selesai dilakukan.',
+    description: 'Mengirimkan keputusan akhir atau respons obrolan manis verbal lahiriah murni kepada the user setelah seluruh tugas selesai dilakukan.',
     version: '1.0.0',
     type: ModuleType.TOOL,
     order: 202,
@@ -68,7 +68,7 @@ export const SendFinalReplyTool: ToolModule = {
       properties: {
         speech: {
           type: "string",
-          description: "Jawaban murni, hangat, dan manis berkarakter yang ditujukan langsung ke Kakak (tidak boleh memuat XML, JSON, atau data log)."
+          description: "Jawaban murni, hangat, dan manis berkarakter yang ditujukan langsung ke the user (tidak boleh memuat XML, JSON, atau data log)."
         },
         animations: {
           type: "array",

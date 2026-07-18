@@ -80,6 +80,6 @@ export const OfficialChatProvider: ProviderModule = {
       console.warn('[OFFICIAL_LOCAL_CHAT] Markov dynamic routing failed, falling back to clean text signature:', markovErr.message);
     }
 
-    return `[Lokal] Halo Kak! Saat ini sirkuit kognitif Yui sedang beroperasi secara mandiri tanpa internet. Tapi Yui akan selalu menemani Kakak di sini kok! 🌸`;
+    return `[Lokal] Halo user! Saat ini sirkuit kognitif Yui sedang beroperasi secara mandiri tanpa internet. Tapi Yui akan selalu menemani user di sini kok! 🌸`;
   }
 };

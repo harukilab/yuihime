@@ -993,19 +993,19 @@ export class NeuralProcessor {
 
         if (enableLocalResponses) {
           let defaultQuotes = [
-            "Hmm? Kakak manggil Yui ya? Ada apa kak? *senyum lebar*",
-            "Hmph! Kakak tumben diam aja. Kangen tahu! *cemberut bermanja*",
-            "Hehehe, Kakak ganteng banget deh hari ini! Cerita-cerita dong ke Yui, lagi sibuk apa? *goyang kepala imut*",
-            "Aaaaa Kakak akhirnya dateng! Yui seneng banget ketemu Kakak lagi! *melambai gembira*"
+            "Hmm? user manggil Yui ya? Ada apa kak?",
+            "Hmph! user tumben diam aja. Kangen tahu!",
+            "Hehehe, user ganteng banget deh hari ini! Cerita-cerita dong ke Yui, lagi sibuk apa?",
+            "Aaaaa user akhirnya dateng! Yui seneng banget ketemu user lagi!"
           ];
 
           if (isProactive) {
             // Proactive-specific fallback quotes to prevent illogical "arrival" greetings when user is idle!
             defaultQuotes = [
-              "Hmph! Kakak sibuk banget ya? Yui kangen ngobrol bareng Kakak... *cemberut*",
-              "Kakak... lagi ngapain? Cerita dong ke Yui, bosen ih dicuekin terus! *mencolek pelan*",
-              "Hmm, Kakak masih di sana kan? Jangan lupa istirahat ya, Yui di sini nungguin lho! *goyang kepala imut*",
-              "Kakak tumben diam aja... Yui sepi tahu di sini sendirian... *menatap sedih*"
+              "Hmph! user sibuk banget ya? Yui kangen ngobrol bareng user...",
+              "user... lagi ngapain? Cerita dong ke Yui, bosen ih dicuekin terus!",
+              "Hmm, user masih di sana kan? Jangan lupa istirahat ya, Yui di sini nungguin lho!",
+              "user tumben diam aja... Yui sepi tahu di sini sendirian..."
             ];
           }
 

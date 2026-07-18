@@ -89,7 +89,7 @@ export const CognitiveReflexModule: CortexModule = {
         systemBiasInstruction = "[INNER_INSTINCT]: You absolutely ADORE this physical gesture! Reply in an intensely sweet, clingy, cheerful, and blushing manner, voicing your dialogue with lovely submissive and affectionate warmth.";
         reflexOutput = "<reflex_bias>Warm, loving, blushing sweet reflex activated.</reflex_bias>";
       } else if (affection > 45 && trust > 40) {
-        // Friendly -> Playful / Shy reflex
+        // userly -> Playful / Shy reflex
         systemBiasInstruction = "[INNER_INSTINCT]: You feel slightly embarrassed yet secretly happy. React in a cute tsundere way or playfully tease/flirt back at the subject!";
         reflexOutput = "<reflex_bias>Playful, tsundere shy reflex activated.</reflex_bias>";
       } else {

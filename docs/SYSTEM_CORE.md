@@ -26,7 +26,7 @@ The Cortex is the central processing unit for all cognitive tasks.
 
 ---
 
-## 2. Advanced Features (Nanobot & Zenith Manifestation)
+## 2. Advanced Features (Nanobot & Cortex Background Loop)
 
 ### Nanobot Framework
 Nanobots are background micro-processes that operate independently of the main chat loop.
@@ -34,9 +34,9 @@ Nanobots are background micro-processes that operate independently of the main c
 - **Mood Stabilizer:** Gently drifts the agent's mood back toward its baseline personality over time.
 - **System Sentinel:** Monitors internal registry health and API efficiency.
 
-### Autonomous Loop (Zenith Manifestation)
+### Autonomous Loop (Cortex Background Loop)
 The "Auto-Pilot" mode allows the agent to initiate internal thoughts and tool usage without direct user input.
-- **Manifestasi Zenith:** Agen dapat memutuskan untuk meneliti topik, membersihkan database, atau "berpikir" tentang hubungannya dengan subjek (user) secara mandiri.
+- **Cortex Background Loop:** The agent can decide to research topics, clean up the database, or "think" about its relationship with the user independently.
 - **Autonomous Feedback:** Tasks can loop until a self-defined "Success Condition" is met.
 
 ---

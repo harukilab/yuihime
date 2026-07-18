@@ -285,12 +285,12 @@ export function registerCortexRoutes(app: express.Express, db: any) {
         const id = "web_usr_" + Math.random().toString(36).substr(2, 9);
         db.prepare(`
           INSERT INTO identities (id, perceivedName, realName, habits, importantFacts, linkedAccounts, lastInteraction, trust, affection, reputation)
-          VALUES (?, ?, ?, '[]', '[]', ?, ?, 50, 50, 50)
-        `).run(id, senderName, senderName, JSON.stringify([platformTag]), Date.now());
+          VALUES (?, ?, 'Belum diisikan', '[]', '[]', ?, ?, 50, 50, 50)
+        `).run(id, senderName, JSON.stringify([platformTag]), Date.now());
         receiverIdentity = {
           id,
           perceivedName: senderName,
-          realName: senderName,
+          realName: 'Belum diisikan',
           habits: [],
           importantFacts: [],
           linkedAccounts: [platformTag],
@@ -461,7 +461,7 @@ export function registerCortexRoutes(app: express.Express, db: any) {
               sendSse("suspended", {
                 suspended: true, 
                 taskId: currentTaskId,
-                message: "Tugas ditangguhkan demi mendahulukan interaksi prioritas tinggi Kakak."
+                message: "Tugas ditangguhkan demi mendahulukan interaksi prioritas tinggi user."
               });
               res.end();
               return;
@@ -498,7 +498,7 @@ export function registerCortexRoutes(app: express.Express, db: any) {
             success: true, 
             suspended: true, 
             taskId: currentTaskId,
-            message: "Tugas ditangguhkan demi mendahulukan interaksi prioritas tinggi Kakak." 
+            message: "Tugas ditangguhkan demi mendahulukan interaksi prioritas tinggi user." 
           });
         }
         throw thinkErr;
@@ -637,7 +637,10 @@ export function registerCortexRoutes(app: express.Express, db: any) {
           WHERE id = ?
         `).run(
           result.perceivedNameUpdate || receiverIdentity.perceivedName,
-          result.viewerProfileUpdate?.realName || receiverIdentity.realName || senderName,
+          result.viewerProfileUpdate?.realName || 
+            (result.perceivedNameUpdate && (!receiverIdentity.realName || receiverIdentity.realName === 'Belum diisikan' || receiverIdentity.realName === senderName)
+              ? result.perceivedNameUpdate
+              : receiverIdentity.realName) || senderName,
           JSON.stringify(currentHabits),
           JSON.stringify(currentFacts),
           JSON.stringify(currentLinks),
@@ -823,12 +826,12 @@ export function registerCortexRoutes(app: express.Express, db: any) {
         const id = "api_usr_" + Math.random().toString(36).substr(2, 9);
         db.prepare(`
           INSERT INTO identities (id, perceivedName, realName, habits, importantFacts, linkedAccounts, lastInteraction, trust, affection, reputation)
-          VALUES (?, ?, ?, '[]', '[]', ?, ?, 50, 50, 50)
-        `).run(id, senderName, senderName, JSON.stringify([platformTag]), Date.now());
+          VALUES (?, ?, 'Belum diisikan', '[]', '[]', ?, ?, 50, 50, 50)
+        `).run(id, senderName, JSON.stringify([platformTag]), Date.now());
         receiverIdentity = {
           id,
           perceivedName: senderName,
-          realName: senderName,
+          realName: 'Belum diisikan',
           habits: [],
           importantFacts: [],
           linkedAccounts: [platformTag],
@@ -1058,7 +1061,10 @@ export function registerCortexRoutes(app: express.Express, db: any) {
               WHERE id = ?
             `).run(
               result.perceivedNameUpdate || receiverIdentity.perceivedName,
-              result.viewerProfileUpdate?.realName || receiverIdentity.realName || senderName,
+              result.viewerProfileUpdate?.realName || 
+                (result.perceivedNameUpdate && (!receiverIdentity.realName || receiverIdentity.realName === 'Belum diisikan' || receiverIdentity.realName === senderName)
+                  ? result.perceivedNameUpdate
+                  : receiverIdentity.realName) || senderName,
               JSON.stringify(currentHabits),
               JSON.stringify(currentFacts),
               JSON.stringify(currentLinks),
@@ -1130,7 +1136,7 @@ export function registerCortexRoutes(app: express.Express, db: any) {
           processResultAndSave(result);
         } catch (thinkErr: any) {
           if (thinkErr.message && thinkErr.message.includes("TASK_SUSPENDED")) {
-            sendOaiSse("\n[Tugas ditangguhkan demi mendahulukan interaksi prioritas tinggi Kakak.]", "stop");
+            sendOaiSse("\n[Tugas ditangguhkan demi mendahulukan interaksi prioritas tinggi user.]", "stop");
             res.write("data: [DONE]\n\n");
             res.end();
             return;

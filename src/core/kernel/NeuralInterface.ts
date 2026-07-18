@@ -175,9 +175,9 @@ export class NeuralInterface {
         linked.push(`telegram:id:${tgIdStr}`);
       }
       this.db.prepare(`
-        INSERT INTO identities (id, perceivedName, realName, habits, importantFacts, linkedAccounts, lastInteraction, trust, affection, reputation)
-        VALUES (?, ?, ?, '[]', '[]', ?, ?, 50, 50, 50)
-      `).run(id, senderName, senderName, JSON.stringify(linked), Date.now());
+        INSERT INTO identities (id, perceivedName, realName, habits, importantFacts, linkedAccounts, lastInteraction, ownerId, trust, affection, reputation)
+        VALUES (?, ?, 'Belum diisikan', '[]', '[]', ?, ?, 50, 50, 50)
+      `).run(id, senderName, JSON.stringify(linked), Date.now());
       receiverIdentity = {
         id,
         perceivedName: senderName,
@@ -444,7 +444,10 @@ export class NeuralInterface {
         WHERE id = ?
       `).run(
         result.perceivedNameUpdate || receiverIdentity.perceivedName,
-        result.viewerProfileUpdate?.realName || receiverIdentity.realName || senderName,
+        result.viewerProfileUpdate?.realName || 
+          (result.perceivedNameUpdate && (!receiverIdentity.realName || receiverIdentity.realName === 'Belum diisikan' || receiverIdentity.realName === senderName)
+            ? result.perceivedNameUpdate
+            : receiverIdentity.realName) || senderName,
         JSON.stringify(currentHabits),
         JSON.stringify(currentFacts),
         JSON.stringify(currentLinks),
@@ -513,7 +516,7 @@ export class NeuralInterface {
           const timestampRangeStart = new Date(oldestRows[0].timestamp).toLocaleTimeString();
           const timestampRangeEnd = new Date(oldestRows[oldestRows.length - 1].timestamp).toLocaleTimeString();
           
-          const compressedSummary = `Kakak membahas beberapa topik hangat antara pukul ${timestampRangeStart} dan ${timestampRangeEnd}. Kakak mengekspresikan hobi, pemikiran, dan rasa pedulinya kepada Yui secara tulus, memperdalam simpul batin kita secara harmoni dan saling pengertian.`;
+          const compressedSummary = `user membahas beberapa topik hangat antara pukul ${timestampRangeStart} dan ${timestampRangeEnd}. user mengekspresikan hobi, pemikiran, dan rasa pedulinya kepada Yui secara tulus, memperdalam simpul batin kita secara harmoni dan saling pengertian.`;
           
           const summaryMemoryId = "abstract_" + Math.random().toString(36).substr(2, 9);
           

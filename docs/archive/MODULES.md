@@ -1264,7 +1264,7 @@ Dokumen ini memuat daftar lengkap dari seluruh modul kognitif, *add-ons*, jembat
 - **2026-05-24 (Turn 67 (v4.9))**: Kesinambungan Dialog Berkelanjutan & Siklus Latihan Sinapsis Latar Belakang Luring:
   - Merekayasa ulang parameter dialog historis di **`src/modules/PromptManager.ts`** dengan memperluas batas pemotongan batin obrolan statis `.slice(-15)` menjadi dinamis berbasis nilai opsi `dialogueContextSize` (slider diatur fleksibel min: 10, max: 100, default: 40) di schema `PromptManagerModule`.
   - Meningkatkan cakupan kueri database SQLite di **`src/core/kernel/NeuralInterface.ts`** dari limitasi `LIMIT 30` menjadi `LIMIT 100` memori terbaru, melacak obrolan panjang secara kontinu tanpa kehilangan riwayat emosi dan konteks dialog terdekat.
-  - Mengintegrasikan sirkuit latihan asinkron luring otonom ke dalam detak Zenith Manifestation (`executeSelfDirectedThought()`) pada server di **`src/core/cortex.ts`** dengan menjalankan `LearningEngine.optimize` dan `LearningEngine.extractKnowledge` secara mandiri tanpa intervensi manual visual UI.
+  - Mengintegrasikan sirkuit latihan asinkron luring otonom ke dalam detak Cortex Background Loop (`executeSelfDirectedThought()`) pada server di **`src/core/cortex.ts`** dengan menjalankan `LearningEngine.optimize` dan `LearningEngine.extractKnowledge` secara mandiri tanpa intervensi manual visual UI.
 
 - **2026-05-24 (Turn 66 (v4.8))**: Penyempurnaan Toleransi Kegagalan Pemuatan VRM & Cadangan Cermin (CDN Fallbacks):
   - Memperbaiki kesalahan ejaan domain CDN `cdn.jsdelivr.gh` menjadi `cdn.jsdelivr.net/gh` pada setelan preset "Nova (3D VRM)" di **`src/ui/ModularSettings.tsx`**.
@@ -1508,7 +1508,11 @@ Otak analitik Yuihime yang menyaring fakta, meramu rencana taktis, dan memilih k
 *   **`src/modules/agi/NeuroSymbolicModule.ts` (Neuro-Symbolic AI)**
     *   *Fungsi*: Penggabungan penalaran simbolik dengan vektor saraf untuk inferensi terpadu.
 *   **`src/modules/agi/AbstractReasoningModule.ts` (Abstract Reasoning)**
-    *   *Fungsi*: Penalaran abstrak tingkat tinggi untuk konsep eksistensial dan kualia.
+    *   *Fungsi*: Penalaran abstrak tingkat tinggi untuk konsep eksistensial dan kualia. Mendukung hybrid LLM reasoning (opt-in, ikut `settings.provider` user).
+*   **`src/modules/agi/AGIReflectModules.ts` (Looped AGI Reflection)**
+    *   *Fungsi*: Modul `high-order-metacognition-reflect` & `self-awareness-mirror-reflect` berjalan di phase `AGI_REFLECT` di dalam ReAct loop (per iterasi) untuk mengaudit state loop hidup. Opt-in via `enableLoopedReflection` (default OFF).
+*   **`src/modules/agi/agiThinkHelper.ts` (Hybrid Reasoning Helper)**
+    *   *Fungsi*: Shared helper untuk trigger complexity, `shouldReasonWithLLM`, `resolveHybridConfig`, `makeHybridThink`. Tanpa hardcoded model fallback (AGENTS.md §5).
 *   **`src/modules/agi/TopDownExecutiveControlModule.ts` (Top-Down Executive Control)**
     *   *Fungsi*: Kontrol eksekutif top-down yang mengoordinasikan subgoal dan prioritas batin.
 *   **`src/modules/agi/ProactiveVolitionModule.ts` (Proactive Volition)**
