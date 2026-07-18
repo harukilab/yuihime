@@ -114,7 +114,7 @@ export function normalizeToolCall(tc: any): any {
   }
 
   // Return an OpenAI-native tool call enriched with backward-compatible aliases
-  // (`tool`, `name`, `args`) so downstream modules (NeuralLoop, puterWrapper, executor)
+  // (`tool`, `name`, `args`) so downstream modules (NeuralLoop, executor)
   // keep working while the canonical contract is preserved.
   return {
     id,

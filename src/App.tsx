@@ -41,7 +41,6 @@ import { AdaptiveMatrix } from './ui/AdaptiveMatrix';
 import { BugReportBoundary } from './ui/BugReportBoundary';
 
 import { eventBus } from './core/kernel/event-bus';
-import { PuterAdapter } from './core/adapters/PuterAdapter';
 import { useChatSessions } from './ui/hooks/useChatSessions';
 import { TabRegistry } from './ui/tabsRegistry';
 
@@ -1106,12 +1105,12 @@ export default function App() {
             `web_${activeSessionId}`,
             'web'
           );
-          const puterCompatibleResult = PuterAdapter.adaptCortexToPuter(result);
+
           
           setReasoningIterations(result.iterations || []);
-          addLog('agent', puterCompatibleResult.response);
+          addLog('agent', result.response);
           
-          setAnimations([...(puterCompatibleResult.animations || [])]);
+          setAnimations([...(result.animations || [])]);
 
           const finalMood = Soul.updateMood(state.mood, result.nextMood);
           setState(prev => ({ 
@@ -1186,10 +1185,10 @@ export default function App() {
           `web_${activeSessionId}`,
           'web'
         );
-        const puterCompatibleResult = PuterAdapter.adaptCortexToPuter(result);
-        addLog('agent', puterCompatibleResult.response);
-        setAnimations([...(puterCompatibleResult.animations || [])]);
-        setLastAgentResponse(puterCompatibleResult.response);
+
+        addLog('agent', result.response);
+        setAnimations([...(result.animations || [])]);
+        setLastAgentResponse(result.response);
       } catch (e) {
         console.error("Reminder Reaction Failed:", e);
       } finally {
@@ -1488,13 +1487,13 @@ export default function App() {
             `web_${activeSessionId}`,
             'web'
           );
-          const puterCompatibleResult = PuterAdapter.adaptCortexToPuter(result);
+
           
           setReasoningIterations(result.iterations || []);
-          if (puterCompatibleResult.response && puterCompatibleResult.response.trim()) {
-            addLog('agent', puterCompatibleResult.response);
+          if (result.response && result.response.trim()) {
+            addLog('agent', result.response);
           }
-          setAnimations([...(puterCompatibleResult.animations || [])]);
+          setAnimations([...(result.animations || [])]);
           
           
           const sentimentImpact = result.sentiment !== undefined ? {
@@ -2028,7 +2027,7 @@ export default function App() {
       }
       
       
-      const puterCompatibleResult = PuterAdapter.adaptCortexToPuter(result);
+
       
       const latency = Date.now() - startTime;
       
@@ -2129,27 +2128,8 @@ export default function App() {
       const updatedMemories = [...currentMemories, ...savedMemories];
       setMemories(updatedMemories);
       
-      setAnimations([...(puterCompatibleResult.animations || [])]);
+      setAnimations([...(result.animations || [])]);
       setReasoningIterations(result.iterations || []);
-      
-      
-      if (puterCompatibleResult.actions && puterCompatibleResult.actions.length > 0) {
-        for (const action of puterCompatibleResult.actions) {
-          console.log('[PUTER_ACTION]', action.type, action);
-          
-          if (action.type === 'message' && (globalThis as any).puter?.apps?.notify) {
-            try {
-              await (globalThis as any).puter.apps.notify({
-                title: 'Yuihime',
-                body: action.content,
-                app_id: action.target
-              });
-            } catch (e) {
-              console.warn('[PUTER] Notify failed:', e);
-            }
-          }
-        }
-      }
       
       
       if (result.actions && result.actions.length > 0) {
@@ -2192,8 +2172,8 @@ export default function App() {
       }
 
       
-      if (puterCompatibleResult.response && puterCompatibleResult.response.trim()) {
-        const cleanResponse = puterCompatibleResult.response.trim();
+      if (result.response && result.response.trim()) {
+        const cleanResponse = result.response.trim();
         const normResponse = normalizeForComparison(cleanResponse);
         if (llmStreamingEnabled) {
           setLogs(prev => {
@@ -2509,8 +2489,8 @@ export default function App() {
         `web_${activeSessionId}`,
         'web'
       );
-      const puterCompatibleResult = PuterAdapter.adaptCortexToPuter(result);
-      addLog('agent', `[MEMORY_ECHO_REFLEX]\n${puterCompatibleResult.response}`);
+
+      addLog('agent', `[MEMORY_ECHO_REFLEX]\n${result.response}`);
       
       
       let updatedMood = Soul.updateMood(state.mood, { joy: 5, irritation: -5 });

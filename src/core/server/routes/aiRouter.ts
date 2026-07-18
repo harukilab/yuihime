@@ -298,23 +298,6 @@ export function registerAiRoutes(app: express.Express, db: any) {
         });
       }
 
-      if (cleanProvider === 'puter-neural-provider' || cleanProvider === 'puter-tts' || cleanProvider === 'puter') {
-        if (!apiKey) {
-          return res.json({
-            valid: true,
-            source: 'puter_default',
-            maskedKey: 'Default Puter Cloud Active (No Optional Token)'
-          });
-        } else {
-          const masked = apiKey.length > 8 ? `${apiKey.slice(0, 4)}...${apiKey.slice(-4)}` : '***';
-          return res.json({
-            valid: true,
-            source: 'puter_custom_auth',
-            maskedKey: `Puter Premium Token Active [${masked}]`
-          });
-        }
-      }
-
       if (cleanProvider === 'gemini') {
         const actualKey = apiKey || process.env.GEMINI_API_KEY;
         if (!actualKey) {
@@ -370,32 +353,6 @@ export function registerAiRoutes(app: express.Express, db: any) {
     }
   });
 
-  app.post("/api/puter/verify", async (req, res) => {
-    try {
-      const { token } = req.body;
-      if (!token) {
-        return res.json({ success: false, error: "Puter token is required" });
-      }
-      
-      const response = await fetch("https://api.puter.com/puterai/chat/models/details", {
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "X-Puter-Token": token
-        }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        res.json({ success: true, message: "Puter token verified successfully via REST api connection.", models: data.models || [] });
-      } else {
-        const errText = await response.text();
-        res.json({ success: false, error: `Puter API returned HTTP status ${response.status}: ${errText}` });
-      }
-    } catch (err: any) {
-      res.json({ success: false, error: err.message || "Network exception to Puter API" });
-    }
-  });
-
   app.get("/api/ai/models", async (req, res) => {
     try {
       const { apiKey, provider, baseUrl } = req.query;
@@ -427,8 +384,6 @@ export function registerAiRoutes(app: express.Express, db: any) {
         baseUrlOverride = provider === 'deepseek'
           ? 'https://api.deepseek.com/v1'
           : 'https://api.groq.com/openai/v1';
-      } else if (provider === 'puter-neural-provider' || provider === 'puter') {
-        activeProvider = 'puter-neural-provider';
       }
 
       const { SystemRegistry } = await import('../../registry.js');

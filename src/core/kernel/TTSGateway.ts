@@ -26,7 +26,7 @@ export class TTSGateway {
     const primaryProviderId = options.provider || settings.ttsProvider || 'browser';
 
     // Define fallback sequence (Rule: Failover chain)
-    const fallbackChain = [primaryProviderId, 'elevenlabs', 'browser', 'web-speech', 'puter-tts']
+    const fallbackChain = [primaryProviderId, 'elevenlabs', 'browser', 'web-speech']
       .filter((v, i, a) => v && a.indexOf(v) === i);
 
     let lastError: any = null;

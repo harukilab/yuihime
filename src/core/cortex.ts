@@ -23,7 +23,6 @@ import { stateMachine } from './kernel/state-machine';
 import { fetchCortexSettings } from './cortex/cortexSettings';
 import { executeCortexSelfDirectedThought } from './cortex/autonomousThought';
 import { normalizeToolCall } from './cortex/toolNormalizer';
-import { wrapForPuterConsciousness } from './cortex/puterWrapper';
 import { repairJsonFormatWithLLM } from './cortex/jsonRepairer';
 import { FastTrackRunner } from './cortex/fastTrackRunner';
 import { executeCortexThink } from './cortex/cortexThinkEngine';
@@ -53,10 +52,6 @@ export class Cortex {
     (Cortex as any)._latestInstance = this;
     Cortex.registerAutoDreamListener();
     Cortex.ensureInitialized().catch(e => console.error('[Cortex] Failed to ensure initialized:', e));
-  }
-
-  public static wrapForPuterConsciousness(thinkResult: any) {
-    return wrapForPuterConsciousness(thinkResult);
   }
 
   public setConfig(config: any) {

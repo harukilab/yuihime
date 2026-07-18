@@ -358,7 +358,7 @@ export function setupSchema(db: any) {
               SET prompt = name
               WHERE (prompt IS NULL OR trim(prompt) = '')
                 AND name IS NOT NULL AND trim(name) != ''
-                AND id NOT IN ('memory-consolidation', 'puter-hourly-check')
+                AND id NOT IN ('memory-consolidation')
                 AND id NOT LIKE 'file_auto_%'
                 AND id NOT LIKE 'fa_%'
             `).run();

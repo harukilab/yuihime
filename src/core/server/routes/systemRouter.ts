@@ -150,7 +150,7 @@ export function registerSystemRoutes(app: express.Express, db: any) {
       console.warn("[SERVER] Failed to clear cortex settings cache on setting update:", cacheErr);
     }
     
-    // Dynamically sync and load/reload plugins (e.g. Puter) post-settings update
+    // Dynamically sync and load/reload plugins post-settings update
     try {
       const { PluginManager } = await import('../../kernel/PluginManager.js');
       await PluginManager.getInstance().loadPlugins();

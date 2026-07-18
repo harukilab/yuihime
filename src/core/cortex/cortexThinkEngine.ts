@@ -28,7 +28,6 @@ import { CognitiveScheduler } from '../kernel/CognitiveScheduler';
 import { normalizeToolCall } from './toolNormalizer';
 import { buildToolResultMessages } from '../openaiTools';
 import { StreamExtractor } from './streamExtractors';
-import { wrapForPuterConsciousness } from './puterWrapper';
 import { repairJsonFormatWithLLM } from './jsonRepairer';
 import { FastTrackRunner } from './fastTrackRunner';
 import { extractBestJsonObject } from './jsonExtract';
@@ -141,13 +140,13 @@ export async function executeCortexThink(
         }
 
         if (finalResult) {
-          return wrapForPuterConsciousness(finalResult);
+          return finalResult;
         }
         throw new Error("Aliran data selesai tanpa memproses hasil kognisi akhir.");
       } else {
         const data = await response.json();
         if (data.success && data.result) {
-          return wrapForPuterConsciousness(data.result);
+          return data.result;
         }
         throw new Error(data.error || 'Server kognisi mengembalikan format tidak valid');
       }
@@ -1677,7 +1676,7 @@ Explain what you did or found in a completely natural, non-technical, cute way. 
   if (taskId) {
     CognitiveScheduler.completeTask(taskId);
   }
-  return wrapForPuterConsciousness(rawResult);
+  return rawResult;
   } catch (err: any) {
     if (err.message && (err.message.includes("TASK_SUSPENDED") || err.message.includes("COGNITIVE_LOOP_ABORTED"))) {
       throw err;
@@ -1716,6 +1715,6 @@ Explain what you did or found in a completely natural, non-technical, cute way. 
     };
     
     stateMachine.transitionTo('IDLE');
-    return wrapForPuterConsciousness(recoveryResult);
+    return recoveryResult;
   }
 }

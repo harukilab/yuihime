@@ -18,7 +18,6 @@ export interface CronTask {
 /** Built-in system jobs that do not run as chat prompts. */
 export const SYSTEM_CRON_IDS = new Set([
   'memory-consolidation',
-  'puter-hourly-check',
 ]);
 
 export function isSystemCronTask(id: string | undefined | null): boolean {
