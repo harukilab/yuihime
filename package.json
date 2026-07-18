@@ -17,7 +17,8 @@
   "pkg": {
     "assets": [
       "dist/**/*",
-      "src/**/*"
+      "src/**/*",
+      "!src/share/prompts/build-info.json"
     ],
     "targets": [
       "node20-linux-x64",
