@@ -15,4 +15,4 @@ coverage/
 
 # Ignore generated build manifest (artifact, not source of truth)
 src/share/prompts/build-info.json
-build-info.json
+/build-info.json
