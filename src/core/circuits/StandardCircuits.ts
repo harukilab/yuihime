@@ -1,7 +1,7 @@
 import { Soul } from '../soul';
 import { Cortex } from '../cortex';
 import { NeuralCircuit, NeuralCircuitConfig } from './NeuralCircuitFramework';
-import { StorageService } from '../../drivers/storage';
+import { StorageService } from '@shared/drivers/storage';
 
 export class MoodStabilizerCircuit extends NeuralCircuit {
   public readonly config: NeuralCircuitConfig = {

@@ -1,4 +1,4 @@
-import { CortexModule, ModuleType } from '../../include/types';
+import { CortexModule, ModuleType } from '@shared/include/types';
 import { PromptRegistry } from '../../core/PromptRegistry';
 import { resolveHybridConfig, shouldReasonWithLLM, computeComplexity, makeHybridThink } from './agiThinkHelper';
 

@@ -1,4 +1,4 @@
-import { ProviderModule, ModuleType } from '../../include/types';
+import { ProviderModule, ModuleType } from '@shared/include/types';
 
 export const GeminiProvider: ProviderModule = {
   metadata: {
@@ -285,7 +285,7 @@ export const GeminiProvider: ProviderModule = {
 
       return data.text || data.content || (typeof data === 'string' ? data : '');
     } catch (e: any) {
-      console.error("[GEMINI] Generation Error:", e.message || String(e));
+      // console.error("[GEMINI] Generation Error:", e.message || String(e));
       throw e;
     }
   }

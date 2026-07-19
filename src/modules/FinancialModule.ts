@@ -1,4 +1,4 @@
-import { CortexModule, ModuleType } from '../include/types';
+import { CortexModule, ModuleType } from '@shared/include/types';
 
 /**
  * Financial Module: Tracks donations, bits, and virtual currency.

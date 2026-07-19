@@ -1,4 +1,4 @@
-import { ToolModule, ModuleType } from '../include/types';
+import { ToolModule, ModuleType } from '@shared/include/types';
 
 export const SendStatusUpdateTool: ToolModule = {
   metadata: {

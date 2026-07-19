@@ -1,5 +1,5 @@
-import { ProviderModule, ModuleType } from '../../include/types';
-import { SystemRegistry } from '../../core/registry';
+import { ProviderModule, ModuleType } from '@shared/include/types';
+import { SystemRegistry } from '@shared/core/registry';
 
 /**
  * OfficialChatProvider: Local module that implements 'official_chat'.

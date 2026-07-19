@@ -1,6 +1,6 @@
 import { NeuralInterface } from "./NeuralInterface.js";
 import { Cortex } from "../cortex.js";
-import { eventBus } from "./event-bus.js";
+import { eventBus } from "@shared/core/kernel/event-bus";
 import { CognitiveScheduler } from "./CognitiveScheduler.js";
 import { PromptRegistry } from "../PromptRegistry.js";
 import { SettingsManager } from "./settings.js";

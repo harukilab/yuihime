@@ -1,5 +1,5 @@
-import { SystemRegistry } from './registry';
-import { ModuleType, ModulePhase } from '../include/types';
+import { SystemRegistry } from '@shared/core/registry';
+import { ModuleType, ModulePhase } from '@shared/include/types';
 import { CustomToolsLoader } from './CustomToolsLoader';
 
 let initPromise: Promise<void> | null = null;

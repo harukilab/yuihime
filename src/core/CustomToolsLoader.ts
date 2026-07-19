@@ -1,4 +1,4 @@
-import { SystemRegistry } from './registry';
+import { SystemRegistry } from '@shared/core/registry';
 
 export class CustomToolsLoader {
   private static registryPath = './src/core/custom_tools_registry.json';
@@ -61,7 +61,7 @@ export class CustomToolsLoader {
           return new Promise(async (resolve, reject) => {
             let shellTimeout = 120000;
             try {
-              const { SettingsManager } = await import('./kernel/settings.js');
+              const { SettingsManager } = await import('@/core/kernel/settings');
               const settings = await SettingsManager.getInstance().load();
               const toolExecutorConfig = settings['tool-executor'] || {};
               if (toolExecutorConfig.shellTimeoutMs !== undefined) {

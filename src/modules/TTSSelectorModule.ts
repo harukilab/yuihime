@@ -1,4 +1,4 @@
-import { CortexModule, ModuleType, AgentState } from '../include/types';
+import { CortexModule, ModuleType, AgentState } from '@shared/include/types';
 import { TTSGateway } from '../core/kernel/TTSGateway.js';
 
 /**

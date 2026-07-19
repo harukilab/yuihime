@@ -10,10 +10,10 @@ import {
   LearnedStrategy, 
   AgentPersona, 
   Identity
-} from '../include/types';
-import { SystemRegistry } from './registry';
+} from '@shared/include/types';
+import { SystemRegistry } from '@shared/core/registry';
 import { initializeCortexModules } from "./RegistryInitializer";
-import { StorageService } from '../drivers/storage';
+import { StorageService } from '@shared/drivers/storage';
 import { DreamEngine } from './dream';
 import { NeuralCircuitManager } from './circuits/NeuralCircuitFramework';
 import { MoodStabilizerCircuit, MemoryRefinerCircuit } from './circuits/StandardCircuits';
@@ -26,7 +26,7 @@ import { normalizeToolCall } from './cortex/toolNormalizer';
 import { repairJsonFormatWithLLM } from './cortex/jsonRepairer';
 import { FastTrackRunner } from './cortex/fastTrackRunner';
 import { executeCortexThink } from './cortex/cortexThinkEngine';
-import { eventBus } from './kernel/event-bus';
+import { eventBus } from '@shared/core/kernel/event-bus';
 
 export { normalizeToolCall } from './cortex/toolNormalizer';
 export { PartialJsonFinalAnswerExtractor, StreamExtractor } from './cortex/streamExtractors';

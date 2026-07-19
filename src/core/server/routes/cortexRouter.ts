@@ -1,12 +1,12 @@
 import express from "express";
 import { Cortex } from "../../cortex.js";
 import { AIService } from "../../kernel/ai.js";
-import { APIService } from "../../../services/api.js";
-import { eventBus } from "../../kernel/event-bus.js";
+import { APIService } from "@shared/services/api";
+import { eventBus } from "@shared/core/kernel/event-bus";
 import { activeStreamClients, broadcastToWS, activeWSConnections } from "../apiRouter.js";
 import { MultiChannelQueue } from "../../kernel/MultiChannelQueue.js";
 import { Soul } from "../../soul.js";
-import { SettingsManager } from "../../kernel/settings.js";
+import { SettingsManager } from "@/core/kernel/settings";
 
 export function registerCortexRoutes(app: express.Express, db: any) {
   app.get("/api/stream/events", (req, res) => {
@@ -333,7 +333,7 @@ export function registerCortexRoutes(app: express.Express, db: any) {
         console.warn("[CORTEX_THINK_MERGE] Self-healing merge warn:", mergeErr.message);
       }
 
-      const { DEFAULT_NEURAL_CORES } = await import("../../../constants.js");
+      const { DEFAULT_NEURAL_CORES } = await import("@shared/constants");
       const activePersona = DEFAULT_NEURAL_CORES.find(c => c.id === state.activePersonaId) || DEFAULT_NEURAL_CORES[1];
 
       const userRelation = {
@@ -873,7 +873,7 @@ export function registerCortexRoutes(app: express.Express, db: any) {
         console.warn("[YUI_LLM_GATEWAY_MERGE] Self-healing merge warn:", mergeErr.message);
       }
 
-      const { DEFAULT_NEURAL_CORES } = await import("../../../constants.js");
+      const { DEFAULT_NEURAL_CORES } = await import("@shared/constants");
       const activePersona = DEFAULT_NEURAL_CORES.find(c => c.id === state.activePersonaId) || DEFAULT_NEURAL_CORES[1];
 
       const userRelation = {

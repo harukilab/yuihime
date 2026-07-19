@@ -1,6 +1,6 @@
 import { initializeDatabase } from "../database.js";
 import { AIService } from "../kernel/ai.js";
-import { SettingsManager } from "../kernel/settings.js";
+import { SettingsManager } from "@/core/kernel/settings";
 
 export interface SynthesizerConfig {
   isEnabled: boolean;

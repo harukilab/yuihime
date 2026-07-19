@@ -5,7 +5,7 @@ import { AIService } from "./ai.js";
 import { Soul } from "../soul.js";
 import Database from "better-sqlite3";
 import { Cortex } from "../cortex.js";
-import { Memory, Dream, Identity } from "../../include/types.js";
+import { Memory, Dream, Identity } from "@shared/include/types";
 
 export class NeuralInterface {
   private static db: any;
@@ -225,7 +225,7 @@ export class NeuralInterface {
       console.warn("[NEURAL_INTERFACE_MERGE] Self-healing merge warn:", mergeErr.message);
     }
 
-    const { DEFAULT_NEURAL_CORES } = await import("../../constants.js");
+    const { DEFAULT_NEURAL_CORES } = await import("@shared/constants");
     const activePersona = DEFAULT_NEURAL_CORES.find(c => c.id === state.activePersonaId) || DEFAULT_NEURAL_CORES[1];
 
     // Establish personal, user-specific relationship stats

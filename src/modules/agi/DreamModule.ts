@@ -9,8 +9,8 @@
  * Part of the "Plug-and-Play" architecture.
  */
 
-import { CortexModule, ModuleType, AgentState, Dream, Memory } from '../../include/types';
-import { StorageService } from '../../drivers/storage';
+import { CortexModule, ModuleType, AgentState, Dream, Memory } from '@shared/include/types';
+import { StorageService } from '@shared/drivers/storage';
 import { PromptRegistry } from '../../core/PromptRegistry';
 
 const DEFAULT_SIMULATION_PROMPT = `

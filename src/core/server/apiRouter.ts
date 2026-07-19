@@ -9,16 +9,16 @@ import { promisify } from "util";
 import * as toml from "smol-toml";
 
 import { AIService } from "../kernel/ai.js";
-import { SettingsManager } from "../kernel/settings.js";
+import { SettingsManager } from "@/core/kernel/settings";
 import { CronModule, resolveCronJobPrompt } from "../kernel/cron.js";
 import { NeuralInterface } from "../kernel/NeuralInterface.js";
 import { MultiChannelQueue } from "../kernel/MultiChannelQueue.js";
-import { eventBus } from "../kernel/event-bus.js";
+import { eventBus } from "@shared/core/kernel/event-bus";
 import { initializeBot, getActiveTelegramBot } from "./telegram.js";
 import { Cortex } from "../cortex.js";
 import { Soul } from "../soul.js";
 import { deduplicateAndMergeIdentities, initializeDatabase } from "../database.js";
-import { APIService } from "../../services/api.js";
+import { APIService } from "@shared/services/api";
 
 // Register server-side persistent tool audit log handlers on globalThis
 (globalThis as any).getToolAuditLogs = () => {
@@ -134,7 +134,7 @@ export const getCronAction = (id: string, name: string, repeating: boolean, db: 
   // CUSTOM OVERRIDES FOR BUILT-IN SYSTEM TASKS
   if (id === 'memory-consolidation') {
     try {
-      const { SystemRegistry } = await import('../registry.js');
+      const { SystemRegistry } = await import('@shared/core/registry');
       const consolidator = SystemRegistry.getModule('memory-consolidation');
       if (consolidator) {
          await consolidator.run('CONSOLIDATE_MEMORIES', {}, { db });

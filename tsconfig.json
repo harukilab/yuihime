@@ -12,6 +12,7 @@
     "types": ["vite/client"],
     "skipLibCheck": true,
     "moduleResolution": "bundler",
+    "baseUrl": ".",
     "resolveJsonModule": true,
     "esModuleInterop": true,
     "isolatedModules": true,
@@ -20,7 +21,13 @@
     "jsx": "react-jsx",
     "paths": {
       "@/*": [
-        "./*"
+        "src/*"
+      ],
+      "@shared/*": [
+        "shared/*"
+      ],
+      "@web/*": [
+        "web/src/*"
       ]
     },
     "allowImportingTsExtensions": true,

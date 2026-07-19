@@ -1,5 +1,5 @@
-import { CortexModule, ModuleType } from '../include/types';
-import { StorageService } from '../drivers/storage';
+import { CortexModule, ModuleType } from '@shared/include/types';
+import { StorageService } from '@shared/drivers/storage';
 
 export const SandboxFSModule: CortexModule = {
   metadata: {

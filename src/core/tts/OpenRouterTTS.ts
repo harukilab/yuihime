@@ -1,4 +1,4 @@
-import { TTSModule, ModuleType } from '../../include/types';
+import { TTSModule, ModuleType } from '@shared/include/types';
 
 /**
  * OpenRouterTTS: Cloud-based Text-to-Speech via OpenAI, OpenRouter, or compatible endpoints.

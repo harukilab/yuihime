@@ -1,6 +1,6 @@
-import { AgentState, CortexModule } from '../include/types';
-import { StorageService } from '../drivers/storage';
-import { SystemRegistry } from '../core/registry';
+import { AgentState, CortexModule } from '@shared/include/types';
+import { StorageService } from '@shared/drivers/storage';
+import { SystemRegistry } from '@shared/core/registry';
 
 export interface ChatMessage {
   id: string;

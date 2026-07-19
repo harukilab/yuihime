@@ -8,8 +8,8 @@
  * Order: 51 (Runs after DreamSimulationModule)
  */
 
-import { CortexModule, ModuleType, AgentState } from '../../include/types';
-import { StorageService } from '../../drivers/storage';
+import { CortexModule, ModuleType, AgentState } from '@shared/include/types';
+import { StorageService } from '@shared/drivers/storage';
 
 export const DreamIntegratorModule: CortexModule = {
   metadata: {

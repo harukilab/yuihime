@@ -1,5 +1,5 @@
-import { CortexModule, ModuleType } from '../include/types';
-import { SystemRegistry } from '../core/registry';
+import { CortexModule, ModuleType } from '@shared/include/types';
+import { SystemRegistry } from '@shared/core/registry';
 
 export const RAGModule: CortexModule = {
   metadata: {

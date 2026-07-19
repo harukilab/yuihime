@@ -1,4 +1,4 @@
-import { CortexModule, ModuleType, AgentState, Memory } from '../../include/types';
+import { CortexModule, ModuleType, AgentState, Memory } from '@shared/include/types';
 
 /**
  * MODULE: Micro-Cognitive Associative Synthesizer (Retro-Cognition & Cognitive Aura Circuit)

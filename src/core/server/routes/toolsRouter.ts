@@ -5,10 +5,10 @@ import { existsSync, readdirSync, statSync, realpathSync, mkdirSync } from "fs";
 import { exec } from "child_process";
 import { promisify } from "util";
 import { AIService } from "../../kernel/ai.js";
-import { SettingsManager } from "../../kernel/settings.js";
+import { SettingsManager } from "@/core/kernel/settings";
 import { apiCustomSystemRoot, verifySandboxPath, getDynamicSandboxRoot, resolveSystemRootPath, getYoloMode, getCommandBlacklist, getCommandWhitelist } from "../apiRouter.js";
 import { CustomToolsLoader } from "../../CustomToolsLoader.js";
-import { APIService } from "../../../services/api.js";
+import { APIService } from "@shared/services/api";
 
 const execPromise = promisify(exec);
 
@@ -260,7 +260,7 @@ export function registerToolsRoutes(app: express.Express, db: any) {
       };
 
       if (saveToMemory !== false && extractedText.trim().length > 0 && !extractedText.startsWith('[Warning]')) {
-        const { StorageServer } = await import('../../../drivers/storageServer.js');
+        const { StorageServer } = await import('@shared/drivers/storageServer');
         const memoryContext = context || 'web_default';
         const imp = typeof importance === 'number' ? importance : 0.8;
         
@@ -495,7 +495,7 @@ export function registerToolsRoutes(app: express.Express, db: any) {
 
       let shellTimeout = 120000;
       try {
-        const { SettingsManager } = await import("../../kernel/settings.js");
+        const { SettingsManager } = await import("@/core/kernel/settings");
         const settings = await SettingsManager.getInstance().load();
         const toolExecutorConfig = settings['tool-executor'] || {};
         if (toolExecutorConfig.shellTimeoutMs !== undefined) {
@@ -1139,7 +1139,7 @@ export function registerToolsRoutes(app: express.Express, db: any) {
 
       // Re-trigger available_tools.json generation
       try {
-        const { SystemRegistry } = await import("../../registry.js");
+        const { SystemRegistry } = await import("@shared/core/registry");
         const tools = SystemRegistry.getTools();
         const toolsData = tools.map((t: any) => t.metadata);
         const outputFilePath = path.resolve(process.cwd(), 'src', 'core', 'available_tools.json');
@@ -1169,7 +1169,7 @@ export function registerToolsRoutes(app: express.Express, db: any) {
 
       // Unregister in memory
       try {
-        const { SystemRegistry } = await import("../../registry.js");
+        const { SystemRegistry } = await import("@shared/core/registry");
         (SystemRegistry as any).tools = (SystemRegistry as any).tools.filter((t: any) => t.metadata.id !== id);
         
         // Re-generate available_tools.json

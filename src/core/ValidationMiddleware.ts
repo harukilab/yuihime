@@ -1,4 +1,4 @@
-import { logger } from "./kernel/logger.js";
+import { logger } from "@/core/kernel/logger";
 
 export class ValidationMiddleware {
   public static isEnabled = false; // Turn off validation by default

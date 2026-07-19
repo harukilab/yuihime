@@ -1,7 +1,7 @@
 import express from "express";
 import { deduplicateAndMergeIdentities } from "../../database.js";
 import { Cortex } from "../../cortex.js";
-import { APIService } from "../../../services/api.js";
+import { APIService } from "@shared/services/api";
 
 export function registerIdentitiesRoutes(app: express.Express, db: any) {
   console.log("[IDENTITIES_ROUTE_INIT] registerIdentitiesRoutes executed!");

@@ -1,7 +1,7 @@
-import { SystemRegistry } from './registry';
-import { ModuleType, ToolModule } from '../include/types';
-import { eventBus } from './kernel/event-bus';
-import { logger } from './kernel/logger';
+import { SystemRegistry } from '@shared/core/registry';
+import { ModuleType, ToolModule } from '@shared/include/types';
+import { eventBus } from '@shared/core/kernel/event-bus';
+import { logger } from '@/core/kernel/logger';
 
 export class DynamicLoader {
   static async syncAddons() {

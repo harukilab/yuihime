@@ -1,5 +1,5 @@
-import { ToolModule } from '../../../include/types';
-import { SystemRegistry } from '../../../core/registry';
+import { ToolModule } from '@shared/include/types';
+import { SystemRegistry } from '@shared/core/registry';
 import manifest from './manifest.json';
 
 const AUTOMATION_ACTIONS = ['sort', 'archive', 'summarize', 'convert'];

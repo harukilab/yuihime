@@ -1,4 +1,4 @@
-import { ModuleType } from '../include/types';
+import { ModuleType } from '@shared/include/types';
 
 export const TelegramBridge = {
   metadata: {

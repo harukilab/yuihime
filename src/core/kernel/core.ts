@@ -1,5 +1,5 @@
 import { SettingsManager } from "./settings.js";
-import { SystemRegistry } from "../registry.js";
+import { SystemRegistry } from "@shared/core/registry";
 
 export class Kernel {
   private static instance: Kernel;

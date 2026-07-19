@@ -1,4 +1,4 @@
-import { StorageService } from '../../drivers/storage';
+import { StorageService } from '@shared/drivers/storage';
 import { LearningEngine } from '../learning';
 import type { Cortex } from '../cortex';
 

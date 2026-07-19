@@ -1,4 +1,4 @@
-import { TTSModule, ModuleType } from '../../include/types';
+import { TTSModule, ModuleType } from '@shared/include/types';
 import { WebSpeechTTS } from './WebSpeechTTS';
 
 /**

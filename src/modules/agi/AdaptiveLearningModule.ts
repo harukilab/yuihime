@@ -1,5 +1,5 @@
-import { CortexModule, ModuleType, AgentState, AdaptiveAction, QTable } from '../../include/types';
-import { StorageService } from '../../drivers/storage';
+import { CortexModule, ModuleType, AgentState, AdaptiveAction, QTable } from '@shared/include/types';
+import { StorageService } from '@shared/drivers/storage';
 
 /**
  * AdaptiveLearningModule

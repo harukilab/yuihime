@@ -1,1 +1,1 @@
-export * from './include/types';
+export * from '@shared/include/types';

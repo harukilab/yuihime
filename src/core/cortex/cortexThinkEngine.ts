@@ -14,15 +14,15 @@ import {
   TaskPlan,
   CortexModule,
   PayloadBlueprint
-} from '../../include/types';
-import { SystemRegistry } from '../registry';
-import { APIService } from '../../services/api';
+} from '@shared/include/types';
+import { SystemRegistry } from '@shared/core/registry';
+import { APIService } from '@shared/services/api';
 import { ValidationMiddleware } from '../ValidationMiddleware';
-import { StorageService } from '../../drivers/storage';
+import { StorageService } from '@shared/drivers/storage';
 import { LearningEngine } from '../learning';
 import { StandardizedProcessor } from '../kernel/processor';
 import { PromptRegistry } from '../PromptRegistry';
-import { eventBus } from '../kernel/event-bus';
+import { eventBus } from '@shared/core/kernel/event-bus';
 import { stateMachine } from '../kernel/state-machine';
 import { CognitiveScheduler } from '../kernel/CognitiveScheduler';
 import { normalizeToolCall } from './toolNormalizer';
@@ -237,7 +237,7 @@ export async function executeCortexThink(
   let resolvedPersona = activePersona;
   if (!resolvedPersona) {
     try {
-      const { DEFAULT_NEURAL_CORES } = await import('../../constants.js');
+      const { DEFAULT_NEURAL_CORES } = await import('@shared/constants');
       const targetId = state.activePersonaId || 'hiyori';
       resolvedPersona = DEFAULT_NEURAL_CORES.find(c => c.id === targetId) || DEFAULT_NEURAL_CORES[1];
     } catch (e) {

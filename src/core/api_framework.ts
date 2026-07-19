@@ -1,4 +1,4 @@
-import { APICapability, APIEndpoint } from "../include/types";
+import { APICapability, APIEndpoint } from "@shared/include/types";
 
 export interface APIConnector {
   id: string;

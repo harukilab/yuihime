@@ -1,5 +1,5 @@
-import { SystemRegistry } from '../registry';
-import { ModuleType } from '../../include/types';
+import { SystemRegistry } from '@shared/core/registry';
+import { ModuleType } from '@shared/include/types';
 
 /**
  * Dynamic Tool Synthesizer:

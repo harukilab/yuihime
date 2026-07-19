@@ -1,7 +1,7 @@
 import express from "express";
 import { Cortex } from "../../cortex.js";
 import { AIService } from "../../kernel/ai.js";
-import { SettingsManager } from "../../kernel/settings.js";
+import { SettingsManager } from "@/core/kernel/settings";
 
 export function registerAiRoutes(app: express.Express, db: any) {
   app.post("/api/ai/generate", async (req, res) => {
@@ -193,7 +193,7 @@ export function registerAiRoutes(app: express.Express, db: any) {
       
       let defaultGeminiModel = "";
       try {
-        const { SystemRegistry } = await import('../../registry.js');
+        const { SystemRegistry } = await import('@shared/core/registry');
         const geminiModule = SystemRegistry.getProvider('gemini');
         if (geminiModule && geminiModule.metadata?.models?.length > 0) {
           defaultGeminiModel = geminiModule.metadata.models[0];
@@ -309,7 +309,7 @@ export function registerAiRoutes(app: express.Express, db: any) {
           let testModel = geminiSettings.model;
           if (!testModel) {
             try {
-              const { SystemRegistry } = await import('../../registry.js');
+              const { SystemRegistry } = await import('@shared/core/registry');
               const geminiModule = SystemRegistry.getProvider('gemini');
               if (geminiModule && geminiModule.metadata?.models?.length > 0) {
                 testModel = geminiModule.metadata.models[0];
@@ -386,7 +386,7 @@ export function registerAiRoutes(app: express.Express, db: any) {
           : 'https://api.groq.com/openai/v1';
       }
 
-      const { SystemRegistry } = await import('../../registry.js');
+      const { SystemRegistry } = await import('@shared/core/registry');
       const providerModule = SystemRegistry.getProvider(activeProvider);
 
       if (!providerModule) {

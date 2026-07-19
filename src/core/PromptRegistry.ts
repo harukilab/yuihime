@@ -1,5 +1,5 @@
-import { logger } from './kernel/logger';
-import { SettingsManager } from './kernel/settings';
+import { logger } from '@/core/kernel/logger';
+import { SettingsManager } from '@/core/kernel/settings';
 
 /**
  * PromptRegistry: Centralized storage for all LLM prompt templates.

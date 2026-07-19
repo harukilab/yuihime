@@ -41,7 +41,7 @@ export async function generateContent(
   };
   let defaultGeminiModel = '';
   try {
-    const { SystemRegistry } = await import('../../registry.js');
+    const { SystemRegistry } = await import('@shared/core/registry');
     const geminiModule = SystemRegistry.getProvider('gemini');
     if (geminiModule && geminiModule.metadata?.models?.length > 0) {
       defaultGeminiModel = geminiModule.metadata.models[0];
@@ -170,7 +170,6 @@ export async function generateContent(
       if (rateLimitedKeys.has(attempt.apiKey)) {
         const hasOtherGoodKey = attemptsToTry.some(a => a.apiKey && a.apiKey !== attempt.apiKey && !rateLimitedKeys.has(a.apiKey));
         if (hasOtherGoodKey) {
-          console.log(`[SERVER_AI] Memangkas / skip sirkuit: ${attempt.label} karena API Key ini terdeksi limit kuota (429) dan ada API Key cadangan lain.`);
           continue;
         }
       }
@@ -188,7 +187,7 @@ export async function generateContent(
                 const cooldownSec = parseFloat(retryMatch[1]);
                 if (!isNaN(cooldownSec)) {
                   backoffMs = Math.ceil(cooldownSec * 1000) + 1500; // sleep cooldown + 1.5s security buffer
-                  console.warn(`[SERVER_AI] Mengaplikasikan penundaan kognitif cerdas (API rate limit 429) sebesar ${backoffMs}ms sebelum retry #${retryCount}...`);
+                  // console.warn(`[SERVER_AI] Mengaplikasikan penundaan kognitif cerdas (API rate limit 429) sebesar ${backoffMs}ms sebelum retry #${retryCount}...`);
                 }
               } else if (lastErrBody.includes('503') || lastErrBody.toLowerCase().includes('overloaded') || lastErrBody.toLowerCase().includes('unavailable')) {
                 backoffMs = Math.pow(2, retryCount) * 3000; // 6s, 12s backoff for 503 overloaded
@@ -466,7 +465,7 @@ export async function generateContent(
         } catch (error: any) {
           lastError = error;
           const errorBody = error.message || String(error);
-          console.error(`[SERVER_AI] Sirkuit ${attempt.label} gagal pada Percobaan #${retryCount + 1}:`, summarizeAiError(error));
+          // console.error(`[SERVER_AI] Sirkuit ${attempt.label} gagal pada Percobaan #${retryCount + 1}:`, summarizeAiError(error));
           
           const isQuotaOrRateLimit = errorBody.includes('429') || 
                                      errorBody.toLowerCase().includes('quota') || 
@@ -490,7 +489,7 @@ export async function generateContent(
           
           // If out of quota, register API key in blocklist temporarily for this cycle
           if (isQuotaOrRateLimit) {
-            console.warn(`[SERVER_AI] API Key ${attempt.apiKey.substring(0, 6)}... terdeteksi kehabisan kuota atau terkena batasan rate limit (429). Mencegah sirkuit lanjutan memakai key ini jika ada key cadangan lain.`);
+            // console.warn(`[SERVER_AI] API Key ${attempt.apiKey.substring(0, 6)}... terdeteksi kehabisan kuota atau terkena batasan rate limit (429). Mencegah sirkuit lanjutan memakai key ini jika ada key cadangan lain.`);
             rateLimitedKeys.add(attempt.apiKey);
           }
 
@@ -572,7 +571,7 @@ export async function generateContent(
               : 'https://api.groq.com/openai/v1';
           }
 
-          const { SystemRegistry } = await import('../../registry.js');
+          const { SystemRegistry } = await import('@shared/core/registry');
           const provider = SystemRegistry.getProvider(resolvedProviderId);
           if (provider) {
             console.log(`[SERVER_AI_FALLBACK] Attempting fallback step to provider: ${providerId} (using actual driver: ${resolvedProviderId}, model: ${modelId})`);
@@ -672,7 +671,7 @@ export async function executeGoogleSearch(query: string): Promise<any[]> {
   let defaultGeminiModel = 'gemini-3.5-flash';
   
   try {
-    const { SystemRegistry } = await import('../../registry.js');
+    const { SystemRegistry } = await import('@shared/core/registry');
     const geminiModule = SystemRegistry.getProvider('gemini');
     if (geminiModule && geminiModule.metadata?.models?.length > 0) {
       defaultGeminiModel = geminiModule.metadata.models[0];

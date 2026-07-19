@@ -1,4 +1,4 @@
-import { ToolModule, EmotionDelta } from "../../../include/types";
+import { ToolModule, EmotionDelta } from "@shared/include/types";
 import { applyEmotionDelta, serializeEmotion } from "../../../modules/EmotionUtils";
 import manifest from "./manifest.json";
 

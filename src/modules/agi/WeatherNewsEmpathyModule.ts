@@ -10,7 +10,7 @@
  * Part of the "Plug-and-Play" architecture.
  */
 
-import { CortexModule, ModuleType, AgentState } from '../../include/types';
+import { CortexModule, ModuleType, AgentState } from '@shared/include/types';
 import { PromptRegistry } from '../../core/PromptRegistry';
 
 const DEFAULT_WEATHER_NEWS_PROMPT = `

@@ -1,6 +1,21 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.55] - 2026-07-19
+### Fix: serveWebUI selalu Vite dev + /lib ter-serve
+- `serveWebUI(app)` di `server.ts` kini selalu pakai Vite middlewareMode (dev), tidak lagi fallback ke static `dist/web` walau build ada. `npm run dev` selalu live.
+- Kembalikan `app.use(express.static(public))` SEBELUM Vite agar aset `/lib/live2d/*` terlayani langsung; sebelumnya jatuh ke proxy Vite `/lib`->:3000 (self-loop, HTTP 500) sehingga React gagal mount & UI kosong.
+- `dist/web` di-rebuild fresh (`rm -rf dist/web && npm run build:web`). `tsc --noEmit` bersih.
+
+## [4.55] - 2026-07-18
+### Refactor: Pisah Fisik Web UI <-> Daemon + Pecah App.tsx (AGENTS.md SOP)
+- `server.ts` kini entry daemon murni: `serveWebUI(app)` diekstrak & lazy-import Vite (`import("vite")`), dipanggil hanya bila `!YUIHIME_NO_UI && !--no-ui`. `--no-ui` membuat `GET /` -> 404 (bukan index.html), bot/API/cron/WS tetap aktif.
+- Folder baru `shared/` untuk modul dipakai dua sisi: `include/types`, `drivers/storage`, `drivers/storageServer`, `core/registry`, `core/kernel/event-bus`, `core/safeStorage`, `services/api`, `constants`. Impor internal disesuaikan (`@shared/*`, `@/*` -> `src/*`). `services/api.ts` diberi guard `typeof window` pada `localStorage`.
+- Folder `web/` berisi React app: `index.html`, `vite.config.ts` (root `web`, outDir `../dist/web`, publicDir `../public`, proxy `/api`->:3000), `src/App.tsx` (shell tipis), `src/main.tsx`, `src/ui`, `src/components`, `src/services/{tools,profileCrypto}`.
+- `src/App.tsx` (2901 baris) dipecah via `web/src/app/`: `state.ts`, `handlers.ts`, `effects.ts`, `controller.ts`, `layout.tsx` -- memenuhi SOP AGENTS.md (>1300 baris wajib split).
+- Alias tsconfig/vite: `@shared/*`->`shared/*`, `@/*`->`src/*`, `@web/*`->`web/src/*`.
+- `package.json`: `build` -> `build:web` (vite) + `build:server` (esbuild); `pkg.assets` -> `shared/**`, `web/dist/**` (bukan `src/**`).
+
 ## [4.54] - 2026-07-18
 ### Feature: Penguatan Agensi AGI (Mode Hybrid) — Area 1, 2, 3, 5
 - `context.think` sekarang tersedia di semua phase (`PHASE 1`, `SOUL`, `PHASE 2`, loop `AGI_REFLECT`, `LOGIC`) dan menerima `opts.model` (empty = model utama user). `Cortex.thinkSimple` mendukung override model tanpa hardcoded fallback (AGENTS.md §5).

@@ -1,5 +1,5 @@
-import { CortexModule, ModuleType } from '../../include/types';
-import { StorageService } from '../../drivers/storage';
+import { CortexModule, ModuleType } from '@shared/include/types';
+import { StorageService } from '@shared/drivers/storage';
 import { PromptRegistry } from '../../core/PromptRegistry';
 import { resolveHybridConfig, shouldReasonWithLLM, computeComplexity, makeHybridThink } from './agiThinkHelper';
 

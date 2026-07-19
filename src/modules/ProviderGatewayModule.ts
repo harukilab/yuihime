@@ -1,5 +1,5 @@
-import { CortexModule, ModuleType } from '../include/types';
-import { SystemRegistry } from '../core/registry';
+import { CortexModule, ModuleType } from '@shared/include/types';
+import { SystemRegistry } from '@shared/core/registry';
 import { PromptRegistry } from '../core/PromptRegistry';
 
 const DEFAULT_OFFLINE_FALLBACK = `<thought>Cognitive online circuit disconnected (quota exceeded/offline). Mounting backup subconscious transmitter.</thought>Halo user! Saat ini sirkuit kognitif Yui sedang berdiet internet (server sedang sibuk/habis kuota)`;
@@ -53,7 +53,7 @@ export const ProviderGatewayModule: CortexModule = {
     // Helper for Real-time Self-Learning Feedback Loop (Dual-Process Human Emulation)
     const triggerSelfLearning = async (promptText: string, resultText: string) => {
       try {
-        const { StorageService } = await import('../drivers/storage.js');
+        const { StorageService } = await import('@shared/drivers/storage');
         const customSettings = (await StorageService.getModularSettings()) || {};
         const localNlpConfig = customSettings['local-nano-nlp'] || {};
         const enableSelfLearning = localNlpConfig.enableSelfLearning !== undefined ? !!localNlpConfig.enableSelfLearning : false;
@@ -144,7 +144,7 @@ export const ProviderGatewayModule: CortexModule = {
         };
       } catch (error: any) {
         lastError = error;
-        console.error(`[GATEWAY] Primary Provider ${selectedProviderId} failed:`, error.message || String(error));
+        // console.error(`[GATEWAY] Primary Provider ${selectedProviderId} failed:`, error.message || String(error));
         await recordNonGeminiLog(selectedProviderId, actualModelOfProvider, undefined, error.message || String(error));
       }
     }
@@ -203,7 +203,7 @@ export const ProviderGatewayModule: CortexModule = {
       console.warn('[GATEWAY] FallbackChain config retrieval failed:', importErr);
     }
 
-    console.error(`[GATEWAY] Critical Failure: All providers exhausted. Initiating emergency offline fallback...`);
+    // console.error(`[GATEWAY] Critical Failure: All providers exhausted. Initiating emergency offline fallback...`);
     try {
       const localNLP = SystemRegistry.getModule('local-nano-nlp');
       if (localNLP && typeof localNLP.run === 'function') {

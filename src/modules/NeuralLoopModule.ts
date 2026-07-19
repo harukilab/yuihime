@@ -1,4 +1,4 @@
-import { CortexModule, ModuleType } from '../include/types';
+import { CortexModule, ModuleType } from '@shared/include/types';
 import { StandardizedProcessor } from '../core/kernel/processor';
 import { L2DExpressionTranslator } from './L2DExpressionTranslator';
 

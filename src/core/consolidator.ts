@@ -1,6 +1,6 @@
-import { Memory } from "../include/types";
+import { Memory } from "@shared/include/types";
 import { Cortex } from "./cortex";
-import { StorageService } from "../drivers/storage";
+import { StorageService } from "@shared/drivers/storage";
 
 export class Consolidator {
   /**

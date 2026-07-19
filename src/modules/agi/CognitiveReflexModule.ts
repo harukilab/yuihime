@@ -1,4 +1,4 @@
-import { CortexModule, ModuleType } from '../../include/types';
+import { CortexModule, ModuleType } from '@shared/include/types';
 
 /**
  * MODULE: System Refleks Kognitif Cepat (Fast-Path / Instinct Layer)

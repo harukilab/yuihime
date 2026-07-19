@@ -1,5 +1,5 @@
-import { ToolModule } from '../../../include/types';
-import { eventBus } from '../../../core/kernel/event-bus';
+import { ToolModule } from '@shared/include/types';
+import { eventBus } from '@shared/core/kernel/event-bus';
 import manifest from './manifest.json';
 
 export const PluginInstallerTool: ToolModule = {

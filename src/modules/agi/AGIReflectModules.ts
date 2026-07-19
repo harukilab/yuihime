@@ -1,4 +1,4 @@
-import { CortexModule, ModuleType } from '../../include/types';
+import { CortexModule, ModuleType } from '@shared/include/types';
 import { runHighOrderMetacognition } from './HighOrderMetacognitionModule';
 import { runSelfAwarenessMirror } from './SelfAwarenessMirrorModule';
 

@@ -1,4 +1,4 @@
-import { StorageService } from '../../drivers/storage';
+import { StorageService } from '@shared/drivers/storage';
 
 let settingsCache: any = null;
 let lastSettingsFetch: number = 0;
@@ -20,7 +20,7 @@ export async function fetchCortexSettings(localConfigOverride?: any): Promise<an
   // Server-side Direct Loading Fallback to bypass invalid relative URL TypeError in Node
   if (typeof window === 'undefined') {
     try {
-      const { SettingsManager } = await import('../kernel/settings.js');
+      const { SettingsManager } = await import('@/core/kernel/settings');
       const settingsManager = SettingsManager.getInstance();
       const s = await settingsManager.load();
       
@@ -28,7 +28,7 @@ export async function fetchCortexSettings(localConfigOverride?: any): Promise<an
       
       let defaultModel = '';
       try {
-        const { SystemRegistry } = await import('../registry.js');
+        const { SystemRegistry } = await import('@shared/core/registry');
         const providerModule = SystemRegistry.getProvider(activeProvider);
         if (providerModule && providerModule.metadata?.models?.length > 0) {
           defaultModel = providerModule.metadata.models[0];
@@ -78,7 +78,7 @@ export async function fetchCortexSettings(localConfigOverride?: any): Promise<an
     
     let defaultModel = '';
     try {
-      const { SystemRegistry } = await import('../registry.js');
+      const { SystemRegistry } = await import('@shared/core/registry');
       const providerModule = SystemRegistry.getProvider(activeProvider);
       if (providerModule && providerModule.metadata?.models?.length > 0) {
         defaultModel = providerModule.metadata.models[0];
@@ -113,7 +113,7 @@ export async function fetchCortexSettings(localConfigOverride?: any): Promise<an
     const prov = localConfig.provider || 'gemini';
     let defaultModel = '';
     try {
-      const { SystemRegistry } = await import('../registry.js');
+      const { SystemRegistry } = await import('@shared/core/registry');
       const providerModule = SystemRegistry.getProvider(prov);
       if (providerModule && providerModule.metadata?.models?.length > 0) {
         defaultModel = providerModule.metadata.models[0];

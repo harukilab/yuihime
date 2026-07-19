@@ -1,4 +1,4 @@
-import { SystemRegistry } from './registry';
+import { SystemRegistry } from '@shared/core/registry';
 
 /**
  * Convert registered Yuihime tool metadata into the native OpenAI

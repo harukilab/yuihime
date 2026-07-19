@@ -1,6 +1,6 @@
-import { Memory, LearnedStrategy, PerformanceMetric, AgentState, CoreKnowledge } from "../include/types";
+import { Memory, LearnedStrategy, PerformanceMetric, AgentState, CoreKnowledge } from "@shared/include/types";
 import { Cortex } from "./cortex";
-import { StorageService } from "../drivers/storage";
+import { StorageService } from "@shared/drivers/storage";
 import { StandardizedProcessor } from "./kernel/processor";
 
 export class LearningEngine {

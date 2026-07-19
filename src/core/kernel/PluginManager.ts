@@ -1,4 +1,4 @@
-import { SystemRegistry } from '../registry';
+import { SystemRegistry } from '@shared/core/registry';
 import { SettingsManager } from './settings';
 import { logger } from './logger';
 import * as fs from 'fs';

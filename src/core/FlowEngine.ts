@@ -1,5 +1,5 @@
-import { NeuralWorkflow, AgentState, Memory, Dream, Identity, AgentPersona } from '../include/types';
-import { SystemRegistry } from './registry';
+import { NeuralWorkflow, AgentState, Memory, Dream, Identity, AgentPersona } from '@shared/include/types';
+import { SystemRegistry } from '@shared/core/registry';
 
 export class FlowEngine {
   static async execute(

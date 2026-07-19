@@ -1,4 +1,4 @@
-import { TTSModule, ModuleType } from '../../include/types';
+import { TTSModule, ModuleType } from '@shared/include/types';
 
 /**
  * GeminiTTS: Native Google Gemini 2.0/3.0 Emotive Speech Synthesizer.

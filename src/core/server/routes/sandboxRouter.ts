@@ -5,7 +5,7 @@ import { exec } from "child_process";
 import { promisify } from "util";
 import * as toml from "smol-toml";
 import { AIService } from "../../kernel/ai.js";
-import { SettingsManager } from "../../kernel/settings.js";
+import { SettingsManager } from "@/core/kernel/settings";
 import { verifySandboxPath, SANDBOX_ROOT, sandboxCfg, systemConfig, getDynamicSandboxRoot, getYoloMode, getCommandBlacklist, getCommandWhitelist } from "../apiRouter.js";
 
 const execPromise = promisify(exec);
@@ -244,7 +244,7 @@ export function registerSandboxRoutes(app: express.Express, db: any) {
         const customPrompt = options?.summaryPrompt || "Generate a dense, informative, and structurally elegant cognitive summary of the following document:";
         const promptTemplate = `${customPrompt}\n\n=== DOCUMENT ===\n${contentLimit}\n=== END OF DOCUMENT ===\n\nProvide a clean summary showcasing the key points at a professional standard.`;
         
-        const { SystemRegistry } = await import('../../registry.js');
+        const { SystemRegistry } = await import('@shared/core/registry');
         const settings = SettingsManager.getInstance();
         const activeProvider = settings.get('provider') || '';
         if (!activeProvider) {

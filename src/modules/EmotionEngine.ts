@@ -1,4 +1,4 @@
-import { CortexModule, ModuleType, AgentState, EmotionState, EmotionDelta } from "../include/types";
+import { CortexModule, ModuleType, AgentState, EmotionState, EmotionDelta } from "@shared/include/types";
 import { applyEmotionDelta, serializeEmotion } from "./EmotionUtils";
 import { Soul } from "../core/soul";
 import { NanoBrain } from "../core/neural/Brain";

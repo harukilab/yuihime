@@ -71,7 +71,6 @@ try {
 }
 import { exec } from "child_process";
 import { promisify } from "util";
-import { createServer as createViteServer } from "vite";
 import Database from "better-sqlite3";
 
 // --- OOB Portability CLI Argument & Env Override Parser ---
@@ -95,6 +94,8 @@ for (let i = 0; i < process.argv.length; i++) {
     argsOverride.agentPath = process.argv[++i];
   } else if (arg === "--port" && i + 1 < process.argv.length) {
     argsOverride.port = process.argv[++i];
+  } else if (arg === "--no-ui") {
+    (argsOverride as any).noUi = true;
   }
 }
 
@@ -285,74 +286,6 @@ MultiChannelQueue.getInstance().setDatabase(db);
     console.warn("[SERVER] Failed to seed default memory consolidation task:", e.message);
   }
 
-  const heartbeatPath = path.join(process.cwd(), 'docs', 'HEARTBEAT.md');
-  if (existsSync(heartbeatPath)) {
-    try {
-      const heartbeatContent = readFileSync(heartbeatPath, 'utf-8');
-      const lines = heartbeatContent.split('\n');
-      let currentSection = '';
-      let currentBullets: string[] = [];
-
-      const sectionScheduleMap: Record<string, string> = {
-        'hourly': '0 * * * *',
-        'every hour': '0 * * * *',
-        'every 15 minutes': '*/15 * * * *',
-        '15 minutes': '*/15 * * * *',
-        'daily': '0 0 * * *',
-        'every day': '0 0 * * *',
-      };
-
-      const processSection = (section: string, bullets: string[]) => {
-        if (!section || bullets.length === 0) return;
-        const sectionLower = section.toLowerCase();
-        let schedule = '0 * * * *';
-        for (const [key, value] of Object.entries(sectionScheduleMap)) {
-          if (sectionLower.includes(key)) {
-            schedule = value;
-            break;
-          }
-        }
-        const taskId = `hb_${section.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')}`;
-        const taskName = section.trim();
-        const prompt = bullets.join('\n');
-
-        db.prepare(`
-          INSERT INTO cron_tasks (id, name, schedule, enabled, repeating, context_id, chat_type, sender_name, prompt)
-          VALUES (?, ?, ?, 1, 1, 'live_stream', 'Live Chat', 'System', ?)
-          ON CONFLICT(id) DO UPDATE SET
-            schedule = excluded.schedule,
-            name = excluded.name,
-            prompt = excluded.prompt,
-            enabled = 1,
-            repeating = 1
-        `).run(taskId, taskName, schedule, prompt);
-      };
-
-      for (const line of lines) {
-        const sectionMatch = line.match(/^##\s+(.+)/i);
-        if (sectionMatch) {
-          processSection(currentSection, currentBullets);
-          currentSection = sectionMatch[1].trim();
-          currentBullets = [];
-        } else if (line.trim().startsWith('- ') && currentSection) {
-          currentBullets.push(line.trim().substring(2).trim());
-        }
-      }
-      processSection(currentSection, currentBullets);
-
-      db.prepare(`
-        INSERT INTO cron_tasks (id, name, schedule, enabled, repeating, context_id, chat_type, sender_name, prompt)
-        VALUES ('puter-hourly-check', 'Puter Hourly Check', '0 * * * *', 1, 1, 'live_stream', 'Live Chat', 'System', ?)
-        ON CONFLICT(id) DO UPDATE SET
-          schedule = excluded.schedule,
-          prompt = excluded.prompt,
-          enabled = 1,
-          repeating = 1
-      `).run('Perform hourly health checks: Check Puter connection status, verify kernel responsiveness, and log system metrics.');
-    } catch (e: any) {
-      console.warn("[SERVER] Failed to sync HEARTBEAT.md to cron tasks:", e.message);
-    }
-  }
 
 
 
@@ -734,45 +667,10 @@ app.use("/models", express.static(modelsDir));
 
 
 
-  // Vite middleware
-  const isDev = __filename.endsWith("server.ts") || process.env.NODE_ENV === "development";
-  if (isDev) {
-    if (__filename.endsWith("server.ts") && process.env.NODE_ENV === "production") {
-      process.env.NODE_ENV = "development";
-    }
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-      mode: "development",
-    });
-    app.use(vite.middlewares);
-
-    // Serve index.html transformed dynamically by Vite
-    app.get("*", async (req, res, next) => {
-      if (req.url.startsWith("/api/")) return next();
-      try {
-        const url = req.originalUrl;
-        let template = await fs.readFile(path.join(process.cwd(), "index.html"), "utf-8");
-        template = await vite.transformIndexHtml(url, template);
-        res.status(200).set({ "Content-Type": "text/html" }).end(template);
-      } catch (e) {
-        vite.ssrFixStacktrace(e as Error);
-        next(e);
-      }
-    });
-  } else {
-    let distPath = path.join(process.cwd(), "dist");
-    if (!existsSync(distPath)) {
-      // Fallback to internal packaged assets inside snapshot
-      const packagedPath = __dirname;
-      if (existsSync(path.join(packagedPath, "index.html"))) {
-        distPath = packagedPath;
-      }
-    }
-    app.use(express.static(distPath));
-    app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
-    });
+  // Serve the Web UI unless explicitly disabled via --no-ui / YUIHIME_NO_UI
+  const noUi = process.env.YUIHIME_NO_UI === "1" || process.env.YUIHIME_NO_UI === "true" || (argsOverride as any).noUi === true;
+  if (!noUi) {
+    await serveWebUI(app);
   }
 
   const server = app.listen(PORT, "0.0.0.0", () => {
@@ -977,6 +875,41 @@ app.use("/models", express.static(modelsDir));
     initializeTwitter(db).catch(() => {});
     initializeMCP().catch(() => {});
   }, 1000);
+}
+
+// Serve the Web UI (Vite dev middleware or static built assets).
+// Vite is lazily imported so the headless daemon bundle stays lean.
+async function serveWebUI(app: any) {
+  // Always run in Vite dev mode (middlewareMode) so `npm run dev` reflects
+  // sources live and never falls back to serving the static built bundle.
+  const publicDir = path.join(process.cwd(), "public");
+
+  // Serve public assets (e.g. /lib/live2d) directly from express BEFORE Vite,
+  // so they are not caught by Vite's proxy rules (/lib -> :3000) which would
+  // otherwise loop back to this same server and return 500.
+  app.use(express.static(publicDir));
+
+  const { createServer: createViteServer } = await import("vite");
+  const vite = await createViteServer({
+    root: path.join(process.cwd(), "web"),
+    server: { middlewareMode: true },
+    appType: "spa",
+    mode: "development",
+  });
+  app.use(vite.middlewares);
+
+  app.get("*", async (req: any, res: any, next: any) => {
+    if (req.url.startsWith("/api/")) return next();
+    try {
+      const url = req.originalUrl;
+      let template = await fs.readFile(path.join(process.cwd(), "web", "index.html"), "utf-8");
+      template = await vite.transformIndexHtml(url, template);
+      res.status(200).set({ "Content-Type": "text/html" }).end(template);
+    } catch (e) {
+      vite.ssrFixStacktrace(e as Error);
+      next(e);
+    }
+  });
 }
 
 // Resilience: Catch fatal process errors

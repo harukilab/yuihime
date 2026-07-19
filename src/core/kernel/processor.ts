@@ -1,8 +1,8 @@
 import { AIService } from "./ai.js";
-import { SystemRegistry } from '../registry.js';
+import { SystemRegistry } from '@shared/core/registry';
 import { SettingsManager } from './settings.js';
 import { keyPool, ApiKeyPool } from './keyPool.js';
-import { ChatCompletionMessage } from '../../include/types.js';
+import { ChatCompletionMessage } from '@shared/include/types';
 
 export class NeuralProcessor {
   private static instance: NeuralProcessor;

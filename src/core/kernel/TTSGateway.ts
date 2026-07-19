@@ -1,6 +1,6 @@
-import { SystemRegistry } from '../registry.js';
+import { SystemRegistry } from '@shared/core/registry';
 import { SettingsManager } from './settings.js';
-import { TTSModule } from '../../include/types.js';
+import { TTSModule } from '@shared/include/types';
 
 export class TTSGateway {
   private static instance: TTSGateway;

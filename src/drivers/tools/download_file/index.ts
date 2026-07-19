@@ -1,4 +1,4 @@
-import { ToolModule } from '../../../include/types';
+import { ToolModule } from '@shared/include/types';
 import manifest from './manifest.json';
 
 export const DownloadFileTool: ToolModule = {

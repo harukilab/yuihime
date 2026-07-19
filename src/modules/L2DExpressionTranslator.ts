@@ -1,4 +1,4 @@
-import { CortexModule, ModuleType, AgentState } from '../include/types';
+import { CortexModule, ModuleType, AgentState } from '@shared/include/types';
 import { SettingsManager } from '../core/kernel/settings';
 
 /**

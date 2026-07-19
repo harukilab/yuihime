@@ -1,7 +1,7 @@
 import { WebSocket } from 'ws';
-import { SettingsManager } from '../kernel/settings.js';
-import { SystemRegistry } from '../registry.js';
-import { ModuleType, ToolModule } from '../../include/types.js';
+import { SettingsManager } from '@/core/kernel/settings';
+import { SystemRegistry } from '@shared/core/registry';
+import { ModuleType, ToolModule } from '@shared/include/types';
 
 let activeMCPWs: WebSocket | null = null;
 let reconnectInterval: any = null;

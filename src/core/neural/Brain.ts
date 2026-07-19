@@ -1,4 +1,4 @@
-import { StorageService } from "../../drivers/storage";
+import { StorageService } from "@shared/drivers/storage";
 
 export interface BrainWeights {
   weights1: number[][]; // input to hidden: 25 x 12

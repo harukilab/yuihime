@@ -1,4 +1,4 @@
-import { ProviderModule, ModuleType } from '../../include/types';
+import { ProviderModule, ModuleType } from '@shared/include/types';
 import { buildChatMessages, normalizeToolCallsToOpenAI, normalizeToolsForProvider } from '../../core/openaiTools';
 
 export const OpenAIProvider: ProviderModule = {

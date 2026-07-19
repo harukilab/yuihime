@@ -1,0 +1,171 @@
+# Plan: Remove "Kakak" Fallback & Make Character Name Configurable
+
+## Goal
+1. Remove all generic "Kakak"/"Kak" user-addressing from runtime prompts and fallback strings.
+2. Make the character name configurable from the character card / character settings instead of hardcoded.
+
+## Context
+- "Kakak" is currently used as a generic user-addressing fallback across:
+  - `src/modules/PromptManager.ts`
+  - `src/core/available_tools.json`
+  - `src/core/cortex/cortexThinkEngine.ts`
+  - `src/core/kernel/processor.ts`
+  - `src/core/kernel/MultiChannelQueue.ts`
+  - `src/core/PromptRegistry.ts`
+  - `src/core/server/routes/cortexRouter.ts`
+  - `src/core/server/routes/datasetRouter.ts`
+  - `src/ui/ModularSettings.tsx`
+  - `src/ui/CronManager.tsx`
+  - `src/ui/StageTab.tsx`
+  - `src/ui/IdentitiesTab.tsx`
+  - `src/ui/RelationAndSpontaneousDrawer.tsx`
+  - `src/ui/ProviderPlayground.tsx`
+  - `src/ui/train/DatasetExport.tsx`
+  - `src/modules/LocalNanoNLPModule.ts`
+  - `src/modules/SpontaneousProactiveModule.ts`
+  - `src/modules/ProviderGatewayModule.ts`
+  - `src/drivers/tools/messaging_integration/index.ts`
+  - `src/bin/terminal.ts`
+  - `src/share/prompts/build-info.json`
+  - `src/share/prompts/system_prompt.md`
+- Character name "Yui Airi" / "Yuihime" is hardcoded in:
+  - `src/share/prompts/character.md`
+  - `src/share/prompts/system_prompt.md`
+  - `src/share/prompts/lore.md`
+  - `src/share/prompts/build-info.json`
+  - Various module prompts and UI strings
+
+## Decision: Source of Truth for Character Name
+**Use `character.md` as the canonical source for the character name.**
+
+Rationale:
+- `character.md` is already the character profile loaded at runtime by `PromptManager.ts`.
+- It contains the canonical identity block (`# Yui Airi Character Profile`).
+- It is editable via UI/API if the system supports dynamic markdown overrides.
+- No need to add a new config field; we extract the name from the existing character data.
+
+## Extraction Strategy
+In `PromptManager.ensureInitialized()` and/or at the start of `PromptManagerModule.run()`:
+1. Parse `characterData` (and/or `charLore`) for a name pattern.
+2. Preferred patterns (in order):
+   - `# <Name> Character Profile` (markdown H1)
+   - `**Name:** <Name>` inside the file
+   - Fallback: `"Yui Airi"` if pattern not found
+3. Expose the resolved name via:
+   - `registry.register('core:character_name', resolvedName, true)`
+   - Or a small getter exported from `PromptManager`.
+
+## Replacement Rules
+
+### A. Remove "Kakak" as generic address
+- In all prompt-injected instructions (`activeUserContext`, `pairingDirectives`, system prompts, etc.):
+  - Remove "Kakak" / "Kak" as a generic form of address.
+  - If a user has `perceivedName` / `realName`, call them by that name directly.
+  - If no name is known yet, use a neutral fallback like `"Friend"` or `"you"` instead of `"Kakak"`.
+- In fallback strings (`processor.ts`, `PromptRegistry.ts`, `cortexThinkEngine.ts`, `MultiChannelQueue.ts`):
+  - Replace hardcoded `"Kakak"` with a neutral placeholder or the resolved user name.
+- In tool descriptions (`available_tools.json`, `LiveStatusToolsModule.ts`):
+  - Remove `"Kakak (user)"` from descriptions; make them generic.
+- In UI strings (`ModularSettings.tsx`, `CronManager.tsx`, `StageTab.tsx`, `IdentitiesTab.tsx`, `ProviderPlayground.tsx`, `DatasetExport.tsx`):
+  - Replace `"Kakak"` with a neutral term or remove from sample text.
+- In `system_prompt.md`:
+  - Update `Honorific Prohibition` section to forbid `"Kakak"` / `"Kak"` as a default generic address, not just as a prohibition after name verification.
+
+### B. Make Character Name Dynamic
+- Inject `characterName` into assembled prompts wherever the character refers to herself:
+  - `system_prompt.md` / `build-info.json` identity block
+  - `PromptManager.ts` active user context and pairing directives
+  - `PromptRegistry.ts` default `final_answer` sample
+- Replace hardcoded `"Yui"` / `"Yui Airi"` / `"Yuihime"` in prompt templates with a token like `${characterName}` resolved at runtime.
+- Keep `"Yui"` / `"Airi"` as default fallback if no character name is configured.
+
+## Files to Modify
+
+### Core
+1. `src/modules/PromptManager.ts`
+   - Extract `characterName` from `characterData`.
+   - Register it in `PromptRegistry`.
+   - Replace hardcoded `"Yui"` references in assembled prompt with `${characterName}`.
+   - Remove "Kakak" from `activeUserContext`, `pairingDirectives`, and fallback text.
+   - Replace fallback user address with neutral term or `${userName || 'Friend'}`.
+
+2. `src/core/PromptRegistry.ts`
+   - Register `core:character_name`.
+   - Update default `final_answer` sample to use dynamic character name instead of hardcoded "Kakak".
+
+3. `src/share/prompts/system_prompt.md`
+   - Update `Honorific Prohibition` to remove "Kakak"/"Kak" from allowed generic fallback list.
+
+4. `src/share/prompts/build-info.json`
+   - This is a generated/bundled file; update the source markdown files instead. If regeneration is required, note it in validation.
+
+### Routes / Engine
+5. `src/core/kernel/processor.ts`
+   - Replace `"Kakak"` in local fallback quotes with neutral terms or dynamic user name.
+
+6. `src/core/cortex/cortexThinkEngine.ts`
+   - Replace `"Kakak"` in instruction text and explanation strings with neutral/dynamic terms.
+
+7. `src/core/kernel/MultiChannelQueue.ts`
+   - Replace `"Kakak"` in proactive impulse prompts and sender fallback with dynamic name.
+
+8. `src/core/server/routes/cortexRouter.ts`
+   - Replace `"Kakak"` in suspended message strings with neutral term.
+
+9. `src/core/server/routes/datasetRouter.ts`
+   - Replace `userFallback = "Kakak"` with a neutral fallback.
+
+10. `src/core/available_tools.json`
+    - Update tool descriptions to remove `"Kakak (user)"`.
+
+### UI / Modules
+11. `src/ui/ModularSettings.tsx`
+    - Update `firstMessage` default sample.
+
+12. `src/ui/CronManager.tsx`
+    - Update placeholder text.
+
+13. `src/ui/StageTab.tsx`
+    - Update stage greeting samples.
+
+14. `src/ui/IdentitiesTab.tsx`
+    - Update sample quotes.
+
+15. `src/ui/RelationAndSpontaneousDrawer.tsx`
+    - Update perceived name fallback.
+
+16. `src/ui/ProviderPlayground.tsx`
+    - Update TTS sample text.
+
+17. `src/ui/train/DatasetExport.tsx`
+    - Update `exportUserFallback` default.
+
+18. `src/modules/LocalNanoNLPModule.ts`
+    - Replace hardcoded "Kakak" in NLP samples with dynamic/neutral terms.
+
+19. `src/modules/SpontaneousProactiveModule.ts`
+    - Update comments and fallback strings.
+
+20. `src/modules/ProviderGatewayModule.ts`
+    - Update offline fallback string.
+
+21. `src/drivers/tools/messaging_integration/index.ts`
+    - Update error message fallback.
+
+22. `src/bin/terminal.ts`
+    - Update offline/exit messages.
+
+## Open Question
+**What should replace "Kakak" when the user's name is unknown?**
+
+Options:
+1. `"Friend"` — neutral, English
+2. `${userName}` — raw platform username (may be ugly)
+3. Omit address entirely — just speak without generic honorific
+
+**Recommendation:** Use `${userName || 'Friend'}` as the only fallback. Do not invent an Indonesian honorific by default. This keeps the system language-neutral and respects the user's earlier request to remove "Kakak".
+
+## Validation
+- `tsc --noEmit` must pass.
+- Grep the entire `src/` tree for remaining `"Kakak"` / `"Kak "` occurrences used as user address and confirm zero matches in prompt/runtime paths.
+- Confirm `characterName` resolves correctly from `character.md` by inspecting `PromptManager` registry at runtime.

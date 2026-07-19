@@ -1,7 +1,7 @@
 import express from "express";
 import { Cortex } from "../../cortex.js";
-import { APIService } from "../../../services/api.js";
-import { SettingsManager } from "../../kernel/settings.js";
+import { APIService } from "@shared/services/api";
+import { SettingsManager } from "@/core/kernel/settings";
 import { AIService } from "../../kernel/ai.js";
 import fs from "fs/promises";
 import { existsSync, mkdirSync, writeFileSync } from "fs";

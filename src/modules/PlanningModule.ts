@@ -1,4 +1,4 @@
-import { CortexModule, ModuleType, TaskPlan } from '../include/types';
+import { CortexModule, ModuleType, TaskPlan } from '@shared/include/types';
 
 export const PlanningModule: CortexModule = {
   metadata: {

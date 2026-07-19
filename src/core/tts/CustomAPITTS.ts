@@ -1,4 +1,4 @@
-import { TTSModule, ModuleType } from '../../include/types';
+import { TTSModule, ModuleType } from '@shared/include/types';
 
 /**
  * CustomAPITTS Module: High-fidelity Custom Audio/TTS Endpoint connector.

@@ -5,12 +5,12 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSy
 import { exec } from "child_process";
 import { promisify } from "util";
 import * as toml from "smol-toml";
-import { SettingsManager } from "../../kernel/settings.js";
+import { SettingsManager } from "@/core/kernel/settings";
 import { CronModule, extractCronPromptFromArgs, normalizeCronPromptForSave } from "../../kernel/cron.js";
 import { MultiChannelQueue } from "../../kernel/MultiChannelQueue.js";
 import { broadcastToWS, getCronAction } from "../apiRouter.js";
 import { NeuralInterface } from "../../kernel/NeuralInterface.js";
-import { eventBus } from "../../kernel/event-bus.js";
+import { eventBus } from "@shared/core/kernel/event-bus";
 
 const execPromise = promisify(exec);
 

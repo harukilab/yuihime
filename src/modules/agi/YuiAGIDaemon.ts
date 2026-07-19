@@ -1,4 +1,4 @@
-import { StorageService } from '../../drivers/storage';
+import { StorageService } from '@shared/drivers/storage';
 import { PromptRegistry } from '../../core/PromptRegistry';
 
 // NOTICE: Core AGI Daemon & Orchestrator for Yuihime.

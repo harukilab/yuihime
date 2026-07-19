@@ -1,6 +1,6 @@
-import { Memory, Dream, AgentState, CoreKnowledge } from "../include/types";
+import { Memory, Dream, AgentState, CoreKnowledge } from "@shared/include/types";
 import { Cortex } from "./cortex";
-import { StorageService } from "../drivers/storage";
+import { StorageService } from "@shared/drivers/storage";
 import { LearningEngine } from "./learning";
 import { StandardizedProcessor } from "./kernel/processor";
 

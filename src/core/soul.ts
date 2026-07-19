@@ -1,4 +1,4 @@
-import { AgentState, MoodState, UserRelation, EmotionType } from "../include/types";
+import { AgentState, MoodState, UserRelation, EmotionType } from "@shared/include/types";
 
 export class Soul {
   private static DECAY_RATE = 0.5; // Reduction per minute

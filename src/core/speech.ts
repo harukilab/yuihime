@@ -1,8 +1,8 @@
-import { ProviderConfig, MoodState, AgentState, CortexModule } from "../include/types";
-import { StorageService } from "../drivers/storage";
-import { SystemRegistry } from "./registry";
-import { getActiveVowel } from "../ui/avatar/vowelExtractor";
-import { eventBus } from "./kernel/event-bus";
+import { ProviderConfig, MoodState, AgentState, CortexModule } from "@shared/include/types";
+import { StorageService } from "@shared/drivers/storage";
+import { SystemRegistry } from "@shared/core/registry";
+import { getActiveVowel } from "@web/ui/avatar/vowelExtractor";
+import { eventBus } from '@shared/core/kernel/event-bus';
 
 export interface SpeechTickEvent {
   speaking: boolean;

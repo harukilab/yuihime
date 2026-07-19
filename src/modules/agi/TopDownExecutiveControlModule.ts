@@ -1,6 +1,6 @@
-import { CortexModule, ModuleType, AgentState } from '../../include/types';
+import { CortexModule, ModuleType, AgentState } from '@shared/include/types';
 import { PromptRegistry } from '../../core/PromptRegistry';
-import { StorageService } from '../../drivers/storage';
+import { StorageService } from '@shared/drivers/storage';
 
 let promptRegistered = false;
 

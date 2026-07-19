@@ -1,4 +1,4 @@
-import { CortexModule, ModuleType } from '../../include/types';
+import { CortexModule, ModuleType } from '@shared/include/types';
 
 /**
  * MODULE: Arsitektur Monolog Batin Sub-Sadar (Subconscious Inner Monologue Engine)

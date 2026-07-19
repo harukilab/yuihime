@@ -1,4 +1,4 @@
-import { CortexModule, ModuleType, Identity } from '../../include/types';
+import { CortexModule, ModuleType, Identity } from '@shared/include/types';
 
 /**
  * MODULE: Sistem Resonansi Memori Sosial (Multi-User Social Brain Engine)

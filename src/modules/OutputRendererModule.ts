@@ -1,4 +1,4 @@
-import { CortexModule, ModuleType } from '../include/types';
+import { CortexModule, ModuleType } from '@shared/include/types';
 
 /**
  * Output Renderer: Prepares final text for the UI and speech modules.

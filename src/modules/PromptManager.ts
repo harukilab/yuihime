@@ -1,7 +1,7 @@
-import { CortexModule, ModuleType } from '../include/types';
+import { CortexModule, ModuleType } from '@shared/include/types';
 import { PromptRegistry } from '../core/PromptRegistry';
-import { SystemRegistry } from '../core/registry';
-import { StorageService } from '../drivers/storage';
+import { SystemRegistry } from '@shared/core/registry';
+import { StorageService } from '@shared/drivers/storage';
 
 let characterData = "";
 let loreData = "";

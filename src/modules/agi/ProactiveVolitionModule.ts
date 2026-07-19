@@ -1,6 +1,6 @@
-import { CortexModule, ModuleType } from '../../include/types';
+import { CortexModule, ModuleType } from '@shared/include/types';
 import { PromptRegistry } from '../../core/PromptRegistry';
-import { StorageService } from '../../drivers/storage';
+import { StorageService } from '@shared/drivers/storage';
 import { resolveHybridConfig, shouldReasonWithLLM, computeComplexity, makeHybridThink } from './agiThinkHelper';
 
 let promptRegistered = false;

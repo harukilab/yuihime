@@ -5,10 +5,10 @@ import { fileURLToPath } from "url";
 import { initializeDatabase, setupSchema } from "../src/core/database.js";
 import { Kernel } from "../src/core/kernel/core.js";
 import { initializeCortexModules } from "../src/core/RegistryInitializer.js";
-import { SystemRegistry } from "../src/core/registry.js";
+import { SystemRegistry } from "@shared/core/registry";
 import { Cortex } from "../src/core/cortex.js";
 import { NeuralInterface } from "../src/core/kernel/NeuralInterface.js";
-import { ModuleType } from "../src/include/types.js";
+import { ModuleType } from "@shared/include/types";
 
 // Global logging interceptor to capture output before process hang
 const logFile = path.join(process.cwd(), "yui_tests", "diagnostic_run.log");

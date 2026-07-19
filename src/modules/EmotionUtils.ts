@@ -1,4 +1,4 @@
-import { EmotionState, EmotionDelta } from "../include/types";
+import { EmotionState, EmotionDelta } from "@shared/include/types";
 
 export function applyEmotionDelta(current: EmotionState, delta: EmotionDelta): EmotionState {
   const clamp = (val: number, min: number, max: number) => Math.min(max, Math.max(min, val));

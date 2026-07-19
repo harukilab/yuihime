@@ -1,7 +1,7 @@
-import { CortexModule, ModuleType } from '../../include/types';
+import { CortexModule, ModuleType } from '@shared/include/types';
 import { PromptRegistry } from '../../core/PromptRegistry';
 import { YuiAGIDaemon } from './YuiAGIDaemon';
-import { eventBus } from '../../core/kernel/event-bus';
+import { eventBus } from '@shared/core/kernel/event-bus';
 
 let promptsRegistered = false;
 

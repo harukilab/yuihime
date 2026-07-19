@@ -1,4 +1,4 @@
-import { StorageService } from '../drivers/storage';
+import { StorageService } from '@shared/drivers/storage';
 
 export interface MemorySearchHit {
   id: string;

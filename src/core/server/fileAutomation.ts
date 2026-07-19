@@ -1,8 +1,8 @@
 import { readdirSync, statSync, existsSync, mkdirSync, writeFileSync, readFileSync, copyFileSync, renameSync, unlinkSync } from "fs";
 import path from "path";
 import { AIService } from "../kernel/ai.js";
-import { SettingsManager } from "../kernel/settings.js";
-import { SystemRegistry } from "../registry.js";
+import { SettingsManager } from "@/core/kernel/settings";
+import { SystemRegistry } from "@shared/core/registry";
 import { CronModule } from "../kernel/cron.js";
 
 export interface FileAutomationRule {

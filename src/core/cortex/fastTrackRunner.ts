@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { AgentState } from '../../include/types';
+import { AgentState } from '@shared/include/types';
 import { Soul } from '../soul';
 
 export class FastTrackRunner {
