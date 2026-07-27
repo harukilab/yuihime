@@ -1,0 +1,11 @@
+name = "Dream Enhancer"
+description = "Adds a poetic and ethereal layer to simulated dreams."
+version = "1.0.0"
+author = "Yuihime Core"
+runtime = "node"
+entry_point = "main.cjs"
+
+[tool]
+name = "poetic_dream_layer"
+description = "Transforms a standard dream description into a poetic fragment."
+parameters = { type = "object", properties = { dream_text = { type = "string", description = "The dream content to transform" } }, required = ["dream_text"] }

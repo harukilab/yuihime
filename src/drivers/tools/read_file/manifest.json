@@ -1,0 +1,19 @@
+{
+  "id": "read_file",
+  "name": "Read File",
+  "description": "Read content from a file in user_data.",
+  "version": "1.0.0",
+  "type": "TOOL",
+  "order": 102,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "filename": { "type": "string", "description": "The path to the file. You MUST specify the full path starting with 'user_data/' (e.g. 'user_data/catatan_prompt_al.txt') or absolute '/app/user_data/' path to ensure precise resolution." },
+      "limit": { "type": "number", "description": "Maximum number of characters to return (default: whole file). Use with 'offset' for character-based pagination." },
+      "offset": { "type": "number", "description": "Character offset to start reading from (default 0)." },
+      "line_start": { "type": "number", "description": "Optional 1-based inclusive starting line to read from." },
+      "line_end": { "type": "number", "description": "Optional 1-based inclusive ending line to read to." }
+    },
+    "required": ["filename"]
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "id": "web_search",
+  "name": "Web Search",
+  "description": "Search the internet for real-time information using multi-provider search grounding.",
+  "version": "1.0.0",
+  "type": "TOOL",
+  "order": 10,
+  "strict": true,
+  "configSchema": {
+    "fields": {
+      "serperApiKey": {
+        "type": "password",
+        "label": "Serper API Key",
+        "description": "Needed for real-time search extraction",
+        "default": ""
+      },
+      "searchProvider": {
+        "type": "select",
+        "label": "Search Provider",
+        "default": "google",
+        "options": [
+          { "label": "Google (Serper)", "value": "google" },
+          { "label": "Bing", "value": "bing" },
+          { "label": "DuckDuckGo", "value": "duckduckgo" }
+        ]
+      },
+      "maxResults": {
+        "type": "number",
+        "label": "Max Results",
+        "default": 5,
+        "min": 1,
+        "max": 20
+      },
+      "usageGuidelines": {
+        "type": "textarea",
+        "label": "Search Context Prompt",
+        "description": "Special instructions for the search engine",
+        "default": "Extract concise, factual information relevant to the user query."
+      }
+    }
+  },
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "query": {
+        "type": "string",
+        "description": "Search query string.",
+        "minLength": 1,
+        "maxLength": 500
+      },
+      "top_k": {
+        "type": "integer",
+        "description": "Number of results to return (1-20).",
+        "default": 5,
+        "minimum": 1,
+        "maximum": 20
+      }
+    },
+    "required": ["query"],
+    "additionalProperties": false
+  }
+}

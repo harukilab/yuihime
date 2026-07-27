@@ -1,0 +1,44 @@
+{
+  "id": "edit_file",
+  "name": "Edit File Segment",
+  "description": "Perform targeted content updates to specific lines or blocks within a file using search/replace tokens, avoiding the need to load or rewrite entire files.",
+  "version": "1.0.0",
+  "type": "TOOL",
+  "order": 102,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "filename": {
+        "type": "string",
+        "description": "The target path of the file to edit. You MUST specify the full path starting with 'user_data/' (e.g. 'user_data/catatan_prompt_al.txt') or absolute '/app/user_data/' path."
+      },
+      "search": {
+        "type": "string",
+        "description": "The precise block/segment of text or lines we want to locate and replace. Must match exactly including whitespace and indentation, and be unique in the file."
+      },
+      "replace": {
+        "type": "string",
+        "description": "The new text block that will replace the search block."
+      },
+      "changes": {
+        "type": "array",
+        "description": "An optional array of multi-segment edits containing multiple search and replace operations, for non-contiguous updates.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "search": {
+              "type": "string",
+              "description": "Precise search block."
+            },
+            "replace": {
+              "type": "string",
+              "description": "Replacement block."
+            }
+          },
+          "required": ["search", "replace"]
+        }
+      }
+    },
+    "required": ["filename"]
+  }
+}
