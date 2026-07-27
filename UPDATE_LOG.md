@@ -1,6 +1,20 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.113] - 2026-07-27
+### Fix: Standalone release package, build stability, Telegram UI init, and TensorArt delivery reporting
+- Added portable release/ package with run.sh/run.bat launchers for deployment outside project root.
+- Fixed tsconfig.json exclude for dist and release folders to prevent TypeScript heap exhaustion during lint/build.
+- Removed duplicate fs/path imports in server.ts causing TS2300 duplicate identifier errors.
+- Added missing CortexApi import in web/src/app/effects.ts.
+- Changed useRef<Cortex> to useRef<any> in web/src/app/state.ts to avoid bundling server-side Cortex class into web.
+- Moved top-level await SettingsManager.applyBootLogLevel() into startServer() because esbuild CJS bundle does not support top-level await.
+- Added overwrite guard in onboarding.ts: config.toml is now only written when missing or content actually changes, preventing unnecessary reset on every boot.
+- Fixed Telegram bot setup in web UI by initializing SystemRegistry from web/src/App.tsx so telegram_bridge module and botToken field are visible in Settings.
+- Wrote Telegram bot token to ~/.yuihime/data/config.toml.
+- Improved TensorArt tool: added sendTextToChat fallback and delivery status reporting to LLM when image download fails.
+
+
 ## [4.112] - 2026-07-27
 ### Fix: Build stability, config guard, Telegram UI init, and TensorArt chat delivery
 - Fixed tsconfig.json exclude for dist folders to prevent TypeScript heap exhaustion during lint/build.
