@@ -33,5 +33,5 @@
     "allowImportingTsExtensions": true,
     "noEmit": true
   },
-  "exclude": ["node_modules", "dist", "web/dist"]
+  "exclude": ["node_modules", "dist", "web/dist", "release"]
 }

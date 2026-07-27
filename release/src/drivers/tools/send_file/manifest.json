@@ -1,0 +1,26 @@
+{
+  "id": "send_file",
+  "name": "Send File Attachment",
+  "description": "Sends and delivers an existing file from Yui's sandbox workspace (user_data) back to the user via the active Telegram or Discord channel or a specified recipient.",
+  "version": "1.0.0",
+  "type": "TOOL",
+  "order": 205,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "filename": {
+        "type": "string",
+        "description": "The name of the file currently residing in Yui's local sandbox data folder (e.g. 'summary.pdf' or 'photo.jpg')."
+      },
+      "caption": {
+        "type": "string",
+        "description": "An optional text caption/message to accompany the file."
+      },
+      "recipient": {
+        "type": "string",
+        "description": "Optional Telegram username, perceived name, or raw Chat ID to send to. If left blank, Yui will automatically deliver it to the active conversational chat channel."
+      }
+    },
+    "required": ["filename"]
+  }
+}
