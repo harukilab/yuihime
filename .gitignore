@@ -17,3 +17,4 @@ coverage/
 src/share/prompts/build-info.json
 /build-info.json
 bin/yuihime-sea
+release/
