@@ -1,6 +1,13 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.114] - 2026-07-27
+### Refactor: Project cleanup and repository hygiene
+- Removed accidental ~ directory and unused root files (eng.traineddata, db-tui.mjs, log-viewer.mjs, settings-tui.mjs, metadata.json, mock-test.ts, sop_system_plan.md, terminal.sh, root index.html).
+- Untracked release/ from git and added to .gitignore to keep repository size healthy; standalone package remains available locally.
+- Added release/ to .gitignore and cleaned up temporary test artifacts from /tmp.
+
+
 ## [4.113] - 2026-07-27
 ### Fix: Standalone release package, build stability, Telegram UI init, and TensorArt delivery reporting
 - Added portable release/ package with run.sh/run.bat launchers for deployment outside project root.
