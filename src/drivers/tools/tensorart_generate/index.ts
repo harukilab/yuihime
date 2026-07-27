@@ -445,22 +445,6 @@ export const TensorArtGenerateTool: ToolModule = {
             console.warn(`[TENSORART_GENERATE_WARN] Download error: ${downloadErr.message}. Local copy skipped, will use remote URL.`);
           }
 
-          const channelId = context?.contextId;
-          const isBotChannel = typeof channelId === "string" && (channelId.startsWith("tg_") || channelId.startsWith("dc_"));
-          let delivered = false;
-          let deliveryError: string | undefined;
-          if (args.sendToChat || isBotChannel) {
-            if (localPath) {
-              delivered = await sendImageToChat(localPath, channelId, "");
-            } else {
-              delivered = await sendTextToChat(`🖼️ Generated image: ${imageUrl}`, channelId);
-            }
-            if (!delivered) {
-              deliveryError = "Failed to deliver image to chat channel.";
-            }
-            console.log(`[TENSORART_GENERATE] Auto-deliver to chat: ${delivered ? "success" : "skipped/failed"}`);
-          }
-
           const resultData: any = {
             imageUrl,
             localPath,
@@ -470,12 +454,6 @@ export const TensorArtGenerateTool: ToolModule = {
             inputs,
             metadata: { width, height },
           };
-          if (deliveryError) {
-            resultData.deliveryError = deliveryError;
-          }
-          if (delivered) {
-            resultData.delivered = true;
-          }
           return buildEnvelope("success", resultData, null, Date.now() - startTime, toolId, attempts);
         } else if (status === "EXCEPTION" || status === "FAILED") {
           return buildEnvelope("error", null, { code: "TASK_FAILED", message: `TensorArt generation task failed: ${taskInfo.error || taskInfo.message || "Unknown Error"}`, retryable: false }, Date.now() - startTime, toolId, attempts);

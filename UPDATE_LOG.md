@@ -1,6 +1,12 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.115] - 2026-07-27
+### Fix: TensorArt duplicate chat delivery fix
+- Removed automatic image/link sending from tensorart_generate tool to prevent duplicate messages in Telegram/Discord.
+- Tool now only returns imageUrl/localPath to LLM; LLM handles final user-facing message so link is sent exactly once.
+
+
 ## [4.114] - 2026-07-27
 ### Refactor: Project cleanup and repository hygiene
 - Removed accidental ~ directory and unused root files (eng.traineddata, db-tui.mjs, log-viewer.mjs, settings-tui.mjs, metadata.json, mock-test.ts, sop_system_plan.md, terminal.sh, root index.html).
