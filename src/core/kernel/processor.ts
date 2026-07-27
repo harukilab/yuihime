@@ -837,6 +837,8 @@ export class NeuralProcessor {
     clean = clean.replace(/^\s*[\*\-\+s]?\s*["'`]?(speech|response|greeting|animations|mood_impact|moodImpact|mood_update|tone|voice|tool_calls|tools_to_call|viewerProfileUpdate|perceivedNameUpdate|linkedAccountUpdate|role|content|arguments|function|pitch|speed)["'`]?\s*:\s*.*$/gim, '');
 
     // Remove XML tags along with their inner contents for structural tags
+    clean = clean.replace(/<environment_details>([\s\S]*?)<\/environment_details>/gi, '');
+    clean = clean.replace(/<environment_details>([\s\S]*?)$/gi, '');
     clean = clean.replace(/<animations>([\s\S]*?)<\/animations>/gi, '');
     clean = clean.replace(/<mood_impact>([\s\S]*?)<\/mood_impact>/gi, '');
     clean = clean.replace(/<moodImpact>([\s\S]*?)<\/moodImpact>/gi, '');

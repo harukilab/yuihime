@@ -1,6 +1,18 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.117] - 2026-07-27
+### Fix: Fix Telegram duplicate message and environment_details leak
+- Merge post-photo text into photo caption instead of sending separate message
+- Strip <environment_details> block globally in NeuralProcessor.sanitizeOutput
+
+
+## [4.116] - 2026-07-27
+### Fix: Fix Telegram duplicate message and environment_details leak
+- Merge post-photo text into photo caption instead of sending separate message
+- Strip <environment_details> block globally in NeuralProcessor.sanitizeOutput
+
+
 ## [4.115] - 2026-07-27
 ### Fix: TensorArt duplicate chat delivery fix
 - Removed automatic image/link sending from tensorart_generate tool to prevent duplicate messages in Telegram/Discord.

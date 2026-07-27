@@ -594,18 +594,20 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
 
       if (attachments.length === 0) return false;
 
-      for (const att of attachments) {
+      for (let i = 0; i < attachments.length; i++) {
+        const att = attachments[i];
+        const isFirstImage = i === 0 && att.isImage;
         if (att.isImage) {
-          await ctx.replyWithPhoto({ source: att.safePath });
+          if (isFirstImage && remainingText) {
+            await ctx.replyWithPhoto({ source: att.safePath }, { caption: remainingText });
+          } else {
+            await ctx.replyWithPhoto({ source: att.safePath });
+          }
         } else {
           await ctx.replyWithDocument({ source: att.safePath });
         }
       }
 
-      // If there is leftover conversational text after the directive, send it as a normal reply.
-      if (remainingText) {
-        await ctx.reply(remainingText).catch(() => {});
-      }
       return true;
     } catch (e) {
       console.warn("[TELEGRAM_FILE] Failed to send file attachment from response:", e);

@@ -74,3 +74,5 @@ Peta struktur direktori pasca-pemisahan Web UI ↔ Daemon (lihat UPDATE_LOG `[4.
 - `web/src/core/socket.ts — Real-time WebSocket communication service parsing avatar animation triggers and TTS audio streams with offline resilience.`
 - `DOCS_SOCKET.md — Complete technical documentation for SocketService and server-side WebSocket broadcasting protocol.`
 - `web/src/ui/modular-settings/GiftiaRelationSection.tsx — Dedicated Giftia OS Relation & Lattice Synchrony panel with AGI Soul influence analysis.`
+- `src/core/kernel/processor.ts`
+- `src/core/kernel/processor.ts`
