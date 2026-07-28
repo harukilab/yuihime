@@ -14,11 +14,13 @@ import { CronModule, resolveCronJobPrompt } from "../kernel/cron.js";
 import { NeuralInterface } from "../kernel/NeuralInterface.js";
 import { MultiChannelQueue } from "../kernel/MultiChannelQueue.js";
 import { eventBus } from "@shared/core/kernel/event-bus";
+import { SystemRegistry } from '@shared/core/registry';
 import { initializeBot, getActiveTelegramBot } from "./telegram.js";
 import { Cortex } from "../cortex.js";
 import { Soul } from "../soul.js";
 import { deduplicateAndMergeIdentities, initializeDatabase } from "../database.js";
 import { APIService } from "@shared/services/api";
+import { initializeCortexModules } from "../RegistryInitializer.js";
 
 // Register server-side persistent tool audit log handlers on globalThis
 (globalThis as any).getToolAuditLogs = () => {
@@ -166,7 +168,6 @@ export const getCronAction = (id: string, name: string, repeating: boolean, db: 
   // CUSTOM OVERRIDES FOR BUILT-IN SYSTEM TASKS
   if (id === 'memory-consolidation') {
     try {
-      const { SystemRegistry } = await import('@shared/core/registry');
       const consolidator = SystemRegistry.getModule('memory-consolidation');
       if (consolidator) {
          await consolidator.run('CONSOLIDATE_MEMORIES', {}, { db });
@@ -751,6 +752,15 @@ export function registerAPIRoutes(app: express.Express, db: any) {
   } catch (err: any) {
     console.warn("[SERVER_ROUTE_INIT] Failed to print routing table:", err.message);
   }
+
+  app.post("/api/modules/initialize", async (req, res) => {
+    try {
+      await initializeCortexModules();
+      res.json({ success: true, message: "Cortex modules initialized" });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
 
   app.all("/api/*", (req, res) => {
     res.status(404).json({ 

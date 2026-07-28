@@ -3,6 +3,7 @@ import { Cortex } from "./cortex";
 import { StorageService } from "@shared/drivers/storage";
 import { LearningEngine } from "./learning";
 import { StandardizedProcessor } from "./kernel/processor";
+import { PromptRegistry } from "./PromptRegistry";
 
 export class DreamEngine {
   /**
@@ -21,7 +22,6 @@ export class DreamEngine {
     const soulMd = await StorageService.getKnowledgeFile('SOUL');
     const memoryMd = await StorageService.getKnowledgeFile('MEMORY');
 
-    const { PromptRegistry } = await import("./PromptRegistry.js");
     const unprocessed_history = unproccessed.map(h => `- ${h.content}`).join('\n');
     
     const prompt = PromptRegistry.getInstance().compile('cortex:dream_consolidation', {

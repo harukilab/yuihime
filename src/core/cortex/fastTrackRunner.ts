@@ -5,6 +5,8 @@
 
 import { AgentState } from '@shared/include/types';
 import { Soul } from '../soul';
+import { initializeDatabase } from '../database.js';
+import { Worker } from 'worker_threads';
 
 export class FastTrackRunner {
   private static fastTrackWorker: any = null;
@@ -28,9 +30,6 @@ export class FastTrackRunner {
 
     if (isNode) {
       try {
-        const workerThreadsPath = 'worker_threads';
-        const { Worker } = await import(/* @vite-ignore */ workerThreadsPath);
-
         // Lazily initialize singleton worker
         if (!this.fastTrackWorker) {
           const workerCode = `
@@ -268,8 +267,6 @@ export class FastTrackRunner {
     if (isNode) {
       (async () => {
         try {
-          const dbModulePath = '../database.js';
-          const { initializeDatabase } = await import(/* @vite-ignore */ dbModulePath);
           const db = initializeDatabase();
           
           if (db) {

@@ -4,10 +4,36 @@ import { eventBus } from "@shared/core/kernel/event-bus";
 import { CognitiveScheduler } from "./CognitiveScheduler.js";
 import { PromptRegistry } from "../PromptRegistry.js";
 import { SettingsManager } from "./settings.js";
+import { broadcastToWS } from "../server/apiRouter.js";
+import { activeDiscordClient } from "../server/discord.js";
+import { activeTelegramBot } from "../server/telegram.js";
+import { Kernel } from "../kernel/core.js";
+import { stateMachine } from "./state-machine.js";
 
 const DEFAULT_PENDING_FEEDBACK = `[SYSTEM MESSAGE]: Koneksi saraf batin Yuihime dengan kognisi LLM sedang sangat padat atau terputus sementara 📡. Tapi jangan khawatir! Pesanmu ("\${inputPreview}") sudah aman dalam antrean tunggu kognisi Yui. Yui akan membalas secara otomatis setelah tautan saraf sinkron kembali! 🌸`;
 
 PromptRegistry.getInstance().register('multi-channel-queue:pending_feedback', DEFAULT_PENDING_FEEDBACK);
+
+function isSqliteBusy(err: any): boolean {
+  return err && (err.code === 'SQLITE_BUSY' || err.message?.includes('database is locked') || err.message?.includes('SQLITE_BUSY'));
+}
+
+async function withSqliteRetry<T>(label: string, db: any, fn: () => T): Promise<T> {
+  const maxRetries = 5;
+  let lastErr: any = null;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await Promise.resolve(fn());
+    } catch (err: any) {
+      lastErr = err;
+      if (!isSqliteBusy(err)) throw err;
+      const backoff = 200 * attempt;
+      console.warn(`[QUEUE_SQLITE_RETRY] ${label} hit SQLITE_BUSY (attempt ${attempt}/${maxRetries}). Retrying in ${backoff}ms...`);
+      await new Promise(resolve => setTimeout(resolve, backoff));
+    }
+  }
+  throw lastErr;
+}
 
 export interface QueueItem {
   input: string;
@@ -31,7 +57,7 @@ export class MultiChannelQueue {
   
   // Dynamic Background Worker Pool Configuration & Status Trackers
   private activeBgWorkers = 0;
-  private maxBgWorkers = 4; // up to 4 parallel concurrent workers
+  private maxBgWorkers = 2; // reduced from 4 to avoid SQLite busy contention
   private runningBgMsgIds = new Set<string>();
 
   // Proactive Impulse Engine Trackers
@@ -230,8 +256,6 @@ export class MultiChannelQueue {
     console.log(`[QUEUE_BG_WORKER_START] Starting parallel cognitive processing (${this.activeBgWorkers}/${this.maxBgWorkers}) for ${pending.sender_name} (${pending.chat_type}) [ID: ${pending.id}]`);
 
     try {
-      this.db.prepare("DELETE FROM pending_messages WHERE id = ?").run(pending.id);
-      
       // 2. Kirim ke nalar kognitif batin Yui (NeuralInterface)
       console.log(`[QUEUE_BG_WORKER_THINK] [ID: ${pending.id}] Yui is pondering response for ${pending.sender_name}...`);
       const reply = await NeuralInterface.processNeuralInput(pending.input, pending.sender_name, pending.context_id, pending.chat_type);
@@ -250,9 +274,8 @@ export class MultiChannelQueue {
               console.log(`[QUEUE_BG_WORKER_SEND] [ID: ${pending.id}] Successfully sent reply to Telegram Chat ID: ${chatId}`);
 
               // Broadcast the delayed telegram response to connected web UIs
-              try {
-                const { broadcastToWS } = await import("../server/apiRouter.js");
-                broadcastToWS({
+               try {
+                 broadcastToWS({
                   type: "remote_response_sent",
                   data: {
                     reply: delayedReply,
@@ -269,19 +292,17 @@ export class MultiChannelQueue {
           }
         } else if (pending.context_id.startsWith("dc_")) {
           const channelId = pending.context_id.replace("dc_", "");
-          try {
-            const { activeDiscordClient } = await import("../server/discord.js");
-            if (activeDiscordClient) {
-              const channel = await activeDiscordClient.channels.fetch(channelId);
-              if (channel && channel.isTextBased()) {
-                const delayedReply = reply;
-                await (channel as any).send(delayedReply);
-                console.log(`[QUEUE_BG_WORKER_SEND] [ID: ${pending.id}] Successfully sent reply to Discord Channel ID: ${channelId}`);
+           try {
+             if (activeDiscordClient) {
+               const channel = await activeDiscordClient.channels.fetch(channelId);
+               if (channel && channel.isTextBased()) {
+                 const delayedReply = reply;
+                 await (channel as any).send(delayedReply);
+                 console.log(`[QUEUE_BG_WORKER_SEND] [ID: ${pending.id}] Successfully sent reply to Discord Channel ID: ${channelId}`);
 
                 // Broadcast the delayed discord response to connected web UIs
-                try {
-                  const { broadcastToWS } = await import("../server/apiRouter.js");
-                  broadcastToWS({
+                 try {
+                   broadcastToWS({
                     type: "remote_response_sent",
                     data: {
                       reply: delayedReply,
@@ -310,6 +331,28 @@ export class MultiChannelQueue {
       }
     } catch (err: any) {
       console.error(`[QUEUE_BG_WORKER_FAIL] Attempt failed for [ID: ${pending.id}]:`, err.message || err);
+      const attempts = (pending.attempts || 0) + 1;
+      const isNeuralGatewayMissing = err.message && err.message.includes('Neural Gateway is missing');
+      const maxRetries = 5;
+      if (isNeuralGatewayMissing || attempts >= maxRetries) {
+        try {
+          await withSqliteRetry(`update-failed-${pending.id}`, this.db, () => {
+            this.db.prepare("UPDATE pending_messages SET attempts = ?, status = 'failed' WHERE id = ?").run(attempts, pending.id);
+          });
+          console.warn(`[QUEUE_BG_WORKER_FAILED] [ID: ${pending.id}] ${isNeuralGatewayMissing ? 'Neural Gateway missing. Marked as failed.' : `Max retries (${maxRetries}) reached.`}`);
+        } catch (dbErr: any) {
+          console.error(`[QUEUE_BG_WORKER_DB_ERR] [ID: ${pending.id}] Failed to update status to failed:`, dbErr.message || dbErr);
+        }
+      } else {
+        try {
+          await withSqliteRetry(`update-retry-${pending.id}`, this.db, () => {
+            this.db.prepare("UPDATE pending_messages SET attempts = ?, status = 'pending' WHERE id = ?").run(attempts, pending.id);
+          });
+          console.warn(`[QUEUE_BG_WORKER_RETRY] [ID: ${pending.id}] Attempt ${attempts}/${maxRetries}. Will retry.`, err.message || err);
+        } catch (dbErr: any) {
+          console.error(`[QUEUE_BG_WORKER_DB_ERR] [ID: ${pending.id}] Failed to update retry status:`, dbErr.message || dbErr);
+        }
+      }
     } finally {
       // 4. Kurangi beban pekerja & bersihkan penanda aktif
       this.runningBgMsgIds.delete(pending.id);
@@ -344,41 +387,37 @@ export class MultiChannelQueue {
       const attempts = (item.attempts || 0) + 1;
       item.attempts = attempts;
       const maxRetries = 3;
-      if (attempts < maxRetries) {
+      const isNeuralGatewayMissing = err.message && err.message.includes('Neural Gateway is missing');
+      if (isNeuralGatewayMissing || attempts < maxRetries) {
         const delay = 1000 * attempts;
         console.warn(`[QUEUE_RETRY] Retrying message from ${item.senderName} (${item.chatType}) - Attempt ${attempts}/${maxRetries} in ${delay}ms...`);
         setTimeout(() => {
-          this.queue.unshift(item); // Taruh kembali di baris depan untuk dicoba ulang
+          this.queue.unshift(item);
           this.processNext();
         }, delay);
       } else {
-        console.error(`[QUEUE_MAX_RETRY_EXCEEDED] Retry limit exceeded (${maxRetries}) for ${item.senderName}. Saving to pending queue (pending_messages)...`);
-        
-        if (this.db) {
-          try {
-            const id = "pending_" + Math.random().toString(36).substr(2, 9);
-            const stmt = this.db.prepare(`
-              INSERT INTO pending_messages (id, input, sender_name, context_id, chat_type, timestamp, attempts, status)
-              VALUES (?, ?, ?, ?, ?, ?, 0, 'pending')
-            `);
-            stmt.run(id, item.input, item.senderName, item.contextId, item.chatType, item.timestamp);
+          console.error(`[QUEUE_MAX_RETRY_EXCEEDED] Retry limit exceeded (${maxRetries}) for ${item.senderName}. Marking as failed in pending queue.`);
 
-            const queueCfg = SettingsManager.getInstance().get('multi-channel-queue') || {};
-            if (queueCfg.enablePendingFeedbackMessage === true) {
-              const preview = `${item.input.substring(0, 30)}${item.input.length > 30 ? '...' : ''}`;
-              const template = queueCfg.pendingFeedbackMessage || PromptRegistry.getInstance().get('multi-channel-queue:pending_feedback');
-              const feedbackText = template.replace(/\$\{inputPreview\}/g, preview);
-              item.onReply(feedbackText);
+          if (this.db) {
+            try {
+              await withSqliteRetry(`insert-failed-${Date.now()}`, this.db, () => {
+                const id = "pending_" + Math.random().toString(36).substr(2, 9);
+                const stmt = this.db.prepare(`
+                  INSERT INTO pending_messages (id, input, sender_name, context_id, chat_type, timestamp, attempts, status)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, 'failed')
+                `);
+                stmt.run(id, item.input, item.senderName, item.contextId, item.chatType, item.timestamp, maxRetries);
+                item.onReply("Maaf, pesan Anda gagal diproses setelah beberapa percobaan. Silakan coba lagi nanti.");
+              });
+            } catch (dbErr) {
+              console.error("[QUEUE_DB_ERROR] Failed to save failed message to database:", dbErr);
+              if (item.onError) item.onError(err);
             }
-          } catch (dbErr) {
-            console.error("[QUEUE_DB_ERROR] Failed to save pending message to database:", dbErr);
+          } else {
             if (item.onError) item.onError(err);
           }
-        } else {
-          if (item.onError) item.onError(err);
         }
-      }
-    } finally {
+     } finally {
       this.processing = false;
       // Stagger jeda tipis antarrespons agar tarian avatar & tts berjalan mulus berurutan tanpa penumpukan
       setTimeout(() => this.processNext(), 1200);
@@ -445,9 +484,8 @@ Hasil rangkuman singkat subkesadaran:`.trim();
           });
 
           // Broadcast WS packet to ensure web interface views/renders this spoken summary
-          try {
-            const { broadcastToWS } = await import("../server/apiRouter.js");
-            broadcastToWS({
+           try {
+             broadcastToWS({
               type: "state_update",
               data: {
                 state: { status: "talking" },
@@ -504,8 +542,7 @@ Hasil rangkuman singkat subkesadaran:`.trim();
     let longingGrowthRate = 0.5;
 
     try {
-      const { Kernel: k } = await import("../kernel/core.js");
-      const settings = k.getInstance().getSettings()?.getAll() || {};
+       const settings = Kernel.getInstance().getSettings()?.getAll() || {};
       const spConfig = settings['spontaneous-proactive'] || settings.agent || {};
       
       if (spConfig.enableSpontaneousSpam !== undefined) {
@@ -713,9 +750,8 @@ Unggkit topik nyata tersebut dari memori jika ingin, sapa dia dengan manis, atau
               }
             };
 
-            try {
-              const { broadcastToWS } = await import("../server/apiRouter.js");
-              broadcastToWS(replyPayload);
+             try {
+               broadcastToWS(replyPayload);
               broadcastToWS(logPayload);
             } catch (wsErr) {
               console.error("[PROACTIVE_ENGINE_WS] Failed to send WS broadcast:", wsErr);
@@ -725,8 +761,7 @@ Unggkit topik nyata tersebut dari memori jika ingin, sapa dia dengan manis, atau
             if (contextId.startsWith("tg_")) {
               const chatId = contextId.split("|")[0].replace("tg_", "");
               try {
-                const { activeTelegramBot } = await import("../server/telegram.js");
-                if (activeTelegramBot) {
+                 if (activeTelegramBot) {
                   await activeTelegramBot.telegram.sendMessage(chatId, reply);
                   console.log(`[PROACTIVE_ENGINE_TELEGRAM] Successfully sent proactive message to Telegram Chat: ${chatId}`);
                 }
@@ -738,9 +773,8 @@ Unggkit topik nyata tersebut dari memori jika ingin, sapa dia dengan manis, atau
             // 3. Dispatch ke Discord jika asalnya dari Discord
             if (contextId.startsWith("discord_")) {
               const channelId = contextId.split("|")[0].replace("discord_", "");
-              try {
-                const { activeDiscordClient } = await import("../server/discord.js");
-                if (activeDiscordClient) {
+           try {
+             if (activeDiscordClient) {
                   const channel = await activeDiscordClient.channels.fetch(channelId);
                   if (channel && typeof (channel as any).send === 'function') {
                     await (channel as any).send(reply);
@@ -783,9 +817,8 @@ Unggkit topik nyata tersebut dari memori jika ingin, sapa dia dengan manis, atau
     if (this.processing || this.activeBgWorkers > 0) return;
     
     // Check if system state is IDLE
-    try {
-      const { stateMachine } = await import("./state-machine.js");
-      const status = stateMachine.getStatus() || 'IDLE';
+     try {
+       const status = stateMachine.getStatus() || 'IDLE';
       if (status.toUpperCase() !== 'IDLE') {
         return;
       }
@@ -832,16 +865,15 @@ Unggkit topik nyata tersebut dari memori jika ingin, sapa dia dengan manis, atau
           }
         } else if (contextId.startsWith("discord_")) {
           const channelId = contextId.split("|")[0].replace("discord_", "");
-          try {
-            const { activeDiscordClient } = await import("../server/discord.js");
-            if (activeDiscordClient) {
-              const channel = await activeDiscordClient.channels.fetch(channelId);
-              if (channel && channel.isTextBased()) {
-                await (channel as any).send(reply);
-                console.log(`[QUEUE_RESUME_SEND] Sent Discord message to channel ${channelId}`);
-              }
-            }
-          } catch (dcErr: any) {
+           try {
+             if (activeDiscordClient) {
+               const channel = await activeDiscordClient.channels.fetch(channelId);
+               if (channel && channel.isTextBased()) {
+                 await (channel as any).send(reply);
+                 console.log(`[QUEUE_RESUME_SEND] Sent Discord message to channel ${channelId}`);
+               }
+             }
+           } catch (dcErr: any) {
             console.error(`[QUEUE_RESUME_ERR] Failed to send Discord message:`, dcErr.message);
           }
         } else {
@@ -850,9 +882,8 @@ Unggkit topik nyata tersebut dari memori jika ingin, sapa dia dengan manis, atau
         }
 
         // Broadcast to Web socket/SSE
-        try {
-          const { broadcastToWS } = await import("../server/apiRouter.js");
-          broadcastToWS({
+         try {
+           broadcastToWS({
             type: "state_update",
             data: {
               state: { status: "talking" },

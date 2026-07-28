@@ -51,7 +51,8 @@ export class Consolidator {
       
       cleaned = cleaned.replace(/```json/gi, '').replace(/```/gi, '').trim();
       
-      const entries = JSON.parse(cleaned);
+      const _conMatch = cleaned.match(/\[[\s\S]*?\]/);
+      const entries = _conMatch ? JSON.parse(_conMatch[0]) : [];
       
       for (const entry of entries) {
         await StorageService.appendHistory({

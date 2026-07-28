@@ -466,15 +466,17 @@ export class NeuralProcessor {
          // Try repairing JSON locally first
          let repaired = cleaned;
          let directParseOk = false;
-         try {
-           const parsedObj = JSON.parse(cleaned);
-           directParseOk = true;
+          try {
+            const _cMatch = cleaned.match(/\{[\s\S]*\}/);
+            const parsedObj = _cMatch ? JSON.parse(_cMatch[0]) : null;
+            directParseOk = true;
          } catch (_) {
            repaired = NeuralProcessor.locallyRepairJson(cleaned);
          }
-         try {
-           const parsedObj = directParseOk ? JSON.parse(cleaned) : JSON.parse(repaired);
-         if (parsedObj && typeof parsedObj === 'object') {
+          try {
+            const _parsedMatch = (directParseOk ? cleaned : repaired).match(/\{[\s\S]*\}/);
+            const parsedObj = _parsedMatch ? JSON.parse(_parsedMatch[0]) : null;
+            if (parsedObj && typeof parsedObj === 'object') {
            if (parsedObj.properties && typeof parsedObj.properties === 'object' && !Array.isArray(parsedObj.properties)) {
              const p = parsedObj.properties;
              if (p.thought || p.tool_calls || p.tools_to_call || p.final_answer || p.speech || p.response) {
@@ -509,9 +511,10 @@ export class NeuralProcessor {
            cleaned = cleaned.substring(firstBrace, lastBrace + 1);
          }
          
-         if (cleaned.startsWith("{") && cleaned.endsWith("}")) {
-           const parsedObj = JSON.parse(cleaned);
-           if (parsedObj && typeof parsedObj === 'object' && parsedObj.properties && typeof parsedObj.properties === 'object' && !Array.isArray(parsedObj.properties)) {
+          if (cleaned.startsWith("{") && cleaned.endsWith("}")) {
+            const _fMatch = cleaned.match(/\{[\s\S]*\}/);
+            const parsedObj = _fMatch ? JSON.parse(_fMatch[0]) : null;
+            if (parsedObj && typeof parsedObj === 'object' && parsedObj.properties && typeof parsedObj.properties === 'object' && !Array.isArray(parsedObj.properties)) {
              const p = parsedObj.properties;
              if (p.thought || p.tool_calls || p.tools_to_call || p.final_answer || p.speech || p.response) {
                console.log("[PARSER] Detected nested properties schema confusion, lifting properties values to root context.");

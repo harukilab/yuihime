@@ -44,6 +44,8 @@ const originalConsoleFns = {
   info: console.info,
   debug: console.debug
 };
+let __globalServer: any = null;
+let __globalWss: any = null;
 ['log', 'warn', 'error', 'info', 'debug'].forEach((method) => {
   (console as any)[method] = (...args: any[]) => {
     try {
@@ -145,17 +147,25 @@ runOnboarding();
 
 const execPromise = promisify(exec);
 
+import { StorageServer } from "./shared/drivers/storageServer.js";
+
+// Register StorageServer on globalThis so shared/drivers/storage.ts can bypass HTTP in Node
+// MUST be set BEFORE RegistryInitializer imports, because AGI modules may call StorageService during module load.
+(globalThis as any).__yuihimeStorageServer = StorageServer;
+
 import { initializeCortexModules } from "./src/core/RegistryInitializer.js";
-import { initializeBot, getActiveTelegramBot } from "./src/core/server/telegram.js";
-import { initializeDiscord } from "./src/core/server/discord.js";
-import { initializeTwitter } from "./src/core/server/twitter.js";
+import { initializeBot, getActiveTelegramBot, activeTelegramBot as yuihimeActiveTelegramBot } from "./src/core/server/telegram.js";
+import { initializeDiscord, activeDiscordClient as yuihimeActiveDiscordClient } from "./src/core/server/discord.js";
+import { initializeTwitter, activeTwitterInterval as yuihimeActiveTwitterInterval } from "./src/core/server/twitter.js";
 import { initializeMCP } from "./src/core/server/mcp.js";
+import { startRepl } from "./src/bin/terminal.js";
 import { registerAPIRoutes, activeWSConnections, activeStreamClients, broadcastToWS, getCronAction } from "./src/core/server/apiRouter.js";
 import { Kernel } from "./src/core/kernel/core.js";
 import { AIService } from "./src/core/kernel/ai.js";
 import { CronModule } from "./src/core/kernel/cron.js";
 import { NeuralInterface } from "./src/core/kernel/NeuralInterface.js";
 import { MultiChannelQueue } from "./src/core/kernel/MultiChannelQueue.js";
+import { closeDatabase } from "./src/core/database.js";
 
 // --- Settings System ---
 const settingsPath = process.env.YUIHIME_CONFIG || path.join(os.homedir(), ".yuihime", "data", "config.toml");
@@ -276,40 +286,57 @@ async function discoverAddons() {
 
 import { initializeDatabase, setupSchema, startAutoCleanupScheduler, dbPath } from "./src/core/database.js";
 
-// Initialize SQLite Database
-const db = initializeDatabase();
-setupSchema(db);
-startAutoCleanupScheduler(db);
+let db: any = null;
 
-// Register on globalThis for plug-and-play tools zero-import runtime access
-(globalThis as any).yuihime_db = db;
-(globalThis as any).yuihime_initializeDatabase = initializeDatabase;
-(globalThis as any).yuihime_CronModule = CronModule;
-try {
-  import("./src/core/server/apiRouter.js").then((mod) => {
-    (globalThis as any).yuihime_getCronAction = mod.getCronAction;
-  }).catch((err) => {
-    console.warn("[SERVER] Failed to dynamically assign getCronAction to globalThis:", err.message);
-  });
-} catch (_) {}
+async function bootstrap() {
+  db = initializeDatabase();
+  setupSchema(db);
 
-// Ensure the singleton agent_state row with ID = 1 exists
-try {
-  db.prepare(`
-    INSERT INTO agent_state (id, mood, emotion, relation, systemHealth, lastDreamCycle, lastRefreshed, activePersonaId, currentPlan)
-    VALUES (1, '{}', '{}', '{}', '{}', 0, 0, 'hiyori', null)
-    ON CONFLICT(id) DO NOTHING
-  `).run();
-} catch (err: any) {
-  console.warn("[SERVER] Warning: Failed to seed default agent_state on startup:", err.message);
-}
+  try {
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS pending_messages (
+        id TEXT PRIMARY KEY,
+        input TEXT,
+        sender_name TEXT,
+        context_id TEXT,
+        chat_type TEXT,
+        timestamp INTEGER,
+        attempts INTEGER DEFAULT 0,
+        status TEXT DEFAULT 'pending'
+      )
+    `).run();
+  } catch (e: any) {
+    console.warn("[SERVER] Warning: pending_messages safety-net creation failed:", e.message);
+  }
 
-NeuralInterface.setDatabase(db);
-MultiChannelQueue.getInstance().setDatabase(db);
+  try {
+    const cutoff = Date.now() - 10 * 60 * 1000;
+    const stalePending = db.prepare("DELETE FROM pending_messages WHERE status = 'pending' AND timestamp < ?").run(cutoff);
+    const staleFailed = db.prepare("DELETE FROM pending_messages WHERE status = 'failed' AND timestamp < ?").run(cutoff);
+    const totalCleaned = (stalePending.changes || 0) + (staleFailed.changes || 0);
+    if (totalCleaned > 0) {
+      console.log(`[SERVER] Startup cleanup: removed ${totalCleaned} stale pending/failed messages.`);
+    }
+  } catch (cleanupErr: any) {
+    console.warn("[SERVER] Startup pending message cleanup failed:", cleanupErr.message);
+  }
 
-// --- Live Stream Connection WebSocket & SSE Gateways (Declared globally for Cron dispatch) ---
+  startAutoCleanupScheduler(db);
 
-  // Seed default background cron tasks to SQLite database if not present, so they are user-configurable via the UI
+  (globalThis as any).yuihime_db = db;
+  (globalThis as any).yuihime_initializeDatabase = initializeDatabase;
+  (globalThis as any).yuihime_CronModule = CronModule;
+
+  try {
+    db.prepare(`
+      INSERT INTO agent_state (id, mood, emotion, relation, systemHealth, lastDreamCycle, lastRefreshed, activePersonaId, currentPlan)
+      VALUES (1, '{}', '{}', '{}', '{}', 0, 0, 'hiyori', null)
+      ON CONFLICT(id) DO NOTHING
+    `).run();
+  } catch (err: any) {
+    console.warn("[SERVER] Warning: Failed to seed default agent_state on startup:", err.message);
+  }
+
   try {
     db.prepare(`
       INSERT INTO cron_tasks (id, name, schedule, enabled, repeating, context_id, chat_type, sender_name)
@@ -319,6 +346,19 @@ MultiChannelQueue.getInstance().setDatabase(db);
   } catch (e: any) {
     console.warn("[SERVER] Failed to seed default memory consolidation task:", e.message);
   }
+
+  await initializeCortexModules();
+
+  NeuralInterface.setDatabase(db);
+  MultiChannelQueue.getInstance().setDatabase(db);
+
+  await startServer();
+
+  initializeBot(db).catch(() => {});
+  initializeDiscord(db).catch(() => {});
+  initializeTwitter(db).catch(() => {});
+  initializeMCP().catch(() => {});
+}
 
 
 
@@ -605,7 +645,11 @@ async function startServer() {
       }
       
       if (!existsSync(filePath) && ['character.md', 'system_prompt.md', 'lore.md'].includes(name)) {
-        filePath = path.join(process.cwd(), 'src', 'share', 'prompts', name);
+        const agentDir = process.env.YUIHIME_AGENT_PATH || path.join(os.homedir(), ".yuihime", "agent");
+        const agentFilePath = path.join(agentDir, name);
+        if (existsSync(agentFilePath)) {
+          filePath = agentFilePath;
+        }
       }
       
       if (existsSync(filePath)) {
@@ -657,7 +701,8 @@ async function startServer() {
 
       const pathsToWrite = [targetPath];
       if (name === 'character.md' || name === 'system_prompt.md' || name === 'lore.md') {
-        const sharePath = path.join(process.cwd(), 'src', 'share', 'prompts', name);
+        const agentDir = process.env.YUIHIME_AGENT_PATH || path.join(os.homedir(), ".yuihime", "agent");
+        const sharePath = path.join(agentDir, name);
         if (existsSync(sharePath) && !pathsToWrite.includes(sharePath)) pathsToWrite.push(sharePath);
       } else if (['IDENTITY.md', 'SOUL.md', 'MEMORY.md', 'USER.md', 'TOOLS.md', 'HEARTBEAT.md'].includes(name)) {
         const rootPath = path.join(process.cwd(), name);
@@ -717,8 +762,23 @@ app.use("/models", express.static(modelsDir));
     console.warn(`[SYSTEM] =============================\n`);
   });
 
+  server.on("error", (err: any) => {
+    if (err.code === "EADDRINUSE") {
+      console.error(`[SYSTEM] Port ${PORT} is already in use. Another YuiHime instance may be running. Exiting gracefully.`);
+      gracefulShutdown('EADDRINUSE');
+      return;
+    } else {
+      console.error(`[SYSTEM] Server error:`, err.message || err);
+    }
+    process.exit(1);
+  });
+
+  __globalServer = server;
+
   // --- WebSocket Gateway Initialization ---
   const wss = new WebSocketServer({ server, path: "/ws" });
+
+  __globalWss = wss;
 
   wss.on("connection", (ws) => {
     activeWSConnections.add(ws);
@@ -869,27 +929,10 @@ app.use("/models", express.static(modelsDir));
   });
 
   // Start Bot after server is listening and initialize modules
-  setTimeout(() => {
-    const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏', '⠗', '⠡'];
-    let frameIdx = 0;
-    const loadingInterval = setInterval(() => {
-      process.stderr.write('\r' + frames[frameIdx = (frameIdx + 1) % frames.length] + ' Loading modules...');
-    }, 100);
-    
-    initializeCortexModules()
-      .then(() => {
-        clearInterval(loadingInterval);
-        process.stderr.write('\r✓ Kernel initialized. Ready.\n');
-      })
-      .catch((err) => {
-        clearInterval(loadingInterval);
-        process.stderr.write('\r✗ Initialization failed: ' + err + '\n');
-      });
-    initializeBot(db).catch(() => {});
-    initializeDiscord(db).catch(() => {});
-    initializeTwitter(db).catch(() => {});
-    initializeMCP().catch(() => {});
-  }, 1000);
+  initializeBot(db).catch(() => {});
+  initializeDiscord(db).catch(() => {});
+  initializeTwitter(db).catch(() => {});
+  initializeMCP().catch(() => {});
 }
 
 // Serve the Web UI (Vite dev middleware or static built assets).
@@ -936,13 +979,61 @@ process.on('unhandledRejection', (reason: any, promise) => {
   if (reason?.code === 'EPIPE' || reason?.errno === -32) return;
 });
 
-startServer();
+// Graceful shutdown handlers
+async function gracefulShutdown(sig: string) {
+  console.log(`\n[SYSTEM] Received ${sig}, initiating graceful shutdown...`);
+  try {
+    if (yuihimeActiveTelegramBot) {
+      console.log('[SYSTEM] Stopping Telegram bot...');
+      yuihimeActiveTelegramBot.stop(sig);
+    }
+  } catch (e: any) {
+    console.warn('[SYSTEM] Telegram shutdown warning:', e.message || e);
+  }
+  try {
+    if (yuihimeActiveDiscordClient) {
+      console.log('[SYSTEM] Destroying Discord client...');
+      yuihimeActiveDiscordClient.destroy();
+    }
+  } catch (e: any) {
+    console.warn('[SYSTEM] Discord shutdown warning:', e.message || e);
+  }
+  try {
+    if (yuihimeActiveTwitterInterval) {
+      console.log('[SYSTEM] Clearing Twitter polling interval...');
+      clearInterval(yuihimeActiveTwitterInterval);
+    }
+  } catch (e: any) {
+    console.warn('[SYSTEM] Twitter shutdown warning:', e.message || e);
+  }
+  if (__globalWss) {
+    console.log('[SYSTEM] Closing WebSocket server...');
+    __globalWss.close();
+  }
+  if (__globalServer) {
+    console.log('[SYSTEM] Closing HTTP server...');
+    __globalServer.close(() => {
+      console.log('[SYSTEM] HTTP server closed.');
+      try { closeDatabase(); } catch {}
+      process.exit(0);
+    });
+  }
+  setTimeout(() => process.exit(1), 5000);
+}
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+
+bootstrap().catch(err => {
+  console.error("[BOOT] Bootstrap failed:", err);
+  process.exit(1);
+});
 
 // --- Interactive Cognitive Terminal & Sandbox Hook ---
+// startRepl is called via static import above; invoked when --terminal or --sandbox is passed.
 const isTerminalMode = process.argv.includes("--terminal") || process.argv.includes("--sandbox");
 if (isTerminalMode) {
   setTimeout(() => {
-    import(/* @vite-ignore */ "./src/bin/terminal.js").catch(err => {
+    startRepl().catch(err => {
       console.error("Gagal meluncurkan Terminal Sandbox:", err);
     });
   }, 1500);

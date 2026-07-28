@@ -39,7 +39,8 @@ export function extractBestJsonObject(text: string): string | null {
         if (c === '}') {
           const candidate = text.substring(start, i + 1);
           try {
-            const parsed = JSON.parse(candidate);
+            const _match = candidate.match(/\{[\s\S]*\}/);
+          const parsed = _match ? JSON.parse(_match[0]) : null;
             if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
               candidates.push({ start, end: i, json: candidate });
             }
@@ -54,7 +55,8 @@ export function extractBestJsonObject(text: string): string | null {
   const validKeys = ['thought', 'speech', 'final_answer', 'tool_calls', 'animations', 'mood_impact'];
 
   for (let i = candidates.length - 1; i >= 0; i--) {
-    const parsed = JSON.parse(candidates[i].json);
+    const _cmatch = candidates[i].json.match(/\{[\s\S]*\}/);
+    const parsed = _cmatch ? JSON.parse(_cmatch[0]) : null;
     const keys = Object.keys(parsed);
     if (keys.some(k => validKeys.includes(k))) {
       return candidates[i].json;

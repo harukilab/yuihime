@@ -205,11 +205,7 @@ export function registerIdentitiesRoutes(app: express.Express, db: any) {
 
       // Merge duplicate identities if they exist
       try {
-        import("../../database.js").then(({ deduplicateAndMergeIdentities }) => {
-          deduplicateAndMergeIdentities(db, identity.id);
-        }).catch(err => {
-          console.error("[SERVER] Failed dynamic import for deduplicateAndMergeIdentities:", err);
-        });
+        deduplicateAndMergeIdentities(db, identity.id);
       } catch (mergeErr) {
         console.error("[SERVER] Failed to trigger inline identity merge:", mergeErr);
       }

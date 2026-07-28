@@ -13,14 +13,17 @@ import { StorageService } from '@shared/drivers/storage';
  */
 
 class AdaptiveEngine {
-  private alpha = 0.1; // Learning rate
-  private gamma = 0.9; // Discount factor
-  private epsilon = 0.2; // Exploration rate
+  private alpha = 0.1;
+  private gamma = 0.9;
+  private epsilon = 0.2;
   private qTable: QTable = {};
+  private initialized = false;
 
   async init() {
+    if (this.initialized) return;
     const saved = await StorageService.getCustom('yuihime_q_table');
     if (saved) this.qTable = saved;
+    this.initialized = true;
   }
 
   private getStateBucket(state: AgentState): string {
@@ -86,7 +89,6 @@ class AdaptiveEngine {
 }
 
 const engine = new AdaptiveEngine();
-engine.init();
 
 export const AdaptiveLearningModule: CortexModule = {
   metadata: {
@@ -99,6 +101,7 @@ export const AdaptiveLearningModule: CortexModule = {
     phase: 'pre-process'
   },
   run: async (input, state, context) => {
+    await engine.init();
     // 1. Determine Reward from the last interaction's mood impact
     // If the mood analyzer (ran in pre-process) found joy, that's positive reward
     const moodShift = context?.moodShift || { joy: 0, stress: 0 };

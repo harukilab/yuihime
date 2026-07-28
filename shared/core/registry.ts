@@ -1,4 +1,5 @@
 import { logger } from './kernel/logger';
+import { SettingsManager } from '@/core/kernel/settings';
 import { 
   ModuleType, 
   CortexModule, 
@@ -8,6 +9,14 @@ import {
   AgentState,
   ModulePhase
 } from '@shared/include/types';
+
+let settingsManagerPromise: Promise<any> | null = null;
+function getSettingsManager(): Promise<any> {
+  if (!settingsManagerPromise) {
+    settingsManagerPromise = Promise.resolve(SettingsManager.getInstance()).catch(() => null);
+  }
+  return settingsManagerPromise;
+}
 
 export class SystemRegistry {
   private static instance: SystemRegistry;
@@ -186,17 +195,17 @@ export class SystemRegistry {
     ];
   }
 
-  static async getConfig(moduleId: string): Promise<any> {
+static async getConfig(moduleId: string): Promise<any> {
     if (typeof window === 'undefined') {
        try {
-         const { SettingsManager } = await import(/* @vite-ignore */ '@/core/kernel/settings');
-         const settings = await SettingsManager.getInstance().load();
+         const mgr = await getSettingsManager();
+         const settings = mgr ? await mgr.load() : {};
          return settings[moduleId] || {};
        } catch (e) {
          return {};
        }
-    }
-    const data = await fetch('/api/settings').then(res => res.json()).catch(() => ({}));
-    return data[moduleId] || {};
-  }
+     }
+     const data = await fetch('/api/settings').then(res => res.json()).catch(() => ({}));
+     return data[moduleId] || {};
+   }
 }

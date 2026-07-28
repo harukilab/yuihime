@@ -1,4 +1,7 @@
 import { SystemRegistry } from '@shared/core/registry';
+import { SettingsManager } from '@/core/kernel/settings';
+import fs from 'fs';
+import { exec } from 'child_process';
 
 export class CustomToolsLoader {
   private static registryPath = './src/core/custom_tools_registry.json';
@@ -9,7 +12,6 @@ export class CustomToolsLoader {
 
   public static async loadAndRegisterAll() {
     try {
-      const fs = await import('fs');
       const registryPath = this.getRegistryPath();
       if (!fs.existsSync(registryPath)) {
         fs.writeFileSync(registryPath, JSON.stringify([], null, 2), 'utf8');
@@ -53,7 +55,6 @@ export class CustomToolsLoader {
           return fn(args, context);
         } else if (actionType === 'shell') {
           // Execute bash command. Inject arguments into actionCode using {{argName}}
-          const { exec } = await import('child_process');
           let command = actionCode;
           for (const key of Object.keys(args)) {
             command = command.replace(new RegExp(`{{\\s*${key}\\s*}}`, 'g'), String(args[key]));
@@ -61,7 +62,6 @@ export class CustomToolsLoader {
           return new Promise(async (resolve, reject) => {
             let shellTimeout = 120000;
             try {
-              const { SettingsManager } = await import('@/core/kernel/settings');
               const settings = await SettingsManager.getInstance().load();
               const toolExecutorConfig = settings['tool-executor'] || {};
               if (toolExecutorConfig.shellTimeoutMs !== undefined) {

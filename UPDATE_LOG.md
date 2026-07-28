@@ -1,6 +1,10 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.117] - 2026-07-28
+### feat: feat: add Docker support and major refactoring for v4.117
+
+
 ## [4.117] - 2026-07-27
 ### Fix: Fix Telegram duplicate message and environment_details leak
 - Merge post-photo text into photo caption instead of sending separate message

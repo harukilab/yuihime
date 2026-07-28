@@ -27,13 +27,96 @@ function serverModuleStubPlugin(): Plugin {
     'smol-toml',
     'telegraf',
     'discord.js',
+    '@/core/database',
+    '@/core/kernel/settings',
+    '@/core/kernel/logger',
+    '@/core/kernel/core',
+    '@/core/api_framework',
+    '@/core/ValidationMiddleware',
+    '@/core/learning',
+    '@/core/circuits/StandardCircuits',
+    '@/core/circuits/NeuralCircuitFramework',
+    '@/core/dream',
+    '@/core/FlowEngine',
+    '@/core/consolidator',
+    '@/core/CustomToolsLoader',
+    '@/core/DynamicLoader',
+    '@/core/memorySearch',
+    '@/core/neural/Brain',
+    '@/core/openaiTools',
+    '@/core/PromptRegistry',
+    '@/core/cortex',
+    '@/core/cortex/cortexThinkEngine',
+    '@/core/cortex/autonomousThought',
+    '@/core/cortex/fastTrackRunner',
+    '@/core/cortex/toolNormalizer',
+    '@/core/cortex/jsonRepairer',
+    '@/core/cortex/jsonExtract',
+    '@/core/cortex/streamExtractors',
+    '@/core/cortex/dynamicToolSynthesizer',
+    '@/core/cortex/cortexSettings',
+    '@/core/kernel/processor',
+    '@/core/kernel/state-machine',
+    '@/core/kernel/CognitiveScheduler',
+    '@/core/kernel/MultiChannelQueue',
+    '@/core/kernel/BackgroundProcessManager',
+    '@/core/kernel/PluginManager',
+    '@/core/kernel/cron',
+    '@/core/kernel/NeuralInterface',
+    '@/core/kernel/ai',
+    '@/core/kernel/TTSGateway',
+    '@/core/server/apiRouter',
+    '@/core/server/telegram',
+    '@/core/server/discord',
+    '@/core/server/twitter',
+    '@/core/server/mcp',
+    '@/core/server/onboarding',
+    '@/core/server/storageServer',
+    '@/core/server/routes/cortexRouter',
+    '@/core/server/routes/toolsRouter',
+    '@/core/server/routes/systemRouter',
+    '@/core/server/routes/telegramRouter',
+    '@/core/server/routes/storageRouter',
+    '@/core/server/routes/identitiesRouter',
+    '@/core/server/routes/datasetRouter',
+    '@/core/server/routes/synthesizerRouter',
+    '@/core/server/routes/aiRouter',
+    '@/core/server/llmAuditor',
+    '@/core/server/channelFileAttachment',
+    '@/core/server/datasetSynthesizer',
+    '@/core/server/telegramReactionLearner',
+    '@/core/tts/OfficialStreamingSpeechTTS',
+    '@/core/tts/OfficialSpeechTTS',
+    '@/core/tts/OpenRouterTTS',
+    '@/core/tts/CustomAPITTS',
+    '@/core/tts/ElevenLabsTTS',
+    '@/core/tts/GeminiTTS',
+    '@/core/tts/WebSpeechTTS',
+    '@/core/agents/SubAgentManager',
+    '@/core/agents/SubAgentRegistry',
+    '@/core/agents/SubAgentTypes',
+    '@/core/agents/definitions/creativeAgent',
+    '@/core/agents/definitions/researchAgent',
+    'shared/drivers/storageServer',
+    '@shared/drivers/storageServer',
+    '@shared/core/registry',
+    '@shared/services/api',
+    '@shared/core/kernel/logger',
+    '@shared/drivers/storage',
+    'src/core/RegistryInitializer',
   ]);
 
   return {
     name: 'server-module-stub',
     enforce: 'pre',
     resolveId(id) {
-      if (stubbedModules.has(id) || id.startsWith('node:')) {
+      if (stubbedModules.has(id)) {
+        return '\0virtual:' + id;
+      }
+      if (id.startsWith('@/core/') || id.startsWith('@shared/drivers/storageServer') || id.startsWith('@shared/services/api') || id.startsWith('@shared/core/registry') || id.startsWith('src/core/RegistryInitializer')) {
+        return '\0virtual:' + id;
+      }
+      if (id.startsWith('node:')) {
         return '\0virtual:' + id;
       }
       return null;
@@ -212,8 +295,25 @@ export default defineConfig(({mode}) => {
       }
     },
     publicDir: path.resolve(__dirname, '../public'),
-    build: {
-      outDir: path.resolve(__dirname, '../dist/web')
-    }
+build: {
+       outDir: path.resolve(__dirname, '../dist/web'),
+        rollupOptions: {
+          onwarn(warning, warn) {
+            if (
+              warning.code === 'UNUSED_EXTERNAL_IMPORT' &&
+              (warning as any).source === 'url'
+            ) return;
+            if (
+              warning.code === 'DYNAMIC_IMPORT_NEEDS_NAME' &&
+              warning.message?.includes('url')
+            ) return;
+            if (
+              warning.message?.includes('dynamic import') &&
+              warning.message?.includes('will not move module into another chunk')
+            ) return;
+            warn(warning);
+         }
+       }
+     }
   };
 });

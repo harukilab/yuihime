@@ -2,6 +2,7 @@ import { SystemRegistry } from '@shared/core/registry';
 import { ModuleType } from '@shared/include/types';
 import os from "os";
 import path from "path";
+import fs from "fs";
 
 /**
  * Dynamic Tool Synthesizer:
@@ -42,9 +43,6 @@ export class DynamicToolSynthesizer {
     if (typeof window !== 'undefined') return;
 
     try {
-      const fs = await import('fs');
-      const path = await import('path');
-
       const addonsDir = process.env.YUIHIME_ADDONS_PATH || path.join(os.homedir(), ".yuihime", "addons");
       const addonDir = path.join(addonsDir, toolId);
       
@@ -225,7 +223,9 @@ Kembalikan HANYA objek JSON tersebut. Pastikan JSON valid dan main_cjs bebas dar
 
     const tryParse = (s: string): any | null => {
       try {
-        return JSON.parse(s);
+        const match = s.match(/\{[\s\S]*\}/);
+        const target = match ? match[0] : s;
+        return JSON.parse(target);
       } catch {
         return null;
       }

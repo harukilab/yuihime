@@ -2,6 +2,11 @@ import { CortexModule, ModuleType } from '@shared/include/types';
 import { SystemRegistry } from '@shared/core/registry';
 import { PromptRegistry } from '../core/PromptRegistry';
 import { toSingleString } from '@/core/kernel/configNormalizer';
+import { StorageService } from '@shared/drivers/storage';
+import { DecisionRouter, EpisodicMemory } from '../core/neural/Brain.js';
+import { LlmIoAuditor } from '../core/server/llmAuditor.js';
+import { buildOpenAITools } from '../core/openaiTools.js';
+import { SettingsManager } from '../core/kernel/settings.js';
 
 const DEFAULT_OFFLINE_FALLBACK = `<thought>Cognitive online circuit disconnected (quota exceeded/offline). Mounting backup subconscious transmitter.</thought>Halo user! Saat ini sirkuit kognitif Yui sedang berdiet internet (server sedang sibuk/habis kuota)`;
 
@@ -54,7 +59,6 @@ export const ProviderGatewayModule: CortexModule = {
     // Helper for Real-time Self-Learning Feedback Loop (Dual-Process Human Emulation)
     const triggerSelfLearning = async (promptText: string, resultText: string) => {
       try {
-        const { StorageService } = await import('@shared/drivers/storage');
         const customSettings = (await StorageService.getModularSettings()) || {};
         const localNlpConfig = customSettings['local-nano-nlp'] || {};
         const enableSelfLearning = localNlpConfig.enableSelfLearning !== undefined ? !!localNlpConfig.enableSelfLearning : false;
@@ -66,8 +70,6 @@ export const ProviderGatewayModule: CortexModule = {
 
         const cleanResult = resultText.replace(/<thought>[\s\S]*?<\/thought>/gi, '').trim();
         if (promptText && promptText.trim().length > 0) {
-          const { DecisionRouter, EpisodicMemory } = await import('../core/neural/Brain.js');
-          
           const router = new DecisionRouter();
           await router.loadFromStorage();
           
@@ -104,7 +106,6 @@ export const ProviderGatewayModule: CortexModule = {
       if (provId === 'gemini') return;
       try {
         const auditorPath = '../core/server/llmAuditor.js';
-        const { LlmIoAuditor } = await import(/* @vite-ignore */ auditorPath);
         LlmIoAuditor.recordLog({
           prompt: input,
           systemInstruction: context.assembledSystemPrompt || context.systemPrompt,
@@ -126,7 +127,6 @@ export const ProviderGatewayModule: CortexModule = {
       try {
         console.log(`[GATEWAY] Routing primary request to: ${selectedProviderId} (Attempting...)`);
 
-        const { buildOpenAITools } = await import('../core/openaiTools.js');
         const result = await primaryProvider.generate(input, {
           ...context,
           config: providerConfig,
@@ -152,7 +152,6 @@ export const ProviderGatewayModule: CortexModule = {
 
     // 2. Cycle dynamically through User's custom multi-provider fallbackChain if primary fails
     try {
-      const { SettingsManager } = await import('../core/kernel/settings.js');
       const settings = await SettingsManager.getInstance().load();
       const geminiSettings = (settings.gemini || {}) as any;
       const fallbackChain = geminiSettings.fallbackChain || [];
@@ -177,7 +176,6 @@ export const ProviderGatewayModule: CortexModule = {
               apiKey: item.apiKey || settings[providerId]?.apiKey
             };
 
-            const { buildOpenAITools } = await import('../core/openaiTools.js');
             const result = await fallbackProvider.generate(input, {
               ...context,
               config: providerConfig,

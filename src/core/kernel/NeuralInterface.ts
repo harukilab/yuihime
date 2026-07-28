@@ -6,6 +6,10 @@ import { Soul } from "../soul.js";
 import Database from "better-sqlite3";
 import { Cortex } from "../cortex.js";
 import { Memory, Dream, Identity } from "@shared/include/types";
+import { DEFAULT_NEURAL_CORES } from "@shared/constants";
+import { deduplicateAndMergeIdentities } from "../database.js";
+
+import { broadcastToWS } from "../server/apiRouter";
 
 export class NeuralInterface {
   private static db: any;
@@ -200,8 +204,6 @@ export class NeuralInterface {
 
     // On-the-fly deduplication alignment and self-healing merge (resolves any case splits/duplications gracefully)
     try {
-      const dbModulePath = "../database.js";
-      const { deduplicateAndMergeIdentities } = await import(/* @vite-ignore */ dbModulePath);
       deduplicateAndMergeIdentities(this.db, receiverIdentity.id);
       
       // Reload receiver identity to pick up any merged facts/stats/habits/linkedAccounts
@@ -225,7 +227,6 @@ export class NeuralInterface {
       console.warn("[NEURAL_INTERFACE_MERGE] Self-healing merge warn:", mergeErr.message);
     }
 
-    const { DEFAULT_NEURAL_CORES } = await import("@shared/constants");
     let activePersona: any = DEFAULT_NEURAL_CORES.find(c => c.id === state.activePersonaId);
 
     if (!activePersona && state.activePersonaId && state.activePersonaId !== 'auto') {
@@ -370,15 +371,38 @@ export class NeuralInterface {
     const dbAffection = result.queuedIdentityUpdate?.affection !== undefined ? result.queuedIdentityUpdate.affection : updatedRelation.affection;
     const dbReputation = result.queuedIdentityUpdate?.reputation !== undefined ? result.queuedIdentityUpdate.reputation : (updatedRelation.reputation || 50);
 
-    this.db.prepare("UPDATE identities SET trust = ?, affection = ?, reputation = ?, lastInteraction = ? WHERE id = ?")
-      .run(dbTrust, dbAffection, dbReputation, Date.now(), receiverIdentity.id);
+    const runDb = (fn: () => void) => {
+      const maxRetries = 4;
+      let lastErr: any = null;
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          fn();
+          return;
+        } catch (err: any) {
+          lastErr = err;
+          const isBusy = err.code === 'SQLITE_BUSY' || err.message?.includes('database is locked');
+          if (!isBusy || attempt === maxRetries) throw err;
+          const backoff = 150 * attempt;
+          console.warn(`[NEURAL_INTERFACE_SQLITE_RETRY] SQLite busy, retrying in ${backoff}ms (${attempt}/${maxRetries})...`);
+          const start = Date.now();
+          while (Date.now() - start < backoff) {}
+        }
+      }
+      throw lastErr;
+    };
 
-    this.db.prepare("UPDATE agent_state SET mood = ?, emotion = ?, relation = ?, systemHealth = ?, activePersonaId = ?, currentPlan = ? WHERE id = 1")
-      .run(JSON.stringify(updatedMood), JSON.stringify(updatedEmotion), JSON.stringify(updatedRelation), JSON.stringify(state.systemHealth), state.activePersonaId || 'auto', result.updatedPlan ? JSON.stringify(result.updatedPlan) : (state.currentPlan ? JSON.stringify(state.currentPlan) : null));
+    runDb(() => {
+      this.db.prepare("UPDATE identities SET trust = ?, affection = ?, reputation = ?, lastInteraction = ? WHERE id = ?")
+        .run(dbTrust, dbAffection, dbReputation, Date.now(), receiverIdentity.id);
+    });
+
+    runDb(() => {
+      this.db.prepare("UPDATE agent_state SET mood = ?, emotion = ?, relation = ?, systemHealth = ?, activePersonaId = ?, currentPlan = ? WHERE id = 1")
+        .run(JSON.stringify(updatedMood), JSON.stringify(updatedEmotion), JSON.stringify(updatedRelation), JSON.stringify(state.systemHealth), state.activePersonaId || 'auto', result.updatedPlan ? JSON.stringify(result.updatedPlan) : (state.currentPlan ? JSON.stringify(state.currentPlan) : null));
+    });
 
     // Broadcast updated state to browser web sockets for live UI rendering
     try {
-      const { broadcastToWS } = await import("../server/apiRouter.js");
       broadcastToWS({
         type: "state_update",
         data: {
@@ -481,24 +505,38 @@ export class NeuralInterface {
       );
     }
 
-    if (result.fallbackTriggered) {
-      console.log(`[NEURAL_INTERFACE] Gateway fallback triggered for ${senderName} (${chatType}). Menyimpan ke antrean luring (pending_messages)...`);
-      try {
-        const pendingId = "pending_" + Math.random().toString(36).substr(2, 9);
-        this.db.prepare(`
-          INSERT INTO pending_messages (id, input, sender_name, context_id, chat_type, timestamp, attempts, status)
-          VALUES (?, ?, ?, ?, ?, ?, 0, 'pending')
-        `).run(pendingId, input, senderName, contextId, chatType, Date.now());
-      } catch (dbErr: any) {
-        console.error("[NEURAL_INTERFACE_FALLBACK_ERR] Gagal menyimpan pesan fallback ke database:", dbErr.message);
+    let responseText = result.response;
+    if (!responseText || responseText.trim().length < 3) {
+      if (result.fallbackTriggered) {
+        console.log(`[NEURAL_INTERFACE] Gateway fallback triggered for ${senderName} (${chatType}) but response is empty. Saving to pending queue.`);
+        try {
+          const pendingId = "pending_" + Math.random().toString(36).substr(2, 9);
+          this.db.prepare(`
+            INSERT INTO pending_messages (id, input, sender_name, context_id, chat_type, timestamp, attempts, status)
+            VALUES (?, ?, ?, ?, ?, ?, 0, 'pending')
+          `).run(pendingId, input, senderName, contextId, chatType, Date.now());
+        } catch (dbErr: any) {
+          console.error("[NEURAL_INTERFACE_FALLBACK_ERR] Gagal menyimpan pesan fallback ke database:", dbErr.message);
+        }
+        return null;
       }
-      return null;
+      console.warn(`[NEURAL_INTERFACE] Empty/short response from cortex for ${senderName} (${chatType}). Generating fallback.`);
+      try {
+        const fallbackCortex = new Cortex();
+        responseText = await fallbackCortex.thinkSimple(`You are YuiHime. The user "${senderName}" just sent you a message on ${chatType}. Reply with a very short, sweet, in-character Indonesian response (1-2 sentences max). Do not mention being an AI.`);
+      } catch (fallbackErr) {
+        console.warn("[NEURAL_INTERFACE] Fallback response generation failed:", fallbackErr);
+        responseText = "Hai! Yui lagi sibuk dikit, tapi Yui selalu ada buat kamu~ ✨";
+      }
     }
 
-    // Call Forgetfulness Decay & Compaction Engine for Perfect Giftia OS
-    NeuralInterface.performForgetfulnessProtocol(contextId);
+    if (responseText && responseText.trim().length >= 3) {
+      // Call Forgetfulness Decay & Compaction Engine for Perfect Giftia OS
+      NeuralInterface.performForgetfulnessProtocol(contextId);
+      return responseText;
+    }
 
-    return result.response;
+    return null;
   }
 
   private static performForgetfulnessProtocol(contextId: string) {

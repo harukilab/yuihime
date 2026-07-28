@@ -2,6 +2,11 @@ import { Client, GatewayIntentBits, ChannelType, Message } from "discord.js";
 import { Kernel } from "../kernel/core.js";
 import { MultiChannelQueue } from "../kernel/MultiChannelQueue.js";
 import { initializeDatabase } from "../database.js";
+import { getDynamicSandboxRoot, broadcastToWS } from "./apiRouter.js";
+import { extractChannelFileAttachments } from "./channelFileAttachment.js";
+import { describeImageFromBuffer } from "../../modules/YuiVisionModule.js";
+import fs from "fs/promises";
+import path from "path";
 
 let db: any = null;
 export let activeDiscordClient: Client | null = null;
@@ -9,9 +14,6 @@ export let activeDiscordToken: string | null = null;
 
 async function trySendFileAttachmentDiscord(message: any, responseText: string): Promise<boolean> {
   try {
-    const { getDynamicSandboxRoot } = await import("./apiRouter.js");
-    const { extractChannelFileAttachments } = await import("./channelFileAttachment.js");
-
     const sandboxDir = getDynamicSandboxRoot();
     const { attachments, remainingText } = await extractChannelFileAttachments(responseText, sandboxDir);
 
@@ -137,12 +139,9 @@ export async function initializeDiscord(activeDb?: any, force = false) {
         for (const [id, attachment] of message.attachments) {
           try {
             const res = await fetch(attachment.url);
-            if (res.ok) {
-              const fs = await import("fs/promises");
-              const path = await import("path");
-              const { getDynamicSandboxRoot } = await import("./apiRouter.js");
-              const sandboxDir = getDynamicSandboxRoot();
-              await fs.mkdir(sandboxDir, { recursive: true });
+          if (res.ok) {
+             const sandboxDir = getDynamicSandboxRoot();
+            await fs.mkdir(sandboxDir, { recursive: true });
 
               const safeFilename = attachment.name || `discord_file_${Date.now()}`;
               const safePath = path.resolve(sandboxDir, safeFilename);
@@ -162,8 +161,7 @@ export async function initializeDiscord(activeDb?: any, force = false) {
                   else if (ext === ".gif") mimeType = "image/gif";
 
                   try {
-                    const { describeImageFromBuffer } = await import("../../modules/YuiVisionModule.js");
-                    const desc = await describeImageFromBuffer(buffer, mimeType);
+const desc = await describeImageFromBuffer(buffer, mimeType);
                     if (desc) {
                       visualDesc = ` Sensory input analysis of this uploaded image indicates: "${desc}"`;
                     }
@@ -187,7 +185,6 @@ export async function initializeDiscord(activeDb?: any, force = false) {
       cleanedInput += attachmentInfo;
 
       // 1. Broadcast pesan masuk dari Discord ke Web UI via WebSockets
-      const { broadcastToWS } = await import("./apiRouter.js");
       broadcastToWS({
         type: "remote_message_received",
         data: {

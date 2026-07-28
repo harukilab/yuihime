@@ -1,5 +1,6 @@
 import { ToolModule } from '@shared/include/types';
 import { SystemRegistry } from '@shared/core/registry';
+import { AIService } from '../../../core/kernel/ai.js';
 import { StandardizedProcessor } from '../../../core/kernel/processor';
 import manifest from './manifest.json';
 
@@ -44,7 +45,6 @@ export const WebSearchTool: ToolModule = {
 
         if (isServer) {
           try {
-            const { AIService } = await import('../../../core/kernel/ai.js');
             const results = await AIService.getInstance().search(query);
             rawResults = Array.isArray(results) ? results : [];
           } catch (importErr: any) {

@@ -24,23 +24,10 @@ function getSopsDir(): string {
 }
 
 function getSourceSopsDir(): string {
-  let localDirname = "";
-  try {
-    if (typeof import.meta !== "undefined" && import.meta.url) {
-      localDirname = path.dirname(fileURLToPath(import.meta.url));
-    } else {
-      localDirname = process.cwd();
-    }
-  } catch (e) {
-    localDirname = process.cwd();
-  }
-
   const pathsToTry = [
-    path.join(localDirname, "..", "..", "..", "share", "prompts", "sops"),
-    path.join(localDirname, "..", "..", "share", "prompts", "sops"),
-    path.join(localDirname, "..", "share", "prompts", "sops"),
-    path.join(process.cwd(), "src", "share", "prompts", "sops"),
-    path.join(process.cwd(), "share", "prompts", "sops")
+    path.join(os.homedir(), ".yuihime", "user_data", "sops"),
+    path.join(process.cwd(), "share", "prompts", "sops"),
+    path.join(process.cwd(), "src", "share", "prompts", "sops")
   ];
 
   for (const p of pathsToTry) {
@@ -48,7 +35,7 @@ function getSourceSopsDir(): string {
       return p;
     }
   }
-  return pathsToTry[0];
+  return path.join(os.homedir(), ".yuihime", "user_data", "sops");
 }
 
 function extractKeywords(filename: string): string[] {

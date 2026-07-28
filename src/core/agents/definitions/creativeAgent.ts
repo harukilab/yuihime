@@ -1,4 +1,4 @@
-import { SubAgentDefinition } from '../SubAgentTypes';
+import { SubAgentDefinition } from '../SubAgentTypes.js';
 
 export const CreativeAgent: SubAgentDefinition = {
   id: 'creative-agent',

@@ -21,16 +21,17 @@ export let dbPath = process.env.YUIHIME_DB_PATH ? resolveHomePath(process.env.YU
 let cachedDb: any = null;
 
 export function closeDatabase() {
-  if (cachedDb) {
-    try {
-      cachedDb.close();
-      console.log('[DATABASE] SQLite connection closed successfully.');
-    } catch (err) {
-      console.error('[DATABASE] Error closing SQLite connection:', err);
-    }
-    cachedDb = null;
-  }
-}
+   if (cachedDb) {
+     try {
+       cachedDb.pragma('busy_timeout = 0');
+       cachedDb.close();
+       console.log('[DATABASE] SQLite connection closed successfully.');
+     } catch (err) {
+       console.error('[DATABASE] Error closing SQLite connection:', err);
+     }
+     cachedDb = null;
+   }
+ }
 
 export function initializeDatabase() {
   if (cachedDb) return cachedDb;
@@ -41,9 +42,10 @@ export function initializeDatabase() {
   try {
     const db = new Database(dbPath, { timeout: 10000 });
     db.pragma('journal_mode = WAL');
+    db.pragma('busy_timeout = 5000');
     cachedDb = db;
     return db;
-  } catch (error) {
+   } catch (error) {
     console.error("CRITICAL: Database initialization failed. Attempting recovery...", error);
     
     try {
@@ -55,6 +57,7 @@ export function initializeDatabase() {
       
       const db = new Database(dbPath, { timeout: 10000 });
       db.pragma('journal_mode = WAL');
+      db.pragma('busy_timeout = 5000');
       cachedDb = db;
       return db;
     } catch (recoveryError) {

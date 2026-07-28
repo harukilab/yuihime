@@ -1,4 +1,8 @@
 import * as toml from 'smol-toml';
+import fs from 'fs';
+import fsPromises from 'fs/promises';
+import path from 'path';
+import os from 'os';
 
 // --- Global log level filtering ---
 // Levels (ascending): debug(0) < info(1) < warn(2) < error(3) < silent(4)
@@ -68,12 +72,10 @@ export class SettingsManager {
    * Synchronously reads config.toml and applies the log-level gate as early as
    * possible (before the async load()), so verbose boot logs are suppressed too.
    */
-  public static async applyBootLogLevel(): Promise<void> {
-    if (typeof window !== 'undefined') return;
-    try {
-      const fs = await import('fs');
-      const path = await import('path');
-      const rootEnv = process.env.YUIHIME_SYSTEM_ROOT || process.env.YUIHIME_ROOT || '~/.yuihime';
+public static async applyBootLogLevel(): Promise<void> {
+     if (typeof window !== 'undefined') return;
+     try {
+       const rootEnv = process.env.YUIHIME_SYSTEM_ROOT || process.env.YUIHIME_ROOT || '~/.yuihime';
       const fallbackRoot = path.isAbsolute(rootEnv) ? rootEnv : path.join(process.cwd(), rootEnv);
       const p = process.env.YUIHIME_CONFIG || path.join(fallbackRoot, 'data', 'config.toml');
       if (!fs.existsSync(p)) return;
@@ -89,32 +91,13 @@ export class SettingsManager {
     return SettingsManager.instance;
   }
 
-  private async ensureNodeModules() {
-    if (typeof window !== 'undefined') return;
-    if (this.fsModule && this.pathModule) return;
-    try {
-      const metaUrl = typeof import.meta !== 'undefined' && import.meta.url ? import.meta.url : '';
-      if (metaUrl) {
-        const { createRequire } = await import(/* @vite-ignore */ 'module');
-        const requireFunc = createRequire(metaUrl);
-        this.fsModule = requireFunc('fs/promises');
-        this.fsSyncModule = requireFunc('fs');
-        this.pathModule = requireFunc('path');
-      } else {
-        if (typeof require !== 'undefined') {
-          this.fsModule = require('fs/promises');
-          this.fsSyncModule = require('fs');
-          this.pathModule = require('path');
-        } else {
-          this.fsModule = await import('fs/promises');
-          this.fsSyncModule = await import('fs');
-          this.pathModule = await import('path');
-        }
-      }
-    } catch (e) {
-      console.error('[SettingsManager] Failed to load node modules:', e);
-    }
-  }
+private async ensureNodeModules() {
+     if (typeof window !== 'undefined') return;
+     if (this.fsModule && this.pathModule) return;
+     this.fsModule = fsPromises;
+     this.fsSyncModule = fs;
+     this.pathModule = path;
+   }
 
   private async getSettingsPath(): Promise<string> {
     if (this.settingsPath) return this.settingsPath;

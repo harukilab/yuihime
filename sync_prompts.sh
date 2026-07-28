@@ -20,7 +20,7 @@ set -euo pipefail
 # ---- Resolve repo root (parent of this script) -----------------------------
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$SCRIPT_DIR"
-HOME_AGENT="/home/userland/.yuihime/agent"
+HOME_AGENT="$HOME/.yuihime/agent"
 SRC_PROMPTS="$REPO/src/share/prompts"
 SRC_AGENT="$REPO/.yuihime/agent"
 

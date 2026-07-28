@@ -24,7 +24,8 @@ export function buildOpenAITools(): any[] {
 function coerceArguments(args: any): any {
   if (typeof args === 'string') {
     try {
-      const parsed = JSON.parse(args);
+    const _opMatch = args.match(/\{[\s\S]*\}/);
+      const parsed = _opMatch ? JSON.parse(_opMatch[0]) : null;
       return (parsed && typeof parsed === 'object') ? parsed : {};
     } catch {
       return {};

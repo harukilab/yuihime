@@ -1,4 +1,5 @@
 import { TTSModule, ModuleType } from '@shared/include/types';
+import { SpeechService } from '../speech';
 
 /**
  * GeminiTTS: Native Google Gemini 2.0/3.0 Emotive Speech Synthesizer.
@@ -120,7 +121,6 @@ export const GeminiTTS: TTSModule = {
 
       // Bind to real-time visualizer audio analysis
       try {
-        const { SpeechService } = await import('../speech');
         SpeechService.analyzeAudioStream(audio);
       } catch (err) {
         console.warn('[GEMINI-TTS] Visual volume analysis binding failed:', err);

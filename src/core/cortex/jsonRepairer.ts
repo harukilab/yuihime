@@ -35,7 +35,8 @@ export async function repairJsonFormatWithLLM(
       }
     }
 
-    const parsed = JSON.parse(repairedRaw);
+    const _jMatch = repairedRaw.match(/\{[\s\S]*\}/);
+    const parsed = _jMatch ? JSON.parse(_jMatch[0]) : null;
     if (parsed && typeof parsed === 'object') {
       if (parsed.properties && typeof parsed.properties === 'object' && !Array.isArray(parsed.properties)) {
         const p = parsed.properties;

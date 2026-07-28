@@ -1,5 +1,9 @@
 import { ToolModule } from "@shared/include/types";
 import manifest from "./manifest.json";
+import fs from "fs";
+import path from "path";
+import os from "os";
+import fsp from "fs/promises";
 
 interface GenerateArgs {
   action?: "generate" | "list_tools" | "upload_file";
@@ -16,14 +20,10 @@ interface GenerateArgs {
 }
 
 /** Lazy Node builtins — never statically imported so browser eager-glob stays safe. */
-async function loadNodeFs() {
+function loadNodeFs() {
   if (typeof window !== "undefined") {
     throw new Error("TensorArt filesystem helpers are only available on the server runtime.");
   }
-  const fs = await import(/* @vite-ignore */ "fs");
-  const path = await import(/* @vite-ignore */ "path");
-  const os = await import(/* @vite-ignore */ "os");
-  const fsp = await import(/* @vite-ignore */ "fs/promises");
   return {
     readFileSync: fs.readFileSync,
     createReadStream: fs.createReadStream,

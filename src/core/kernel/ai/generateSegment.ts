@@ -1,6 +1,8 @@
 import { SettingsManager } from '../settings.js';
 import { AIConfig } from './aiTypes.js';
 import { toKeyArray, toSingleString } from '../configNormalizer.js';
+import { SystemRegistry } from '@shared/core/registry';
+import { LlmIoAuditor } from '../../server/llmAuditor.js';
 
 const keyPool = {
   configure: (_providerId: string, _config: any, _settings: any) => {},
@@ -54,12 +56,11 @@ export async function generateContent(
   };
   let defaultGeminiModel = '';
   try {
-    const { SystemRegistry } = await import('@shared/core/registry');
-    const geminiModule = SystemRegistry.getProvider('gemini');
-    if (geminiModule && geminiModule.metadata?.models?.length > 0) {
-      defaultGeminiModel = geminiModule.metadata.models[0];
-    }
-  } catch (e) {}
+     const geminiModule = SystemRegistry.getProvider('gemini');
+     if (geminiModule && geminiModule.metadata?.models?.length > 0) {
+       defaultGeminiModel = geminiModule.metadata.models[0];
+     }
+   } catch (e) {}
 
    const rawModel = config.model || geminiSettings.model || defaultGeminiModel;
    const model = Array.isArray(rawModel) ? (rawModel[0] || defaultGeminiModel) : rawModel;
@@ -187,14 +188,13 @@ export async function generateContent(
     }
 
     try {
-      const { SystemRegistry } = await import('@shared/core/registry');
-      const geminiModule = SystemRegistry.getProvider('gemini');
-      if (geminiModule && Array.isArray(geminiModule.metadata?.models)) {
-        for (const m of geminiModule.metadata.models) {
-          if (typeof m === 'string') addModels(m);
-        }
-      }
-    } catch (e) {}
+       const geminiModule = SystemRegistry.getProvider('gemini');
+       if (geminiModule && Array.isArray(geminiModule.metadata?.models)) {
+         for (const m of geminiModule.metadata.models) {
+           if (typeof m === 'string') addModels(m);
+         }
+       }
+     } catch (e) {}
 
     // Prioritas sirkuit kognitif yang akan dicoba
     const attemptsToTry: Array<{ apiKey: string; modelId: string; label: string }> = [];
@@ -653,9 +653,8 @@ export async function generateContent(
               : 'https://api.groq.com/openai/v1';
           }
 
-          const { SystemRegistry } = await import('@shared/core/registry');
-          const provider = SystemRegistry.getProvider(resolvedProviderId);
-          if (provider) {
+           const provider = SystemRegistry.getProvider(resolvedProviderId);
+           if (provider) {
             console.log(`[SERVER_AI_FALLBACK] Attempting fallback step to provider: ${providerId} (using actual driver: ${resolvedProviderId}, model: ${modelId})`);
             const fallbackConfig = {
               ...(config || {}),
@@ -689,46 +688,40 @@ export async function generateContent(
         response = successResponse;
       } else {
         try {
-          const auditorPath = '../../server/llmAuditor.js';
-          const { LlmIoAuditor } = await import(auditorPath);
-          LlmIoAuditor.recordLog({
-            prompt,
-            systemInstruction: config.systemInstruction,
-            model: usedModel || model || 'unknown',
-            provider: usedProvider || 'gemini',
-            error: primaryErr?.message || String(primaryErr)
-          });
-        } catch (auditErr) {}
-        throw primaryErr;
-      }
-    } else {
-      try {
-        const auditorPath = '../../server/llmAuditor.js';
-        const { LlmIoAuditor } = await import(auditorPath);
-        LlmIoAuditor.recordLog({
-          prompt,
-          systemInstruction: config.systemInstruction,
-          model: usedModel || model || 'unknown',
-          provider: usedProvider || 'gemini',
-          error: primaryErr?.message || String(primaryErr)
-        });
-      } catch (auditErr) {}
-      throw primaryErr;
-    }
-  }
-  let rawResponse = response;
+           LlmIoAuditor.recordLog({
+             prompt,
+             systemInstruction: config.systemInstruction,
+             model: usedModel || model || 'unknown',
+             provider: usedProvider || 'gemini',
+             error: primaryErr?.message || String(primaryErr)
+           });
+         } catch (auditErr) {}
+         throw primaryErr;
+       }
+     } else {
+       try {
+         LlmIoAuditor.recordLog({
+           prompt,
+           systemInstruction: config.systemInstruction,
+           model: usedModel || model || 'unknown',
+           provider: usedProvider || 'gemini',
+           error: primaryErr?.message || String(primaryErr)
+         });
+       } catch (auditErr) {}
+       throw primaryErr;
+     }
+   }
+   let rawResponse = response;
 
   try {
-    const auditorPath = '../../server/llmAuditor.js';
-    const { LlmIoAuditor } = await import(auditorPath);
-    LlmIoAuditor.recordLog({
-      prompt,
-      systemInstruction: config.systemInstruction,
-      model: usedModel || 'unknown',
-      provider: usedProvider || 'gemini',
-      response: rawResponse
-    });
-  } catch (auditErr) {}
+     LlmIoAuditor.recordLog({
+       prompt,
+       systemInstruction: config.systemInstruction,
+       model: usedModel || 'unknown',
+       provider: usedProvider || 'gemini',
+       response: rawResponse
+     });
+   } catch (auditErr) {}
 
   // --- UNIVERSAL TAG ENFORCEMENT ---
   const systemInstructionText = config.systemInstruction || '';
@@ -745,7 +738,6 @@ export async function generateContent(
 }
 
 export async function executeGoogleSearch(query: string): Promise<any[]> {
-  const { SettingsManager } = await import('../settings.js');
   const settings = SettingsManager.getInstance();
   
   // 1. Attempt Native Google Search Grounding if a Gemini API Key is available
@@ -765,12 +757,11 @@ export async function executeGoogleSearch(query: string): Promise<any[]> {
     defaultGeminiModel = toModelString(geminiSettings.model) || defaultGeminiModel;
   } else {
     try {
-      const { SystemRegistry } = await import('@shared/core/registry');
-      const geminiModule = SystemRegistry.getProvider('gemini');
-      if (geminiModule && geminiModule.metadata?.models?.length > 0) {
-        defaultGeminiModel = toModelString(geminiModule.metadata.models[0]) || defaultGeminiModel;
-      }
-    } catch (e) {}
+       const geminiModule = SystemRegistry.getProvider('gemini');
+       if (geminiModule && geminiModule.metadata?.models?.length > 0) {
+         defaultGeminiModel = toModelString(geminiModule.metadata.models[0]) || defaultGeminiModel;
+       }
+     } catch (e) {}
   }
 
   const resolveModelIdName = (rawModel: any): string => {

@@ -3,6 +3,8 @@ import { Cortex } from "../../cortex.js";
 import { AIService } from "../../kernel/ai.js";
 import { SettingsManager } from "@/core/kernel/settings";
 import { toSingleString } from "@/core/kernel/configNormalizer";
+import { SystemRegistry } from '@shared/core/registry';
+import { GoogleGenAI, Modality } from "@google/genai";
 
 export function registerAiRoutes(app: express.Express, db: any) {
   app.post("/api/ai/generate", async (req, res) => {
@@ -89,8 +91,6 @@ export function registerAiRoutes(app: express.Express, db: any) {
         return res.status(400).json({ error: "Gemini API key is required. Please insert it in Settings to activate Gemini Speech." });
       }
 
-      // Dynamically load @google/genai module
-      const { GoogleGenAI, Modality } = await import("@google/genai");
       const aiClient = new GoogleGenAI({
         apiKey: finalApiKey,
         httpOptions: {
@@ -142,7 +142,6 @@ export function registerAiRoutes(app: express.Express, db: any) {
       
       let defaultGeminiModel = "";
       try {
-        const { SystemRegistry } = await import('@shared/core/registry');
         const geminiModule = SystemRegistry.getProvider('gemini');
         if (geminiModule && geminiModule.metadata?.models?.length > 0) {
           defaultGeminiModel = geminiModule.metadata.models[0];
@@ -259,7 +258,6 @@ export function registerAiRoutes(app: express.Express, db: any) {
           let testModel = geminiSettings.model;
           if (!testModel) {
             try {
-              const { SystemRegistry } = await import('@shared/core/registry');
               const geminiModule = SystemRegistry.getProvider('gemini');
               if (geminiModule && geminiModule.metadata?.models?.length > 0) {
                 testModel = geminiModule.metadata.models[0];
@@ -336,7 +334,6 @@ export function registerAiRoutes(app: express.Express, db: any) {
           : 'https://api.groq.com/openai/v1';
       }
 
-      const { SystemRegistry } = await import('@shared/core/registry');
       const providerModule = SystemRegistry.getProvider(activeProvider);
 
       if (!providerModule) {

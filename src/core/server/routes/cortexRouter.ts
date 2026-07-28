@@ -7,6 +7,9 @@ import { activeStreamClients, broadcastToWS, activeWSConnections } from "../apiR
 import { MultiChannelQueue } from "../../kernel/MultiChannelQueue.js";
 import { Soul } from "../../soul.js";
 import { SettingsManager } from "@/core/kernel/settings";
+import { deduplicateAndMergeIdentities } from "../../database.js";
+import { DEFAULT_NEURAL_CORES } from "@shared/constants";
+import { LlmIoAuditor } from "../llmAuditor";
 
 export function registerCortexRoutes(app: express.Express, db: any) {
   app.get("/api/stream/events", (req, res) => {
@@ -309,7 +312,6 @@ export function registerCortexRoutes(app: express.Express, db: any) {
 
       // On-the-fly deduplication alignment and self-healing merge (resolves any case splits/duplications gracefully)
       try {
-        const { deduplicateAndMergeIdentities } = await import("../../database.js");
         deduplicateAndMergeIdentities(db, receiverIdentity.id);
         
         // Reload receiver identity to pick up any merged facts/stats/habits/linkedAccounts
@@ -333,92 +335,91 @@ export function registerCortexRoutes(app: express.Express, db: any) {
         console.warn("[CORTEX_THINK_MERGE] Self-healing merge warn:", mergeErr.message);
       }
 
-      const { DEFAULT_NEURAL_CORES } = await import("@shared/constants");
-      let activePersona: any = DEFAULT_NEURAL_CORES.find(c => c.id === state.activePersonaId);
+       let activePersona: any = DEFAULT_NEURAL_CORES.find(c => c.id === state.activePersonaId);
 
-      if (!activePersona && state.activePersonaId && state.activePersonaId !== 'auto') {
-        const customPersonaRow = db.prepare("SELECT * FROM custom_personas WHERE id = ?").get(state.activePersonaId);
-        if (customPersonaRow) {
-          activePersona = {
-            id: customPersonaRow.id,
-            name: customPersonaRow.name,
-            description: customPersonaRow.description,
-            systemPrompt: customPersonaRow.systemPrompt || '',
-            traits: customPersonaRow.traits ? JSON.parse(customPersonaRow.traits) : [],
-            color: customPersonaRow.color,
-            archetype: customPersonaRow.archetype,
-          };
-        } else {
-          db.prepare("UPDATE agent_state SET activePersonaId = 'auto' WHERE id = 1").run();
-        }
-      }
+       if (!activePersona && state.activePersonaId && state.activePersonaId !== 'auto') {
+         const customPersonaRow = db.prepare("SELECT * FROM custom_personas WHERE id = ?").get(state.activePersonaId);
+         if (customPersonaRow) {
+           activePersona = {
+             id: customPersonaRow.id,
+             name: customPersonaRow.name,
+             description: customPersonaRow.description,
+             systemPrompt: customPersonaRow.systemPrompt || '',
+             traits: customPersonaRow.traits ? JSON.parse(customPersonaRow.traits) : [],
+             color: customPersonaRow.color,
+             archetype: customPersonaRow.archetype,
+           };
+         } else {
+           db.prepare("UPDATE agent_state SET activePersonaId = 'auto' WHERE id = 1").run();
+         }
+       }
 
-      if (!activePersona) {
-        activePersona = DEFAULT_NEURAL_CORES.find(c => c.id === 'auto') || DEFAULT_NEURAL_CORES[1];
-      }
+       if (!activePersona) {
+         activePersona = DEFAULT_NEURAL_CORES.find(c => c.id === 'auto') || DEFAULT_NEURAL_CORES[1];
+       }
 
-      const userRelation = {
-        uid: receiverIdentity.id || senderName,
-        trust: receiverIdentity.trust !== undefined ? receiverIdentity.trust : 50,
-        affection: receiverIdentity.affection !== undefined ? receiverIdentity.affection : 50,
-        reputation: receiverIdentity.reputation !== undefined ? receiverIdentity.reputation : 50,
-        lastInteraction: receiverIdentity.lastMet || Date.now()
-      };
+       const userRelation = {
+         uid: receiverIdentity.id || senderName,
+         trust: receiverIdentity.trust !== undefined ? receiverIdentity.trust : 50,
+         affection: receiverIdentity.affection !== undefined ? receiverIdentity.affection : 50,
+         reputation: receiverIdentity.reputation !== undefined ? receiverIdentity.reputation : 50,
+         lastInteraction: receiverIdentity.lastMet || Date.now()
+       };
 
-      const customState = {
-        ...state,
-        relation: userRelation
-      };
+       const customState = {
+         ...state,
+         relation: userRelation
+       };
 
-      // Retrieve context memories
-      const targetContexts = new Set<string>();
-      targetContexts.add(finalContextId);
+       // Retrieve context memories
+       const targetContexts = new Set<string>();
+       targetContexts.add(finalContextId);
 
-      if (receiverIdentity && Array.isArray(receiverIdentity.linkedAccounts)) {
-        for (const acc of receiverIdentity.linkedAccounts) {
-          const cleanAcc = acc.toLowerCase();
-          if (cleanAcc.startsWith("telegram:id:")) {
-            const tgId = acc.split(":")[2];
-            if (tgId) {
-              targetContexts.add(`tg_${tgId}`);
-            }
-          }
-        }
-        const hasTelegramLinked = receiverIdentity.linkedAccounts.some((acc: string) => acc.toLowerCase().startsWith("telegram"));
-        if (hasTelegramLinked) {
-          targetContexts.add("live_stream");
-        }
-      }
+       if (receiverIdentity && Array.isArray(receiverIdentity.linkedAccounts)) {
+         for (const acc of receiverIdentity.linkedAccounts) {
+           const cleanAcc = acc.toLowerCase();
+           if (cleanAcc.startsWith("telegram:id:")) {
+             const tgId = acc.split(":")[2];
+             if (tgId) {
+               targetContexts.add(`tg_${tgId}`);
+             }
+           }
+         }
+         const hasTelegramLinked = receiverIdentity.linkedAccounts.some((acc: string) => acc.toLowerCase().startsWith("telegram"));
+         if (hasTelegramLinked) {
+           targetContexts.add("live_stream");
+         }
+       }
 
-      const contextsList = Array.from(targetContexts);
-      let historyRows: any[] = [];
-      if (contextsList.length > 0) {
-        const dbLikeClauses = contextsList.map(() => "context LIKE ?").join(" OR ");
-        const dbQueryParams = contextsList.map(c => `%${c}%`);
-        const recentRows = db.prepare(`
-          SELECT * FROM memories 
-          WHERE ${dbLikeClauses} 
-          ORDER BY timestamp DESC 
-          LIMIT 100
-        `).all(...dbQueryParams);
-        historyRows = recentRows.reverse();
-      }
+       const contextsList = Array.from(targetContexts);
+       let historyRows: any[] = [];
+       if (contextsList.length > 0) {
+         const dbLikeClauses = contextsList.map(() => "context LIKE ?").join(" OR ");
+         const dbQueryParams = contextsList.map(c => `%${c}%`);
+         const recentRows = db.prepare(`
+           SELECT * FROM memories 
+           WHERE ${dbLikeClauses} 
+           ORDER BY timestamp DESC 
+           LIMIT 100
+         `).all(...dbQueryParams);
+         historyRows = recentRows.reverse();
+       }
 
-      const memories = historyRows.map((r: any) => ({
-        id: r.id,
-        ownerId: r.ownerId || 'local_user',
-        type: r.type || 'interaction',
-        content: r.content,
-        importance: r.importance || 0.4,
-        tags: r.tags ? JSON.parse(r.tags) : [],
-        context: r.context,
-        sentiment: r.sentiment || 0.5,
-        timestamp: r.timestamp,
-        speaker: r.speaker || 'Unknown'
-      }));
+       const memories = historyRows.map((r: any) => ({
+         id: r.id,
+         ownerId: r.ownerId || 'local_user',
+         type: r.type || 'interaction',
+         content: r.content,
+         importance: r.importance || 0.4,
+         tags: r.tags ? JSON.parse(r.tags) : [],
+         context: r.context,
+         sentiment: r.sentiment || 0.5,
+         timestamp: r.timestamp,
+         speaker: r.speaker || 'Unknown'
+       }));
 
-      // Create or resolve unique taskId for non-blocking concurrent priority multitasking
-      const currentTaskId = req.body.taskId || `ctx_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+       // Create or resolve unique taskId for non-blocking concurrent priority multitasking
+       const currentTaskId = req.body.taskId || `ctx_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
 
       const shouldStream = req.body.stream === true || req.query.stream === "true";
 
@@ -881,7 +882,6 @@ export function registerCortexRoutes(app: express.Express, db: any) {
 
       // Self-healing merge
       try {
-        const { deduplicateAndMergeIdentities } = await import("../../database.js");
         deduplicateAndMergeIdentities(db, receiverIdentity.id);
         
         const refreshed = db.prepare("SELECT * FROM identities WHERE id = ?").get(receiverIdentity.id) as any;
@@ -904,75 +904,74 @@ export function registerCortexRoutes(app: express.Express, db: any) {
         console.warn("[YUI_LLM_GATEWAY_MERGE] Self-healing merge warn:", mergeErr.message);
       }
 
-      const { DEFAULT_NEURAL_CORES } = await import("@shared/constants");
-      let activePersona: any = DEFAULT_NEURAL_CORES.find(c => c.id === state.activePersonaId);
+       let activePersona: any = DEFAULT_NEURAL_CORES.find(c => c.id === state.activePersonaId);
 
-      if (!activePersona && state.activePersonaId && state.activePersonaId !== 'auto') {
-        const customPersonaRow = db.prepare("SELECT * FROM custom_personas WHERE id = ?").get(state.activePersonaId);
-        if (customPersonaRow) {
-          activePersona = {
-            id: customPersonaRow.id,
-            name: customPersonaRow.name,
-            description: customPersonaRow.description,
-            systemPrompt: customPersonaRow.systemPrompt || '',
-            traits: customPersonaRow.traits ? JSON.parse(customPersonaRow.traits) : [],
-            color: customPersonaRow.color,
-            archetype: customPersonaRow.archetype,
-          };
-        } else {
-          db.prepare("UPDATE agent_state SET activePersonaId = 'auto' WHERE id = 1").run();
-        }
-      }
+       if (!activePersona && state.activePersonaId && state.activePersonaId !== 'auto') {
+         const customPersonaRow = db.prepare("SELECT * FROM custom_personas WHERE id = ?").get(state.activePersonaId);
+         if (customPersonaRow) {
+           activePersona = {
+             id: customPersonaRow.id,
+             name: customPersonaRow.name,
+             description: customPersonaRow.description,
+             systemPrompt: customPersonaRow.systemPrompt || '',
+             traits: customPersonaRow.traits ? JSON.parse(customPersonaRow.traits) : [],
+             color: customPersonaRow.color,
+             archetype: customPersonaRow.archetype,
+           };
+         } else {
+           db.prepare("UPDATE agent_state SET activePersonaId = 'auto' WHERE id = 1").run();
+         }
+       }
 
-      if (!activePersona) {
-        activePersona = DEFAULT_NEURAL_CORES.find(c => c.id === 'auto') || DEFAULT_NEURAL_CORES[1];
-      }
+       if (!activePersona) {
+         activePersona = DEFAULT_NEURAL_CORES.find(c => c.id === 'auto') || DEFAULT_NEURAL_CORES[1];
+       }
 
-      const userRelation = {
-        uid: receiverIdentity.id || senderName,
-        trust: receiverIdentity.trust !== undefined ? receiverIdentity.trust : 50,
-        affection: receiverIdentity.affection !== undefined ? receiverIdentity.affection : 50,
-        reputation: receiverIdentity.reputation !== undefined ? receiverIdentity.reputation : 50,
-        lastInteraction: receiverIdentity.lastMet || Date.now()
-      };
+       const userRelation = {
+         uid: receiverIdentity.id || senderName,
+         trust: receiverIdentity.trust !== undefined ? receiverIdentity.trust : 50,
+         affection: receiverIdentity.affection !== undefined ? receiverIdentity.affection : 50,
+         reputation: receiverIdentity.reputation !== undefined ? receiverIdentity.reputation : 50,
+         lastInteraction: receiverIdentity.lastMet || Date.now()
+       };
 
-      const customState = {
-        ...state,
-        relation: userRelation
-      };
+       const customState = {
+         ...state,
+         relation: userRelation
+       };
 
-      // Retrieve context memories
-      const targetContexts = new Set<string>();
-      targetContexts.add(finalContextId);
+       // Retrieve context memories
+       const targetContexts = new Set<string>();
+       targetContexts.add(finalContextId);
 
-      const contextsList = Array.from(targetContexts);
-      let historyRows: any[] = [];
-      if (contextsList.length > 0) {
-        const dbLikeClauses = contextsList.map(() => "context LIKE ?").join(" OR ");
-        const dbQueryParams = contextsList.map(c => `%${c}%`);
-        const recentRows = db.prepare(`
-          SELECT * FROM memories 
-          WHERE ${dbLikeClauses} 
-          ORDER BY timestamp DESC 
-          LIMIT 100
-        `).all(...dbQueryParams);
-        historyRows = recentRows.reverse();
-      }
+       const contextsList = Array.from(targetContexts);
+       let historyRows: any[] = [];
+       if (contextsList.length > 0) {
+         const dbLikeClauses = contextsList.map(() => "context LIKE ?").join(" OR ");
+         const dbQueryParams = contextsList.map(c => `%${c}%`);
+         const recentRows = db.prepare(`
+           SELECT * FROM memories 
+           WHERE ${dbLikeClauses} 
+           ORDER BY timestamp DESC 
+           LIMIT 100
+         `).all(...dbQueryParams);
+         historyRows = recentRows.reverse();
+       }
 
-      const memories = historyRows.map((r: any) => ({
-        id: r.id,
-        ownerId: r.ownerId || 'local_user',
-        type: r.type || 'interaction',
-        content: r.content,
-        importance: r.importance || 0.4,
-        tags: r.tags ? JSON.parse(r.tags) : [],
-        context: r.context,
-        sentiment: r.sentiment || 0.5,
-        timestamp: r.timestamp,
-        speaker: r.speaker || 'Unknown'
-      }));
+       const memories = historyRows.map((r: any) => ({
+         id: r.id,
+         ownerId: r.ownerId || 'local_user',
+         type: r.type || 'interaction',
+         content: r.content,
+         importance: r.importance || 0.4,
+         tags: r.tags ? JSON.parse(r.tags) : [],
+         context: r.context,
+         sentiment: r.sentiment || 0.5,
+         timestamp: r.timestamp,
+         speaker: r.speaker || 'Unknown'
+       }));
 
-      const currentTaskId = `ctx_api_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+       const currentTaskId = `ctx_api_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
       const completionId = `chatcmpl-${Math.random().toString(36).substr(2, 12)}`;
       const createdTime = Math.floor(Date.now() / 1000);
 
@@ -1276,8 +1275,7 @@ export function registerCortexRoutes(app: express.Express, db: any) {
 
   app.get("/api/cortex/llm-logs", async (req, res) => {
     try {
-      const { LlmIoAuditor } = await import("../llmAuditor.js");
-      res.json({ success: true, logs: LlmIoAuditor.getLogs() });
+       res.json({ success: true, logs: LlmIoAuditor.getLogs() });
     } catch (err: any) {
       res.status(500).json({ error: err.message || "Failed to load LLM logs." });
     }
@@ -1285,8 +1283,7 @@ export function registerCortexRoutes(app: express.Express, db: any) {
 
   app.post("/api/cortex/llm-logs/clear", async (req, res) => {
     try {
-      const { LlmIoAuditor } = await import("../llmAuditor.js");
-      LlmIoAuditor.clearLogs();
+       LlmIoAuditor.clearLogs();
       res.json({ success: true });
     } catch (err: any) {
       res.status(500).json({ error: err.message || "Failed to clear LLM logs." });

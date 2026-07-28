@@ -1,6 +1,7 @@
 import { ToolModule } from '@shared/include/types';
 import { SystemRegistry } from '@shared/core/registry';
 import manifest from './manifest.json';
+import { initializeDatabase } from '../../../core/database.js';
 
 async function resolveTelegramChatId(recipient: string | undefined, context: any): Promise<{ tg_id: number; matchedName: string; source: string } | null> {
   // Determine target search name(s)
@@ -23,9 +24,7 @@ async function resolveTelegramChatId(recipient: string | undefined, context: any
   // 1. Direct Native Database Check (Fast, zero-network, bypasses port routing)
   try {
     if (typeof window === 'undefined') {
-      const dbModulePath = '../../../core/database.js';
-      const dbMod = await import(/* @vite-ignore */ dbModulePath);
-      const db = dbMod.initializeDatabase();
+      const db = initializeDatabase();
       if (db) {
         const cleanSearchName = searchName.trim();
         const cleanUsername = cleanSearchName.startsWith("@") ? cleanSearchName.substring(1) : cleanSearchName;

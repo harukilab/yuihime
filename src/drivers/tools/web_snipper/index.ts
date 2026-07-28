@@ -2,6 +2,8 @@ import { ToolModule } from '@shared/include/types';
 import { SystemRegistry } from '@shared/core/registry';
 import { StandardizedProcessor } from '../../../core/kernel/processor';
 import manifest from './manifest.json';
+import { StorageServer } from '@shared/drivers/storageServer';
+import { load } from 'cheerio';
 
 export const WebSnipperTool: ToolModule = {
   metadata: manifest as any,
@@ -81,9 +83,7 @@ export const WebSnipperTool: ToolModule = {
               let $;
 
               try {
-                const cheerioPath = 'cheerio';
-                const cheerio = await import(/* @vite-ignore */ cheerioPath);
-                $ = cheerio.load(html);
+                $ = load(html);
               } catch (cheerioErr: any) {
                 console.warn("[WEB_SNIPPER] Direct Cheerio import or load failed. Using primitive fallback parser:", cheerioErr.message);
                 cheerioFailed = true;
@@ -141,7 +141,6 @@ export const WebSnipperTool: ToolModule = {
 
           if (saveToMemory && extractedText.trim().length > 0 && !extractedText.startsWith('[Warning]')) {
             const storageModulePath = '../../storageServer.js';
-            const { StorageServer } = await import(/* @vite-ignore */ storageModulePath);
             const memoryData = {
               type: "system",
               speaker: "system",

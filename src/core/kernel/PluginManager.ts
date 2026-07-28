@@ -31,12 +31,7 @@ export class PluginManager {
     
     let localRequire: any = typeof require !== 'undefined' ? require : null;
     if (!localRequire) {
-      try {
-        const { createRequire } = await import(/* @vite-ignore */ 'module');
-        localRequire = createRequire(import.meta.url);
-      } catch (e) {
-        logger.log('WARN', 'PLUGIN_MANAGER', 'Could not initialize createRequire for ES modules, localRequire is not available in this environment.');
-      }
+      localRequire = require;
     }
     
     const addonsDirs = [

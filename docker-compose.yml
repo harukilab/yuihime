@@ -1,0 +1,85 @@
+# =============================================================================
+# YuiHime - Docker Compose
+# =============================================================================
+# Usage:
+#   Production:  docker compose up -d
+#   Development: docker compose --profile dev up -d
+#
+# Environment: Copy .env.example to .env and fill in API keys before starting.
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Production service
+  # ---------------------------------------------------------------------------
+  yuihime:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: yuihime
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - YUIHIME_SYSTEM_ROOT=/home/user/.yuihime
+      # Paste API keys from .env here (or use env_file below)
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+    env_file:
+      - .env
+    volumes:
+      # Persistent data: database, config, addons, models, agent files
+      - yuihime-data:/home/user/.yuihime
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - yuihime-net
+
+  # ---------------------------------------------------------------------------
+  # Development service (profile: dev)
+  # ---------------------------------------------------------------------------
+  yuihime-dev:
+    profiles:
+      - dev
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: yuihime-dev
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - YUIHIME_SYSTEM_ROOT=/home/user/.yuihime
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+    env_file:
+      - .env
+    volumes:
+      # Source code live-mount for hot reload
+      - .:/app
+      # Persist data across container rebuilds
+      - yuihime-data:/home/user/.yuihime
+    networks:
+      - yuihime-net
+
+# ---------------------------------------------------------------------------
+# Volumes
+# ---------------------------------------------------------------------------
+volumes:
+  yuihime-data:
+    driver: local
+
+# ---------------------------------------------------------------------------
+# Networks
+# ---------------------------------------------------------------------------
+networks:
+  yuihime-net:
+    driver: bridge

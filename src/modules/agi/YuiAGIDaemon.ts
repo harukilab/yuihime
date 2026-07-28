@@ -73,7 +73,7 @@ Align your recollections honestly, eliminate all forms of informational contradi
 `.trim();
 
   private constructor() {
-    this.loadState();
+    // Defer loadState to first explicit access to avoid StorageServer race condition
   }
 
   public static getInstance(): YuiAGIDaemon {
@@ -81,6 +81,10 @@ Align your recollections honestly, eliminate all forms of informational contradi
       YuiAGIDaemon.instance = new YuiAGIDaemon();
     }
     return YuiAGIDaemon.instance;
+  }
+
+  public async initialize(): Promise<void> {
+    await this.loadState();
   }
 
   private async loadState() {

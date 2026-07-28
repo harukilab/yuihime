@@ -1,6 +1,6 @@
 import express from "express";
 import path from "path";
-import fs from "fs/promises";
+import fs, { createReadStream } from "fs/promises";
 import { existsSync, readdirSync, statSync, realpathSync, mkdirSync } from "fs";
 import { exec } from "child_process";
 import { promisify } from "util";
@@ -8,7 +8,13 @@ import { AIService } from "../../kernel/ai.js";
 import { SettingsManager } from "@/core/kernel/settings";
 import { apiCustomSystemRoot, verifySandboxPath, getDynamicSandboxRoot, resolveSystemRootPath, getYoloMode, getCommandBlacklist, getCommandWhitelist } from "../apiRouter.js";
 import { CustomToolsLoader } from "../../CustomToolsLoader.js";
+import { initializeDatabase } from "../../database.js";
 import { APIService } from "@shared/services/api";
+import { StorageServer } from "@shared/drivers/storageServer.js";
+import { searchMemories } from "../../memorySearch";
+import { SystemRegistry } from "@shared/core/registry";
+import { BackgroundProcessManager } from "../../kernel/BackgroundProcessManager";
+import { load } from "cheerio";
 
 const execPromise = promisify(exec);
 
@@ -207,8 +213,7 @@ export function registerToolsRoutes(app: express.Express, db: any) {
         let $;
 
         try {
-          const cheerio = await import('cheerio');
-          $ = cheerio.load(html);
+          $ = load(html);
         } catch (cheerioErr: any) {
           console.warn("[WEB_SNIPPER] Cheerio fallback triggered in API route:", cheerioErr.message);
           cheerioFailed = true;
@@ -261,9 +266,8 @@ export function registerToolsRoutes(app: express.Express, db: any) {
         savedToMemory: false
       };
 
-      if (saveToMemory !== false && extractedText.trim().length > 0 && !extractedText.startsWith('[Warning]')) {
-        const { StorageServer } = await import('@shared/drivers/storageServer');
-        const memoryContext = context || 'web_default';
+       if (saveToMemory !== false && extractedText.trim().length > 0 && !extractedText.startsWith('[Warning]')) {
+         const memoryContext = context || 'web_default';
         const imp = typeof importance === 'number' ? importance : 0.8;
         
         const memoryData = {
@@ -296,7 +300,6 @@ export function registerToolsRoutes(app: express.Express, db: any) {
     }
 
     try {
-      const { searchMemories } = await import('../../memorySearch.js');
       const hits = await searchMemories(
         String(query),
         Math.min(Math.max(Number(limit) || 5, 1), 20),
@@ -315,7 +318,8 @@ export function registerToolsRoutes(app: express.Express, db: any) {
 
     try {
       const wrappedCode = `(async () => { ${code.includes("return") ? code : `return (${code})`} })()`;
-      const result = await eval(wrappedCode);
+      const fn = new Function(`"use strict"; return ${wrappedCode}`);
+      const result = await fn();
       res.json({ result: typeof result === "object" ? JSON.stringify(result) : String(result) });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -482,7 +486,6 @@ export function registerToolsRoutes(app: express.Express, db: any) {
 
       let shellTimeout = 120000;
       try {
-        const { SettingsManager } = await import("@/core/kernel/settings");
         const settings = await SettingsManager.getInstance().load();
         const toolExecutorConfig = settings['tool-executor'] || {};
         if (toolExecutorConfig.shellTimeoutMs !== undefined) {
@@ -765,9 +768,8 @@ export function registerToolsRoutes(app: express.Express, db: any) {
       const activeContextId = contextId || "";
       if (activeContextId.startsWith("tg_")) {
         const chatId = activeContextId.substring(3);
-        const bot = (globalThis as any).activeTelegramBot;
-        if (bot) {
-          const { createReadStream } = await import("fs");
+          const bot = (globalThis as any).activeTelegramBot;
+          if (bot) {
           console.log(`[API_FILE_SEND] Sending file "${filename}" to Telegram chatId: ${chatId}`);
           await bot.telegram.sendDocument(chatId, { source: createReadStream(safePath), filename: path.basename(safePath) }, { caption: caption || "" });
           sent = true;
@@ -792,10 +794,8 @@ export function registerToolsRoutes(app: express.Express, db: any) {
         }
       }
 
-      if (!sent && recipient) {
-        const dbModulePath = '../../core/database.js';
-        const dbMod = await import(/* @vite-ignore */ dbModulePath);
-        const activeDb = dbMod.initializeDatabase();
+       if (!sent && recipient) {
+        const activeDb = initializeDatabase();
         if (activeDb) {
           const cleanRec = recipient.trim();
           const cleanUsername = cleanRec.startsWith("@") ? cleanRec.substring(1) : cleanRec;
@@ -826,9 +826,8 @@ export function registerToolsRoutes(app: express.Express, db: any) {
           if (tgId) {
             const bot = (globalThis as any).activeTelegramBot;
             if (bot) {
-              const { createReadStream } = await import("fs");
-              console.log(`[API_FILE_SEND] Sending file "${filename}" to resolved Telegram user: ${tgId}`);
-              await bot.telegram.sendDocument(tgId, { source: createReadStream(safePath), filename: path.basename(safePath) }, { caption: caption || "" });
+            console.log(`[API_FILE_SEND] Sending file "${filename}" to resolved Telegram user: ${tgId}`);
+            await bot.telegram.sendDocument(tgId, { source: createReadStream(safePath), filename: path.basename(safePath) }, { caption: caption || "" });
               sent = true;
               platform = "telegram";
               detail = `Successfully sent to Telegram recipient: ${recipient} (ID: ${tgId})`;
@@ -1115,15 +1114,14 @@ export function registerToolsRoutes(app: express.Express, db: any) {
 
       await fs.writeFile(registryPath, JSON.stringify(customTools, null, 2), 'utf8');
 
-      // Register it in our SystemRegistry dynamically
-      CustomToolsLoader.registerTool(toolDef);
+       // Register it in our SystemRegistry dynamically
+       CustomToolsLoader.registerTool(toolDef);
 
-      // Re-trigger available_tools.json generation
-      try {
-        const { SystemRegistry } = await import("@shared/core/registry");
+       // Re-trigger available_tools.json generation
+       try {
         const tools = SystemRegistry.getTools();
         const toolsData = tools.map((t: any) => t.metadata);
-        const outputFilePath = path.resolve(process.cwd(), 'src', 'core', 'available_tools.json');
+        const outputFilePath = path.join(os.homedir(), ".yuihime", "data", "available_tools.json");
         await fs.writeFile(outputFilePath, JSON.stringify(toolsData, null, 2), 'utf8');
       } catch (genErr) {
         console.error("[SERVER] Failed to regenerate available_tools.json dynamically:", genErr);
@@ -1148,15 +1146,14 @@ export function registerToolsRoutes(app: express.Express, db: any) {
       const updatedTools = customTools.filter((t: any) => t.id !== id);
       await fs.writeFile(registryPath, JSON.stringify(updatedTools, null, 2), 'utf8');
 
-      // Unregister in memory
-      try {
-        const { SystemRegistry } = await import("@shared/core/registry");
-        (SystemRegistry as any).tools = (SystemRegistry as any).tools.filter((t: any) => t.metadata.id !== id);
+       // Unregister in memory
+       try {
+         (SystemRegistry as any).tools = (SystemRegistry as any).tools.filter((t: any) => t.metadata.id !== id);
         
         // Re-generate available_tools.json
         const tools = SystemRegistry.getTools();
         const toolsData = tools.map((t: any) => t.metadata);
-        const outputFilePath = path.resolve(process.cwd(), 'src', 'core', 'available_tools.json');
+        const outputFilePath = path.join(os.homedir(), ".yuihime", "data", "available_tools.json");
         await fs.writeFile(outputFilePath, JSON.stringify(toolsData, null, 2), 'utf8');
       } catch (err) {
         console.error("[SERVER] Memory unregister failed:", err);
@@ -1174,10 +1171,9 @@ export function registerToolsRoutes(app: express.Express, db: any) {
     if (!command) return res.status(400).json({ error: "command is required." });
 
     try {
-      const { BackgroundProcessManager } = await import("../../kernel/BackgroundProcessManager.js");
-      const mgr = BackgroundProcessManager.getInstance();
+       const mgr = BackgroundProcessManager.getInstance();
 
-      // Basic safety: only allow if yolo mode or command is whitelisted
+       // Basic safety: only allow if yolo mode or command is whitelisted
       const yoloMode = getYoloMode();
       const whitelist = getCommandWhitelist();
       const blacklist = getCommandBlacklist();
@@ -1206,9 +1202,8 @@ export function registerToolsRoutes(app: express.Express, db: any) {
 
   app.get("/api/tools/bgproc/list", async (_req, res) => {
     try {
-      const { BackgroundProcessManager } = await import("../../kernel/BackgroundProcessManager.js");
-      const mgr = BackgroundProcessManager.getInstance();
-      res.json({ success: true, processes: mgr.list().map(sanitizeRecord) });
+       const mgr = BackgroundProcessManager.getInstance();
+       res.json({ success: true, processes: mgr.list().map(sanitizeRecord) });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
@@ -1218,9 +1213,8 @@ export function registerToolsRoutes(app: express.Express, db: any) {
     const { id, signal } = req.body;
     if (!id) return res.status(400).json({ error: "id is required." });
     try {
-      const { BackgroundProcessManager } = await import("../../kernel/BackgroundProcessManager.js");
-      const mgr = BackgroundProcessManager.getInstance();
-      const ok = mgr.stop(id, signal ?? "SIGTERM");
+       const mgr = BackgroundProcessManager.getInstance();
+       const ok = mgr.stop(id, signal ?? "SIGTERM");
       res.json({ success: ok, message: ok ? `Process ${id} stopped.` : `Process ${id} not found or already stopped.` });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -1230,9 +1224,8 @@ export function registerToolsRoutes(app: express.Express, db: any) {
   app.delete("/api/tools/bgproc/:id", async (req, res) => {
     const { id } = req.params;
     try {
-      const { BackgroundProcessManager } = await import("../../kernel/BackgroundProcessManager.js");
-      const mgr = BackgroundProcessManager.getInstance();
-      const ok = mgr.remove(id);
+       const mgr = BackgroundProcessManager.getInstance();
+       const ok = mgr.remove(id);
       res.json({ success: ok, message: ok ? `Process ${id} removed.` : `Cannot remove: process is still running or not found.` });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -1243,9 +1236,8 @@ export function registerToolsRoutes(app: express.Express, db: any) {
     const { id } = req.params;
     const tail = parseInt(String(req.query.tail ?? "100"), 10);
     try {
-      const { BackgroundProcessManager } = await import("../../kernel/BackgroundProcessManager.js");
-      const mgr = BackgroundProcessManager.getInstance();
-      const record = mgr.get(id);
+       const mgr = BackgroundProcessManager.getInstance();
+       const record = mgr.get(id);
       if (!record) return res.status(404).json({ error: `Process ${id} not found.` });
       const logs = mgr.getLogs(id, tail);
       res.json({ success: true, id, status: record.status, logs });

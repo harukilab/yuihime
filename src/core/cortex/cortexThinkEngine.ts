@@ -33,6 +33,10 @@ import { repairJsonFormatWithLLM } from './jsonRepairer';
 import { FastTrackRunner } from './fastTrackRunner';
 import { extractBestJsonObject } from './jsonExtract';
 import { makeToolCall } from './cortexThinkEngineUtils';
+import { DEFAULT_NEURAL_CORES } from '@shared/constants';
+import { broadcastToWS } from '../server/apiRouter.js';
+import { DynamicToolSynthesizer } from './dynamicToolSynthesizer.js';
+import { LlmIoAuditor } from '../server/llmAuditor.js';
 
 /**
  * Build a canonical OpenAI-native tool call object enriched with backward
@@ -236,7 +240,6 @@ export async function executeCortexThink(
   
   let resolvedPersona = activePersona;
   try {
-    const { DEFAULT_NEURAL_CORES } = await import('@shared/constants');
     let targetId = state.activePersonaId || 'auto';
 
     if (targetId !== 'auto' && db) {
@@ -570,14 +573,15 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
        try {
           let repaired = cleanJsonStr;
            let directParseOk = false;
-           try {
-              parsedPayload = JSON.parse(cleanJsonStr);
-              directParseOk = true;
-              logs.push("[CORTEX_LOOP] Successfully parsed JSON_OBJECT response layout directly.");
+            try {
+               const _parseMatch = cleanJsonStr.match(/\{[\s\S]*\}/);
+               parsedPayload = _parseMatch ? JSON.parse(_parseMatch[0]) : null;
+               directParseOk = true;
+               logs.push("[CORTEX_LOOP] Successfully parsed JSON_OBJECT response layout directly.");
            } catch (_) {
               repaired = StandardizedProcessor.locallyRepairJson(cleanJsonStr);
            }
-          if (!directParseOk) { parsedPayload = JSON.parse(repaired); }
+           if (!directParseOk) { const _rMatch = repaired.match(/\{[\s\S]*\}/); parsedPayload = _rMatch ? JSON.parse(_rMatch[0]) : null; }
           logs.push("[CORTEX_LOOP] Successfully parsed JSON_OBJECT response layout.");
           if (parsedPayload && parsedPayload.properties && typeof parsedPayload.properties === 'object' && !Array.isArray(parsedPayload.properties)) {
              if (parsedPayload.properties.thought || parsedPayload.properties.tool_calls || parsedPayload.properties.tools_to_call || parsedPayload.properties.final_answer) {
@@ -605,9 +609,11 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
              const firstBrace = cleanJsonStr.indexOf('{');
              const lastBrace = cleanJsonStr.lastIndexOf('}');
              if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-                try {
-                   parsedPayload = JSON.parse(cleanJsonStr.substring(firstBrace, lastBrace + 1));
-                   logs.push("[CORTEX_LOOP] Successfully parsed JSON_OBJECT using bracket isolation.");
+                   try {
+                       const _bStr = cleanJsonStr.substring(firstBrace, lastBrace + 1);
+                       const _bMatch = _bStr.match(/\{[\s\S]*\}/);
+                       parsedPayload = _bMatch ? JSON.parse(_bMatch[0]) : null;
+                       logs.push("[CORTEX_LOOP] Successfully parsed JSON_OBJECT using bracket isolation.");
                    if (parsedPayload && parsedPayload.properties && typeof parsedPayload.properties === 'object' && !Array.isArray(parsedPayload.properties)) {
                       if (parsedPayload.properties.thought || parsedPayload.properties.tool_calls || parsedPayload.properties.tools_to_call || parsedPayload.properties.final_answer) {
                          logs.push("[CORTEX_LOOP] Detected nested properties schema confusion, lifting properties values to root.");
@@ -771,10 +777,11 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
 
                 if (cleanSpeech && cleanSpeech.length > 5) {
                    const extractedFromSpeech = extractBestJsonObject(cleanSpeech);
-                   if (extractedFromSpeech) {
-                      try {
-                         parsedPayload = JSON.parse(extractedFromSpeech);
-                         logs.push("[CORTEX_LOOP] [MONOLOGUE_STRIPPER] Extracted balanced JSON object from cleaned speech before engaging LLM repairer.");
+if (extractedFromSpeech) {
+                       try {
+                          const sanitized = extractedFromSpeech.match(/\{[\s\S]*\}/);
+                          parsedPayload = JSON.parse(sanitized ? sanitized[0] : extractedFromSpeech);
+                          logs.push("[CORTEX_LOOP] [MONOLOGUE_STRIPPER] Extracted balanced JSON object from cleaned speech before engaging LLM repairer.");
                       } catch {}
                    }
                    if (!parsedPayload) {
@@ -1076,21 +1083,18 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
           indonesianStatus = `Yui sedang memproses kemampuan: [${toolNames}]... 🌸`;
         }
         
-        const routerPath = "../server/apiRouter.js";
-        import(/* @vite-ignore */ routerPath).then(({ broadcastToWS }) => {
-          if (typeof broadcastToWS === 'function') {
-            broadcastToWS({
-              type: "state_update",
-              data: {
-                state: { status: "thinking" },
-                activeSubtitle: indonesianStatus,
-                typedSubtitle: indonesianStatus,
-                isSubtitleTyping: false,
-                animations: ["THINK"]
-              }
-            });
-          }
-        }).catch(() => {});
+        if (typeof broadcastToWS === 'function') {
+          broadcastToWS({
+            type: "state_update",
+            data: {
+              state: { status: "thinking" },
+              activeSubtitle: indonesianStatus,
+              typedSubtitle: indonesianStatus,
+              isSubtitleTyping: false,
+              animations: ["THINK"]
+            }
+          });
+        }
       } catch (_) {}
 
       logs.push(`[PHASE 4] Hub distributed ${toolsToCall.length} tasks to Executors in PARALLEL to enable concurrent process execution...`);
@@ -1102,8 +1106,7 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
           const tName = tc.name || tc.tool;
           console.log(`[DYNAMIC_SYNTHESIS] Tool '${tName}' not found. Attempting autonomous dynamic tool synthesis...`);
           try {
-            const { DynamicToolSynthesizer } = await import('./dynamicToolSynthesizer');
-            tool = await DynamicToolSynthesizer.synthesizeAndRegister(tName, input, cortexInstance);
+             tool = await DynamicToolSynthesizer.synthesizeAndRegister(tName, input, cortexInstance);
           } catch (synthErr: any) {
             console.error(`[CORTEX_SYNTHESIS_FAIL] Failed during dynamic tool synthesis for '${tName}':`, synthErr.message);
           }
@@ -1119,11 +1122,12 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
             if (tool.metadata && tool.metadata.parameters) {
               const schema = tool.metadata.parameters;
               let parsedArgs: any = tc.args || {};
-              if (typeof parsedArgs === 'string') {
-                try {
-                  parsedArgs = JSON.parse(parsedArgs);
-                } catch (_) {}
-              }
+if (typeof parsedArgs === 'string') {
+                 try {
+                   const sanitized = parsedArgs.match(/\{[\s\S]*\}/);
+                   parsedArgs = JSON.parse(sanitized ? sanitized[0] : parsedArgs);
+                 } catch (_) {}
+               }
               if (typeof parsedArgs !== 'object' || parsedArgs === null) parsedArgs = {};
 
               if (parsedArgs._meta && typeof parsedArgs._meta === 'object') {
@@ -1297,9 +1301,7 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
       });
       // Persist tool calls + results into the LLM audit log for UI inspection
       try {
-        const auditorPath = '../server/llmAuditor.js';
-        const { LlmIoAuditor } = await import(/* @vite-ignore */ auditorPath);
-        LlmIoAuditor.recordToolExecution({
+         LlmIoAuditor.recordToolExecution({
           toolCalls: toolsToCall.map((tc: any) => ({
             name: tc.name || tc.tool,
             arguments: tc.args || tc.arguments || {}
@@ -1628,10 +1630,11 @@ Explain what you did or found in a completely natural, non-technical, cute way. 
   const cortexSettings = await cortexInstance.getSettings();
   const isFailsafeEnabled = cortexSettings?.developer?.enableKernelFailsafe !== false && cortexSettings?.enableKernelFailsafe !== false;
 
-  // Guna mematuhi instruksi batin di akhir alur: jika finalAnswer kosong (empty string) setelah iterasi penuh selesai,
-  // ini merupakan kondisi galat kognisi (bukan kesengajaan). Kita wajib memicu failsafe untuk mengamankan dialog manis Yui.
-  // UPDATE: Diaktifkan true agar jika Yui tidak bicara dalam loop (karena menggunakan tools seperti messaging/send_update), dibiarkan kosong tanpa memicu failsafe.
-  const isIntentionalEmpty = true;
+  const hasResponseDeliveryTools = Array.isArray(toolsToCall) && toolsToCall.some((tc: any) => {
+    const name = tc.tool || tc.name || '';
+    return ['speak', 'final_answer', 'send_message', 'send_telegram', 'send_discord', 'send_update', 'send_file', 'reply'].includes(name);
+  });
+  const isIntentionalEmpty = hasResponseDeliveryTools;
 
   if (!finalAnswer || finalAnswer.length < 5) {
     logs.push("[KERNEL_FAIL_SAFE] Allowed empty or short output (< 5 chars) without triggering fallback, as Yui may have executed tool-based replies/actions.");

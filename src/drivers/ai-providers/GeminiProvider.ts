@@ -1,5 +1,6 @@
 import { ProviderModule, ModuleType } from '@shared/include/types';
 import { toSingleString } from '@/core/kernel/configNormalizer';
+import { AIService } from '../../core/kernel/ai.js';
 
 export const GeminiProvider: ProviderModule = {
   metadata: {
@@ -66,7 +67,6 @@ export const GeminiProvider: ProviderModule = {
 
     try {
       if (typeof window === 'undefined') {
-        const { AIService } = await import('../../core/kernel/ai.js');
         const aiService = AIService.getInstance();
         const data = await aiService.listModels('gemini', config?.apiKey, config?.baseUrl || config?.endpoint);
         const fetched = (data.models || [])
@@ -207,7 +207,6 @@ export const GeminiProvider: ProviderModule = {
       }
 
       if (typeof window === 'undefined') {
-        const { AIService } = await import('../../core/kernel/ai.js');
         const aiService = AIService.getInstance();
         return await aiService.generate(promptText, {
           model: modelId,

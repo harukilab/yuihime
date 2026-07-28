@@ -2,6 +2,8 @@ import { CortexModule, ModuleType } from '@shared/include/types';
 import { PromptRegistry } from '../core/PromptRegistry';
 import { SystemRegistry } from '@shared/core/registry';
 import { StorageService } from '@shared/drivers/storage';
+import { initializeDatabase } from '../core/database.js';
+import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
@@ -33,79 +35,43 @@ function resolveCharacterName(charData: string): string {
 
 async function ensureInitialized() {
   if (initialized) return;
-  if (typeof window === 'undefined') {
-    try {
-      const metaUrl = typeof import.meta !== 'undefined' && import.meta.url ? import.meta.url : '';
-      let fs: any;
-      let path: any;
-      if (metaUrl) {
-        const { createRequire } = await import(/* @vite-ignore */ 'module');
-        const requireFunc = createRequire(metaUrl);
-        fs = requireFunc('fs');
-        path = requireFunc('path');
-      } else {
-        if (typeof require !== 'undefined') {
-          fs = require('fs');
-          path = require('path');
-        } else {
-          fs = await import('fs');
-          path = await import('path');
-        }
+    if (typeof window === 'undefined') {
+      try {
+        const rootEnvStr = process.env.YUIHIME_SYSTEM_ROOT || process.env.YUIHIME_ROOT || '~/.yuihime';
+        const customSystemRoot = path.isAbsolute(rootEnvStr) ? rootEnvStr : path.join(os.homedir(), rootEnvStr);
+        const agentDir = process.env.YUIHIME_AGENT_PATH || path.join(customSystemRoot, 'agent');
+
+        const getFileContent = (filename: string, fallback: string): string => {
+          try {
+            const fullPath = path.join(agentDir, filename);
+            if (fs.existsSync(fullPath)) {
+              return fs.readFileSync(fullPath, 'utf8');
+            }
+          } catch (e) {
+            console.warn(`[PromptManager] Failed loading ${filename}, using fallback`, e);
+          }
+          return fallback;
+        };
+
+        systemPromptData = getFileContent('system_prompt.md', '');
+        characterData = getFileContent('character.md', '');
+        loreData = getFileContent('lore.md', '');
+
+        registry.register('core:system_prompt', systemPromptData, true);
+        registry.register('core:character', characterData, true);
+        registry.register('core:lore', loreData, true);
+        registry.register('core:character_name', resolveCharacterName(characterData), true);
+      } catch (e) {
+        console.warn('[PromptManager] Server-side file sync failed:', e);
+        registry.register('core:system_prompt', systemPromptData);
+        registry.register('core:character', characterData);
+        registry.register('core:lore', loreData);
+        registry.register('core:character_name', resolveCharacterName(characterData));
       }
-      
-      const shareDir = path.join(process.cwd(), 'src', 'share', 'prompts');
-      
-      const getShareFallback = (filename: string): string => {
-        try {
-          const fallbackPath = path.join(shareDir, filename);
-          if (fs.existsSync(fallbackPath)) {
-            return fs.readFileSync(fallbackPath, 'utf8');
-          }
-        } catch (_) {}
-        return "";
-      };
-
-      systemPromptData = getShareFallback('system_prompt.md');
-      characterData = getShareFallback('character.md');
-      loreData = getShareFallback('lore.md');
-
-      const rootEnvStr = process.env.YUIHIME_SYSTEM_ROOT || process.env.YUIHIME_ROOT || '~/.yuihime';
-      const customSystemRoot = path.isAbsolute(rootEnvStr) ? rootEnvStr : path.join(process.cwd(), rootEnvStr);
-      const agentDir = process.env.YUIHIME_AGENT_PATH || path.join(customSystemRoot, 'agent');
-      
-      const getFileContent = (filename: string, fallback: string): string => {
-        try {
-          const fullPath = path.join(agentDir, filename);
-          if (fs.existsSync(fullPath)) {
-            return fs.readFileSync(fullPath, 'utf8');
-          }
-        } catch (e) {
-          console.warn(`[PromptManager] Failed loading ${filename}, using fallback`, e);
-        }
-        return fallback;
-      };
-
-      registry.register('core:system_prompt', getFileContent('system_prompt.md', systemPromptData), true);
-      registry.register('core:character', getFileContent('character.md', characterData), true);
-      registry.register('core:lore', getFileContent('lore.md', loreData), true);
-      registry.register('core:character_name', resolveCharacterName(getFileContent('character.md', characterData)), true);
-    } catch (e) {
-      console.warn('[PromptManager] Server-side file sync failed:', e);
-      // Fallback
-      registry.register('core:system_prompt', systemPromptData);
-      registry.register('core:character', characterData);
-      registry.register('core:lore', loreData);
-      registry.register('core:character_name', resolveCharacterName(characterData));
-    }
   } else {
-    // Client-side: build registry using bundled fallbacks
-    try {
-      characterData = (await import('../share/prompts/character.md?raw')).default;
-      loreData = (await import('../share/prompts/lore.md?raw')).default;
-      systemPromptData = (await import('../share/prompts/system_prompt.md?raw')).default;
-    } catch (err) {
-      console.warn('[PromptManager] Browser dynamic raw imports failed:', err);
-    }
+    characterData = "";
+    loreData = "";
+    systemPromptData = "";
 
     // Dynamic client-side override: Fetch customized server-side agent files if available to load true persona
     try {
@@ -361,30 +327,13 @@ export const PromptManagerModule: CortexModule = {
     let tools: any[] = [];
     if (typeof window === 'undefined') {
       try {
-        const metaUrl = typeof import.meta !== 'undefined' && import.meta.url ? import.meta.url : '';
-        let fs: any;
-        let path: any;
-        if (metaUrl) {
-          const { createRequire } = await import('module');
-          const requireFunc = createRequire(metaUrl);
-          fs = requireFunc('fs');
-          path = requireFunc('path');
-        } else {
-          if (typeof require !== 'undefined') {
-            fs = require('fs');
-            path = require('path');
-          } else {
-            fs = await import('fs');
-            path = await import('path');
-          }
-        }
-        const toolsPath = path.resolve(process.cwd(), 'src', 'core', 'available_tools.json');
+        const toolsPath = path.join(os.homedir(), '.yuihime', 'data', 'available_tools.json');
         if (fs.existsSync(toolsPath)) {
           const fileData = fs.readFileSync(toolsPath, 'utf8');
           tools = JSON.parse(fileData).map((m: any) => ({ metadata: m }));
         }
       } catch (err) {
-        console.warn('[PromptManager] Failed loading available_tools.json:', err);
+        console.warn('[PromptManager] Failed loading build-info.json:', err);
       }
     }
 
@@ -509,34 +458,14 @@ export const PromptManagerModule: CortexModule = {
 
     if (typeof window === 'undefined') {
       try {
-        const metaUrl = typeof import.meta !== 'undefined' && import.meta.url ? import.meta.url : '';
-        let fs: any;
-        let path: any;
-        if (metaUrl) {
-          const { createRequire } = await import(/* @vite-ignore */ 'module');
-          const requireFunc = createRequire(metaUrl);
-          fs = requireFunc('fs');
-          path = requireFunc('path');
-        } else {
-          if (typeof require !== 'undefined') {
-            fs = require('fs');
-            path = require('path');
-          } else {
-            fs = await import('fs');
-            path = await import('path');
-          }
-        }
-        
         const rootEnvStr = process.env.YUIHIME_SYSTEM_ROOT || process.env.YUIHIME_ROOT || '~/.yuihime';
-        const customSystemRoot = path.isAbsolute(rootEnvStr) ? rootEnvStr : path.join(process.cwd(), rootEnvStr);
+        const customSystemRoot = path.isAbsolute(rootEnvStr) ? rootEnvStr : path.join(os.homedir(), rootEnvStr);
         const agentDir = process.env.YUIHIME_AGENT_PATH || path.join(customSystemRoot, 'agent');
-        
+
         for (const fileItem of filesToLoad) {
           let filePath = path.join(agentDir, fileItem.name);
           if (!fs.existsSync(filePath)) {
-            filePath = path.join(process.cwd(), fileItem.name);
-          }
-          if (!fs.existsSync(filePath)) {
+            filePath = path.join(os.homedir(), fileItem.name);
           }
           if (fs.existsSync(filePath)) {
             let content = fs.readFileSync(filePath, 'utf8').trim();
@@ -600,8 +529,6 @@ export const PromptManagerModule: CortexModule = {
             let otherChatRows: any[] = [];
             if (typeof window === 'undefined') {
               try {
-                const dbModuleName = '../core/database.js';
-                const { initializeDatabase } = await import(/* @vite-ignore */ dbModuleName);
                 const db = initializeDatabase();
                 
                 const targetContexts = new Set<string>();

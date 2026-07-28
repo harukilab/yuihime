@@ -14,6 +14,11 @@ import {
 import { safeLocalStorage } from "../core/safeStorage";
 import { RUNTIME_DEFAULTS } from '@shared/constants';
 
+function getStorageServer(): any {
+  if (typeof window !== 'undefined') return null;
+  return (globalThis as any).__yuihimeStorageServer || null;
+}
+
 export class StorageService {
   static async ensureAuth(): Promise<string | null> {
     return 'local_user';
@@ -45,11 +50,11 @@ export class StorageService {
     return 'local_user';
   }
 
-  private static async fetchWithRetry(url: string, options?: RequestInit, retries = 5): Promise<Response> {
+   private static async fetchWithRetry(url: string, options?: RequestInit, retries = 5): Promise<Response> {
     if (typeof window === 'undefined') {
       try {
-        const modulePath = './storageServer.js';
-        const { StorageServer } = await import(/* @vite-ignore */ modulePath);
+        const ss = getStorageServer();
+        if (!ss) throw new Error("StorageServer not available on globalThis");
         const method = options?.method?.toUpperCase() || 'GET';
         const body = options?.body && typeof options.body === 'string' ? JSON.parse(options.body) : null;
 
@@ -58,103 +63,103 @@ export class StorageService {
 
         if (url.startsWith('/api/storage/knowledge')) {
           if (method === 'GET') {
-            result = await StorageServer.getKnowledge();
+            result = await ss.getKnowledge();
           } else if (method === 'POST') {
-            await StorageServer.saveKnowledge(body);
+            await ss.saveKnowledge(body);
             result = { success: true };
           }
         } else if (url.startsWith('/api/storage/memories')) {
           if (method === 'GET') {
             const context = url.includes('context=') ? decodeURIComponent(url.split('context=')[1].split('&')[0]) : undefined;
-            result = await StorageServer.getMemories(context);
+            result = await ss.getMemories(context);
           } else if (method === 'POST') {
-            result = await StorageServer.saveMemory(body);
+            result = await ss.saveMemory(body);
           } else if (method === 'DELETE') {
             const context = url.includes('context=') ? decodeURIComponent(url.split('context=')[1].split('&')[0]) : undefined;
             const id = url.includes('id=') ? decodeURIComponent(url.split('id=')[1].split('&')[0]) : undefined;
             const ids = url.includes('ids=') ? decodeURIComponent(url.split('ids=')[1].split('&')[0]).split(',') : undefined;
             const type = url.includes('type=') ? decodeURIComponent(url.split('type=')[1].split('&')[0]) : undefined;
             if (context && !id && !ids && !type) {
-              result = await StorageServer.deleteMemoriesByContext(context);
+              result = await ss.deleteMemoriesByContext(context);
             } else {
-              result = await StorageServer.deleteMemories({ context, id, ids, type });
+              result = await ss.deleteMemories({ context, id, ids, type });
             }
           }
         } else if (url.startsWith('/api/storage/identities')) {
           if (method === 'GET') {
-            result = await StorageServer.getIdentities();
+            result = await ss.getIdentities();
           } else if (method === 'POST') {
-            await StorageServer.saveIdentity(body);
+            await ss.saveIdentity(body);
             result = { success: true };
           }
         } else if (url.startsWith('/api/storage/dreams')) {
           if (method === 'GET') {
-            result = await StorageServer.getDreams();
+            result = await ss.getDreams();
           } else if (method === 'POST') {
-            await StorageServer.saveDreams(body);
+            await ss.saveDreams(body);
             result = { success: true };
           }
         } else if (url.startsWith('/api/storage/state')) {
           if (method === 'GET') {
-            result = await StorageServer.getAgentState();
+            result = await ss.getAgentState();
           } else if (method === 'POST') {
-            await StorageServer.saveAgentState(body);
+            await ss.saveAgentState(body);
             result = { success: true };
           }
         } else if (url.startsWith('/api/storage/strategies')) {
           if (method === 'GET') {
-            result = await StorageServer.getStrategies();
+            result = await ss.getStrategies();
           } else if (method === 'POST') {
-            await StorageServer.saveStrategies(body);
+            await ss.saveStrategies(body);
             result = { success: true };
           }
         } else if (url.startsWith('/api/storage/capabilities')) {
           if (method === 'GET') {
-            result = await StorageServer.getCapabilities();
+            result = await ss.getCapabilities();
           } else if (method === 'POST') {
-            await StorageServer.saveCapability(body);
+            await ss.saveCapability(body);
             result = { success: true };
           }
         } else if (url.startsWith('/api/storage/metrics/summary')) {
-          result = await StorageServer.getPerformanceSummary();
+          result = await ss.getPerformanceSummary();
         } else if (url.startsWith('/api/storage/metrics/history')) {
-          result = await StorageServer.getPerformanceHistory();
+          result = await ss.getPerformanceHistory();
         } else if (url.startsWith('/api/storage/metrics')) {
           if (method === 'POST') {
-            await StorageServer.savePerformanceMetric(body);
+            await ss.savePerformanceMetric(body);
             result = { success: true };
           }
         } else if (url.startsWith('/api/settings')) {
           if (method === 'GET') {
-            result = await StorageServer.getModularSettings();
+            result = await ss.getModularSettings();
           } else if (method === 'POST') {
-            await StorageServer.saveModularSettings(body);
+            await ss.saveModularSettings(body);
             result = { success: true };
           }
         } else if (url.startsWith('/api/workflow')) {
           if (method === 'GET') {
-            result = await StorageServer.getWorkflow();
+            result = await ss.getWorkflow();
           } else if (method === 'POST') {
-            await StorageServer.saveWorkflow(body);
+            await ss.saveWorkflow(body);
             result = { success: true };
           }
         } else if (url.startsWith('/api/storage/custom/')) {
           const key = url.split('/api/storage/custom/')[1]?.split('?')[0];
           if (method === 'GET') {
-            result = await StorageServer.getCustom(key);
+            result = await ss.getCustom(key);
           } else if (method === 'POST') {
-            await StorageServer.saveCustom(key, body);
+            await ss.saveCustom(key, body);
             result = { success: true };
           }
         } else if (url.startsWith('/api/pending-messages')) {
           if (method === 'GET') {
-            result = await StorageServer.getPendingMessages();
+            result = await ss.getPendingMessages();
           } else if (method === 'DELETE') {
             const parts = url.split('/');
             const id = parts[parts.length - 1];
-            result = await StorageServer.deletePendingMessage(id);
+            result = await ss.deletePendingMessage(id);
           } else if (url.endsWith('/clear')) {
-            result = await StorageServer.clearPendingQueue();
+            result = await ss.clearPendingQueue();
           } else {
             handled = false;
           }

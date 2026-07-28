@@ -9,7 +9,8 @@ export function normalizeToolCall(tc: any): any {
   let args = tc.args || tc.arguments || tc.function?.arguments || {};
   if (typeof args === 'string') {
     try {
-      args = JSON.parse(args);
+      const _tMatch = args.match(/\{[\s\S]*\}/);
+      args = _tMatch ? JSON.parse(_tMatch[0]) : {};
     } catch (e) {
       console.warn("[normalizer] Failed parsing string args:", args);
     }

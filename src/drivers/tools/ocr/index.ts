@@ -1,6 +1,7 @@
 import { ToolModule } from '@shared/include/types';
 import fs from 'fs';
 import manifest from './manifest.json';
+import tesseract from 'tesseract.js';
 
 export const OCRTool: ToolModule = {
   metadata: manifest as any,
@@ -16,10 +17,7 @@ export const OCRTool: ToolModule = {
     }
 
     try {
-      // Lazily import tesseract.js so it's not a heavy boot dependency
-      const tesseractPath = 'tesseract.js';
-      const TesseractMod = await import(/* @vite-ignore */ tesseractPath);
-      const recognize = TesseractMod.recognize || (TesseractMod as any).default?.recognize;
+      const recognize = tesseract.recognize || (tesseract as any).default?.recognize;
 
       if (typeof recognize !== 'function') {
         throw new Error("Failed to load tesseract.js recognize function.");

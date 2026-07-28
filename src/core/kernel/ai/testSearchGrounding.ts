@@ -3,6 +3,8 @@
  * Run with: npx tsx src/core/kernel/ai/testSearchGrounding.ts
  */
 
+import { executeGoogleSearch } from './generateSegment';
+
 async function scrapeHtmlResults(html: string, selectors: { resultBlock: RegExp; title: RegExp; link: RegExp; snippet: RegExp }, maxResults = 5): Promise<any[]> {
   const results: any[] = [];
   let match;
@@ -213,7 +215,6 @@ async function testRSSFeeds(query: string) {
 
 async function testFullExecuteGoogleSearch(query: string) {
   console.log(`\n[TEST] Full executeGoogleSearch: "${query}"`);
-  const { executeGoogleSearch } = await import('./generateSegment.ts');
   try {
     const results = await executeGoogleSearch(query);
     console.log(`[TEST] executeGoogleSearch returned ${results.length} results`);

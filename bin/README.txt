@@ -11,7 +11,5 @@ Mode Biner:
 - Server Only (--server-only): Menjalankan backend daemon tanpa static web UI.
 - Web Only (--web-only): Hanya membuat file build statis UI (dist/web).
 
-Enhanced SEA (@yao-pkg/pkg --sea):
-Menggunakan Node.js Single Executable Applications API resmi dengan binary stock Node.js (tanpa patch).
-Dikompres dengan GZip untuk ukuran minimal.
-Pkg packaging dinonaktifkan (--no-pkg).
+Node.js SEA (Single Executable Application):
+Gunakan "sea-config.json" dan "dist/sea-prep.blob" untuk mendistribusikan biner tunggal Node.js.

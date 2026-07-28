@@ -2,6 +2,7 @@ import { initializeDatabase } from "../database.js";
 import { AIService } from "../kernel/ai.js";
 import { SettingsManager } from "@/core/kernel/settings";
 import { toSingleString } from "@/core/kernel/configNormalizer";
+import { broadcastToWS } from "./apiRouter.js";
 
 export interface SynthesizerConfig {
   isEnabled: boolean;
@@ -75,6 +76,9 @@ Your response must be STRICTLY valid JSON ONLY. No markdown wraps, no extra prea
         const saved = JSON.parse(row.value);
         this.config = { ...this.config, ...saved };
         this.addLog(`[SYSTEM] Loaded persisted configuration. Delay: ${this.config.intervalSeconds}s.`);
+      } else {
+        this.addLog("[SYSTEM] No persisted synthesizer config found. Writing defaults.");
+        this.savePersistedConfig();
       }
     } catch (e) {
       this.addLog("[SYSTEM] Failed to load persisted synthesizer config, using default.");
@@ -331,7 +335,8 @@ Your response must be STRICTLY valid JSON ONLY. No markdown wraps, no extra prea
 
       // Safe JSON sanitization and parsing check
       const parsedText = this.sanitizeJsonString(rawText);
-      const parsed = JSON.parse(parsedText);
+      const _dsMatch = parsedText.match(/\{[\s\S]*\}/);
+      const parsed = _dsMatch ? JSON.parse(_dsMatch[0]) : null;
 
       // Validate core required fields
       if (!parsed.thought || !parsed.tool_calls) {
@@ -426,9 +431,7 @@ Your response must be STRICTLY valid JSON ONLY. No markdown wraps, no extra prea
       const state = this.getStats();
       const logs = this.logs.slice(0, 30); // 30 most recent lines
       
-      // Dynamic import to avoid circular dependency
-      import("./apiRouter.js").then(({ broadcastToWS }) => {
-        if (typeof broadcastToWS === "function") {
+      if (typeof broadcastToWS === "function") {
           broadcastToWS({
             type: "synthesizer_update",
             data: {
@@ -438,8 +441,7 @@ Your response must be STRICTLY valid JSON ONLY. No markdown wraps, no extra prea
             }
           });
         }
-      }).catch(() => {});
-    } catch (_) {}
+      } catch (_) {}
   }
 }
 

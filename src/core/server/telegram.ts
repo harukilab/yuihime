@@ -2,10 +2,15 @@ import { Telegraf } from "telegraf";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import crypto from "crypto";
 import https from "https";
+import fs from "fs/promises";
+import path from "path";
 import { Kernel } from "../kernel/core.js";
 import { MultiChannelQueue } from "../kernel/MultiChannelQueue.js";
 import { initializeDatabase, deduplicateAndMergeIdentities } from "../database.js";
 import { TelegramReactionLearner } from "./telegramReactionLearner.js";
+import { getDynamicSandboxRoot, broadcastToWS } from "./apiRouter.js";
+import { extractChannelFileAttachments } from "./channelFileAttachment.js";
+import { describeImageFromBuffer } from "../../modules/YuiVisionModule.js";
 
 let db: any = null;
 
@@ -363,9 +368,6 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
         const fileUrl = fileLink.toString();
         const resFile = await fetch(fileUrl);
         if (resFile.ok) {
-          const fs = await import("fs/promises");
-          const path = await import("path");
-          const { getDynamicSandboxRoot } = await import("./apiRouter.js");
           const sandboxDir = getDynamicSandboxRoot();
           await fs.mkdir(sandboxDir, { recursive: true });
 
@@ -387,7 +389,6 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
               else if (ext === ".gif") mimeType = "image/gif";
 
               try {
-                const { describeImageFromBuffer } = await import("../../modules/YuiVisionModule.js");
                 const desc = await describeImageFromBuffer(buffer, mimeType);
                 if (desc) {
                   visualDesc = ` Sensory input analysis of this uploaded image indicates: "${desc}"`;
@@ -514,7 +515,6 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
       }
 
       // Broadcast the incoming remote Telegram message to connected WebClients
-      const { broadcastToWS } = await import("./apiRouter.js");
       broadcastToWS({
         type: "remote_message_received",
         data: {
@@ -586,9 +586,6 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
 
   async function trySendFileAttachment(ctx: any, responseText: string): Promise<boolean> {
     try {
-      const { getDynamicSandboxRoot } = await import("./apiRouter.js");
-      const { extractChannelFileAttachments } = await import("./channelFileAttachment.js");
-
       const sandboxDir = getDynamicSandboxRoot();
       const { attachments, remainingText } = await extractChannelFileAttachments(responseText, sandboxDir);
 

@@ -1,5 +1,6 @@
 import { ToolModule } from '@shared/include/types';
 import { eventBus } from '@shared/core/kernel/event-bus';
+import { DynamicLoader } from '../../../core/DynamicLoader.js';
 import manifest from './manifest.json';
 
 export const PluginInstallerTool: ToolModule = {
@@ -22,7 +23,6 @@ export const PluginInstallerTool: ToolModule = {
         throw new Error(`Failed to install plugin: ${await response.text()}`);
       }
 
-      const { DynamicLoader } = await import('../../../core/DynamicLoader');
       await DynamicLoader.syncAddons();
 
       eventBus.emit('PLUGIN_INSTALLED', { id: args.id });

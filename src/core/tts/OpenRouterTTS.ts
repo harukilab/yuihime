@@ -1,4 +1,5 @@
 import { TTSModule, ModuleType } from '@shared/include/types';
+import { SpeechService } from '../speech';
 
 /**
  * OpenRouterTTS: Cloud-based Text-to-Speech via OpenAI, OpenRouter, or compatible endpoints.
@@ -124,7 +125,6 @@ export const OpenRouterTTS: TTSModule = {
 
       // Bind to real-time visualizer audio analysis
       try {
-        const { SpeechService } = await import('../speech');
         SpeechService.analyzeAudioStream(audio);
       } catch (err) {
         console.warn('[OPENAI-TTS] Visual volume analysis binding failed:', err);

@@ -264,7 +264,7 @@ function showHelp() {
 }
 
 // --- Interactive REPL Loop ---
-async function startRepl() {
+export async function startRepl() {
   await checkApiConnection();
   printBanner();
   console.log(`System Initialized. Type ${GREEN}'help'${RESET} to see list of commands.\n`);
@@ -523,5 +523,4 @@ async function startRepl() {
   });
 }
 
-// Start
-startRepl();
+// Start is called from server.ts when --terminal or --sandbox flag is present.

@@ -1,4 +1,5 @@
 import { TTSModule, ModuleType } from '@shared/include/types';
+import { SpeechService } from '../speech';
 
 export const ElevenLabsTTS: TTSModule = {
   metadata: {
@@ -25,8 +26,8 @@ export const ElevenLabsTTS: TTSModule = {
     }
   },
   speak: async (text: string, config: any) => {
-    const apiKey = config.apiKey || import.meta.env.VITE_ELEVENLABS_API_KEY;
-    const voiceId = config.voiceId || import.meta.env.VITE_ELEVENLABS_VOICE_ID || 'EXAVITQu4vr4xnSDxMaL';
+    const apiKey = config.apiKey || process.env.ELEVENLABS_API_KEY;
+    const voiceId = config.voiceId || process.env.ELEVENLABS_VOICE_ID || 'EXAVITQu4vr4xnSDxMaL';
 
     if (!apiKey) {
       console.warn('[ELEVENLABS] API Key missing, falling back to Web Speech');
@@ -64,7 +65,6 @@ export const ElevenLabsTTS: TTSModule = {
       
       // Hook up real-time audio analysis
       try {
-        const { SpeechService } = await import('../speech');
         SpeechService.analyzeAudioStream(audio);
       } catch (err) {
         console.warn('[ELEVENLABS] Audio analysis binding failed:', err);

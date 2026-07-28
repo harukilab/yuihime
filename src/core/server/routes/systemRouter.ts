@@ -8,9 +8,17 @@ import * as toml from "smol-toml";
 import { SettingsManager } from "@/core/kernel/settings";
 import { CronModule, extractCronPromptFromArgs, normalizeCronPromptForSave } from "../../kernel/cron.js";
 import { MultiChannelQueue } from "../../kernel/MultiChannelQueue.js";
+import { closeDatabase, initializeDatabase } from "../../database.js";
 import { broadcastToWS, getCronAction } from "../apiRouter.js";
 import { NeuralInterface } from "../../kernel/NeuralInterface.js";
 import { eventBus } from "@shared/core/kernel/event-bus";
+import { initializeBot } from '../telegram.js';
+import AdmZip from "adm-zip";
+import { clearCortexSettingsCache } from '../../cortex/cortexSettings.js';
+import { PluginManager } from '../../kernel/PluginManager.js';
+import { initializeDiscord } from '../discord.js';
+import { initializeTwitter } from '../twitter.js';
+import { initializeMCP } from '../mcp.js';
 
 const execPromise = promisify(exec);
 
@@ -123,8 +131,7 @@ async function discoverAddons() {
 export function registerSystemRoutes(app: express.Express, db: any) {
   app.post("/api/telegram/restart", async (req, res) => {
     try {
-      const { initializeBot } = await import("../telegram.js");
-      await initializeBot(db, true);
+       await initializeBot(db, true);
       res.json({ success: true, message: "Bot Telegram berhasil dimuat ulang dan dijalankan kembali secara batiniah!" });
     } catch (err: any) {
       console.error("[API_TELEGRAM_RESTART] Failed to reload bot:", err);
@@ -144,26 +151,19 @@ export function registerSystemRoutes(app: express.Express, db: any) {
     
     // Clear cortex settings cache in real-time
     try {
-      const { clearCortexSettingsCache } = await import("../../cortex/cortexSettings.js");
-      clearCortexSettingsCache();
+       clearCortexSettingsCache();
     } catch (cacheErr) {
       console.warn("[SERVER] Failed to clear cortex settings cache on setting update:", cacheErr);
     }
     
     // Dynamically sync and load/reload plugins post-settings update
     try {
-      const { PluginManager } = await import('../../kernel/PluginManager.js');
-      await PluginManager.getInstance().loadPlugins();
+       await PluginManager.getInstance().loadPlugins();
     } catch (pluginErr: any) {
       console.error("[KERNEL_DYNAMIC] Failed to sync dynamic plugins post-settings update:", pluginErr.message);
     }
     
     try {
-      const { initializeBot } = await import("../telegram.js");
-      const { initializeDiscord } = await import("../discord.js");
-      const { initializeTwitter } = await import("../twitter.js");
-      const { initializeMCP } = await import("../mcp.js");
-
       initializeBot(db, true).catch(err => {
         console.error("[KERNEL_DYNAMIC] Failed to sync Telegram Bot after settings update:", err);
       });
@@ -294,7 +294,6 @@ export function registerSystemRoutes(app: express.Express, db: any) {
   app.get("/api/backup", async (req, res) => {
     try {
       console.log("[BACKUP] Initiating full system backup of .yuihime...");
-      const AdmZip = (await import("adm-zip")).default;
       const zip = new AdmZip();
       
       const tempDbPath = path.join(process.cwd(), `yuihime.db.backup.${Date.now()}`);
@@ -367,7 +366,6 @@ export function registerSystemRoutes(app: express.Express, db: any) {
       }
       
       console.log("[RESTORE] Restoring system from compressed base64 ZIP payload...");
-      const AdmZip = (await import("adm-zip")).default;
       const buffer = Buffer.from(backupData, "base64");
       const zip = new AdmZip(buffer);
       
@@ -444,8 +442,7 @@ export function registerSystemRoutes(app: express.Express, db: any) {
 
       // 1. Lock and safely dispose of active connection pool
       console.log("[RESTORE] Shutting down active SQLite database handles...");
-      const dbModule = await import("../../database.js");
-      dbModule.closeDatabase();
+      closeDatabase();
       
       // 2. Perform atomic system folders replacement
       const yuihimeRoot = apiCustomSystemRoot;
@@ -475,7 +472,7 @@ export function registerSystemRoutes(app: express.Express, db: any) {
       
       // 4. Re-open and reinitialize database handles
       console.log("[RESTORE] Reconnecting database pool to restored DB...");
-      const restoredDb = dbModule.initializeDatabase();
+      const restoredDb = initializeDatabase();
       
       // Re-assign local register routing CLOSURE reference bound to 'db'
       db = restoredDb;
@@ -483,8 +480,6 @@ export function registerSystemRoutes(app: express.Express, db: any) {
 
       // 5. Update NeuralInterface & MultiChannelQueue references
       try {
-        const { NeuralInterface } = await import("../../kernel/NeuralInterface.js");
-        const { MultiChannelQueue } = await import("../../kernel/MultiChannelQueue.js");
         NeuralInterface.setDatabase(restoredDb);
         const queueObj = MultiChannelQueue.getInstance();
         queueObj.setDatabase(restoredDb);
@@ -495,24 +490,21 @@ export function registerSystemRoutes(app: express.Express, db: any) {
 
       // 6. Update Telegram, Discord, and Twitter database references, forcing their bots to restart with updated credentials
       try {
-        const telegramModule = await import("../telegram.js");
-        await telegramModule.initializeBot(restoredDb, true);
+        await initializeBot(restoredDb, true);
         console.log("[RESTORE] Telegram Bot Daemon refreshed with restored DB.");
       } catch (tgErr) {
         console.warn("[RESTORE_WARN] Failed to re-init Telegram Bot:", tgErr);
       }
 
       try {
-        const discordModule = await import("../discord.js");
-        await discordModule.initializeDiscord(restoredDb, true);
+        await initializeDiscord(restoredDb, true);
         console.log("[RESTORE] Discord Bot Daemon refreshed with restored DB.");
       } catch (dcErr) {
         console.warn("[RESTORE_WARN] Failed to re-init Discord Bot:", dcErr);
       }
 
       try {
-        const twitterModule = await import("../twitter.js");
-        await twitterModule.initializeTwitter(restoredDb, true);
+        await initializeTwitter(restoredDb, true);
         console.log("[RESTORE] Twitter Daemon refreshed with restored DB.");
       } catch (twErr) {
         console.warn("[RESTORE_WARN] Failed to re-init Twitter bot:", twErr);

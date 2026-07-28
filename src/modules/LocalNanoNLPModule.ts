@@ -1,3 +1,4 @@
+import { initializeDatabase } from '../core/database.js';
 import { CortexModule, ModuleType, AgentState } from '@shared/include/types';
 import { StorageService } from '@shared/drivers/storage';
 import { NanoBrain, DecisionRouter, EpisodicMemory, CognitiveFatigue, predictWithTemperature } from '../core/neural/Brain';
@@ -262,28 +263,7 @@ async function triggerBackgroundTraining(intervalHours: number, triggerThreshold
   if (isTrainingInProgress || typeof window !== 'undefined') return;
 
   try {
-    const metaUrl = typeof import.meta !== 'undefined' && import.meta.url ? import.meta.url : '';
-    let Database: any;
-    let path: any;
-    if (metaUrl) {
-      const { createRequire } = await import('module');
-      const requireFn = createRequire(metaUrl);
-      Database = requireFn('better-sqlite3');
-      path = requireFn('path');
-    } else {
-      if (typeof require !== 'undefined') {
-        Database = require('better-sqlite3');
-        path = require('path');
-      } else {
-        Database = (await import('better-sqlite3')).default;
-        path = await import('path');
-      }
-    }
-    
-    const rootEnvStr = process.env.YUIHIME_SYSTEM_ROOT || process.env.YUIHIME_ROOT || "~/.yuihime";
-    const customSystemRoot = path.isAbsolute(rootEnvStr) ? rootEnvStr : path.join(process.cwd(), rootEnvStr);
-    const targetDbPath = process.env.YUIHIME_DB_PATH || path.join(customSystemRoot, "data", "yuihime.db");
-    const db = new Database(targetDbPath, { timeout: 5000 });
+    const db = initializeDatabase();
 
     // Ensure metadata exists in customs
     const metaRow = db.prepare("SELECT value FROM custom_storage WHERE key = ?").get('yuihime_nano_nlp_markov_meta');
@@ -313,8 +293,6 @@ async function triggerBackgroundTraining(intervalHours: number, triggerThreshold
       // Execute Training
       await performMarkovTraining(db, currentMsgCount);
     }
-    
-    db.close();
   } catch (error) {
     console.warn('[LOCAL_NLP] Background check skipped (likely native bindings or database lock):');
   }

@@ -16,7 +16,13 @@ export interface SpeechTickEvent {
 }
 
 export class SpeechService {
-  private static synth: SpeechSynthesis = window.speechSynthesis;
+  private static synth: any = null;
+  private static getSynth(): any {
+    if (!SpeechService.synth && typeof window !== 'undefined') {
+      SpeechService.synth = (window as any).speechSynthesis;
+    }
+    return SpeechService.synth;
+  }
   private static voice: SpeechSynthesisVoice | null = null;
   private static enabled: boolean = true;
   private static onSpeakListeners: ((speaking: boolean) => void)[] = [];
@@ -80,21 +86,21 @@ export class SpeechService {
   static init() {
     this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
     const loadVoices = () => {
-      const voices = this.synth.getVoices();
+      const voices = this.getSynth().getVoices();
       this.voice = voices.find(v => v.name.includes('Google') && v.name.includes('Female')) || 
                    voices.find(v => v.name.includes('Female')) || 
                    voices[0];
     };
 
-    if (this.synth.onvoiceschanged !== undefined) {
-      this.synth.onvoiceschanged = loadVoices;
+    if (this.getSynth().onvoiceschanged !== undefined) {
+      this.getSynth().onvoiceschanged = loadVoices;
     }
     loadVoices();
   }
 
   static setEnabled(enabled: boolean) {
     this.enabled = enabled;
-    if (!enabled) this.synth.cancel();
+    if (!enabled) this.getSynth().cancel();
   }
 
   static isEnabled() {
@@ -156,7 +162,7 @@ export class SpeechService {
         // Fallback for browser SpeechSynthesis or when no audio element is provided
         const elapsed = Date.now() - startTime;
         currentTime = elapsed / 1000;
-        speaking = this.synth.speaking;
+        speaking = this.getSynth().speaking;
         
         // Procedural volume
         const frame = Math.floor(currentTime * 60);
@@ -477,7 +483,7 @@ export class SpeechService {
   }
 
   private static speakBrowser(text: string, mood?: Partial<MoodState>, tone?: { pitch: number; speed: number; emotionalBias: string }) {
-    this.synth.cancel();
+    this.getSynth().cancel();
     const utterance = new SpeechSynthesisUtterance(text);
     
     // Store reference on window to prevent GC issues
@@ -487,7 +493,7 @@ export class SpeechService {
     utterance.lang = lang;
 
     // Pick a voice for the detected language if possible
-    const voices = this.synth.getVoices();
+    const voices = this.getSynth().getVoices();
     const langVoice = voices.find(v => v.lang.startsWith(lang.split('-')[0])) || this.voice;
     if (langVoice) utterance.voice = langVoice;
 
@@ -557,11 +563,11 @@ export class SpeechService {
       });
     };
 
-    this.synth.speak(utterance);
+    this.getSynth().speak(utterance);
   }
 
   static stop() {
-    this.synth.cancel();
+    this.getSynth().cancel();
     if (this.activeAudio) {
       try {
         const audio = this.activeAudio;

@@ -7,6 +7,7 @@ import fs from "fs/promises";
 import { existsSync, mkdirSync, writeFileSync } from "fs";
 import path from "path";
 import { apiCustomSystemRoot } from "../apiRouter.js";
+import AdmZip from "adm-zip";
 
 export function registerDatasetRoutes(app: express.Express, db: any) {
   app.post("/api/cortex/import-dataset", express.json({ limit: "50mb" }), async (req, res) => {
@@ -671,8 +672,6 @@ DO NOT alter, omit, or shorten her original speech. Preserve actual physical exp
 
       await fs.mkdir(destFolder, { recursive: true });
 
-      // Load adm-zip dynamically
-      const { default: AdmZip } = await import("adm-zip");
       const zip = new AdmZip(buffer);
       zip.extractAllTo(destFolder, true);
 
