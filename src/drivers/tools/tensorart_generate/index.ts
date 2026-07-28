@@ -56,6 +56,47 @@ function getBaseUrl(accessKey: string): string {
   return "https://openapi.tensor.art/openworks/v1";
 }
 
+function getSystemRoot(): string {
+  let rootEnv = process.env.YUIHIME_SYSTEM_ROOT || process.env.YUIHIME_ROOT || "~/.yuihime";
+  if (rootEnv.startsWith("~")) {
+    rootEnv = path.join(os.homedir(), rootEnv.substring(1));
+  } else if (rootEnv.includes("$HOME")) {
+    rootEnv = rootEnv.replace(/\$HOME/g, os.homedir());
+  } else if (rootEnv.includes("$home")) {
+    rootEnv = rootEnv.replace(/\$home/g, os.homedir());
+  } else if (rootEnv.includes("%USERPROFILE%")) {
+    rootEnv = rootEnv.replace(/%USERPROFILE%/g, os.homedir());
+  }
+  rootEnv = rootEnv.replace(/^['"]|['"]$/g, "");
+  return path.isAbsolute(rootEnv) ? rootEnv : path.join(process.cwd(), rootEnv);
+}
+
+function getUserDataDir(settings: any): string {
+  const systemRoot = getSystemRoot();
+  let rawPath = settings?.sandbox_paths?.user_data_path || process.env.YUIHIME_USER_DATA_PATH;
+  if (rawPath) {
+    if (rawPath.startsWith("~")) {
+      rawPath = path.join(os.homedir(), rawPath.substring(1));
+    } else if (rawPath.includes("$HOME")) {
+      rawPath = rawPath.replace(/\$HOME/g, os.homedir());
+    } else if (rawPath.includes("$home")) {
+      rawPath = rawPath.replace(/\$home/g, os.homedir());
+    } else if (rawPath.includes("%USERPROFILE%")) {
+      rawPath = rawPath.replace(/%USERPROFILE%/g, os.homedir());
+    }
+    rawPath = rawPath.replace(/^['"]|['"]$/g, "");
+    if (path.isAbsolute(rawPath)) {
+      return path.resolve(rawPath);
+    }
+    let cleanRelative = rawPath;
+    if (cleanRelative.startsWith("./")) {
+      cleanRelative = cleanRelative.substring(2);
+    }
+    return path.resolve(path.join(systemRoot, cleanRelative));
+  }
+  return path.resolve(path.join(systemRoot, "user_data"));
+}
+
 function isRetryable(e: any): boolean {
   const msg = (e?.message || "").toLowerCase();
   if (e?.cause?.code === "ETIMEDOUT" || e?.cause?.code === "ECONNRESET" || e?.cause?.code === "ENOTFOUND") return true;
@@ -436,7 +477,7 @@ export const TensorArtGenerateTool: ToolModule = {
             const buffer = Buffer.from(await imageRes.arrayBuffer());
             const { path, os, mkdir, writeFile } = await loadNodeFs();
             const ext = path.extname(new URL(imageUrl).pathname) || ".png";
-            const outDir = path.join(os.tmpdir(), "yuihime-tensorart");
+            const outDir = path.join(getUserDataDir(settings), "images");
             await mkdir(outDir, { recursive: true });
             localPath = path.join(outDir, `tensorart_${jobId}${ext}`);
             await writeFile(localPath, buffer);

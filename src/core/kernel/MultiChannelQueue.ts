@@ -54,6 +54,9 @@ export class MultiChannelQueue {
   private backgroundChatBuffer: { speaker: string; text: string; timestamp: number }[] = [];
   private msgTimestamps: number[] = []; // for frequency calculation
   private recentMsgHashes: { hash: string; timestamp: number }[] = [];
+  private processingStartTime = 0;
+  private processingTimer: ReturnType<typeof setTimeout> | null = null;
+  private static readonly PROCESSING_TIMEOUT_MS = 30000;
   
   // Dynamic Background Worker Pool Configuration & Status Trackers
   private activeBgWorkers = 0;
@@ -64,6 +67,11 @@ export class MultiChannelQueue {
   private lastProactiveTime = Date.now();
   private isProactiveRunning = false;
   private lastHighFreqNotifyTime = 0;
+
+  // Hold mechanism: pause incoming/outgoing message processing
+  private holdMode = false;
+  private holdOutgoing = false;
+  private heldMessages: QueueItem[] = [];
 
   private constructor() {
     this.startPendingScheduler();
@@ -85,6 +93,49 @@ export class MultiChannelQueue {
       console.error("[QUEUE_INIT_DISPATCH_ERR] Failed to execute initial dispatch:", err);
     });
     this.startProactiveImpulseEngine();
+  }
+
+  /**
+   * Mengaktifkan/menonaktifkan mode tahan. Ketika diaktifkan, pesan masuk disimpan
+   * tanpa diproses dan balasan keluar ditahan.
+   */
+  public setHoldMode(enabled: boolean) {
+    this.holdMode = enabled;
+    this.holdOutgoing = enabled;
+    console.log(`[QUEUE_HOLD] Hold mode ${enabled ? "diaktifkan" : "dinonaktifkan"}.`);
+    if (!enabled) {
+      this.flushHeldMessages();
+    }
+  }
+
+  /**
+   * Mengaktifkan/menonaktifkan penahanan balasan keluar saja.
+   */
+  public setHoldOutgoing(enabled: boolean) {
+    this.holdOutgoing = enabled;
+    console.log(`[QUEUE_HOLD] Hold outgoing ${enabled ? "diaktifkan" : "dinonaktifkan"}.`);
+  }
+
+  /**
+   * Memproses semua pesan yang ditahan saat mode tahan dinonaktifkan.
+   */
+  private flushHeldMessages() {
+    if (this.heldMessages.length === 0) return;
+    console.log(`[QUEUE_HOLD] Flushing ${this.heldMessages.length} held message(s)...`);
+    const messages = [...this.heldMessages];
+    this.heldMessages = [];
+    for (const msg of messages) {
+      this.queue.push({
+        input: msg.input,
+        senderName: msg.senderName,
+        contextId: msg.contextId,
+        chatType: msg.chatType,
+        timestamp: msg.timestamp,
+        onReply: msg.onReply,
+        onError: msg.onError
+      });
+    }
+    this.processNext();
   }
 
   /**
@@ -123,6 +174,13 @@ export class MultiChannelQueue {
       this.recentMsgHashes.push({ hash: dedupHash, timestamp: now });
     }
 
+
+    // Hold mode: store incoming messages without processing
+    if (this.holdMode) {
+      this.heldMessages.push({ input, senderName, contextId, chatType, timestamp, onReply, onError });
+      console.log(`[QUEUE_HOLD] Incoming message from ${senderName} held (hold mode active).`);
+      return;
+    }
     // 1. Masukkan semua pesan (tanpa terkecuali) ke buffer ringkasan latar belakang agar Yui tetap memahami konteks penuh
     this.backgroundChatBuffer.push({ speaker: senderName, text: input, timestamp });
     this.checkAndTriggerBackgroundSummary();
@@ -269,9 +327,12 @@ export class MultiChannelQueue {
           try {
             const activeTelegramBot = (globalThis as any).activeTelegramBot;
             if (activeTelegramBot) {
-              const delayedReply = reply;
-              await activeTelegramBot.telegram.sendMessage(chatId, delayedReply);
-              console.log(`[QUEUE_BG_WORKER_SEND] [ID: ${pending.id}] Successfully sent reply to Telegram Chat ID: ${chatId}`);
+               const delayedReply = reply;
+               await Promise.race([
+                 activeTelegramBot.telegram.sendMessage(chatId, delayedReply),
+                 new Promise((_, reject) => setTimeout(() => reject(new Error('[TELEGRAM_BG_SEND_TIMEOUT] sendMessage timed out')), 15000))
+               ]);
+               console.log(`[QUEUE_BG_WORKER_SEND] [ID: ${pending.id}] Successfully sent reply to Telegram Chat ID: ${chatId}`);
 
               // Broadcast the delayed telegram response to connected web UIs
                try {
@@ -371,6 +432,16 @@ export class MultiChannelQueue {
     if (this.queue.length === 0) return;
 
     this.processing = true;
+    this.processingStartTime = Date.now();
+    this.processingTimer = setTimeout(() => {
+      if (this.processing) {
+        console.warn(`[QUEUE_WATCHDOG] Cognitive processing stuck for ${Date.now() - this.processingStartTime}ms. Resetting processing flag to recover queue.`);
+        this.processing = false;
+        this.processingTimer = null;
+        this.processNext();
+      }
+    }, MultiChannelQueue.PROCESSING_TIMEOUT_MS);
+
     const item = this.queue.shift()!;
 
     try {
@@ -379,8 +450,21 @@ export class MultiChannelQueue {
       // Jalankan proses berpikir neural Yui secara berurutan
       const reply = await NeuralInterface.processNeuralInput(item.input, item.senderName, item.contextId, item.chatType);
       
-      // Kirim jawaban balik ke pemanggil
-      item.onReply(reply);
+      // Await delivery so Telegram/Discord send completes before the next queue item,
+      // and so floating promise rejections from async onReply are not lost.
+      if (reply && reply.trim()) {
+        console.log(`[QUEUE_EXEC] Cognitive reply ready for ${item.senderName}. Dispatching to channel...`);
+      } else {
+        console.warn(`[QUEUE_EXEC] Empty cognitive reply for ${item.senderName} (${item.chatType}).`);
+      }
+      if (this.holdOutgoing) {
+        console.log(`[QUEUE_HOLD] Holding outgoing reply to ${item.senderName}.`);
+      } else {
+        await Promise.resolve(item.onReply(reply ?? "")).catch((deliveryErr: any) => {
+          console.error(`[QUEUE_DELIVERY_ERR] Failed to deliver reply to ${item.senderName}:`, deliveryErr?.message || deliveryErr);
+          if (item.onError) item.onError(deliveryErr);
+        });
+      }
 
     } catch (err: any) {
       console.error(`[QUEUE_ERROR] Failed to process message in cognitive queue:`, err);
@@ -388,7 +472,7 @@ export class MultiChannelQueue {
       item.attempts = attempts;
       const maxRetries = 3;
       const isNeuralGatewayMissing = err.message && err.message.includes('Neural Gateway is missing');
-      if (isNeuralGatewayMissing || attempts < maxRetries) {
+      if (!isNeuralGatewayMissing && attempts < maxRetries) {
         const delay = 1000 * attempts;
         console.warn(`[QUEUE_RETRY] Retrying message from ${item.senderName} (${item.chatType}) - Attempt ${attempts}/${maxRetries} in ${delay}ms...`);
         setTimeout(() => {
@@ -407,7 +491,9 @@ export class MultiChannelQueue {
                   VALUES (?, ?, ?, ?, ?, ?, ?, 'failed')
                 `);
                 stmt.run(id, item.input, item.senderName, item.contextId, item.chatType, item.timestamp, maxRetries);
-                item.onReply("Maaf, pesan Anda gagal diproses setelah beberapa percobaan. Silakan coba lagi nanti.");
+                if (!this.holdOutgoing) {
+                  item.onReply("Maaf, pesan Anda gagal diproses setelah beberapa percobaan. Silakan coba lagi nanti.");
+                }
               });
             } catch (dbErr) {
               console.error("[QUEUE_DB_ERROR] Failed to save failed message to database:", dbErr);
@@ -418,7 +504,12 @@ export class MultiChannelQueue {
           }
         }
      } finally {
+      if (this.processingTimer) {
+        clearTimeout(this.processingTimer);
+        this.processingTimer = null;
+      }
       this.processing = false;
+      this.processingStartTime = 0;
       // Stagger jeda tipis antarrespons agar tarian avatar & tts berjalan mulus berurutan tanpa penumpukan
       setTimeout(() => this.processNext(), 1200);
     }
@@ -762,8 +853,11 @@ Unggkit topik nyata tersebut dari memori jika ingin, sapa dia dengan manis, atau
               const chatId = contextId.split("|")[0].replace("tg_", "");
               try {
                  if (activeTelegramBot) {
-                  await activeTelegramBot.telegram.sendMessage(chatId, reply);
-                  console.log(`[PROACTIVE_ENGINE_TELEGRAM] Successfully sent proactive message to Telegram Chat: ${chatId}`);
+                   await Promise.race([
+                     activeTelegramBot.telegram.sendMessage(chatId, reply),
+                     new Promise((_, reject) => setTimeout(() => reject(new Error('[TELEGRAM_BG_SEND_TIMEOUT] sendMessage timed out')), 15000))
+                   ]);
+                   console.log(`[PROACTIVE_ENGINE_TELEGRAM] Successfully sent proactive message to Telegram Chat: ${chatId}`);
                 }
               } catch (tgErr: any) {
                 console.error("[PROACTIVE_ENGINE_TELEGRAM_ERR] Failed to send to Telegram:", tgErr.message);
@@ -856,9 +950,12 @@ Unggkit topik nyata tersebut dari memori jika ingin, sapa dia dengan manis, atau
           const chatId = contextId.split("|")[0].replace("tg_", "");
           try {
             const activeTelegramBot = (globalThis as any).activeTelegramBot;
-            if (activeTelegramBot) {
-              await activeTelegramBot.telegram.sendMessage(chatId, reply);
-              console.log(`[QUEUE_RESUME_SEND] Sent Telegram message to chat ${chatId}`);
+             if (activeTelegramBot) {
+               await Promise.race([
+                 activeTelegramBot.telegram.sendMessage(chatId, reply),
+                 new Promise((_, reject) => setTimeout(() => reject(new Error('[TELEGRAM_BG_SEND_TIMEOUT] sendMessage timed out')), 15000))
+               ]);
+               console.log(`[QUEUE_RESUME_SEND] Sent Telegram message to chat ${chatId}`);
             }
           } catch (tgErr: any) {
             console.error(`[QUEUE_RESUME_ERR] Failed to send Telegram message:`, tgErr.message);

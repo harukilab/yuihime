@@ -37,6 +37,7 @@ import { DEFAULT_NEURAL_CORES } from '@shared/constants';
 import { broadcastToWS } from '../server/apiRouter.js';
 import { DynamicToolSynthesizer } from './dynamicToolSynthesizer.js';
 import { LlmIoAuditor } from '../server/llmAuditor.js';
+import { BackgroundToolDispatcher } from '../kernel/BackgroundToolDispatcher.js';
 
 /**
  * Build a canonical OpenAI-native tool call object enriched with backward
@@ -996,10 +997,11 @@ if (extractedFromSpeech) {
        }
     }
 
-    // Fix: Only update processedResponse if the new response is non-empty/non-falsy to avoid overwriting beautiful speech from previous turns/iterations
     const iterResponse = typeof loopContext.processedResponse === 'string' ? loopContext.processedResponse : loopContext.rawResult;
     if (iterResponse && iterResponse.trim().length > 0) {
-      processedResponse = iterResponse;
+      if (!processedResponse || processedResponse.trim().length < 5) {
+        processedResponse = iterResponse;
+      }
     }
     toolsToCall = loopContext.toolsToCall || [];
     animations = loopContext.animations || [];
@@ -1064,10 +1066,102 @@ if (extractedFromSpeech) {
             logs.push(`[CORTEX] max_iterations_override accepted: extended loop to ${maxIterations} (ceiling ${ceiling}).`);
           }
         }
-      } catch (_) {}
+       } catch (_) {}
 
-      stateMachine.transitionTo('EXECUTING');
-      eventBus.emit('EXECUTING_STARTED', { tools: toolsToCall });
+        if (settings['tool-executor']?.bgEnabled === true && contextId) {
+          const blockingTools = ['speak', 'final_answer', 'status_update'];
+          const nonBlockingTools = toolsToCall.filter(
+            (tc: any) => !blockingTools.includes(tc.tool || tc.name)
+          );
+          const allNonBlocking = nonBlockingTools.length > 0 && nonBlockingTools.length === toolsToCall.length;
+
+          if (allNonBlocking) {
+            let indonesianStatus = "Yui sedang memproses sesuatu...";
+            try {
+              const toolNames = toolsToCall.map((tc: any) => tc.tool || tc.name).join(", ");
+              if (toolNames.includes("web_search") || toolNames.includes("search")) {
+                indonesianStatus = "Yui sedang berselancar mencari informasi terbaru untuk user... 🌐✨";
+              } else if (toolNames.includes("execute_sql") || toolNames.includes("cloudsql_execute_sql")) {
+                indonesianStatus = "Yui sedang menelusuri data dalam pangkalan batin batin... 🗄️🔍";
+              } else if (toolNames.includes("execute_bash") || toolNames.includes("run_command")) {
+                indonesianStatus = "Yui sedang memproses instruksi sistem di balik layar... ⚙️💻";
+              } else {
+                indonesianStatus = `Yui sedang memproses kemampuan: [${toolNames}]... 🌸`;
+              }
+
+              eventBus.emit('OUTPUT_EMITTED', { response: indonesianStatus, isInternal: false });
+
+              if (typeof broadcastToWS === 'function') {
+                broadcastToWS({
+                  type: "state_update",
+                  data: {
+                    state: { status: "thinking" },
+                    activeSubtitle: indonesianStatus,
+                    typedSubtitle: indonesianStatus,
+                    isSubtitleTyping: false,
+                    animations: ["THINK"]
+                  }
+                });
+              }
+            } catch (_) {}
+
+            const pendingToolRef = contextId;
+            BackgroundToolDispatcher.getInstance().enqueue(
+              contextId,
+              nonBlockingTools,
+              settings,
+              state,
+              augContext,
+              signal
+            ).then((results) => {
+              const pending = BackgroundToolDispatcher.getInstance().getPending(contextId);
+              if (pending) {
+                pending.status = 'completed';
+                pending.results = results;
+                pending.completedAt = Date.now();
+              }
+            }).catch((err: any) => {
+              console.warn(`[BG_DISPATCHER] Background tool execution failed for ${contextId}:`, err?.message || err);
+              const pending = BackgroundToolDispatcher.getInstance().getPending(contextId);
+              if (pending) {
+                pending.status = 'failed';
+                pending.completedAt = Date.now();
+              }
+            });
+
+            const immediateResult = {
+              response: indonesianStatus,
+              logs,
+              nextMood: loopContext.moodImpact,
+              moodImpact: loopContext.moodImpact,
+              sentiment: loopContext.sentiment,
+              newMemories: loopGeneratedMemories,
+              actions: toolsToCall,
+              perceivedNameUpdate: loopContext.perceivedNameUpdate || preContext.perceivedNameUpdate,
+              linkedAccountUpdate: loopContext.linkedAccountUpdate || preContext.linkedAccountUpdate,
+              viewerProfileUpdate: loopContext.viewerProfileUpdate,
+              shouldStartDreaming: loopContext.shouldStartDreaming,
+              animations: animations,
+               tone: loopContext.tone,
+               tool_calls: toolsToCall,
+               updatedPlan: currentPlan,
+               iterations: iterationsHistory,
+               moodDelta: {},
+               relationDelta: {},
+               queuedIdentityUpdate: {},
+               fallbackTriggered: false,
+               systemHealth: state.systemHealth,
+               status: 'tools_running' as const,
+               pendingToolRef
+             };
+
+              return immediateResult;
+            }
+          }
+          // Otherwise: only blocking tools (speak/final_answer/status_update) — fall through to synchronous execution.
+
+        stateMachine.transitionTo('EXECUTING');
+       eventBus.emit('EXECUTING_STARTED', { tools: toolsToCall });
       
       // Dynamic Indonesian status update broadcast to WebSocket to prevent blind wait state
       try {
@@ -1239,6 +1333,18 @@ if (typeof parsedArgs === 'string') {
         logs.push(logMsg);
         eventBus.emit('OUTPUT_EMITTED', { response: logMsg, isInternal: true });
         return res;
+      });
+
+      toolPromises.forEach((p, idx) => {
+        p.then((res) => {
+          const tc = toolsToCall[idx];
+          if (res.success && (tc.tool === 'speak' || tc.name === 'speak')) {
+            const speech = res.observation?.speech;
+            if (speech) {
+              eventBus.emit('OUTPUT_EMITTED', { response: speech });
+            }
+          }
+        }).catch(() => {});
       });
 
       const toolResults = await Promise.all(toolPromises);
@@ -1553,6 +1659,10 @@ Provide a concise validation summary. Start with [VALIDATION_SUCCESS] if everyth
             case 'set_emotion': return 'menyelaraskan suasana hati';
             case 'pair_account': return 'menyambungkan sirkuit hubungan';
             case 'send_message': return 'menghubungkan saluran sosial';
+            case 'send_telegram': return 'mengirim pesan Telegram';
+            case 'send_discord': return 'mengirim pesan Discord';
+            case 'send_file': return 'mengirim berkas';
+            case 'reply': return 'membalas pesan';
             default: return `memproses kemampuan ${t}`;
           }
         });
@@ -1630,14 +1740,28 @@ Explain what you did or found in a completely natural, non-technical, cute way. 
   const cortexSettings = await cortexInstance.getSettings();
   const isFailsafeEnabled = cortexSettings?.developer?.enableKernelFailsafe !== false && cortexSettings?.enableKernelFailsafe !== false;
 
-  const hasResponseDeliveryTools = Array.isArray(toolsToCall) && toolsToCall.some((tc: any) => {
+  const senderFacingTools = ['speak', 'final_answer'];
+  const thirdPartyDeliveryTools = ['send_message', 'send_telegram', 'send_discord', 'send_update', 'send_file', 'reply'];
+
+  const hasSenderFacingTools = Array.isArray(toolsToCall) && toolsToCall.some((tc: any) => {
     const name = tc.tool || tc.name || '';
-    return ['speak', 'final_answer', 'send_message', 'send_telegram', 'send_discord', 'send_update', 'send_file', 'reply'].includes(name);
+    return senderFacingTools.includes(name);
   });
-  const isIntentionalEmpty = hasResponseDeliveryTools;
+  const hasThirdPartyDeliveryTools = Array.isArray(toolsToCall) && toolsToCall.some((tc: any) => {
+    const name = tc.tool || tc.name || '';
+    return thirdPartyDeliveryTools.includes(name);
+  });
+  const hasResponseDeliveryTools = hasSenderFacingTools || hasThirdPartyDeliveryTools;
+  const isIntentionalEmpty = hasSenderFacingTools;
 
   if (!finalAnswer || finalAnswer.length < 5) {
-    logs.push("[KERNEL_FAIL_SAFE] Allowed empty or short output (< 5 chars) without triggering fallback, as Yui may have executed tool-based replies/actions.");
+    if (hasSenderFacingTools) {
+      logs.push("[KERNEL_FAIL_SAFE] Empty/short output with sender-facing reply tools (speak/final_answer). Response delivery is intentional.");
+    } else if (hasThirdPartyDeliveryTools) {
+      logs.push("[KERNEL_FAIL_SAFE] Third-party delivery tools called but no sender-facing reply. Allowing short response but may trigger fallback if empty.");
+    } else {
+      logs.push("[KERNEL_FAIL_SAFE] Empty or short output without tool-based reply action.");
+    }
   }
 
   if (!isIntentionalEmpty && (!finalAnswer || finalAnswer.length < 5)) {
@@ -1698,52 +1822,34 @@ Explain what you did or found in a completely natural, non-technical, cute way. 
   }
 
   eventBus.emit('OUTPUT_EMITTED', { response: finalAnswer });
-  const postContext = await SystemRegistry.runCortexPhase('PHASE 4: EXECUTION', finalAnswer || "Aduh... maaf ya user, sirkuit batin Yui sempat agak pusing barusan... 🥺 Tapi Yui tetap di sini kok! 💕", state, {
-    ...augContext,
-    rawResult: loopContext.parsedData || { final_answer: finalAnswer }
-  });
 
-  if (!postContext.newMemories) {
-    postContext.newMemories = [];
-  }
-  postContext.newMemories.push(...loopGeneratedMemories);
-
-  logs.push("[LOGIC] Running Maintenance & Simulation Cycles...");
-  const logicContext = await SystemRegistry.runCortexPhase('LOGIC', finalAnswer || "", state, {
-    ...postContext,
-    systemConfig: cortexInstance.getConfig(),
-    think: (p: string, opts?: { model?: string; jsonMode?: boolean }) => cortexInstance.thinkSimple(p, opts?.jsonMode ?? false, opts?.model)
-  });
+   const immediateResult = {
+     response: finalAnswer,
+     logs,
+     nextMood: loopContext.moodImpact,
+     moodImpact: loopContext.moodImpact,
+     sentiment: loopContext.sentiment,
+     newMemories: loopGeneratedMemories,
+     actions: toolsToCall,
+     perceivedNameUpdate: loopContext.perceivedNameUpdate || preContext.perceivedNameUpdate,
+     linkedAccountUpdate: loopContext.linkedAccountUpdate || preContext.linkedAccountUpdate,
+     viewerProfileUpdate: loopContext.viewerProfileUpdate,
+     shouldStartDreaming: loopContext.shouldStartDreaming,
+     animations: animations,
+     tone: loopContext.tone,
+     tool_calls: toolsToCall,
+     updatedPlan: currentPlan,
+     iterations: iterationsHistory,
+     moodDelta: {},
+     relationDelta: {},
+     queuedIdentityUpdate: {},
+     fallbackTriggered: loopContext.fallbackTriggered || false,
+     systemHealth: state.systemHealth,
+     status: 'completed' as const,
+     pendingToolRef: undefined
+   };
 
   stateMachine.transitionTo('IDLE');
-  
-  const rawDialogueSource = logicContext.processedResponse || finalAnswer || "Aduh... Yui bingung mau bilang apa nih user... 🥺 Tapi Yui tetap sayang user kok! 💕";
-  const finalCleanRes = APIService.cleanAIOutput(StandardizedProcessor.sanitizeOutput(rawDialogueSource, isProactiveRun));
-  eventBus.emit('OUTPUT_EMITTED', { response: finalCleanRes });
-
-  const rawResult = { 
-    response: finalCleanRes,
-    logs,
-    nextMood: loopContext.moodImpact,
-    moodImpact: loopContext.moodImpact,
-    sentiment: loopContext.sentiment,
-    newMemories: postContext.newMemories,
-    actions: toolsToCall,
-    perceivedNameUpdate: loopContext.perceivedNameUpdate || preContext.perceivedNameUpdate,
-    linkedAccountUpdate: loopContext.linkedAccountUpdate || preContext.linkedAccountUpdate,
-    viewerProfileUpdate: loopContext.viewerProfileUpdate,
-    shouldStartDreaming: loopContext.shouldStartDreaming,
-    animations: animations,
-    tone: loopContext.tone,
-    tool_calls: toolsToCall,
-    updatedPlan: currentPlan,
-    iterations: iterationsHistory,
-    moodDelta: logicContext.moodDelta,
-    relationDelta: logicContext.relationDelta,
-    queuedIdentityUpdate: logicContext.queuedIdentityUpdate,
-    fallbackTriggered: loopContext.fallbackTriggered || false,
-    systemHealth: state.systemHealth
-  };
 
   const latency = Date.now() - startTime;
   FastTrackRunner.run(cortexInstance.getConfig(), state, {
@@ -1762,7 +1868,40 @@ Explain what you did or found in a completely natural, non-technical, cute way. 
   if (taskId) {
     CognitiveScheduler.completeTask(taskId);
   }
-  return rawResult;
+
+  // Continuation in background so delivery is not blocked by post-processing.
+  setImmediate(async () => {
+    try {
+      const postContext = await SystemRegistry.runCortexPhase('PHASE 4: EXECUTION', finalAnswer, state, {
+        ...augContext,
+        rawResult: loopContext.parsedData || { final_answer: finalAnswer }
+      });
+
+      const mergedMemories = [...(loopGeneratedMemories || [])];
+      if (postContext.newMemories) {
+        mergedMemories.push(...postContext.newMemories);
+      }
+
+      const logicContext = await SystemRegistry.runCortexPhase('LOGIC', finalAnswer, state, {
+        ...postContext,
+        systemConfig: cortexInstance.getConfig(),
+        think: (p: string, opts?: { model?: string; jsonMode?: boolean }) => cortexInstance.thinkSimple(p, opts?.jsonMode ?? false, opts?.model)
+      });
+
+      const rawDialogueSource = logicContext.processedResponse || finalAnswer;
+      const finalCleanRes = APIService.cleanAIOutput(StandardizedProcessor.sanitizeOutput(rawDialogueSource, isProactiveRun));
+      eventBus.emit('OUTPUT_EMITTED', { response: finalCleanRes });
+
+      immediateResult.newMemories = mergedMemories;
+      immediateResult.moodDelta = logicContext.moodDelta || {};
+      immediateResult.relationDelta = logicContext.relationDelta || {};
+      immediateResult.queuedIdentityUpdate = logicContext.queuedIdentityUpdate || {};
+    } catch (bgErr: any) {
+      console.error('[CORTEX_BG] Background phase failed:', bgErr?.message || bgErr);
+    }
+  });
+
+  return immediateResult;
   } catch (err: any) {
     if (err.message && (err.message.includes("TASK_SUSPENDED") || err.message.includes("COGNITIVE_LOOP_ABORTED"))) {
       throw err;
@@ -1796,9 +1935,11 @@ Explain what you did or found in a completely natural, non-technical, cute way. 
       moodDelta: {},
       relationDelta: {},
       queuedIdentityUpdate: undefined,
-      fallbackTriggered: true,
-      systemHealth: { ...state.systemHealth, consecutive_formatting_errors: 0 }
-    };
+       fallbackTriggered: true,
+       systemHealth: { ...state.systemHealth, consecutive_formatting_errors: 0 },
+       status: 'completed' as const,
+       pendingToolRef: undefined
+     };
     
     stateMachine.transitionTo('IDLE');
     return recoveryResult;

@@ -10,6 +10,7 @@ import { Cortex } from './cortex.js';
 import { ContextCompressor } from '../modules/ContextCompressionModule.js';
 import { PluginManager } from './kernel/PluginManager.js';
 import { DynamicLoader } from './DynamicLoader.js';
+import { BackgroundToolDispatcher } from './kernel/BackgroundToolDispatcher.js';
 import os from 'os';
 import path from 'path';
 import fs from 'fs';
@@ -35,6 +36,7 @@ import { TTSSelectorModule } from '../modules/TTSSelectorModule.js';
 import { SubAgentDelegationModule } from '../modules/SubAgentDelegationModule.js';
 import { YuiVisionModule } from '../modules/YuiVisionModule.js';
 import { L2DExpressionTranslatorModule } from '../modules/L2DExpressionTranslator.js';
+import { SendFinalReplyTool, SendStatusUpdateTool } from '../modules/LiveStatusToolsModule.js';
 
 import { YUIAGICoreModule } from '../modules/agi/YUIAGICoreModule.js';
 import { WeatherNewsEmpathyModule } from '../modules/agi/WeatherNewsEmpathyModule.js';
@@ -462,7 +464,8 @@ export function initializeCortexModules(): Promise<void> {
         EditFileSegmentTool, DownloadFileTool, SendFileTool, OverlayControlTool, LuaInterpreter,
         EmotionAdjustTool, FileListTool, CalculatorTool, PythonInterpreter, GitHubTool,
         GetCurrentTimeTool, MessagingTool, BgProcTool, ManageIdentitiesTool, CronTool,
-        OCRTool, ManagePairingTool, FileManagerTool, FileWriteTool
+        OCRTool, ManagePairingTool, FileManagerTool, FileWriteTool,
+        SendFinalReplyTool, SendStatusUpdateTool
       ];
 
       allStaticModules.forEach(m => SystemRegistry.register(m));
@@ -498,15 +501,17 @@ export function initializeCortexModules(): Promise<void> {
         console.warn('[KERNEL] DynamicLoader not available yet.');
       }
 
-      if (typeof window === 'undefined') {
-        SubAgentRegistry.register(CreativeAgent);
-        SubAgentRegistry.register(ResearchAgent);
-        SystemRegistry.register(ProviderGatewayModule);
-        console.log(`[SUBAGENT] Registered ${SubAgentRegistry.getAll().length} sub-agents`);
-      }
-    } catch (err) {
-      console.error('[KERNEL] Registry Initialization CRITICAL FAILURE:', err);
-    }
-  })();
-  return initPromise;
+       if (typeof window === 'undefined') {
+         SubAgentRegistry.register(CreativeAgent);
+         SubAgentRegistry.register(ResearchAgent);
+         SystemRegistry.register(ProviderGatewayModule);
+         console.log(`[SUBAGENT] Registered ${SubAgentRegistry.getAll().length} sub-agents`);
+       }
+
+       BackgroundToolDispatcher.getInstance();
+     } catch (err) {
+       console.error('[KERNEL] Registry Initialization CRITICAL FAILURE:', err);
+     }
+   })();
+   return initPromise;
 }

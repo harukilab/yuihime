@@ -768,6 +768,49 @@ export function registerSystemRoutes(app: express.Express, db: any) {
     }
   });
 
+  // --- Message Hold Mechanism ---
+  app.post("/api/queue/hold", async (req, res) => {
+    try {
+      const { holdMode, holdOutgoing } = req.body;
+      const queue = MultiChannelQueue.getInstance();
+      if (holdMode !== undefined) {
+        queue.setHoldMode(holdMode);
+      }
+      if (holdOutgoing !== undefined) {
+        queue.setHoldOutgoing(holdOutgoing);
+      }
+      res.json({ success: true, holdMode: queue["holdMode"], holdOutgoing: queue["holdOutgoing"] });
+    } catch (e: any) {
+      console.error("[SERVER] Failed to set hold mode:", e.message);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/queue/hold", async (req, res) => {
+    try {
+      const queue = MultiChannelQueue.getInstance();
+      res.json({ holdMode: queue["holdMode"], heldMessages: queue["heldMessages"].length });
+    } catch (e: any) {
+      console.error("[SERVER] Failed to get hold status:", e.message);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+
+  // --- Forgetfulness Protocol ---
+  app.post("/api/queue/forgetfulness", async (req, res) => {
+    try {
+      const { contextId } = req.body;
+      if (!contextId) {
+        return res.status(400).json({ error: "contextId is required" });
+      }
+      await NeuralInterface.performForgetfulnessProtocol(contextId);
+      res.json({ success: true, message: "Forgetfulness protocol executed successfully." });
+    } catch (e: any) {
+      console.error("[SERVER] Forgetfulness protocol failed:", e.message);
+      res.status(500).json({ error: e.message });
+    }
+  });
   // --- Workflow Graph APIs ---
   app.get("/api/workflow", async (req, res) => {
     const workflow = await loadWorkflow();

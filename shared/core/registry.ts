@@ -125,23 +125,51 @@ export class SystemRegistry {
 
   // --- Cortex Execution ---
   static async runCortexPhase(
-    phase: ModulePhase, 
-    input: string, 
-    state: AgentState, 
+    phase: ModulePhase,
+    input: string,
+    state: AgentState,
     context: any = {}
   ): Promise<any> {
-    const phaseModules = this.cortexModules.filter(m => 
-      m.metadata.phase === phase && 
+    const phaseModules = this.cortexModules.filter(m =>
+      m.metadata.phase === phase &&
       (!m.metadata.trigger || m.metadata.trigger(input, state))
     );
 
-    let currentContext = { ...context };
-    for (const module of phaseModules) {
-      console.log(`[REGISTRY_RUN] Running module: ${module.metadata.id} [${module.metadata.phase}]...`);
-      const result = await module.run(input, state, currentContext);
-      console.log(`[REGISTRY_RUN] Module completed: ${module.metadata.id}`);
-      currentContext = { ...currentContext, ...result };
+    if (phaseModules.length === 0) return context;
+
+    const modulesByOrder = new Map<number, CortexModule[]>();
+    for (const m of phaseModules) {
+      const order = m.metadata.order || 0;
+      const arr = modulesByOrder.get(order);
+      if (arr) arr.push(m);
+      else modulesByOrder.set(order, [m]);
     }
+
+    const sortedOrders = Array.from(modulesByOrder.keys()).sort((a, b) => a - b);
+    let currentContext = { ...context };
+
+    for (const order of sortedOrders) {
+      const modulesAtLevel = modulesByOrder.get(order)!;
+      
+      const results = await Promise.all(
+        modulesAtLevel.map(async (module) => {
+          try {
+            console.log(`[REGISTRY_RUN] Running module: ${module.metadata.id} [${module.metadata.phase}]...`);
+            const result = await module.run(input, state, currentContext);
+            console.log(`[REGISTRY_RUN] Module completed: ${module.metadata.id}`);
+            return result;
+          } catch (err: any) {
+            console.error(`[REGISTRY] Module ${module.metadata.id} failed in ${phase}:`, err?.message || err);
+            return {};
+          }
+        })
+      );
+
+      for (const result of results) {
+        currentContext = { ...currentContext, ...result };
+      }
+    }
+
     return currentContext;
   }
 

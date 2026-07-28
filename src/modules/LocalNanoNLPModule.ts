@@ -86,8 +86,15 @@ export const LocalNanoNLPModule: CortexModule = {
       }
     }
   },
-  run: async (input: string, state: AgentState, context: any) => {
+  run: async (input: string, state: AgentState, context: any): Promise<any> => {
     console.log('[LOCAL_NLP] Ingesting neural signals with Dual-Process emulation...');
+
+    const timeoutMs = 15000;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error('[LOCAL_NLP] Module execution timed out')), timeoutMs);
+    });
+
+    const runPromise = (async (): Promise<any> => {
 
     // Load configurations safely (or load defaults)
     const customSettings = (await StorageService.getModularSettings()) || {};
@@ -253,6 +260,17 @@ export const LocalNanoNLPModule: CortexModule = {
       cognitiveComplexity,
       logs: [...(context.logs || []), ...logs]
     };
+  })();
+
+    return Promise.race([runPromise, timeoutPromise]).catch((err: any) => {
+    console.warn('[LOCAL_NLP] Module timed out or failed, falling back:', err?.message || err);
+    return {
+      ...context,
+      cognitiveSystem: 'System 2 (Deliberative LLM)',
+      cognitiveComplexity: 0,
+      logs: [...(context.logs || []), '[LOCAL_NLP] Local NLP timed out, continuing without local prediction.']
+    };
+  });
   }
 };
 

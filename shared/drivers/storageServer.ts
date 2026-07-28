@@ -1,4 +1,4 @@
-import { initializeDatabase } from "@/core/database.js";
+import { initializeDatabase, retryDbOperation } from "@/core/database.js";
 import { SettingsManager } from "@/core/kernel/settings.js";
 import fs from "fs";
 import path from "path";
@@ -73,24 +73,26 @@ export class StorageServer {
     }
   }
 
-  static async saveMemory(memory: any) {
+  static async saveMemory(memory: any): Promise<any> {
     try {
-      const id = Math.random().toString(36).substring(2, 11);
-      db.prepare(`
-        INSERT INTO memories (id, type, speaker, content, timestamp, context, tags, importance, meta)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        id,
-        memory.type || "dialogue",
-        memory.speaker || "user",
-        memory.content,
-        memory.timestamp || Date.now(),
-        memory.context || "web_default",
-        JSON.stringify(memory.tags || []),
-        memory.importance || 1,
-        JSON.stringify(memory.meta || {})
-      );
-      return { id, ...memory };
+      return await retryDbOperation(() => {
+        const id = Math.random().toString(36).substring(2, 11);
+        db.prepare(`
+          INSERT INTO memories (id, type, speaker, content, timestamp, context, tags, importance, meta)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          id,
+          memory.type || "dialogue",
+          memory.speaker || "user",
+          memory.content,
+          memory.timestamp || Date.now(),
+          memory.context || "web_default",
+          JSON.stringify(memory.tags || []),
+          memory.importance || 1,
+          JSON.stringify(memory.meta || {})
+        );
+        return { id, ...memory };
+      }, 'StorageServer.saveMemory');
     } catch (e) {
       console.error("[STORAGE_SERVER] Failed to save memory:", e);
       throw e;
@@ -261,55 +263,57 @@ export class StorageServer {
 
   static async saveAgentState(state: any) {
     try {
-      const current = db.prepare("SELECT * FROM agent_state LIMIT 1").get();
-      if (!current) {
-        db.prepare(`
-          INSERT INTO agent_state (id, status, energy, mood, emotion, relation, activePersonaId, tone, activeContext, lastDreamCycle, systemHealth)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(
-          "default",
-          state.status || "idle",
-          state.energy !== undefined ? state.energy : 100,
-          JSON.stringify(state.mood || {}),
-          JSON.stringify(state.emotion || {}),
-          JSON.stringify(state.relation || {}),
-          state.activePersonaId || "auto",
-          JSON.stringify(state.tone || {}),
-          JSON.stringify(state.activeContext || []),
-          state.lastDreamCycle || 0,
-          JSON.stringify(state.systemHealth || {})
-        );
-      } else {
-        const merged = {
-          status: state.status !== undefined ? state.status : current.status,
-          energy: state.energy !== undefined ? state.energy : current.energy,
-          mood: JSON.stringify({ ...JSON.parse(current.mood || "{}"), ...(state.mood || {}) }),
-          emotion: JSON.stringify({ ...JSON.parse(current.emotion || "{}"), ...(state.emotion || {}) }),
-          relation: JSON.stringify({ ...JSON.parse(current.relation || "{}"), ...(state.relation || {}) }),
-          activePersonaId: state.activePersonaId !== undefined ? state.activePersonaId : current.activePersonaId,
-          tone: JSON.stringify({ ...JSON.parse(current.tone || "{}"), ...(state.tone || {}) }),
-          activeContext: JSON.stringify(state.activeContext !== undefined ? state.activeContext : JSON.parse(current.activeContext || "[]")),
-          lastDreamCycle: state.lastDreamCycle !== undefined ? state.lastDreamCycle : current.lastDreamCycle,
-          systemHealth: JSON.stringify({ ...JSON.parse(current.systemHealth || "{}"), ...(state.systemHealth || {}) })
-        };
-        db.prepare(`
-          UPDATE agent_state SET
-            status = ?, energy = ?, mood = ?, emotion = ?, relation = ?, activePersonaId = ?, tone = ?, activeContext = ?, lastDreamCycle = ?, systemHealth = ?
-          WHERE id = ?
-        `).run(
-          merged.status,
-          merged.energy,
-          merged.mood,
-          merged.emotion,
-          merged.relation,
-          merged.activePersonaId,
-          merged.tone,
-          merged.activeContext,
-          merged.lastDreamCycle,
-          merged.systemHealth,
-          current.id
-        );
-      }
+      await retryDbOperation(() => {
+        const current = db.prepare("SELECT * FROM agent_state LIMIT 1").get();
+        if (!current) {
+          db.prepare(`
+            INSERT INTO agent_state (id, status, energy, mood, emotion, relation, activePersonaId, tone, activeContext, lastDreamCycle, systemHealth)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `).run(
+            "default",
+            state.status || "idle",
+            state.energy !== undefined ? state.energy : 100,
+            JSON.stringify(state.mood || {}),
+            JSON.stringify(state.emotion || {}),
+            JSON.stringify(state.relation || {}),
+            state.activePersonaId || "auto",
+            JSON.stringify(state.tone || {}),
+            JSON.stringify(state.activeContext || []),
+            state.lastDreamCycle || 0,
+            JSON.stringify(state.systemHealth || {})
+          );
+        } else {
+          const merged = {
+            status: state.status !== undefined ? state.status : current.status,
+            energy: state.energy !== undefined ? state.energy : current.energy,
+            mood: JSON.stringify({ ...JSON.parse(current.mood || "{}"), ...(state.mood || {}) }),
+            emotion: JSON.stringify({ ...JSON.parse(current.emotion || "{}"), ...(state.emotion || {}) }),
+            relation: JSON.stringify({ ...JSON.parse(current.relation || "{}"), ...(state.relation || {}) }),
+            activePersonaId: state.activePersonaId !== undefined ? state.activePersonaId : current.activePersonaId,
+            tone: JSON.stringify({ ...JSON.parse(current.tone || "{}"), ...(state.tone || {}) }),
+            activeContext: JSON.stringify(state.activeContext !== undefined ? state.activeContext : JSON.parse(current.activeContext || "[]")),
+            lastDreamCycle: state.lastDreamCycle !== undefined ? state.lastDreamCycle : current.lastDreamCycle,
+            systemHealth: JSON.stringify({ ...JSON.parse(current.systemHealth || "{}"), ...(state.systemHealth || {}) })
+          };
+          db.prepare(`
+            UPDATE agent_state SET
+              status = ?, energy = ?, mood = ?, emotion = ?, relation = ?, activePersonaId = ?, tone = ?, activeContext = ?, lastDreamCycle = ?, systemHealth = ?
+            WHERE id = ?
+          `).run(
+            merged.status,
+            merged.energy,
+            merged.mood,
+            merged.emotion,
+            merged.relation,
+            merged.activePersonaId,
+            merged.tone,
+            merged.activeContext,
+            merged.lastDreamCycle,
+            merged.systemHealth,
+            current.id
+          );
+        }
+      }, 'StorageServer.saveAgentState');
     } catch (e) {
       console.error("[STORAGE_SERVER] Failed to save agent state:", e);
     }
@@ -429,13 +433,15 @@ export class StorageServer {
     }
   }
 
-  static async saveCustom(key: string, value: any) {
+  static async saveCustom(key: string, value: any): Promise<void> {
     try {
-      db.prepare(`
-        INSERT INTO custom_storage (key, value, updatedAt)
-        VALUES (?, ?, ?)
-        ON CONFLICT(key) DO UPDATE SET value = excluded.value, updatedAt = excluded.updatedAt
-      `).run(key, JSON.stringify(value), Date.now());
+      await retryDbOperation(() => {
+        db.prepare(`
+          INSERT INTO custom_storage (key, value, updatedAt)
+          VALUES (?, ?, ?)
+          ON CONFLICT(key) DO UPDATE SET value = excluded.value, updatedAt = excluded.updatedAt
+        `).run(key, JSON.stringify(value), Date.now());
+      }, `StorageServer.saveCustom ${key}`);
     } catch (e) {
       console.error(`[STORAGE_SERVER] Failed to save custom storage for ${key}:`, e);
     }

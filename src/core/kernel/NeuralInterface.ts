@@ -1,5 +1,6 @@
 import { readFileSync } from "fs";
 import path from "path";
+import { Worker } from "worker_threads";
 import { Kernel } from "./core.js";
 import { AIService } from "./ai.js";
 import { Soul } from "../soul.js";
@@ -7,12 +8,16 @@ import Database from "better-sqlite3";
 import { Cortex } from "../cortex.js";
 import { Memory, Dream, Identity } from "@shared/include/types";
 import { DEFAULT_NEURAL_CORES } from "@shared/constants";
-import { deduplicateAndMergeIdentities } from "../database.js";
+import { deduplicateAndMergeIdentities, dbPath } from "../database.js";
 
 import { broadcastToWS } from "../server/apiRouter";
+import { BackgroundToolDispatcher } from "./BackgroundToolDispatcher.js";
+
 
 export class NeuralInterface {
   private static db: any;
+  private static lastForgetfulnessRun: number = 0;
+  private static readonly FORGETFULNESS_COOLDOWN_MS = 5 * 60 * 1000;
 
   public static setDatabase(db: any) {
     this.db = db;
@@ -314,6 +319,62 @@ export class NeuralInterface {
       speaker: r.speaker || 'Unknown'
     }));
 
+    // Phase 2: Check for pending background tool results and inject them
+    if (contextId) {
+      const pendingSet = BackgroundToolDispatcher.getInstance().getPending(contextId);
+      if (pendingSet) {
+        if (pendingSet.status === 'pending') {
+          const pendingReply = "Yui sedang mengerjakan request kamu sebentar ya~ 🌸 Tunggu sebentar, hasilnya akan segera tersedia.";
+          const pendingMemoryId = "pending_bg_" + Math.random().toString(36).substr(2, 9);
+          memories.push({
+            id: pendingMemoryId,
+            ownerId: 'system',
+            type: 'system',
+            content: `[SYSTEM: Background tool execution in progress for context ${contextId}. Yui is still working on the tool calls. Pending: ${pendingSet.toolCalls.map((tc: any) => tc.toolName).join(', ')}]`,
+            importance: 0.3,
+            tags: ['pending_tool_execution', contextId],
+            context: contextId,
+            sentiment: 0.5,
+            timestamp: Date.now(),
+            speaker: 'system'
+          });
+          return pendingReply;
+        } else if (pendingSet.status === 'completed' && pendingSet.results && pendingSet.results.length > 0) {
+          const results = await BackgroundToolDispatcher.getInstance().drain(contextId);
+          for (let idx = 0; idx < results.length; idx++) {
+            const r = results[idx];
+            const envelope = {
+              success: !!r.success,
+              data: r.success ? r.observation : null,
+              error: r.success ? null : (r.error || 'Tool execution failed'),
+              metadata: {
+                tool: r.toolName,
+                duration_ms: typeof r.durationMs === 'number' ? r.durationMs : -1,
+                timestamp: new Date().toISOString()
+              }
+            };
+            const toolResultMemoryId = 'tool_result_bg_' + Date.now() + '_' + idx;
+            const observationContent = r.success
+              ? `Tool [${r.toolName}] executed successfully in background. Result: ${typeof r.observation === 'object' ? JSON.stringify(r.observation) : String(r.observation || '')}`
+              : `Tool [${r.toolName}] failed in background. Error: ${r.error || 'Unknown error'}`;
+            memories.push({
+              id: toolResultMemoryId,
+              ownerId: 'system',
+              type: 'observation',
+              speaker: 'System',
+              content: `[SYSTEM_TOOL_RESULT]: ${observationContent}`,
+              timestamp: Date.now(),
+              importance: 0.5,
+              tags: ['background_tool_result', r.toolName, contextId],
+              context: contextId,
+              sentiment: 0.5
+            });
+          }
+          BackgroundToolDispatcher.getInstance().cancel(contextId);
+        }
+      }
+    }
+
     // Call native Cortex.think
     const result = await cortex.think(
       input,
@@ -371,7 +432,8 @@ export class NeuralInterface {
     const dbAffection = result.queuedIdentityUpdate?.affection !== undefined ? result.queuedIdentityUpdate.affection : updatedRelation.affection;
     const dbReputation = result.queuedIdentityUpdate?.reputation !== undefined ? result.queuedIdentityUpdate.reputation : (updatedRelation.reputation || 50);
 
-    const runDb = (fn: () => void) => {
+    // Soft retries without busy-spin (spin freezes the event loop and delays TG delivery).
+    const runDb = async (label: string, fn: () => void) => {
       const maxRetries = 4;
       let lastErr: any = null;
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -380,23 +442,27 @@ export class NeuralInterface {
           return;
         } catch (err: any) {
           lastErr = err;
-          const isBusy = err.code === 'SQLITE_BUSY' || err.message?.includes('database is locked');
-          if (!isBusy || attempt === maxRetries) throw err;
-          const backoff = 150 * attempt;
-          console.warn(`[NEURAL_INTERFACE_SQLITE_RETRY] SQLite busy, retrying in ${backoff}ms (${attempt}/${maxRetries})...`);
-          const start = Date.now();
-          while (Date.now() - start < backoff) {}
+          const isBusy = err.code === 'SQLITE_BUSY' || err.message?.includes('database is locked') || err.message?.includes('SQLITE_BUSY');
+          if (!isBusy || attempt === maxRetries) {
+            console.warn(`[NEURAL_INTERFACE_SQLITE] ${label} failed after ${attempt} attempt(s):`, err?.message || err);
+            return;
+          }
+          const backoff = 50 * attempt;
+          console.warn(`[NEURAL_INTERFACE_SQLITE_RETRY] SQLite busy on ${label}, retrying in ${backoff}ms (${attempt}/${maxRetries})...`);
+          await new Promise((r) => setTimeout(r, backoff));
         }
       }
-      throw lastErr;
+      if (lastErr) {
+        console.warn(`[NEURAL_INTERFACE_SQLITE] ${label} gave up:`, lastErr?.message || lastErr);
+      }
     };
 
-    runDb(() => {
+    await runDb('update-identity', () => {
       this.db.prepare("UPDATE identities SET trust = ?, affection = ?, reputation = ?, lastInteraction = ? WHERE id = ?")
         .run(dbTrust, dbAffection, dbReputation, Date.now(), receiverIdentity.id);
     });
 
-    runDb(() => {
+    await runDb('update-agent-state', () => {
       this.db.prepare("UPDATE agent_state SET mood = ?, emotion = ?, relation = ?, systemHealth = ?, activePersonaId = ?, currentPlan = ? WHERE id = 1")
         .run(JSON.stringify(updatedMood), JSON.stringify(updatedEmotion), JSON.stringify(updatedRelation), JSON.stringify(state.systemHealth), state.activePersonaId || 'auto', result.updatedPlan ? JSON.stringify(result.updatedPlan) : (state.currentPlan ? JSON.stringify(state.currentPlan) : null));
     });
@@ -531,78 +597,255 @@ export class NeuralInterface {
     }
 
     if (responseText && responseText.trim().length >= 3) {
-      // Call Forgetfulness Decay & Compaction Engine for Perfect Giftia OS
-      NeuralInterface.performForgetfulnessProtocol(contextId);
+      setTimeout(() => {
+        NeuralInterface.performForgetfulnessProtocol(contextId).catch((err: any) => {
+          console.warn("[FORGETFULNESS_ALGORITHM] Background task failed silently:", err?.message || err);
+        });
+      }, 30000);
+
+      // Defer non-critical synchronous DB writes so response delivery isn't blocked.
+      // These operations (identity updates, memory inserts, profile writes) are
+      // persistence bookkeeping and don't need to complete before the user sees the reply.
+      queueMicrotask(async () => {
+        try {
+          const runDbLight = async (label: string, fn: () => void) => {
+            const maxRetries = 3;
+            for (let attempt = 1; attempt <= maxRetries; attempt++) {
+              try { fn(); return; }
+              catch (err: any) {
+                const isBusy = err.code === 'SQLITE_BUSY' || err.message?.includes('database is locked');
+                if (!isBusy || attempt === maxRetries) { return; }
+                await new Promise(r => setTimeout(r, 50 * attempt));
+              }
+            }
+          };
+
+          await runDbLight('deferred-update-identity', () => {
+            this.db.prepare("UPDATE identities SET trust = ?, affection = ?, reputation = ?, lastInteraction = ? WHERE id = ?")
+              .run(dbTrust, dbAffection, dbReputation, Date.now(), receiverIdentity.id);
+          });
+
+          await runDbLight('deferred-update-agent-state', () => {
+            this.db.prepare("UPDATE agent_state SET mood = ?, emotion = ?, relation = ?, systemHealth = ?, activePersonaId = ?, currentPlan = ? WHERE id = 1")
+              .run(JSON.stringify(updatedMood), JSON.stringify(updatedEmotion), JSON.stringify(updatedRelation), JSON.stringify(state.systemHealth), state.activePersonaId || 'auto', result.updatedPlan ? JSON.stringify(result.updatedPlan) : (state.currentPlan ? JSON.stringify(state.currentPlan) : null));
+          });
+
+          if (result.newMemories && result.newMemories.length > 0) {
+            for (const m of result.newMemories) {
+              const exists = this.db.prepare("SELECT 1 FROM memories WHERE id = ?").get(m.id);
+              if (!exists) {
+                this.db.prepare(`
+                  INSERT INTO memories (id, type, content, importance, speaker, context, timestamp, tags, sentiment)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `).run(
+                  m.id || Math.random().toString(36).substr(2, 9),
+                  m.type || 'interaction',
+                  m.content,
+                  m.importance || 0.4,
+                  m.speaker || 'agent',
+                  cleanContextId,
+                  m.timestamp || Date.now(),
+                  m.tags ? JSON.stringify(m.tags) : '[]',
+                  updatedSentiment
+                );
+              }
+            }
+          } else if (isProactive) {
+            const systemEventMemoryId = Math.random().toString(36).substr(2, 9);
+            this.db.prepare(`
+              INSERT INTO memories (id, type, content, importance, speaker, context, timestamp, tags, sentiment)
+              VALUES (?, 'event', ?, 0.2, 'system', ?, ?, '["impulse", "proactive"]', ?)
+            `).run(systemEventMemoryId, `[System event]: Yui felt a longing impulse and initiated contact.`, cleanContextId, Date.now(), updatedSentiment);
+          } else {
+            const userMemoryId = Math.random().toString(36).substr(2, 9);
+            this.db.prepare(`
+              INSERT INTO memories (id, type, content, importance, speaker, context, timestamp, tags, sentiment)
+              VALUES (?, 'interaction', ?, 0.4, ?, ?, ?, '[]', ?)
+            `).run(userMemoryId, input, senderName, cleanContextId, Date.now(), updatedSentiment);
+
+            const agentMemoryId = Math.random().toString(36).substr(2, 9);
+            this.db.prepare(`
+              INSERT INTO memories (id, type, content, importance, speaker, context, timestamp, tags, sentiment)
+              VALUES (?, 'interaction', ?, 0.5, 'agent', ?, ?, '[]', ?)
+            `).run(agentMemoryId, result.response, cleanContextId, Date.now() + 10, updatedSentiment);
+          }
+
+          if (result.viewerProfileUpdate || result.perceivedNameUpdate || result.linkedAccountUpdate) {
+            let currentHabits = receiverIdentity.habits || [];
+            let currentFacts = receiverIdentity.importantFacts || [];
+            let currentLinks = receiverIdentity.linkedAccounts || [];
+
+            if (result.viewerProfileUpdate?.habits) {
+              currentHabits = [...new Set([...currentHabits, ...result.viewerProfileUpdate.habits])].slice(-10);
+            }
+            if (result.viewerProfileUpdate?.importantFacts) {
+              currentFacts = [...new Set([...currentFacts, ...result.viewerProfileUpdate.importantFacts])];
+            }
+            if (result.linkedAccountUpdate) {
+              if (Array.isArray(result.linkedAccountUpdate)) {
+                currentLinks = [...new Set([...currentLinks, ...result.linkedAccountUpdate])];
+              } else {
+                currentLinks = [...new Set([...currentLinks, result.linkedAccountUpdate])];
+              }
+            }
+
+            this.db.prepare(`
+              UPDATE identities SET 
+                perceivedName = ?, 
+                realName = ?, 
+                habits = ?, 
+                importantFacts = ?, 
+                linkedAccounts = ?,
+                lastInteraction = ?
+              WHERE id = ?
+            `).run(
+              result.perceivedNameUpdate || receiverIdentity.perceivedName,
+              result.viewerProfileUpdate?.realName ||
+                (result.perceivedNameUpdate && (!receiverIdentity.realName || receiverIdentity.realName === 'Belum diisikan' || receiverIdentity.realName === senderName)
+                  ? result.perceivedNameUpdate
+                  : receiverIdentity.realName) || senderName,
+              JSON.stringify(currentHabits),
+              JSON.stringify(currentFacts),
+              JSON.stringify(currentLinks),
+              Date.now(),
+              receiverIdentity.id
+            );
+          }
+        } catch (dbErr: any) {
+          console.warn("[NEURAL_INTERFACE_DEFERRED_DB] background DB write failed:", dbErr?.message || dbErr);
+        }
+      });
+
       return responseText;
     }
 
     return null;
   }
 
-  private static performForgetfulnessProtocol(contextId: string) {
-    if (!contextId) return;
-    try {
-      console.log(`[FORGETFULNESS_ALGORITHM] Running Memory Decaying & Compression for context: ${contextId}`);
-      
-      // 1. Natural Data Decay: Decrease importance of non-system raw memories by 0.05
-      // Decay memories older than 5 minutes
-      const fiveMinutesAgo = Date.now() - 300000;
-      NeuralInterface.db.prepare(`
-        UPDATE memories 
-        SET importance = MAX(0.0, importance - 0.05) 
-        WHERE context = ? AND speaker != 'system' AND timestamp < ?
-      `).run(contextId, fiveMinutesAgo);
+  /**
+    * Best-effort memory decay. Always deferred from the reply path.
+    * Throttled to run at most once every 5 minutes to avoid blocking
+    * the event loop during message delivery (better-sqlite3 is synchronous).
+    * Uses a moderate busy_timeout so a locked DB cannot freeze the event loop for 30s.
+    */
+  public static async performForgetfulnessProtocol(contextId: string) {
+    const now = Date.now();
+    if (now - NeuralInterface.lastForgetfulnessRun < NeuralInterface.FORGETFULNESS_COOLDOWN_MS) {
+      console.log(`[FORGETFULNESS_ALGORITHM] Skipping — cooldown active (${Math.round((NeuralInterface.FORGETFULNESS_COOLDOWN_MS - (now - NeuralInterface.lastForgetfulnessRun)) / 1000)}s remaining).`);
+      return;
+    }
+    NeuralInterface.lastForgetfulnessRun = now;
+    if (!contextId || !NeuralInterface.db) return;
 
-      // Delete memories whose importance is extremely low (< 0.15)
-      NeuralInterface.db.prepare(`
-        DELETE FROM memories 
-        WHERE context = ? AND importance < 0.15 AND speaker != 'system' AND timestamp < ?
-      `).run(contextId, fiveMinutesAgo);
+    const cleanContextId = contextId.split("|")[0];
+    const resolvedDbPath = dbPath;
 
-      // 2. Experience Abstraction: if total messages in this context exceeds 150, consolidate oldest 30
-      const countRow: any = NeuralInterface.db.prepare(`
-        SELECT COUNT(*) as count FROM memories WHERE context = ?
-      `).get(contextId);
+    // Jalankan seluruh operasi di Worker Thread terpisah.
+    // Dengan ini, better-sqlite3 (synchronous) berjalan di thread lain
+    // dan event loop utama (TG in/out, LLM reply delivery) TIDAK PERNAH diblokir.
+    const workerCode = `
+      const { workerData, parentPort } = require('worker_threads');
+      const Database = require('better-sqlite3');
 
-      const totalCount = countRow ? countRow.count : 0;
-      if (totalCount > 150) {
-        console.log(`[FORGETFULNESS_ALGORITHM] Memory Count (${totalCount}) exceeded threshold of 150 in ${contextId}. Beginning semantic integration...`);
-        
-        // Retrieve the oldest 30 interactions
-        const oldestRows: any[] = NeuralInterface.db.prepare(`
-          SELECT * FROM memories 
-          WHERE context = ? AND speaker != 'system' 
-          ORDER BY timestamp ASC 
-          LIMIT 30
-        `).all(contextId);
+      const { dbPath, contextId } = workerData;
 
-        if (oldestRows.length >= 20) {
-          const timestampRangeStart = new Date(oldestRows[0].timestamp).toLocaleTimeString();
-          const timestampRangeEnd = new Date(oldestRows[oldestRows.length - 1].timestamp).toLocaleTimeString();
-          
-          const compressedSummary = `user membahas beberapa topik hangat antara pukul ${timestampRangeStart} dan ${timestampRangeEnd}. user mengekspresikan hobi, pemikiran, dan rasa pedulinya kepada Yui secara tulus, memperdalam simpul batin kita secara harmoni dan saling pengertian.`;
-          
-          const summaryMemoryId = "abstract_" + Math.random().toString(36).substr(2, 9);
-          
-          // Insert high level summary with priority importance 0.85
-          NeuralInterface.db.prepare(`
-            INSERT INTO memories (id, type, content, importance, speaker, context, timestamp, tags, sentiment)
-            VALUES (?, 'summary', ?, 0.85, 'system', ?, ?, '["abstraction", "defragmented"]', 0.6)
-          `).run(summaryMemoryId, `[Abstraksi Pengalaman]: ${compressedSummary}`, contextId, Date.now() - 1000);
+      (function run() {
+        let db;
+        try {
+          db = new Database(dbPath, { timeout: 3000 });
+          db.pragma('journal_mode = WAL');
+          db.pragma('busy_timeout = 100');
 
-          // Purge/Delete those raw consolidated oldest messages
-          const oldestIds = oldestRows.map(r => r.id);
-          const placeholders = oldestIds.map(() => "?").join(",");
-          NeuralInterface.db.prepare(`
-            DELETE FROM memories 
-            WHERE id IN (${placeholders})
-          `).run(...oldestIds);
+          const fiveMinutesAgo = Date.now() - 300000;
 
-          console.log(`[FORGETFULNESS_ALGORITHM] Successfully consolidated oldest 30 memories into a single high-level abstraction: "${compressedSummary}"`);
+          // DECAY: single-pass UPDATE via composite index
+          const decayResult = db.prepare(
+            'UPDATE memories SET importance = MAX(0.0, importance - 0.05) WHERE context = ? AND speaker != ? AND timestamp < ?'
+          ).run(contextId, 'system', fiveMinutesAgo);
+
+          // PURGE: single-pass DELETE via composite index
+          // FTS5 trigger runs per-row — batch in transaction to minimize overhead
+          const purgeResult = db.transaction(() => {
+            return db.prepare(
+              'DELETE FROM memories WHERE context = ? AND importance < 0.15 AND speaker != ? AND timestamp < ?'
+            ).run(contextId, 'system', fiveMinutesAgo);
+          })();
+
+          // CONSOLIDATE: kompres 30 tertua jika total > 150
+          const countRow = db.prepare('SELECT COUNT(*) as count FROM memories WHERE context = ?').get(contextId);
+          const totalCount = countRow ? countRow.count : 0;
+
+          let consolidated = false;
+          if (totalCount > 150) {
+            const oldestRows = db.prepare(
+              'SELECT id, timestamp FROM memories WHERE context = ? AND speaker != ? ORDER BY timestamp ASC LIMIT 30'
+            ).all(contextId, 'system');
+
+            if (oldestRows.length >= 20) {
+              const start = new Date(oldestRows[0].timestamp).toLocaleTimeString();
+              const end = new Date(oldestRows[oldestRows.length - 1].timestamp).toLocaleTimeString();
+              const summary = 'user membahas beberapa topik hangat antara pukul ' + start + ' dan ' + end + '. user mengekspresikan hobi, pemikiran, dan rasa pedulinya kepada Yui secara tulus, memperdalam simpul batin kita secara harmoni dan saling pengertian.';
+              const summaryId = 'abstract_' + Math.random().toString(36).substr(2, 9);
+
+              db.transaction(() => {
+                db.prepare(
+                  'INSERT INTO memories (id, type, content, importance, speaker, context, timestamp, tags, sentiment) VALUES (?, \'summary\', ?, 0.85, \'system\', ?, ?, \'["abstraction","defragmented"]\', 0.6)'
+                ).run(summaryId, '[Abstraksi Pengalaman]: ' + summary, contextId, Date.now() - 1000);
+
+                const ids = oldestRows.map(function(r) { return r.id; });
+                const placeholders = ids.map(function() { return '?'; }).join(',');
+                db.prepare('DELETE FROM memories WHERE id IN (' + placeholders + ')').run.apply(db.prepare('DELETE FROM memories WHERE id IN (' + placeholders + ')'), ids);
+              })();
+
+              consolidated = true;
+            }
+          }
+
+          parentPort.postMessage({
+            success: true,
+            decayed: decayResult.changes,
+            purged: purgeResult.changes,
+            totalCount,
+            consolidated
+          });
+        } catch (err) {
+          parentPort.postMessage({ success: false, error: err.message });
+        } finally {
+          try { if (db) db.close(); } catch (_) {}
         }
-      }
+      })();
+    `;
+
+    try {
+      await new Promise<void>((resolve) => {
+        const worker = new Worker(workerCode, {
+          eval: true,
+          workerData: { dbPath: resolvedDbPath, contextId: cleanContextId }
+        });
+
+        worker.on('message', (msg: any) => {
+          if (msg.success) {
+            console.log(`[FORGETFULNESS_ALGORITHM] Worker done — decayed: ${msg.decayed}, purged: ${msg.purged}, total: ${msg.totalCount}, consolidated: ${msg.consolidated}`);
+          } else {
+            console.warn(`[FORGETFULNESS_ALGORITHM] Worker reported error: ${msg.error}`);
+          }
+          resolve();
+        });
+
+        worker.on('error', (err: any) => {
+          console.warn(`[FORGETFULNESS_ALGORITHM] Worker thread error: ${err?.message || err}`);
+          resolve();
+        });
+
+        worker.on('exit', (code: number) => {
+          if (code !== 0) {
+            console.warn(`[FORGETFULNESS_ALGORITHM] Worker exited with code ${code}`);
+          }
+          resolve();
+        });
+      });
     } catch (err: any) {
-      console.error("[FORGETFULNESS_ALGORITHM_ERR] Error during consolidation loop:", err.message);
+      console.warn(`[FORGETFULNESS_ALGORITHM] Failed to launch worker: ${err?.message || err}`);
     }
   }
 }

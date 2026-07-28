@@ -1,6 +1,16 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.118] - 2026-07-29
+### Fix: Fix speak delivery and preserve rich responses
+
+
+## [4.117] - 2026-07-29
+### Fix: Fix speak delivery and preserve rich responses
+- speak tool now sends directly to Telegram/Discord immediately when executed
+- protected processedResponse from being overwritten by offline fallback messages
+
+
 ## [4.117] - 2026-07-28
 ### feat: feat: add Docker support and major refactoring for v4.117
 

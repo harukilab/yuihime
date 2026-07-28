@@ -1,7 +1,8 @@
 import express from "express";
 import path from "path";
-import fs, { createReadStream } from "fs/promises";
-import { existsSync, readdirSync, statSync, realpathSync, mkdirSync } from "fs";
+import fs from "fs/promises";
+import { existsSync, readdirSync, statSync, realpathSync, mkdirSync, createReadStream } from "fs";
+import os from "os";
 import { exec } from "child_process";
 import { promisify } from "util";
 import { AIService } from "../../kernel/ai.js";

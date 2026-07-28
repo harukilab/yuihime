@@ -21,17 +21,17 @@ export let dbPath = process.env.YUIHIME_DB_PATH ? resolveHomePath(process.env.YU
 let cachedDb: any = null;
 
 export function closeDatabase() {
-   if (cachedDb) {
-     try {
-       cachedDb.pragma('busy_timeout = 0');
-       cachedDb.close();
-       console.log('[DATABASE] SQLite connection closed successfully.');
-     } catch (err) {
-       console.error('[DATABASE] Error closing SQLite connection:', err);
-     }
-     cachedDb = null;
-   }
- }
+  if (cachedDb) {
+    try {
+      cachedDb.pragma('busy_timeout = 5000');
+      cachedDb.close();
+      console.log('[DATABASE] SQLite connection closed successfully.');
+    } catch (err) {
+      console.error('[DATABASE] Error closing SQLite connection:', err);
+    }
+    cachedDb = null;
+  }
+}
 
 export function initializeDatabase() {
   if (cachedDb) return cachedDb;
@@ -40,12 +40,17 @@ export function initializeDatabase() {
     mkdirSync(dbDir, { recursive: true });
   }
   try {
-    const db = new Database(dbPath, { timeout: 10000 });
+    const db = new Database(dbPath, { timeout: 30000 });
     db.pragma('journal_mode = WAL');
-    db.pragma('busy_timeout = 5000');
+    db.pragma('busy_timeout = 30000');
+    try {
+      db.pragma('wal_checkpoint(TRUNCATE)');
+    } catch (checkpointErr: any) {
+      console.warn('[DATABASE] Initial WAL checkpoint failed:', checkpointErr.message);
+    }
     cachedDb = db;
     return db;
-   } catch (error) {
+  } catch (error) {
     console.error("CRITICAL: Database initialization failed. Attempting recovery...", error);
     
     try {
@@ -55,9 +60,9 @@ export function initializeDatabase() {
         console.log(`Successfully backed up corrupted database to ${backupPath}`);
       }
       
-      const db = new Database(dbPath, { timeout: 10000 });
+      const db = new Database(dbPath, { timeout: 30000 });
       db.pragma('journal_mode = WAL');
-      db.pragma('busy_timeout = 5000');
+      db.pragma('busy_timeout = 30000');
       cachedDb = db;
       return db;
     } catch (recoveryError) {
@@ -67,7 +72,27 @@ export function initializeDatabase() {
   }
 }
 
-export function setupSchema(db: any) {
+export async function retryDbOperation<T>(operation: () => T, label = 'DB operation', maxRetries = 5): Promise<T> {
+  let attempt = 0;
+  while (true) {
+    try {
+      return operation();
+    } catch (err: any) {
+      const msg = err?.message || '';
+      if (msg.includes('database is locked') || msg.includes('SQLITE_BUSY')) {
+        attempt++;
+        if (attempt > maxRetries) throw err;
+        const delay = Math.min(1000 * Math.pow(2, attempt - 1), 8000);
+        console.warn(`[DB_RETRY] ${label} locked (attempt ${attempt}/${maxRetries}), retrying in ${delay}ms...`);
+        await new Promise(r => setTimeout(r, delay));
+        continue;
+      }
+      throw err;
+    }
+  }
+}
+
+export async function setupSchema(db: any) {
   const tables = {
     memories: `
       CREATE TABLE IF NOT EXISTS memories (
@@ -289,6 +314,12 @@ export function setupSchema(db: any) {
     idx_memories_speaker: "CREATE INDEX IF NOT EXISTS idx_memories_speaker ON memories(speaker);",
     idx_memories_type: "CREATE INDEX IF NOT EXISTS idx_memories_type ON memories(type);",
     idx_memories_context: "CREATE INDEX IF NOT EXISTS idx_memories_context ON memories(context);",
+    // Composite indexes for forgetfulness protocol — eliminates full-table scans on decay/purge queries
+    idx_memories_context_ts: "CREATE INDEX IF NOT EXISTS idx_memories_context_ts ON memories(context, timestamp);",
+    idx_memories_context_imp_ts: "CREATE INDEX IF NOT EXISTS idx_memories_context_imp_ts ON memories(context, importance, timestamp);",
+    idx_memories_context_speaker_ts: "CREATE INDEX IF NOT EXISTS idx_memories_context_speaker_ts ON memories(context, speaker, timestamp);",
+    // Pending messages index for fast status+attempts filter
+    idx_pending_status_attempts: "CREATE INDEX IF NOT EXISTS idx_pending_status_attempts ON pending_messages(status, attempts, timestamp);",
     idx_identities_perceived: "CREATE INDEX IF NOT EXISTS idx_identities_perceived ON identities(perceivedName);",
     idx_history_timestamp: "CREATE INDEX IF NOT EXISTS idx_history_timestamp ON history(timestamp);",
     idx_cron_tasks_next: "CREATE INDEX IF NOT EXISTS idx_cron_tasks_next ON cron_tasks(nextRun);",
@@ -481,6 +512,12 @@ export function setupSchema(db: any) {
     } catch (tableInfoError: any) {
       console.error(`ERROR: Migration checks failed for table "${table}":`, tableInfoError.message);
     }
+  }
+  
+  try {
+    db.pragma('wal_checkpoint(TRUNCATE)');
+  } catch (checkpointErr: any) {
+    console.warn('[DATABASE] WAL checkpoint failed:', checkpointErr.message);
   }
 }
 

@@ -12,6 +12,15 @@ import { getDynamicSandboxRoot, broadcastToWS } from "./apiRouter.js";
 import { extractChannelFileAttachments } from "./channelFileAttachment.js";
 import { describeImageFromBuffer } from "../../modules/YuiVisionModule.js";
 
+async function withDeliveryTimeout<T>(fn: () => Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  return Promise.race([
+    fn(),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`[TELEGRAM_DELIVERY_TIMEOUT] ${label} timed out after ${timeoutMs}ms`)), timeoutMs)
+    )
+  ]);
+}
+
 let db: any = null;
 
 // --- Telegram Bot Daemon ---
@@ -498,6 +507,8 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
         : `tg_${ctx.chat.id}`;
       const chatType = `Telegram (${isGroup ? 'Group: ' + chatTitle : 'Private'})`;
 
+      console.log(`[TELEGRAM] Pesan masuk dari ${senderName} (${contextId}): ${rawInput.substring(0, 200)}`);
+
       // FILTER UNTUK GROUP CHAT: Hanya merespons jika di-mention (@username), membalas pesan bot, atau merupakan chat privat.
       if (isGroup) {
         const botInfo = ctx.botInfo;
@@ -525,36 +536,54 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
         }
       });
 
-      MultiChannelQueue.getInstance().addMessage(
-        userMessage,
-        senderName,
-        contextId,
-        chatType,
-        async (response) => {
-          if (response) {
-            const sentAsFile = await trySendFileAttachment(ctx, response);
-            if (!sentAsFile) {
-              await ctx.reply(response).catch(() => {});
-            }
+       MultiChannelQueue.getInstance().addMessage(
+         userMessage,
+         senderName,
+         contextId,
+         chatType,
+         async (response) => {
+           if (response && String(response).trim()) {
+             try {
+               const sentAsFile = await withDeliveryTimeout(() => trySendFileAttachment(ctx, response), 10000, 'file-attachment');
+               if (!sentAsFile) {
+                 await withDeliveryTimeout(() => ctx.reply(response), 15000, 'telegram-reply');
+               }
+               console.log(`[TELEGRAM_DELIVERY] Reply sent to ${senderName} (${contextId}), len=${String(response).length}`);
+             } catch (sendErr: any) {
+               console.error(`[TELEGRAM_DELIVERY_ERR] Failed to send reply to ${senderName}:`, sendErr?.message || sendErr);
+               try {
+                 await withDeliveryTimeout(() => ctx.reply(String(response).slice(0, 3500)), 10000, 'telegram-reply-retry');
+               } catch (retryErr: any) {
+                 console.error(`[TELEGRAM_DELIVERY_ERR] Retry also failed:`, retryErr?.message || retryErr);
+               }
+             }
 
             // Broadcast Yui's response to the connected WebClients
-            broadcastToWS({
-              type: "remote_response_sent",
-              data: {
-                reply: response,
-                channel: chatType,
-                contextId
-              }
-            });
+            try {
+              broadcastToWS({
+                type: "remote_response_sent",
+                data: {
+                  reply: response,
+                  channel: chatType,
+                  contextId
+                }
+              });
+            } catch (_) {}
+          } else {
+            console.warn(`[TELEGRAM_DELIVERY] Empty response for ${senderName} (${contextId}) — nothing to send.`);
           }
           // Update last seen (use UPSERT to preserve pairing context mapping from being overwritten to NULL on incoming messages)
-          db.prepare(`
-            INSERT INTO telegram_users (tg_id, username, last_seen)
-            VALUES (?, ?, ?)
-            ON CONFLICT(tg_id) DO UPDATE SET
-              username = excluded.username,
-              last_seen = excluded.last_seen
-          `).run(tgUserId, ctx.from.username || senderName, Date.now());
+          try {
+            db.prepare(`
+              INSERT INTO telegram_users (tg_id, username, last_seen)
+              VALUES (?, ?, ?)
+              ON CONFLICT(tg_id) DO UPDATE SET
+                username = excluded.username,
+                last_seen = excluded.last_seen
+            `).run(tgUserId, ctx.from.username || senderName, Date.now());
+          } catch (dbErr: any) {
+            console.warn(`[TELEGRAM] Failed to update last_seen for ${tgUserId}:`, dbErr?.message || dbErr);
+          }
         },
         async (err) => {
           console.error("[TELEGRAM_QUEUE] Failed to process message:", err);
@@ -596,12 +625,12 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
         const isFirstImage = i === 0 && att.isImage;
         if (att.isImage) {
           if (isFirstImage && remainingText) {
-            await ctx.replyWithPhoto({ source: att.safePath }, { caption: remainingText });
+            await withDeliveryTimeout(() => ctx.replyWithPhoto({ source: att.safePath }, { caption: remainingText }), 10000, 'telegram-photo');
           } else {
-            await ctx.replyWithPhoto({ source: att.safePath });
+            await withDeliveryTimeout(() => ctx.replyWithPhoto({ source: att.safePath }), 10000, 'telegram-photo');
           }
         } else {
-          await ctx.replyWithDocument({ source: att.safePath });
+          await withDeliveryTimeout(() => ctx.replyWithDocument({ source: att.safePath }), 10000, 'telegram-document');
         }
       }
 
@@ -660,6 +689,7 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
         err.code === 'ECONNRESET' ||
         err.code === 'ENETUNREACH' ||
         err.code === 'EHOSTUNREACH' ||
+        err.code === 'ECONNABORTED' ||
         (err.message && (
           err.message.toLowerCase().includes('timeout') ||
           err.message.toLowerCase().includes('eai_again') ||
@@ -669,7 +699,7 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
         const maxNetworkRetries = settings['telegram_bridge']?.maxRetries || 5;
         if (retryCount < maxNetworkRetries) {
           const delay = 5000 + (retryCount * 3000) + Math.random() * 2000;
-          console.warn(`[TELEGRAM] Network timeout/connection error on launch (${err.code || 'EAI_AGAIN'}). Retrying in ${Math.round(delay/1000)}s (Attempt ${retryCount + 1}/${maxNetworkRetries})...`);
+          console.warn(`[TELEGRAM] Network timeout/connection error on launch (${err.code || 'UNKNOWN'}). Retrying in ${Math.round(delay/1000)}s (Attempt ${retryCount + 1}/${maxNetworkRetries})...`);
           setTimeout(() => launchBot(retryCount + 1), delay);
         } else {
           console.error(`[TELEGRAM] Failed to launch Bot Daemon after ${maxNetworkRetries} retries for network/DNS errors. Error: ${err.message || err.code}. Bot will remain disabled until system restart or config change.`);

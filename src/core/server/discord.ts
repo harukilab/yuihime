@@ -99,8 +99,10 @@ export async function initializeDiscord(activeDb?: any, force = false) {
     const currentSettings = Kernel.getInstance().getSettings().getAll();
     const userMessage = message.content;
     const senderName = message.author.displayName || message.author.username;
-    
-    // Tentukan apakah pesan ini ditujukan untuk Yui
+
+    console.log(`[DISCORD] Pesan masuk dari ${senderName}: ${userMessage.substring(0, 200)}`);
+
+      // Tentukan apakah pesan ini ditujukan untuk Yui
     const isDM = message.channel.type === ChannelType.DM;
     const isMentioned = client.user ? message.mentions.has(client.user) : false;
     

@@ -1,9 +1,12 @@
+import { createRequire } from 'module';
 import { SystemRegistry } from '@shared/core/registry';
 import { SettingsManager } from './settings';
 import { logger } from './logger';
 import * as fs from 'fs';
 import * as path from 'path';
 import os from 'os';
+
+const localRequire = createRequire(path.join(process.cwd(), 'package.json'));
 
 export interface PluginRegisterHook {
   registerProvider: (provider: any) => void;
@@ -28,12 +31,7 @@ export class PluginManager {
    */
   public async loadPlugins(): Promise<void> {
     logger.log('INFO', 'PLUGIN_MANAGER', 'Scanning addons directory for plugins...');
-    
-    let localRequire: any = typeof require !== 'undefined' ? require : null;
-    if (!localRequire) {
-      localRequire = require;
-    }
-    
+
     const addonsDirs = [
       path.join(process.cwd(), 'addons'),
       path.join(os.homedir(), ".yuihime", "addons")
@@ -70,18 +68,13 @@ export class PluginManager {
               this.unloadPlugin(subdir.name);
 
               logger.log('INFO', 'PLUGIN_MANAGER', `Loading plugin: ${subdir.name} from ${pluginScriptPath}`);
-              
-              if (!localRequire) {
-                logger.log('ERROR', 'PLUGIN_MANAGER', `Cannot load plugin ${subdir.name}: require/createRequire is not defined in this environment.`);
-                continue;
-              }
 
               // Clear require cache for dynamic reload
               const resolvedPath = localRequire.resolve(pluginScriptPath);
               if (localRequire.cache && localRequire.cache[resolvedPath]) {
                 delete localRequire.cache[resolvedPath];
               }
-              
+
               const pluginModule = localRequire(pluginScriptPath);
               if (pluginModule && typeof pluginModule.initialize === 'function') {
                 const hooks: PluginRegisterHook = {

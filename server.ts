@@ -139,6 +139,10 @@ if (argsOverride.configPath) process.env.YUIHIME_CONFIG = argsOverride.configPat
 if (argsOverride.addonsPath) process.env.YUIHIME_ADDONS_PATH = argsOverride.addonsPath;
 if (argsOverride.agentPath) process.env.YUIHIME_AGENT_PATH = argsOverride.agentPath;
 if (argsOverride.port) process.env.PORT = argsOverride.port;
+process.on("warning", (warning: any) => {
+  if (warning.code === "DEP0169") return;
+  console.warn(warning.name, warning.message, warning.stack);
+});
 
 import { runOnboarding } from "./src/core/server/onboarding.js";
 
@@ -284,13 +288,13 @@ async function discoverAddons() {
   }
 }
 
-import { initializeDatabase, setupSchema, startAutoCleanupScheduler, dbPath } from "./src/core/database.js";
+import { initializeDatabase, setupSchema, startAutoCleanupScheduler, dbPath, retryDbOperation } from "./src/core/database.js";
 
 let db: any = null;
 
 async function bootstrap() {
   db = initializeDatabase();
-  setupSchema(db);
+  await retryDbOperation(() => setupSchema(db), 'setupSchema');
 
   try {
     db.prepare(`
@@ -328,21 +332,25 @@ async function bootstrap() {
   (globalThis as any).yuihime_CronModule = CronModule;
 
   try {
-    db.prepare(`
-      INSERT INTO agent_state (id, mood, emotion, relation, systemHealth, lastDreamCycle, lastRefreshed, activePersonaId, currentPlan)
-      VALUES (1, '{}', '{}', '{}', '{}', 0, 0, 'hiyori', null)
-      ON CONFLICT(id) DO NOTHING
-    `).run();
+    await retryDbOperation(() => {
+      db.prepare(`
+        INSERT INTO agent_state (id, mood, emotion, relation, systemHealth, lastDreamCycle, lastRefreshed, activePersonaId, currentPlan)
+        VALUES (1, '{}', '{}', '{}', '{}', 0, 0, 'hiyori', null)
+        ON CONFLICT(id) DO NOTHING
+      `).run();
+    }, 'seed agent_state');
   } catch (err: any) {
     console.warn("[SERVER] Warning: Failed to seed default agent_state on startup:", err.message);
   }
 
   try {
-    db.prepare(`
-      INSERT INTO cron_tasks (id, name, schedule, enabled, repeating, context_id, chat_type, sender_name)
-      VALUES ('memory-consolidation', 'Memory Consolidation', '0 * * * *', 1, 1, 'live_stream', 'Live Chat', 'System')
-      ON CONFLICT(id) DO NOTHING
-    `).run();
+    await retryDbOperation(() => {
+      db.prepare(`
+        INSERT INTO cron_tasks (id, name, schedule, enabled, repeating, context_id, chat_type, sender_name)
+        VALUES ('memory-consolidation', 'Memory Consolidation', '0 * * * *', 1, 1, 'live_stream', 'Live Chat', 'System')
+        ON CONFLICT(id) DO NOTHING
+      `).run();
+    }, 'seed cron_tasks');
   } catch (e: any) {
     console.warn("[SERVER] Failed to seed default memory consolidation task:", e.message);
   }
@@ -1018,7 +1026,10 @@ async function gracefulShutdown(sig: string) {
       process.exit(0);
     });
   }
-  setTimeout(() => process.exit(1), 5000);
+  setTimeout(() => {
+    console.log('[SYSTEM] Graceful shutdown timed out, forcefully exiting.');
+    process.exit(0);
+  }, 3000);
 }
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));

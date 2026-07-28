@@ -23,9 +23,10 @@ export const SendStatusUpdateTool: ToolModule = {
       required: ["message"]
     }
   } as any,
-  execute: async (args: any) => {
+  execute: async (args: any, context?: any) => {
     try {
       const hostPort = process.env.PORT || "3000";
+      const senderName = context?.userName || context?.state?.relation?.uid || "Unknown";
       const payload = {
         type: "state_update",
         data: {
@@ -33,7 +34,8 @@ export const SendStatusUpdateTool: ToolModule = {
           activeSubtitle: args.message,
           typedSubtitle: args.message,
           isSubtitleTyping: false,
-          animations: args.animation ? [args.animation] : ["TALK"]
+          animations: args.animation ? [args.animation] : ["TALK"],
+          senderName
         }
       };
 
@@ -53,7 +55,7 @@ export const SendStatusUpdateTool: ToolModule = {
         console.warn("[LiveStatus] Gagal mengirim status update ke stream events (bypassed):", fetchErr.message);
       }
 
-      return { status: "success", info: `Status update sent: ${args.message}` };
+      return { status: "success", info: `Status update sent: ${args.message}`, senderName };
     } catch (err: any) {
       console.error("[LiveStatus] Gagal mengeksekusi status update:", err.message);
       return { status: "error", message: err.message };
@@ -90,9 +92,10 @@ export const SendFinalReplyTool: ToolModule = {
       required: ["speech"]
     }
   } as any,
-  execute: async (args: any) => {
+  execute: async (args: any, context?: any) => {
     try {
       const hostPort = process.env.PORT || "3000";
+      const senderName = context?.userName || context?.state?.relation?.uid || "Unknown";
       const payload = {
         type: "state_update",
         data: {
@@ -100,7 +103,8 @@ export const SendFinalReplyTool: ToolModule = {
           activeSubtitle: args.speech,
           typedSubtitle: args.speech,
           isSubtitleTyping: false,
-          animations: args.animations || ["TALK", "SMILE"]
+          animations: args.animations || ["TALK", "SMILE"],
+          senderName
         }
       };
 
@@ -120,12 +124,43 @@ export const SendFinalReplyTool: ToolModule = {
         console.warn("[LiveStatus] Gagal mengirim final reply ke stream events (bypassed):", fetchErr.message);
       }
 
+      let sentDirectly = false;
+      const contextId = context?.contextId || "";
+      if (contextId.startsWith("tg_")) {
+        try {
+          const bot = (globalThis as any).activeTelegramBot;
+          if (bot && bot.telegram) {
+            const chatId = contextId.split("|")[0].replace("tg_", "");
+            await bot.telegram.sendMessage(chatId, args.speech);
+            sentDirectly = true;
+          }
+        } catch (tgErr: any) {
+          console.warn("[LiveStatus] Gagal mengirim speak ke Telegram:", tgErr.message);
+        }
+      } else if (contextId.startsWith("dc_")) {
+        try {
+          const client = (globalThis as any).activeDiscordClient;
+          if (client && client.channels) {
+            const channelId = contextId.split("|")[0].replace("dc_", "");
+            const channel = await client.channels.fetch(channelId);
+            if (channel && channel.isTextBased()) {
+              await channel.send(args.speech);
+              sentDirectly = true;
+            }
+          }
+        } catch (dcErr: any) {
+          console.warn("[LiveStatus] Gagal mengirim speak ke Discord:", dcErr.message);
+        }
+      }
+
       return { 
         status: "success", 
         isFinalReply: true, 
         speech: args.speech, 
         animations: args.animations || ["TALK", "SMILE"], 
-        mood_impact: args.mood_impact || {} 
+        mood_impact: args.mood_impact || {},
+        senderName,
+        sentDirectly
       };
     } catch (err: any) {
       console.error("[LiveStatus] Gagal mengeksekusi final reply:", err.message);
