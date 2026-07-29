@@ -8,6 +8,7 @@ import * as toml from "smol-toml";
 import { SettingsManager } from "@/core/kernel/settings";
 import { CronModule, extractCronPromptFromArgs, normalizeCronPromptForSave } from "../../kernel/cron.js";
 import { MultiChannelQueue } from "../../kernel/MultiChannelQueue.js";
+import { GlobalOutputDeduplicator } from "../../kernel/GlobalOutputDeduplicator.js";
 import { closeDatabase, initializeDatabase } from "../../database.js";
 import { broadcastToWS, getCronAction } from "../apiRouter.js";
 import { NeuralInterface } from "../../kernel/NeuralInterface.js";
@@ -738,13 +739,19 @@ export function registerSystemRoutes(app: express.Express, db: any) {
       
       const reply = await NeuralInterface.processNeuralInput(pending.input, pending.sender_name, pending.context_id, pending.chat_type);
       if (reply && reply.trim()) {
+        const dedup = GlobalOutputDeduplicator.getInstance();
         if (pending.context_id.startsWith("tg_")) {
           const chatId = pending.context_id.replace("tg_", "");
           try {
             const activeTelegramBot = (globalThis as any).activeTelegramBot;
             if (activeTelegramBot) {
               const delayedReply = `[BALASAN TERTUNDA] @${pending.sender_name}, ini balasan Yui untuk pesanmu sebelumnya: "${pending.input.substring(0, 25)}${pending.input.length > 25 ? '...' : ''}" \n\n${reply}`;
-              await activeTelegramBot.telegram.sendMessage(chatId, delayedReply);
+              if (dedup.isDuplicate(delayedReply, pending.context_id)) {
+                console.log(`[GLOBAL_DEDUP] Skipping duplicate delayed Telegram retry for ${pending.sender_name} (${pending.context_id}).`);
+              } else {
+                dedup.markSent(delayedReply, pending.context_id);
+                await activeTelegramBot.telegram.sendMessage(chatId, delayedReply);
+              }
             } else {
               console.warn("[API_MANUAL_RETRY] Bot Telegram offline, memori tersimpan di database.");
             }
@@ -752,10 +759,16 @@ export function registerSystemRoutes(app: express.Express, db: any) {
             console.error("[API_MANUAL_RETRY] Failed to send Telegram message:", tgErr);
           }
         } else {
-          eventBus.emit('OUTPUT_EMITTED', { 
-            response: `[BALASAN TERTUNDA] @${pending.sender_name}: ${reply}`, 
-            isInternal: true 
-          });
+          const delayedReply = `[BALASAN TERTUNDA] @${pending.sender_name}: ${reply}`;
+          if (dedup.isDuplicate(delayedReply, pending.context_id)) {
+            console.log(`[GLOBAL_DEDUP] Skipping duplicate delayed local retry for ${pending.sender_name} (${pending.context_id}).`);
+          } else {
+            dedup.markSent(delayedReply, pending.context_id);
+            eventBus.emit('OUTPUT_EMITTED', { 
+              response: delayedReply, 
+              isInternal: true 
+            });
+          }
         }
         db.prepare("DELETE FROM pending_messages WHERE id = ?").run(id);
         res.json({ success: true, message: "Pesan sukses diproses batiniah Yui!" });

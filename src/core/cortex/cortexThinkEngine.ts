@@ -35,6 +35,7 @@ import { extractBestJsonObject } from './jsonExtract';
 import { makeToolCall } from './cortexThinkEngineUtils';
 import { DEFAULT_NEURAL_CORES } from '@shared/constants';
 import { broadcastToWS } from '../server/apiRouter.js';
+import { GlobalOutputDeduplicator } from '../kernel/GlobalOutputDeduplicator.js';
 import { DynamicToolSynthesizer } from './dynamicToolSynthesizer.js';
 import { LlmIoAuditor } from '../server/llmAuditor.js';
 import { BackgroundToolDispatcher } from '../kernel/BackgroundToolDispatcher.js';
@@ -1089,19 +1090,23 @@ if (extractedFromSpeech) {
                 indonesianStatus = `Yui sedang memproses kemampuan: [${toolNames}]... 🌸`;
               }
 
-              eventBus.emit('OUTPUT_EMITTED', { response: indonesianStatus, isInternal: false });
+              const dedup = GlobalOutputDeduplicator.getInstance();
+              if (!dedup.isDuplicate(indonesianStatus, contextId || 'web_default')) {
+                dedup.markSent(indonesianStatus, contextId || 'web_default');
+                eventBus.emit('OUTPUT_EMITTED', { response: indonesianStatus, isInternal: false });
 
-              if (typeof broadcastToWS === 'function') {
-                broadcastToWS({
-                  type: "state_update",
-                  data: {
-                    state: { status: "thinking" },
-                    activeSubtitle: indonesianStatus,
-                    typedSubtitle: indonesianStatus,
-                    isSubtitleTyping: false,
-                    animations: ["THINK"]
-                  }
-                });
+                if (typeof broadcastToWS === 'function') {
+                  broadcastToWS({
+                    type: "state_update",
+                    data: {
+                      state: { status: "thinking" },
+                      activeSubtitle: indonesianStatus,
+                      typedSubtitle: indonesianStatus,
+                      isSubtitleTyping: false,
+                      animations: ["THINK"]
+                    }
+                  });
+                }
               }
             } catch (_) {}
 
@@ -1178,16 +1183,20 @@ if (extractedFromSpeech) {
         }
         
         if (typeof broadcastToWS === 'function') {
-          broadcastToWS({
-            type: "state_update",
-            data: {
-              state: { status: "thinking" },
-              activeSubtitle: indonesianStatus,
-              typedSubtitle: indonesianStatus,
-              isSubtitleTyping: false,
-              animations: ["THINK"]
-            }
-          });
+          const dedup = GlobalOutputDeduplicator.getInstance();
+          if (!dedup.isDuplicate(indonesianStatus, contextId || 'web_default')) {
+            dedup.markSent(indonesianStatus, contextId || 'web_default');
+            broadcastToWS({
+              type: "state_update",
+              data: {
+                state: { status: "thinking" },
+                activeSubtitle: indonesianStatus,
+                typedSubtitle: indonesianStatus,
+                isSubtitleTyping: false,
+                animations: ["THINK"]
+              }
+            });
+          }
         }
       } catch (_) {}
 
@@ -1331,7 +1340,11 @@ if (typeof parsedArgs === 'string') {
         
         const logMsg = `[TOOL] ${res.tool} ${res.success ? 'success' : 'failed'}${pathDetail}.`;
         logs.push(logMsg);
-        eventBus.emit('OUTPUT_EMITTED', { response: logMsg, isInternal: true });
+        const dedup = GlobalOutputDeduplicator.getInstance();
+        if (!dedup.isDuplicate(logMsg, contextId || 'web_default')) {
+          dedup.markSent(logMsg, contextId || 'web_default');
+          eventBus.emit('OUTPUT_EMITTED', { response: logMsg, isInternal: true });
+        }
         return res;
       });
 
@@ -1341,7 +1354,11 @@ if (typeof parsedArgs === 'string') {
           if (res.success && (tc.tool === 'speak' || tc.name === 'speak')) {
             const speech = res.observation?.speech;
             if (speech) {
-              eventBus.emit('OUTPUT_EMITTED', { response: speech });
+              const dedup = GlobalOutputDeduplicator.getInstance();
+              if (!dedup.isDuplicate(speech, contextId || 'web_default')) {
+                dedup.markSent(speech, contextId || 'web_default');
+                eventBus.emit('OUTPUT_EMITTED', { response: speech });
+              }
             }
           }
         }).catch(() => {});
@@ -1821,7 +1838,11 @@ Explain what you did or found in a completely natural, non-technical, cute way. 
     finalAnswer = "Aduh... maaf ya user, sirkuit batin Yui sempat agak pusing barusan saat memproses permintaan user... 🥺 Tapi Yui tetap di sini kok! Ada yang bisa Yui bantu lagi? 💕";
   }
 
-  eventBus.emit('OUTPUT_EMITTED', { response: finalAnswer });
+  const dedup = GlobalOutputDeduplicator.getInstance();
+  if (!dedup.isDuplicate(finalAnswer, contextId || 'web_default')) {
+    dedup.markSent(finalAnswer, contextId || 'web_default');
+    eventBus.emit('OUTPUT_EMITTED', { response: finalAnswer });
+  }
 
    const immediateResult = {
      response: finalAnswer,
@@ -1890,7 +1911,11 @@ Explain what you did or found in a completely natural, non-technical, cute way. 
 
       const rawDialogueSource = logicContext.processedResponse || finalAnswer;
       const finalCleanRes = APIService.cleanAIOutput(StandardizedProcessor.sanitizeOutput(rawDialogueSource, isProactiveRun));
-      eventBus.emit('OUTPUT_EMITTED', { response: finalCleanRes });
+      const dedup = GlobalOutputDeduplicator.getInstance();
+      if (!dedup.isDuplicate(finalCleanRes, contextId || 'web_default')) {
+        dedup.markSent(finalCleanRes, contextId || 'web_default');
+        eventBus.emit('OUTPUT_EMITTED', { response: finalCleanRes });
+      }
 
       immediateResult.newMemories = mergedMemories;
       immediateResult.moodDelta = logicContext.moodDelta || {};

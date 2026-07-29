@@ -7,6 +7,7 @@ import { SettingsManager } from "./settings.js";
 import { broadcastToWS } from "../server/apiRouter.js";
 import { activeDiscordClient } from "../server/discord.js";
 import { activeTelegramBot } from "../server/telegram.js";
+import { GlobalOutputDeduplicator } from "./GlobalOutputDeduplicator.js";
 import { Kernel } from "../kernel/core.js";
 import { stateMachine } from "./state-machine.js";
 
@@ -67,6 +68,10 @@ export class MultiChannelQueue {
   private lastProactiveTime = Date.now();
   private isProactiveRunning = false;
   private lastHighFreqNotifyTime = 0;
+
+  // Output dedup: track recently delivered message hashes to prevent duplicate sends
+  private recentOutputHashes: { hash: string; timestamp: number }[] = [];
+  private static readonly OUTPUT_DEDUP_WINDOW_MS = 10000;
 
   // Hold mechanism: pause incoming/outgoing message processing
   private holdMode = false;
@@ -163,9 +168,9 @@ export class MultiChannelQueue {
     const freq = this.getChatFrequency();
     console.log(`[QUEUE] Message received from ${senderName} (${chatType}). Chat frequency: ${freq.toFixed(1)} msgs/15s.`);
 
-    // 0. Deduplication guard: reject exact duplicate messages within 2s window (less aggressive, especially for private chats)
+    // 0. Deduplication guard: reject exact duplicate messages within window (less aggressive for private chats)
     const isPrivateChat = chatType === 'private';
-    const dedupWindow = isPrivateChat ? 1500 : 3000;
+    const dedupWindow = isPrivateChat ? 3000 : 5000;
     const dedupHash = `${input}|${senderName}|${contextId}`;
     const now = Date.now();
     this.recentMsgHashes = this.recentMsgHashes.filter(h => now - h.timestamp < dedupWindow);
@@ -318,76 +323,100 @@ export class MultiChannelQueue {
       console.log(`[QUEUE_BG_WORKER_THINK] [ID: ${pending.id}] Yui is pondering response for ${pending.sender_name}...`);
       const reply = await NeuralInterface.processNeuralInput(pending.input, pending.sender_name, pending.context_id, pending.chat_type);
 
-      if (reply && reply.trim()) {
-        console.log(`[QUEUE_BG_WORKER_SUCCESS] [ID: ${pending.id}] Thinking complete! Delivering reply to target platform...`);
+       if (reply && reply.trim()) {
+         // Output dedup: skip if the same message was delivered within the dedup window
+         const now = Date.now();
+         this.recentOutputHashes = this.recentOutputHashes.filter(h => now - h.timestamp < MultiChannelQueue.OUTPUT_DEDUP_WINDOW_MS);
+         const isDuplicateOutput = this.recentOutputHashes.some(h => h.hash === reply);
+         if (isDuplicateOutput) {
+           console.log(`[QUEUE_DEDUP_OUTPUT] Duplicate background output for ${pending.sender_name}, skipping delivery.`);
+         } else {
+           this.recentOutputHashes.push({ hash: reply, timestamp: now });
+           console.log(`[QUEUE_BG_WORKER_SUCCESS] [ID: ${pending.id}] Thinking complete! Delivering reply to target platform...`);
 
-        // 3. Distribusikan balasan ke platform masing-masing
-        if (pending.context_id.startsWith("tg_")) {
-          const chatId = pending.context_id.split("|")[0].replace("tg_", "");
-          try {
-            const activeTelegramBot = (globalThis as any).activeTelegramBot;
-            if (activeTelegramBot) {
-               const delayedReply = reply;
-               await Promise.race([
-                 activeTelegramBot.telegram.sendMessage(chatId, delayedReply),
-                 new Promise((_, reject) => setTimeout(() => reject(new Error('[TELEGRAM_BG_SEND_TIMEOUT] sendMessage timed out')), 15000))
-               ]);
-               console.log(`[QUEUE_BG_WORKER_SEND] [ID: ${pending.id}] Successfully sent reply to Telegram Chat ID: ${chatId}`);
-
-              // Broadcast the delayed telegram response to connected web UIs
-               try {
-                 broadcastToWS({
-                  type: "remote_response_sent",
-                  data: {
-                    reply: delayedReply,
-                    channel: pending.chat_type,
-                    contextId: pending.context_id
+            // 3. Distribusikan balasan ke platform masing-masing
+            const dedup = GlobalOutputDeduplicator.getInstance();
+            if (pending.context_id.startsWith("tg_")) {
+              const chatId = pending.context_id.split("|")[0].replace("tg_", "");
+              try {
+                if (dedup.isDuplicate(reply, pending.context_id)) {
+                  console.log(`[GLOBAL_DEDUP] Skipping duplicate Telegram reply for ${pending.sender_name} (${pending.context_id}).`);
+                } else {
+                  dedup.markSent(reply, pending.context_id);
+                  const activeTelegramBot = (globalThis as any).activeTelegramBot;
+                  if (activeTelegramBot) {
+                     const delayedReply = reply;
+                      await Promise.race([
+                        activeTelegramBot.telegram.sendMessage(chatId, delayedReply),
+                        new Promise((_, reject) => setTimeout(() => reject(new Error('[TELEGRAM_BG_SEND_TIMEOUT] sendMessage timed out')), 15000))
+                      ]);
+                     console.log(`[QUEUE_BG_WORKER_SEND] [ID: ${pending.id}] Successfully sent reply to Telegram Chat ID: ${chatId}`);
+                  } else {
+                    console.warn(`[QUEUE_BG_WORKER_WARN] [ID: ${pending.id}] Telegram Bot offline when reply ready. Cognitive memory remains saved in database.`);
                   }
-                });
-              } catch (e) {}
-            } else {
-              console.warn(`[QUEUE_BG_WORKER_WARN] [ID: ${pending.id}] Telegram Bot offline when reply ready. Cognitive memory remains saved in database.`);
-            }
-          } catch (tgErr: any) {
-            console.error(`[QUEUE_BG_WORKER_ERR] [ID: ${pending.id}] Failed to send Telegram response:`, tgErr.message || tgErr);
-          }
-        } else if (pending.context_id.startsWith("dc_")) {
-          const channelId = pending.context_id.replace("dc_", "");
-           try {
-             if (activeDiscordClient) {
-               const channel = await activeDiscordClient.channels.fetch(channelId);
-               if (channel && channel.isTextBased()) {
-                 const delayedReply = reply;
-                 await (channel as any).send(delayedReply);
-                 console.log(`[QUEUE_BG_WORKER_SEND] [ID: ${pending.id}] Successfully sent reply to Discord Channel ID: ${channelId}`);
+                }
+
+                 // Broadcast the delayed telegram response to connected web UIs
+                  try {
+                    broadcastToWS({
+                     type: "remote_response_sent",
+                     data: {
+                       reply: reply,
+                       channel: pending.chat_type,
+                       contextId: pending.context_id
+                     }
+                   });
+                 } catch (e) {}
+              } catch (tgErr: any) {
+                console.error(`[QUEUE_BG_WORKER_ERR] [ID: ${pending.id}] Failed to send Telegram response:`, tgErr.message || tgErr);
+              }
+            } else if (pending.context_id.startsWith("dc_")) {
+             const channelId = pending.context_id.replace("dc_", "");
+              try {
+                if (dedup.isDuplicate(reply, pending.context_id)) {
+                  console.log(`[GLOBAL_DEDUP] Skipping duplicate Discord reply for ${pending.sender_name} (${pending.context_id}).`);
+                } else {
+                  dedup.markSent(reply, pending.context_id);
+                  if (activeDiscordClient) {
+                    const channel = await activeDiscordClient.channels.fetch(channelId);
+                    if (channel && channel.isTextBased()) {
+                      const delayedReply = reply;
+                      await (channel as any).send(delayedReply);
+                      console.log(`[QUEUE_BG_WORKER_SEND] [ID: ${pending.id}] Successfully sent reply to Discord Channel ID: ${channelId}`);
+                    }
+                  } else {
+                    console.warn(`[QUEUE_BG_WORKER_WARN] [ID: ${pending.id}] Discord Bot offline when reply ready. Cognitive memory remains saved in database.`);
+                  }
+                }
 
                 // Broadcast the delayed discord response to connected web UIs
-                 try {
-                   broadcastToWS({
-                    type: "remote_response_sent",
-                    data: {
-                      reply: delayedReply,
-                      channel: pending.chat_type,
-                      contextId: pending.context_id
-                    }
-                  });
-                } catch (e) {}
-              }
-            } else {
-              console.warn(`[QUEUE_BG_WORKER_WARN] [ID: ${pending.id}] Discord Bot offline when reply ready. Cognitive memory remains saved in database.`);
-            }
-          } catch (dcErr: any) {
-            console.error(`[QUEUE_BG_WORKER_ERR] [ID: ${pending.id}] Failed to send Discord response:`, dcErr.message || dcErr);
-          }
-        } else {
-          // Saluran Web / Local / OBS: pancarkan ke Event Bus
-          eventBus.emit('OUTPUT_EMITTED', { 
-            response: reply, 
-            isInternal: true 
-          });
-          console.log(`[QUEUE_BG_WORKER_SEND] [ID: ${pending.id}] Successfully emitted local response signal via Event Bus.`);
-        }
-      } else {
+                try {
+                  broadcastToWS({
+                   type: "remote_response_sent",
+                   data: {
+                     reply: reply,
+                     channel: pending.chat_type,
+                     contextId: pending.context_id
+                   }
+                 });
+               } catch (e) {}
+             } catch (dcErr: any) {
+               console.error(`[QUEUE_BG_WORKER_ERR] [ID: ${pending.id}] Failed to send Discord response:`, dcErr.message || dcErr);
+             }
+           } else {
+             if (dedup.isDuplicate(reply, pending.context_id)) {
+               console.log(`[GLOBAL_DEDUP] Skipping duplicate local output for ${pending.sender_name} (${pending.context_id}).`);
+             } else {
+               dedup.markSent(reply, pending.context_id);
+               eventBus.emit('OUTPUT_EMITTED', {
+                 response: reply,
+                 isInternal: true
+               });
+               console.log(`[QUEUE_BG_WORKER_SEND] [ID: ${pending.id}] Successfully emitted local response signal via Event Bus.`);
+             }
+           }
+         }
+       } else {
         throw new Error("Tanggapan dari saraf kognitif kosong atau gagal dirumuskan");
       }
     } catch (err: any) {
@@ -453,18 +482,36 @@ export class MultiChannelQueue {
       // Await delivery so Telegram/Discord send completes before the next queue item,
       // and so floating promise rejections from async onReply are not lost.
       if (reply && reply.trim()) {
-        console.log(`[QUEUE_EXEC] Cognitive reply ready for ${item.senderName}. Dispatching to channel...`);
-      } else {
-        console.warn(`[QUEUE_EXEC] Empty cognitive reply for ${item.senderName} (${item.chatType}).`);
-      }
-      if (this.holdOutgoing) {
-        console.log(`[QUEUE_HOLD] Holding outgoing reply to ${item.senderName}.`);
-      } else {
-        await Promise.resolve(item.onReply(reply ?? "")).catch((deliveryErr: any) => {
-          console.error(`[QUEUE_DELIVERY_ERR] Failed to deliver reply to ${item.senderName}:`, deliveryErr?.message || deliveryErr);
-          if (item.onError) item.onError(deliveryErr);
-        });
-      }
+         console.log(`[QUEUE_EXEC] Cognitive reply ready for ${item.senderName}. Dispatching to channel...`);
+       } else {
+         console.warn(`[QUEUE_EXEC] Empty cognitive reply for ${item.senderName} (${item.chatType}).`);
+       }
+
+       // Output dedup: skip if the same message was delivered within the dedup window
+       const outputHash = reply ?? "";
+       const now = Date.now();
+       this.recentOutputHashes = this.recentOutputHashes.filter(h => now - h.timestamp < MultiChannelQueue.OUTPUT_DEDUP_WINDOW_MS);
+       const isDuplicateOutput = this.recentOutputHashes.some(h => h.hash === outputHash);
+       if (isDuplicateOutput) {
+         console.log(`[QUEUE_DEDUP_OUTPUT] Duplicate output detected for ${item.senderName}, skipping delivery.`);
+       } else {
+         this.recentOutputHashes.push({ hash: outputHash, timestamp: now });
+       }
+
+        if (this.holdOutgoing) {
+          console.log(`[QUEUE_HOLD] Holding outgoing reply to ${item.senderName}.`);
+        } else if (!isDuplicateOutput) {
+          const dedup = GlobalOutputDeduplicator.getInstance();
+          if (dedup.isDuplicate(reply ?? "", item.contextId)) {
+            console.log(`[GLOBAL_DEDUP] Skipping duplicate main queue output for ${item.senderName} (${item.contextId}).`);
+          } else {
+            dedup.markSent(reply ?? "", item.contextId);
+            await Promise.resolve(item.onReply(reply ?? "")).catch((deliveryErr: any) => {
+              console.error(`[QUEUE_DELIVERY_ERR] Failed to deliver reply to ${item.senderName}:`, deliveryErr?.message || deliveryErr);
+              if (item.onError) item.onError(deliveryErr);
+            });
+          }
+        }
 
     } catch (err: any) {
       console.error(`[QUEUE_ERROR] Failed to process message in cognitive queue:`, err);
@@ -848,45 +895,60 @@ Unggkit topik nyata tersebut dari memori jika ingin, sapa dia dengan manis, atau
               console.error("[PROACTIVE_ENGINE_WS] Failed to send WS broadcast:", wsErr);
             }
 
-            // 2. Dispatch ke Bot Telegram jika asalnya dari Telegram
-            if (contextId.startsWith("tg_")) {
-              const chatId = contextId.split("|")[0].replace("tg_", "");
-              try {
-                 if (activeTelegramBot) {
-                   await Promise.race([
-                     activeTelegramBot.telegram.sendMessage(chatId, reply),
-                     new Promise((_, reject) => setTimeout(() => reject(new Error('[TELEGRAM_BG_SEND_TIMEOUT] sendMessage timed out')), 15000))
-                   ]);
-                   console.log(`[PROACTIVE_ENGINE_TELEGRAM] Successfully sent proactive message to Telegram Chat: ${chatId}`);
-                }
-              } catch (tgErr: any) {
-                console.error("[PROACTIVE_ENGINE_TELEGRAM_ERR] Failed to send to Telegram:", tgErr.message);
-              }
-            }
+              // Output dedup: skip if the same message was delivered within the dedup window
+              const dedupNow = Date.now();
+              this.recentOutputHashes = this.recentOutputHashes.filter(h => dedupNow - h.timestamp < MultiChannelQueue.OUTPUT_DEDUP_WINDOW_MS);
+              const isDuplicateOutput = this.recentOutputHashes.some(h => h.hash === reply);
+              if (!isDuplicateOutput) {
+                this.recentOutputHashes.push({ hash: reply, timestamp: dedupNow });
 
-            // 3. Dispatch ke Discord jika asalnya dari Discord
-            if (contextId.startsWith("discord_")) {
-              const channelId = contextId.split("|")[0].replace("discord_", "");
-           try {
-             if (activeDiscordClient) {
-                  const channel = await activeDiscordClient.channels.fetch(channelId);
-                  if (channel && typeof (channel as any).send === 'function') {
-                    await (channel as any).send(reply);
-                    console.log(`[PROACTIVE_ENGINE_DISCORD] Successfully sent proactive message to Discord Channel: ${channelId}`);
+                const globalDedup = GlobalOutputDeduplicator.getInstance();
+                if (globalDedup.isDuplicate(reply, contextId)) {
+                  console.log(`[GLOBAL_DEDUP] Skipping duplicate proactive output for ${senderName} (${contextId}).`);
+                } else {
+                  globalDedup.markSent(reply, contextId);
+
+                  // 2. Dispatch ke Bot Telegram jika asalnya dari Telegram
+                  if (contextId.startsWith("tg_")) {
+                    const chatId = contextId.split("|")[0].replace("tg_", "");
+                    try {
+                       if (activeTelegramBot) {
+                         await Promise.race([
+                           activeTelegramBot.telegram.sendMessage(chatId, reply),
+                           new Promise((_, reject) => setTimeout(() => reject(new Error('[TELEGRAM_BG_SEND_TIMEOUT] sendMessage timed out')), 15000))
+                         ]);
+                         console.log(`[PROACTIVE_ENGINE_TELEGRAM] Successfully sent proactive message to Telegram Chat: ${chatId}`);
+                      }
+                    } catch (tgErr: any) {
+                      console.error("[PROACTIVE_ENGINE_TELEGRAM_ERR] Failed to send to Telegram:", tgErr.message);
+                    }
                   }
+
+                   // 3. Dispatch ke Discord jika asalnya dari Discord
+                   if (contextId.startsWith("discord_")) {
+                     const channelId = contextId.split("|")[0].replace("discord_", "");
+                     try {
+                       if (activeDiscordClient) {
+                         const channel = await activeDiscordClient.channels.fetch(channelId);
+                         if (channel && typeof (channel as any).send === 'function') {
+                           await (channel as any).send(reply);
+                           console.log(`[PROACTIVE_ENGINE_DISCORD] Successfully sent proactive message to Discord Channel: ${channelId}`);
+                         }
+                       }
+                     } catch (dcErr: any) {
+                       console.error("[PROACTIVE_ENGINE_DISCORD_ERR] Failed to send to Discord:", dcErr.message);
+                     }
+                   }
                 }
-              } catch (dcErr: any) {
-                console.error("[PROACTIVE_ENGINE_DISCORD_ERR] Failed to send to Discord:", dcErr.message);
+              }
+
+              // Lock proactive for this idle session after successful send
+              try {
+                this.db.prepare("UPDATE agent_state SET proactiveLocked = 1, lastProactiveTimestamp = ? WHERE id = 1").run(dedupNow);
+              } catch (lockErr) {
+                console.error("[PROACTIVE_ENGINE_LOCK_ERR] Failed to lock proactive state:", lockErr);
               }
             }
-
-            // Lock proactive for this idle session after successful send
-            try {
-              this.db.prepare("UPDATE agent_state SET proactiveLocked = 1, lastProactiveTimestamp = ? WHERE id = 1").run(now);
-            } catch (lockErr) {
-              console.error("[PROACTIVE_ENGINE_LOCK_ERR] Failed to lock proactive state:", lockErr);
-            }
-          }
         }
       }
     } catch (e: any) {
@@ -936,70 +998,94 @@ Unggkit topik nyata tersebut dari memori jika ingin, sapa dia dengan manis, atau
         task.taskId // Pass the taskId to trigger resume!
       );
 
-      if (reply && reply.trim()) {
-        console.log(`[QUEUE_RESUME_SUCCESS] [TaskID: ${task.taskId}] Task resumed and completed. Reply: ${reply}`);
-        
-        // Mark as completed
-        CognitiveScheduler.completeTask(task.taskId);
+        if (reply && reply.trim()) {
+          // Output dedup: skip if the same message was delivered within the dedup window
+          const dedupNow = Date.now();
+          this.recentOutputHashes = this.recentOutputHashes.filter(h => dedupNow - h.timestamp < MultiChannelQueue.OUTPUT_DEDUP_WINDOW_MS);
+          const isDuplicateOutput = this.recentOutputHashes.some(h => h.hash === reply);
+          if (isDuplicateOutput) {
+            console.log(`[QUEUE_DEDUP_OUTPUT] Duplicate resumed output for task ${task.taskId}, skipping delivery.`);
+          } else {
+            this.recentOutputHashes.push({ hash: reply, timestamp: dedupNow });
+            console.log(`[QUEUE_RESUME_SUCCESS] [TaskID: ${task.taskId}] Task resumed and completed. Reply: ${reply}`);
+            
+            // Mark as completed
+            CognitiveScheduler.completeTask(task.taskId);
 
-        // Dispatch the reply to the original channel!
-        const contextId = task.contextId || 'web_default';
-        const chatType = task.chatType || 'web';
+            // Dispatch the reply to the original channel!
+            const contextId = task.contextId || 'web_default';
+            const chatType = task.chatType || 'web';
+            const globalDedup = GlobalOutputDeduplicator.getInstance();
 
-        if (contextId.startsWith("tg_")) {
-          const chatId = contextId.split("|")[0].replace("tg_", "");
-          try {
-            const activeTelegramBot = (globalThis as any).activeTelegramBot;
-             if (activeTelegramBot) {
-               await Promise.race([
-                 activeTelegramBot.telegram.sendMessage(chatId, reply),
-                 new Promise((_, reject) => setTimeout(() => reject(new Error('[TELEGRAM_BG_SEND_TIMEOUT] sendMessage timed out')), 15000))
-               ]);
-               console.log(`[QUEUE_RESUME_SEND] Sent Telegram message to chat ${chatId}`);
+            if (contextId.startsWith("tg_")) {
+              const chatId = contextId.split("|")[0].replace("tg_", "");
+              try {
+                if (globalDedup.isDuplicate(reply, contextId)) {
+                  console.log(`[GLOBAL_DEDUP] Skipping duplicate resumed Telegram reply for task ${task.taskId}.`);
+                } else {
+                  globalDedup.markSent(reply, contextId);
+                  const activeTelegramBot = (globalThis as any).activeTelegramBot;
+                  if (activeTelegramBot) {
+                    await Promise.race([
+                      activeTelegramBot.telegram.sendMessage(chatId, reply),
+                      new Promise((_, reject) => setTimeout(() => reject(new Error('[TELEGRAM_BG_SEND_TIMEOUT] sendMessage timed out')), 15000))
+                    ]);
+                    console.log(`[QUEUE_RESUME_SEND] Sent Telegram message to chat ${chatId}`);
+                  }
+                }
+              } catch (tgErr: any) {
+                console.error(`[QUEUE_RESUME_ERR] Failed to send Telegram message:`, tgErr.message);
+              }
+            } else if (contextId.startsWith("discord_")) {
+              const channelId = contextId.split("|")[0].replace("discord_", "");
+              try {
+                if (globalDedup.isDuplicate(reply, contextId)) {
+                  console.log(`[GLOBAL_DEDUP] Skipping duplicate resumed Discord reply for task ${task.taskId}.`);
+                } else {
+                  globalDedup.markSent(reply, contextId);
+                  if (activeDiscordClient) {
+                    const channel = await activeDiscordClient.channels.fetch(channelId);
+                    if (channel && channel.isTextBased()) {
+                      await (channel as any).send(reply);
+                      console.log(`[QUEUE_RESUME_SEND] Sent Discord message to channel ${channelId}`);
+                    }
+                  }
+                }
+              } catch (dcErr: any) {
+                console.error(`[QUEUE_RESUME_ERR] Failed to send Discord message:`, dcErr.message);
+              }
+            } else {
+              if (globalDedup.isDuplicate(reply, contextId)) {
+                console.log(`[GLOBAL_DEDUP] Skipping duplicate resumed local output for task ${task.taskId}.`);
+              } else {
+                globalDedup.markSent(reply, contextId);
+                eventBus.emit('OUTPUT_EMITTED', { response: reply });
+              }
             }
-          } catch (tgErr: any) {
-            console.error(`[QUEUE_RESUME_ERR] Failed to send Telegram message:`, tgErr.message);
+
+            // Broadcast to Web socket/SSE
+            try {
+              broadcastToWS({
+                type: "state_update",
+                data: {
+                  state: { status: "talking" },
+                  activeSubtitle: reply,
+                  typedSubtitle: reply,
+                  isSubtitleTyping: false,
+                  animations: ["TALK", "SMILE"]
+                }
+              });
+              broadcastToWS({
+                type: "remote_response_sent",
+                data: {
+                  reply: reply,
+                  channel: chatType,
+                  contextId
+                }
+              });
+            } catch (wsErr) {}
           }
-        } else if (contextId.startsWith("discord_")) {
-          const channelId = contextId.split("|")[0].replace("discord_", "");
-           try {
-             if (activeDiscordClient) {
-               const channel = await activeDiscordClient.channels.fetch(channelId);
-               if (channel && channel.isTextBased()) {
-                 await (channel as any).send(reply);
-                 console.log(`[QUEUE_RESUME_SEND] Sent Discord message to channel ${channelId}`);
-               }
-             }
-           } catch (dcErr: any) {
-            console.error(`[QUEUE_RESUME_ERR] Failed to send Discord message:`, dcErr.message);
-          }
-        } else {
-          // Emit local event bus
-          eventBus.emit('OUTPUT_EMITTED', { response: reply });
         }
-
-        // Broadcast to Web socket/SSE
-         try {
-           broadcastToWS({
-            type: "state_update",
-            data: {
-              state: { status: "talking" },
-              activeSubtitle: reply,
-              typedSubtitle: reply,
-              isSubtitleTyping: false,
-              animations: ["TALK", "SMILE"]
-            }
-          });
-          broadcastToWS({
-            type: "remote_response_sent",
-            data: {
-              reply: reply,
-              channel: chatType,
-              contextId
-            }
-          });
-        } catch (wsErr) {}
-      }
     } catch (err: any) {
       console.error(`[QUEUE_RESUME_FAIL] Failed to process resumed task ${task.taskId}:`, err.message || err);
     } finally {

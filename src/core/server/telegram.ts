@@ -9,6 +9,7 @@ import { MultiChannelQueue } from "../kernel/MultiChannelQueue.js";
 import { initializeDatabase, deduplicateAndMergeIdentities } from "../database.js";
 import { TelegramReactionLearner } from "./telegramReactionLearner.js";
 import { getDynamicSandboxRoot, broadcastToWS } from "./apiRouter.js";
+import { GlobalOutputDeduplicator } from "../kernel/GlobalOutputDeduplicator.js";
 import { extractChannelFileAttachments } from "./channelFileAttachment.js";
 import { describeImageFromBuffer } from "../../modules/YuiVisionModule.js";
 
@@ -541,37 +542,43 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
          senderName,
          contextId,
          chatType,
-         async (response) => {
-           if (response && String(response).trim()) {
-             try {
-               const sentAsFile = await withDeliveryTimeout(() => trySendFileAttachment(ctx, response), 10000, 'file-attachment');
-               if (!sentAsFile) {
-                 await withDeliveryTimeout(() => ctx.reply(response), 15000, 'telegram-reply');
-               }
-               console.log(`[TELEGRAM_DELIVERY] Reply sent to ${senderName} (${contextId}), len=${String(response).length}`);
-             } catch (sendErr: any) {
-               console.error(`[TELEGRAM_DELIVERY_ERR] Failed to send reply to ${senderName}:`, sendErr?.message || sendErr);
-               try {
-                 await withDeliveryTimeout(() => ctx.reply(String(response).slice(0, 3500)), 10000, 'telegram-reply-retry');
-               } catch (retryErr: any) {
-                 console.error(`[TELEGRAM_DELIVERY_ERR] Retry also failed:`, retryErr?.message || retryErr);
-               }
-             }
-
-            // Broadcast Yui's response to the connected WebClients
-            try {
-              broadcastToWS({
-                type: "remote_response_sent",
-                data: {
-                  reply: response,
-                  channel: chatType,
-                  contextId
+          async (response) => {
+            if (response && String(response).trim()) {
+              const dedup = GlobalOutputDeduplicator.getInstance();
+              if (dedup.isDuplicate(response, contextId)) {
+                console.log(`[GLOBAL_DEDUP] Skipping duplicate Telegram reply for ${senderName} (${contextId}).`);
+              } else {
+                dedup.markSent(response, contextId);
+                try {
+                  const sentAsFile = await withDeliveryTimeout(() => trySendFileAttachment(ctx, response), 10000, 'file-attachment');
+                  if (!sentAsFile) {
+                    await withDeliveryTimeout(() => ctx.reply(response), 15000, 'telegram-reply');
+                  }
+                  console.log(`[TELEGRAM_DELIVERY] Reply sent to ${senderName} (${contextId}), len=${String(response).length}`);
+                } catch (sendErr: any) {
+                  console.error(`[TELEGRAM_DELIVERY_ERR] Failed to send reply to ${senderName}:`, sendErr?.message || sendErr);
+                  try {
+                    await withDeliveryTimeout(() => ctx.reply(String(response).slice(0, 3500)), 10000, 'telegram-reply-retry');
+                  } catch (retryErr: any) {
+                    console.error(`[TELEGRAM_DELIVERY_ERR] Retry also failed:`, retryErr?.message || retryErr);
+                  }
                 }
-              });
-            } catch (_) {}
-          } else {
-            console.warn(`[TELEGRAM_DELIVERY] Empty response for ${senderName} (${contextId}) — nothing to send.`);
-          }
+              }
+
+             // Broadcast Yui's response to the connected WebClients
+             try {
+               broadcastToWS({
+                 type: "remote_response_sent",
+                 data: {
+                   reply: response,
+                   channel: chatType,
+                   contextId
+                 }
+               });
+             } catch (_) {}
+           } else {
+             console.warn(`[TELEGRAM_DELIVERY] Empty response for ${senderName} (${contextId}) — nothing to send.`);
+           }
           // Update last seen (use UPSERT to preserve pairing context mapping from being overwritten to NULL on incoming messages)
           try {
             db.prepare(`
@@ -589,7 +596,12 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
           console.error("[TELEGRAM_QUEUE] Failed to process message:", err);
           try {
             if (err.code !== 403 && err.code !== 400) {
-              await ctx.reply("[SYSTEM ERROR] Sinkronisasi neural terganggu dalam antrean.");
+              const dedup = GlobalOutputDeduplicator.getInstance();
+              const errorMsg = "[SYSTEM ERROR] Sinkronisasi neural terganggu dalam antrean.";
+              if (!dedup.isDuplicate(errorMsg, contextId)) {
+                dedup.markSent(errorMsg, contextId);
+                await ctx.reply(errorMsg);
+              }
             }
           } catch (e) {}
         }
@@ -598,7 +610,13 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
        console.error("Bot Error:", error);
        try {
          if (error.code !== 403 && error.code !== 400) {
-           await ctx.reply("[SYSTEM ERROR] Neural Sync Interrupted.");
+           const dedup = GlobalOutputDeduplicator.getInstance();
+           const errorMsg = "[SYSTEM ERROR] Neural Sync Interrupted.";
+           const fallbackKey = (ctx as any)?.chat?.id ? String((ctx as any).chat.id) : 'bot_global_error';
+           if (!dedup.isDuplicate(errorMsg, fallbackKey)) {
+             dedup.markSent(errorMsg, fallbackKey);
+             await ctx.reply(errorMsg);
+           }
          }
        } catch (e) {
          console.error("Critical: Failed to send even the error report.", e);
@@ -613,33 +631,35 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
     }
   });
 
-  async function trySendFileAttachment(ctx: any, responseText: string): Promise<boolean> {
-    try {
-      const sandboxDir = getDynamicSandboxRoot();
-      const { attachments, remainingText } = await extractChannelFileAttachments(responseText, sandboxDir);
+async function trySendFileAttachment(ctx: any, responseText: string): Promise<boolean> {
+     try {
+       const sandboxDir = getDynamicSandboxRoot();
+       const { attachments, remainingText } = await extractChannelFileAttachments(responseText, sandboxDir);
 
-      if (attachments.length === 0) return false;
+       if (attachments.length === 0) return false;
 
-      for (let i = 0; i < attachments.length; i++) {
-        const att = attachments[i];
-        const isFirstImage = i === 0 && att.isImage;
-        if (att.isImage) {
-          if (isFirstImage && remainingText) {
-            await withDeliveryTimeout(() => ctx.replyWithPhoto({ source: att.safePath }, { caption: remainingText }), 10000, 'telegram-photo');
-          } else {
-            await withDeliveryTimeout(() => ctx.replyWithPhoto({ source: att.safePath }), 10000, 'telegram-photo');
-          }
-        } else {
-          await withDeliveryTimeout(() => ctx.replyWithDocument({ source: att.safePath }), 10000, 'telegram-document');
-        }
-      }
+       let sentAny = false;
+       for (let i = 0; i < attachments.length; i++) {
+         const att = attachments[i];
+         const isFirstImage = i === 0 && att.isImage;
+         if (att.isImage) {
+           if (isFirstImage && remainingText) {
+             await withDeliveryTimeout(() => ctx.replyWithPhoto({ source: att.safePath }, { caption: remainingText }), 10000, 'telegram-photo');
+           } else {
+             await withDeliveryTimeout(() => ctx.replyWithPhoto({ source: att.safePath }), 10000, 'telegram-photo');
+           }
+         } else {
+           await withDeliveryTimeout(() => ctx.replyWithDocument({ source: att.safePath }), 10000, 'telegram-document');
+         }
+         sentAny = true;
+       }
 
-      return true;
-    } catch (e) {
-      console.warn("[TELEGRAM_FILE] Failed to send file attachment from response:", e);
-    }
-    return false;
-  }
+       return sentAny;
+     } catch (e) {
+       console.warn("[TELEGRAM_FILE] Failed to send file attachment from response:", e);
+     }
+     return false;
+   }
 
   const launchBot = async (retryCount = 0) => {
     if (activeTelegramBot !== bot) return; // Instansi sudah digantikan
