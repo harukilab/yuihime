@@ -389,6 +389,11 @@ async function saveAndReinit(settings: any, db: any): Promise<void> {
 }
 
 export async function startSettingsTUI(): Promise<void> {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    console.error("[SETTINGS] --settings requires an interactive terminal (TTY).");
+    return;
+  }
+
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,

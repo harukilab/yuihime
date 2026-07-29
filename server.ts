@@ -1055,6 +1055,10 @@ if (isTerminalMode) {
 
 const isSettingsMode = process.argv.includes("--settings");
 if (isSettingsMode) {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    console.error("[SETTINGS] --settings requires an interactive terminal (TTY). Run without piping stdin/stdout.");
+    process.exit(1);
+  }
   setTimeout(() => {
     startSettingsTUI().catch(err => {
       console.error("Gagal meluncurkan Settings TUI:", err);

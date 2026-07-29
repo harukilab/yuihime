@@ -2,6 +2,12 @@
 ---
 
 ## [4.118] - 2026-07-29
+### Fix: Add TTY guard to --settings TUI to prevent hanging in non-interactive shells
+- settingsTUI.ts now checks process.stdin.isTTY / process.stdout.isTTY before launching
+- server.ts also validates TTY before invoking startSettingsTUI() with clear error message
+
+
+## [4.118] - 2026-07-29
 ### Feature: Add CLI TUI settings editor via --settings flag
 - New --settings flag launches interactive terminal settings editor
 - Supports all configSchema field types with dynamic options
