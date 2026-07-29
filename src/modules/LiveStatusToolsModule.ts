@@ -1,5 +1,23 @@
 import { ToolModule, ModuleType } from '@shared/include/types';
 
+const DEDUP_WINDOW_MS = 10_000;
+const dedupRegistry = new Map<string, number>();
+
+function getDedupKey(contextId: string, text: string): string {
+  const normalized = (text || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  return `${contextId || 'unknown'}::${normalized}`;
+}
+
+function isDuplicateSend(key: string): boolean {
+  const now = Date.now();
+  const last = dedupRegistry.get(key);
+  if (last && now - last < DEDUP_WINDOW_MS) {
+    return true;
+  }
+  dedupRegistry.set(key, now);
+  return false;
+}
+
 export const SendStatusUpdateTool: ToolModule = {
   metadata: {
     id: 'status_update',
@@ -27,6 +45,13 @@ export const SendStatusUpdateTool: ToolModule = {
     try {
       const hostPort = process.env.PORT || "3000";
       const senderName = context?.userName || context?.state?.relation?.uid || "Unknown";
+      const contextId = context?.contextId || "";
+      const dedupKey = getDedupKey(contextId, args.message);
+
+      if (isDuplicateSend(dedupKey)) {
+        return { status: "skipped", info: `Duplicate status_update suppressed for: ${args.message}`, senderName };
+      }
+
       const payload = {
         type: "state_update",
         data: {
@@ -96,6 +121,17 @@ export const SendFinalReplyTool: ToolModule = {
     try {
       const hostPort = process.env.PORT || "3000";
       const senderName = context?.userName || context?.state?.relation?.uid || "Unknown";
+      const contextId = context?.contextId || "";
+      const dedupKey = getDedupKey(contextId, args.speech);
+
+      if (isDuplicateSend(dedupKey)) {
+        return {
+          status: "skipped",
+          info: `Duplicate speak suppressed for: ${args.speech}`,
+          senderName
+        };
+      }
+
       const payload = {
         type: "state_update",
         data: {
@@ -125,7 +161,6 @@ export const SendFinalReplyTool: ToolModule = {
       }
 
       let sentDirectly = false;
-      const contextId = context?.contextId || "";
       if (contextId.startsWith("tg_")) {
         try {
           const bot = (globalThis as any).activeTelegramBot;

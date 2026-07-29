@@ -13,29 +13,31 @@ export let activeDiscordClient: Client | null = null;
 export let activeDiscordToken: string | null = null;
 
 async function trySendFileAttachmentDiscord(message: any, responseText: string): Promise<boolean> {
-  try {
-    const sandboxDir = getDynamicSandboxRoot();
-    const { attachments, remainingText } = await extractChannelFileAttachments(responseText, sandboxDir);
+   try {
+     const sandboxDir = getDynamicSandboxRoot();
+     const { attachments, remainingText } = await extractChannelFileAttachments(responseText, sandboxDir);
 
-    if (attachments.length === 0) return false;
+     if (attachments.length === 0) return false;
 
-    for (const att of attachments) {
-      if (att.isImage) {
-        await message.reply({ files: [att.safePath] });
-      } else {
-        await message.reply({ files: [{ attachment: att.safePath }] });
-      }
-    }
+     let sentAny = false;
+     for (const att of attachments) {
+       if (att.isImage) {
+         await message.reply({ files: [att.safePath] });
+       } else {
+         await message.reply({ files: [{ attachment: att.safePath }] });
+       }
+       sentAny = true;
+     }
 
-    if (remainingText) {
-      await message.reply(remainingText).catch(() => {});
-    }
-    return true;
-  } catch (e) {
-    console.warn("[DISCORD_FILE] Failed to send file attachment from response:", e);
-  }
-  return false;
-}
+     if (remainingText) {
+       await message.reply(remainingText).catch(() => {});
+     }
+     return sentAny;
+   } catch (e) {
+     console.warn("[DISCORD_FILE] Failed to send file attachment from response:", e);
+   }
+   return false;
+ }
 
 export async function initializeDiscord(activeDb?: any, force = false) {
   if (activeDb) {

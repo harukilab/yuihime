@@ -96,7 +96,6 @@ import { LuaInterpreter } from '../drivers/tools/lua_interpreter/index.js';
 import { EmotionAdjustTool } from '../drivers/tools/emotion_adjust/index.js';
 import { FileListTool } from '../drivers/tools/list_files/index.js';
 import { CalculatorTool } from '../drivers/tools/calculator/index.js';
-import { PythonInterpreter } from '../drivers/tools/python_interpreter/index.js';
 import { GitHubTool } from '../drivers/tools/github_integration/index.js';
 import { GetCurrentTimeTool } from '../drivers/tools/get_current_time/index.js';
 import { MessagingTool } from '../drivers/tools/messaging_integration/index.js';
@@ -462,7 +461,7 @@ export function initializeCortexModules(): Promise<void> {
         TensorArtGenerateTool, SearchChatHistoryTool, ShellTool, FileReadTool, WebSearchTool,
         PluginInstallerTool, ViewLogsTool, WebSnipperTool, CodeInterpreter, CalendarReminderTool,
         EditFileSegmentTool, DownloadFileTool, SendFileTool, OverlayControlTool, LuaInterpreter,
-        EmotionAdjustTool, FileListTool, CalculatorTool, PythonInterpreter, GitHubTool,
+        EmotionAdjustTool, FileListTool, CalculatorTool, GitHubTool,
         GetCurrentTimeTool, MessagingTool, BgProcTool, ManageIdentitiesTool, CronTool,
         OCRTool, ManagePairingTool, FileManagerTool, FileWriteTool,
         SendFinalReplyTool, SendStatusUpdateTool

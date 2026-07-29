@@ -76,3 +76,4 @@ Peta struktur direktori pasca-pemisahan Web UI ↔ Daemon (lihat UPDATE_LOG `[4.
 - `web/src/ui/modular-settings/GiftiaRelationSection.tsx — Dedicated Giftia OS Relation & Lattice Synchrony panel with AGI Soul influence analysis.`
 - `src/core/kernel/processor.ts`
 - `src/core/kernel/processor.ts`
+- `src/core/server/settingsTUI.ts — CLI TUI Settings Editor`

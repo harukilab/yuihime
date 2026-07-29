@@ -2,6 +2,23 @@
 ---
 
 ## [4.118] - 2026-07-29
+### Feature: Add CLI TUI settings editor via --settings flag
+- New --settings flag launches interactive terminal settings editor
+- Supports all configSchema field types with dynamic options
+- Full side-effect chain on save: cache clear, plugins reload, bridges reinit, WS broadcast
+
+
+## [4.118] - 2026-07-29
+### Feature: Add CLI TUI settings editor via --settings flag
+- New --settings flag launches interactive terminal settings editor
+- Supports all configSchema field types: boolean, number, slider, select, multiselect, string, password, textarea, color
+- Dynamic options support via module getDynamicOptions() for async field loading
+- Modules grouped by type (Consciousness, Tools, Speech, AI Providers, Bridges, Addons)
+- Full side-effect chain on save: clear cortex cache, reload plugins, reinit all bridges, broadcast WS update
+- No new npm dependencies — uses existing readline + ANSI escape codes
+
+
+## [4.118] - 2026-07-29
 ### Fix: Fix speak delivery and preserve rich responses
 
 

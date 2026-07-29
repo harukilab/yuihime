@@ -129,6 +129,8 @@ for (let i = 0; i < process.argv.length; i++) {
     argsOverride.agentPath = process.argv[++i];
   } else if (arg === "--port" && i + 1 < process.argv.length) {
     argsOverride.port = process.argv[++i];
+  } else if (arg === "--settings") {
+    (argsOverride as any).settingsMode = true;
   } else if (arg === "--no-ui") {
     (argsOverride as any).noUi = true;
   }
@@ -163,6 +165,7 @@ import { initializeDiscord, activeDiscordClient as yuihimeActiveDiscordClient } 
 import { initializeTwitter, activeTwitterInterval as yuihimeActiveTwitterInterval } from "./src/core/server/twitter.js";
 import { initializeMCP } from "./src/core/server/mcp.js";
 import { startRepl } from "./src/bin/terminal.js";
+import { startSettingsTUI } from "./src/core/server/settingsTUI.js";
 import { registerAPIRoutes, activeWSConnections, activeStreamClients, broadcastToWS, getCronAction } from "./src/core/server/apiRouter.js";
 import { Kernel } from "./src/core/kernel/core.js";
 import { AIService } from "./src/core/kernel/ai.js";
@@ -1046,6 +1049,15 @@ if (isTerminalMode) {
   setTimeout(() => {
     startRepl().catch(err => {
       console.error("Gagal meluncurkan Terminal Sandbox:", err);
+    });
+  }, 1500);
+}
+
+const isSettingsMode = process.argv.includes("--settings");
+if (isSettingsMode) {
+  setTimeout(() => {
+    startSettingsTUI().catch(err => {
+      console.error("Gagal meluncurkan Settings TUI:", err);
     });
   }, 1500);
 }

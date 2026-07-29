@@ -140,7 +140,8 @@ File konfigurasi dan data disimpan **di luar binary**:
   --db-path /var/data/yuihime.db \
   --config /etc/yuihime/config.toml \
   --agent /home/user/prompts/ \
-  --addons /home/user/my_skills/
+  --addons /home/user/my_skills/ \
+  --settings
 ```
 
 ### Environment Variables
