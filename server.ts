@@ -1037,32 +1037,47 @@ async function gracefulShutdown(sig: string) {
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 
-bootstrap().catch(err => {
-  console.error("[BOOT] Bootstrap failed:", err);
-  process.exit(1);
-});
-
-// --- Interactive Cognitive Terminal & Sandbox Hook ---
-// startRepl is called via static import above; invoked when --terminal or --sandbox is passed.
-const isTerminalMode = process.argv.includes("--terminal") || process.argv.includes("--sandbox");
-if (isTerminalMode) {
-  setTimeout(() => {
-    startRepl().catch(err => {
-      console.error("Gagal meluncurkan Terminal Sandbox:", err);
-    });
-  }, 1500);
-}
-
+// --- Standalone Settings TUI Mode ---
+// Runs lightweight initialization (no HTTP server) so it doesn't conflict with
+// an already-running daemon instance.
 const isSettingsMode = process.argv.includes("--settings");
 if (isSettingsMode) {
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
     console.error("[SETTINGS] --settings requires an interactive terminal (TTY). Run without piping stdin/stdout.");
     process.exit(1);
   }
-  setTimeout(() => {
-    startSettingsTUI().catch(err => {
-      console.error("Gagal meluncurkan Settings TUI:", err);
-    });
-  }, 1500);
+  (async () => {
+    try {
+      const db = initializeDatabase();
+      await initializeCortexModules();
+      NeuralInterface.setDatabase(db);
+      MultiChannelQueue.getInstance().setDatabase(db);
+      (globalThis as any).yuihime_db = db;
+      setTimeout(() => {
+        startSettingsTUI().catch(err => {
+          console.error("Gagal meluncurkan Settings TUI:", err);
+        });
+      }, 500);
+    } catch (err: any) {
+      console.error("[BOOT] Settings TUI init failed:", err);
+      process.exit(1);
+    }
+  })();
+} else {
+  // --- Standard Server Mode ---
+  bootstrap().catch(err => {
+    console.error("[BOOT] Bootstrap failed:", err);
+    process.exit(1);
+  });
+
+  // --- Interactive Cognitive Terminal & Sandbox Hook ---
+  const isTerminalMode = process.argv.includes("--terminal") || process.argv.includes("--sandbox");
+  if (isTerminalMode) {
+    setTimeout(() => {
+      startRepl().catch(err => {
+        console.error("Gagal meluncurkan Terminal Sandbox:", err);
+      });
+    }, 1500);
+  }
 }
 

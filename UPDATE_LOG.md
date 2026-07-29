@@ -2,6 +2,12 @@
 ---
 
 ## [4.118] - 2026-07-29
+### Fix: Make --settings a standalone TUI mode that skips HTTP server bootstrap
+- --settings skips bootstrap()/startServer(), does only DB + registry init to avoid EADDRINUSE conflicts
+- Added TTY guard to both server.ts and settingsTUI.ts for non-interactive shell safety
+
+
+## [4.118] - 2026-07-29
 ### Fix: Add TTY guard to --settings TUI to prevent hanging in non-interactive shells
 - settingsTUI.ts now checks process.stdin.isTTY / process.stdout.isTTY before launching
 - server.ts also validates TTY before invoking startSettingsTUI() with clear error message

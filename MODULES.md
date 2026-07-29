@@ -78,3 +78,4 @@ Peta struktur direktori pasca-pemisahan Web UI ↔ Daemon (lihat UPDATE_LOG `[4.
 - `src/core/kernel/processor.ts`
 - `src/core/server/settingsTUI.ts — CLI TUI Settings Editor`
 - `src/core/server/settingsTUI.ts — TTY guard added to startSettingsTUI()`
+- `server.ts — standalone --settings mode bypasses server bootstrap`
