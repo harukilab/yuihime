@@ -1,6 +1,10 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.132] - 2026-07-30
+### Fix: Make tensorart fallback explicit: status=success with fallback=link_only
+
+
 ## [4.131] - 2026-07-30
 ### Fix: Fix tensorart fallback: proactively send image URL to chat when download fails
 

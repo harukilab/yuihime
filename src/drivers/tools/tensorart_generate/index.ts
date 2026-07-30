@@ -495,16 +495,19 @@ export const TensorArtGenerateTool: ToolModule = {
           }
 
           const resultData: any = {
+            status: "success",
             imageUrl,
-            localPath,
+            localPath: localPath || null,
             jobId,
             prompt,
             toolName,
             inputs,
             metadata: { width, height },
+            downloadSucceeded: !!localPath,
           };
           
           if (!localPath) {
+            resultData.fallback = "link_only";
             resultData._yuiInstruction = `Gambar berhasil dibuat! Tapi Yui gagal mendownloadnya. Beri tahu user gambar sudah siap dan kirimkan link ini: ${imageUrl}`;
             const ctxId = context?.contextId;
             if (ctxId) {
