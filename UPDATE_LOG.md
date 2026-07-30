@@ -1,6 +1,12 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.122] - 2026-07-30
+### Fix: Yui sekarang pasti panggil generate_image saat user minta gambar
+- Perkuat deskripsi manifest.json — instruksi eksplisit 'MUST IMMEDIATELY call this tool' jika user minta gambar
+- Tambah 8 alias di toolNormalizer.ts: create_image, image_generation, text_to_image, txt2img, draw, dalle, dall_e, dall-e → generate_image
+
+
 ## [4.121] - 2026-07-30
 ### Refactor: Centralisasi akses database ke singleton getDb() + cleanup stale WAL/SHM
 - Tambah export getDb() — panggil initializeDatabase() secara lazy, semua akses DB via getDb()
