@@ -1,6 +1,26 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.120] - 2026-07-30
+### Refactor: Hapus fungsi Reaction NLP dari Telegram
+- Hapus telegramReactionLearner.ts (NanoBrain sentiment classification, emoji selection, feedback loop)
+- Hapus reaction code dari telegram.ts (import, pendingReactionFeedback, auto-react emoji)
+- Hapus tabel telegram_reaction_feedback, index dan auto-cleanup dari database.ts
+- Hapus reactionEmojis config dari TelegramBridge.ts
+- Hapus telegram_reaction_feedback_retain_days dari shared/constants.ts
+- Hapus tools/reset-tg-reaction.mjs
+
+
+## [4.119] - 2026-07-30
+### Refactor: Hapus fungsi Reaction NLP dari Telegram
+- Hapus telegramReactionLearner.ts (NanoBrain sentiment classification, emoji selection, feedback loop)
+- Hapus reaction code dari telegram.ts (import, pendingReactionFeedback, auto-react emoji)
+- Hapus tabel telegram_reaction_feedback, index dan auto-cleanup dari database.ts
+- Hapus reactionEmojis config dari TelegramBridge.ts
+- Hapus telegram_reaction_feedback_retain_days dari shared/constants.ts
+- Hapus tools/reset-tg-reaction.mjs
+
+
 ## [4.118] - 2026-07-29
 ### Fix: Make --settings a standalone TUI mode that skips HTTP server bootstrap
 - --settings skips bootstrap()/startServer(), does only DB + registry init to avoid EADDRINUSE conflicts
