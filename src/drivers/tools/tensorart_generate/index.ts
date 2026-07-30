@@ -506,6 +506,13 @@ export const TensorArtGenerateTool: ToolModule = {
           
           if (!localPath) {
             resultData._yuiInstruction = `Gambar berhasil dibuat! Tapi Yui gagal mendownloadnya. Beri tahu user gambar sudah siap dan kirimkan link ini: ${imageUrl}`;
+            const ctxId = context?.contextId;
+            if (ctxId) {
+              const sent = await sendImageToChat(imageUrl, ctxId, "Gambar berhasil dibuat! Tapi Yui gagal menyimpannya di folder, jadi ini link-nya ya:");
+              if (!sent) {
+                await sendTextToChat(`Gambar berhasil dibuat! Tapi Yui gagal mendownloadnya. Lihat di sini ya: ${imageUrl}`, ctxId);
+              }
+            }
           }
           
           return buildEnvelope("success", resultData, null, Date.now() - startTime, toolId, attempts);

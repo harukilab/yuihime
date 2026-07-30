@@ -1,6 +1,10 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.131] - 2026-07-30
+### Fix: Fix tensorart fallback: proactively send image URL to chat when download fails
+
+
 ## [4.130] - 2026-07-30
 ### Fix: Fix log level sync: Logger.level now updates live via setLevel()
 
