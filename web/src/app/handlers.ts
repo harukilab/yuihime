@@ -813,6 +813,9 @@ export function useAppHandlers(
       if (result.response && result.response.trim()) {
         const cleanResponse = result.response.trim();
         const normResponse = normalizeForComparison(cleanResponse);
+        const rawToolCalls = result.tool_calls;
+        console.log('[HANDLER_RESULT]', { response: result.response?.slice(0,100), tool_calls: rawToolCalls });
+        const toolCalls = rawToolCalls && rawToolCalls.length > 0 ? rawToolCalls : undefined;
         if (s.llmStreamingEnabled) {
           chat.setLogs((prev: any[]) => {
             const updated = [...prev];
@@ -825,7 +828,8 @@ export function useAppHandlers(
                 ...updated[streamIndex],
                 content: cleanResponse,
                 thoughts: result.thought || (result as any).thoughts,
-                isStreaming: false
+                isStreaming: false,
+                toolCalls
               };
             } else {
               updated.push({
@@ -834,13 +838,14 @@ export function useAppHandlers(
                 timestamp: Date.now(),
                 isSystem: false,
                 thoughts: result.thought || (result as any).thoughts,
-                isStreaming: false
+                isStreaming: false,
+                toolCalls
               });
             }
             return updated;
           });
         } else {
-          chat.addLog('agent', cleanResponse);
+          chat.addLog('agent', cleanResponse, toolCalls);
         }
         activeSessionLogs.add(normResponse);
       } else {

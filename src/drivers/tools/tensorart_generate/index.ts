@@ -378,7 +378,7 @@ export const TensorArtGenerateTool: ToolModule = {
     if (!apiKey) {
       return buildEnvelope("error", null, {
         code: "MISSING_API_KEY",
-        message: "TensorArt API key is required but missing. Provide it under Settings -> Modules -> TensorArt, add TENSORART_API_KEY to env, or save to ~/.tensor_access_key.",
+        message: "TensorArt API key is required but missing. Yui must politely ask the user to provide their TensorArt API key through chat so Yui can save it and try generating the image again. Tell the user: 'Yui butuh API key TensorArt nih, tolong kirim key-nya ya!'. Once the user provides it, save it to ~/.tensor_access_key and retry.",
         retryable: false,
       }, 0, toolId, 0);
     }
@@ -472,18 +472,26 @@ export const TensorArtGenerateTool: ToolModule = {
           console.log(`[TENSORART_GENERATE] Generation completed successfully! URL: ${imageUrl}`);
 
           let localPath: string | undefined;
-          try {
-            const imageRes = await downloadImage(imageUrl, { timeoutMs: requestTimeoutMs, retryLimit });
-            const buffer = Buffer.from(await imageRes.arrayBuffer());
-            const { path, os, mkdir, writeFile } = await loadNodeFs();
-            const ext = path.extname(new URL(imageUrl).pathname) || ".png";
-            const outDir = path.join(getUserDataDir(settings), "images");
-            await mkdir(outDir, { recursive: true });
-            localPath = path.join(outDir, `tensorart_${jobId}${ext}`);
-            await writeFile(localPath, buffer);
-            console.log(`[TENSORART_GENERATE] Auto-downloaded to: ${localPath}`);
-          } catch (downloadErr: any) {
-            console.warn(`[TENSORART_GENERATE_WARN] Download error: ${downloadErr.message}. Local copy skipped, will use remote URL.`);
+          const maxDownloadRetries = 3;
+          for (let dlAttempt = 0; dlAttempt < maxDownloadRetries; dlAttempt++) {
+            try {
+              const imageRes = await downloadImage(imageUrl, { timeoutMs: requestTimeoutMs, retryLimit: 1 });
+              const buffer = Buffer.from(await imageRes.arrayBuffer());
+              const { path, os, mkdir, writeFile } = await loadNodeFs();
+              const ext = path.extname(new URL(imageUrl).pathname) || ".png";
+              const outDir = path.join(getUserDataDir(settings), "images");
+              await mkdir(outDir, { recursive: true });
+              localPath = path.join(outDir, `tensorart_${jobId}${ext}`);
+              await writeFile(localPath, buffer);
+              console.log(`[TENSORART_GENERATE] Auto-downloaded to: ${localPath}`);
+              break;
+            } catch (downloadErr: any) {
+              const remaining = maxDownloadRetries - dlAttempt - 1;
+              console.warn(`[TENSORART_GENERATE_WARN] Download attempt ${dlAttempt + 1}/${maxDownloadRetries} failed: ${downloadErr.message}${remaining > 0 ? `, retrying...` : ''}`);
+              if (remaining > 0) {
+                await new Promise(r => setTimeout(r, 2000 * (dlAttempt + 1)));
+              }
+            }
           }
 
           const resultData: any = {
@@ -495,6 +503,11 @@ export const TensorArtGenerateTool: ToolModule = {
             inputs,
             metadata: { width, height },
           };
+          
+          if (!localPath) {
+            resultData._yuiInstruction = `Gambar berhasil dibuat! Tapi Yui gagal mendownloadnya. Beri tahu user gambar sudah siap dan kirimkan link ini: ${imageUrl}`;
+          }
+          
           return buildEnvelope("success", resultData, null, Date.now() - startTime, toolId, attempts);
         } else if (status === "EXCEPTION" || status === "FAILED") {
           return buildEnvelope("error", null, { code: "TASK_FAILED", message: `TensorArt generation task failed: ${taskInfo.error || taskInfo.message || "Unknown Error"}`, retryable: false }, Date.now() - startTime, toolId, attempts);

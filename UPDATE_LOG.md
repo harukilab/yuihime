@@ -1,6 +1,43 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.129] - 2026-07-30
+### Fix: Handle COGNITIVE_LOOP_ABORTED gracefully in cortexRouter.ts
+- cortexRouter.ts: tambah handler COGNITIVE_LOOP_ABORTED di streaming dan non-streaming path agar client disconnect tidak logged sebagai server error
+
+
+## [4.128] - 2026-07-30
+### Minor: Handle COGNITIVE_LOOP_ABORTED gracefully in cortexRouter.ts
+- cortexRouter.ts: tambah handler COGNITIVE_LOOP_ABORTED di streaming dan non-streaming path agar client disconnect tidak logged sebagai server error
+
+
+## [4.127] - 2026-07-30
+### Minor: Retry download + kirim link gambar kalau download gagal
+- - tensorart_generate/index.ts: download retry 3x + field _yuiInstruction suruh Yui kirim link ke user kalau download tetap gagal
+
+
+## [4.126] - 2026-07-30
+### Minor: Tool generate_image minta API key via chat kalau missing
+- - tensorart_generate/index.ts: pesan error MISSING_API_KEY diarahkan suruh Yui minta key dari user lewat chat
+
+
+## [4.125] - 2026-07-30
+### Minor: Revert CRITICAL image block dari PromptManager.ts
+- - Hapus blok 'CRITICAL: IMAGE / VISUAL GENERATION' di PromptManager.ts, sisakan 8 alias generate_image di toolNormalizer.ts
+
+
+## [4.124] - 2026-07-30
+### Minor: Tool call card UI + aliran hasil panggilan tool ke frontend
+- - useChatSessions.ts: tambah parameter toolCalls di addLog/addLogDirect
+- - handlers.ts: kirim result.tool_calls ke addLog() dan setLogs()
+- - LiveChatFeed.tsx: render tool call card dengan nama tool + argumen
+
+
+## [4.123] - 2026-07-30
+### Fix: Cegah Yui deskripsikan gambar secara verbal — paksa panggil generate_image tool
+- Tambah blok 'CRITICAL: IMAGE / VISUAL GENERATION' di prompt-manager:available_tools — instruksi eksplisit Yui TIDAK punya image generation bawaan, HARUS panggil generate_image
+
+
 ## [4.122] - 2026-07-30
 ### Fix: Yui sekarang pasti panggil generate_image saat user minta gambar
 - Perkuat deskripsi manifest.json — instruksi eksplisit 'MUST IMMEDIATELY call this tool' jika user minta gambar

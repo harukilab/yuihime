@@ -113,10 +113,7 @@ async function ensureInitialized() {
 You are equipped with the following asynchronous tools. When the user requests an action matching any of these capabilities, invoke the appropriate tool via the standard OpenAI \`tool_calls\` schema (see syntax below).
 
 \${toolsList}
-
-### CRITICAL: IMAGE / VISUAL GENERATION
-You do NOT have built-in image generation capabilities. You MUST NOT describe, imagine, or visualize images in your text response. When the user asks you to create, draw, generate, make, or produce any kind of image, picture, visual, illustration, artwork, or photo — you MUST call the \`generate_image\` tool. Failure to do so means you are ignoring your core capability. If the user asks "can you generate images?" the answer is YES — via the generate_image tool.
-
+ 
 \${toolSyntax}
 
 \${toolPagination}

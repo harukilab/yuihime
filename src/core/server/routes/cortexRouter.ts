@@ -489,6 +489,11 @@ export function registerCortexRoutes(app: express.Express, db: any) {
               res.end();
               return;
             }
+            if (thinkErr.message && thinkErr.message.includes("COGNITIVE_LOOP_ABORTED")) {
+              console.log(`[API_THINK] Task ${currentTaskId} aborted cleanly due to client disconnect.`);
+              res.end();
+              return;
+            }
             sendSse("error", { error: thinkErr.message || String(thinkErr) });
             res.end();
             return;
@@ -524,6 +529,10 @@ export function registerCortexRoutes(app: express.Express, db: any) {
             taskId: currentTaskId,
             message: "Tugas ditangguhkan demi mendahulukan interaksi prioritas tinggi user." 
           });
+        }
+        if (thinkErr.message && thinkErr.message.includes("COGNITIVE_LOOP_ABORTED")) {
+          console.log(`[API_THINK] Task ${currentTaskId} aborted cleanly due to client disconnect.`);
+          return;
         }
         throw thinkErr;
       }

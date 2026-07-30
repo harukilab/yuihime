@@ -26,7 +26,7 @@ const isCancellationPhrase = (text: string): boolean => {
 };
 
 export function useChatSessions(loadDataCallback?: () => void) {
-  const [logs, setLogs] = useState<{ type: 'user' | 'agent', content: string, timestamp: number, isSystem: boolean, thoughts?: string, isStreaming?: boolean }[]>(() => {
+  const [logs, setLogs] = useState<{ type: 'user' | 'agent', content: string, timestamp: number, isSystem: boolean, thoughts?: string, isStreaming?: boolean, toolCalls?: any[] }[]>(() => {
     const raw = safeLocalStorage.parseJSON('yuihime_logs', []);
     return raw.filter((log: any) => {
       const trimmed = (log.content || '').trim();
@@ -70,7 +70,7 @@ export function useChatSessions(loadDataCallback?: () => void) {
 
   // Response Queue to prevent simultaneous UI / stream flooding
   const [responseQueue, setResponseQueue] = useState<{ type: 'user' | 'agent', content: string }[]>([]);
-  const responseQueueRef = useRef<{ type: 'user' | 'agent', content: string }[]>([]);
+  const responseQueueRef = useRef<{ type: 'user' | 'agent', content: string, toolCalls?: any[] }[]>([]);
   const isProcessingQueueRef = useRef<boolean>(false);
 
   // Synchronous turn-based caches to prevent duplicate log insertions in microtasks and React StrictMode double rendering
@@ -320,7 +320,7 @@ export function useChatSessions(loadDataCallback?: () => void) {
     return cleaned.trim();
   };
 
-  const addLogDirect = (type: 'user' | 'agent', content: string) => {
+  const addLogDirect = (type: 'user' | 'agent', content: string, toolCalls?: any[]) => {
     let processedContent = content.trim();
     let thoughts: string | undefined = undefined;
 
@@ -415,7 +415,8 @@ export function useChatSessions(loadDataCallback?: () => void) {
       content: processedContent, 
       timestamp: Date.now(),
       isSystem,
-      thoughts
+      thoughts,
+      toolCalls: toolCalls && toolCalls.length > 0 ? toolCalls : undefined
     };
     
     if (isSystem) {
@@ -494,7 +495,7 @@ export function useChatSessions(loadDataCallback?: () => void) {
       setResponseQueue([...responseQueueRef.current]);
 
       if (nextItem) {
-        addLogDirect(nextItem.type, nextItem.content);
+        addLogDirect(nextItem.type, nextItem.content, (nextItem as any).toolCalls);
 
         // Dynamic delay based on word count to humanize typing and avoid UI flash
         const wordCount = nextItem.content.split(/\s+/).length;
@@ -506,7 +507,7 @@ export function useChatSessions(loadDataCallback?: () => void) {
     isProcessingQueueRef.current = false;
   };
 
-  const addLog = (type: 'user' | 'agent', content: string) => {
+  const addLog = (type: 'user' | 'agent', content: string, toolCalls?: any[]) => {
     // If we're streaming or interruption is requested, bypass the queue
     const containsInterruption = type === 'user' && isCancellationPhrase(content);
     if (containsInterruption) {
@@ -533,11 +534,11 @@ export function useChatSessions(loadDataCallback?: () => void) {
                         content.includes('[TOOL]');
 
     if (type === 'agent' && !isSystemLog) {
-      responseQueueRef.current.push({ type, content });
+      responseQueueRef.current.push({ type, content, toolCalls });
       setResponseQueue([...responseQueueRef.current]);
       processQueue();
     } else {
-      addLogDirect(type, content);
+      addLogDirect(type, content, toolCalls);
     }
   };
 

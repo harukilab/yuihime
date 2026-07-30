@@ -217,6 +217,32 @@ export const LiveChatFeed: React.FC<LiveChatFeedProps> = ({
                     )}
                   </p>
 
+                  {!isUser && (log as any).toolCalls && (log as any).toolCalls.length > 0 && (
+                    <div className="mt-2 flex flex-col gap-1">
+                      {(log as any).toolCalls.map((tc: any, idx: number) => {
+                        const toolName = tc.function?.name || tc.name || tc.tool || 'unknown';
+                        const args = tc.function?.arguments || tc.args || {};
+                        const argStr = typeof args === 'string' ? args : JSON.stringify(args, null, 1);
+                        return (
+                          <div
+                            key={tc.id || idx}
+                            className="flex items-start gap-2 bg-pink-500/8 border border-pink-500/15 rounded-lg p-2 text-[9px] font-mono text-pink-200/70"
+                          >
+                            <Cpu size={10} className="mt-0.5 shrink-0 text-pink-400" />
+                            <div className="flex flex-col min-w-0">
+                              <span className="text-pink-300 font-bold tracking-wide uppercase">
+                                ⚡ {toolName}
+                              </span>
+                              <span className="truncate text-pink-200/50 mt-0.5 leading-relaxed">
+                                {typeof args === 'object' ? (args.prompt || args.query || args.command || argStr) : argStr}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
                   {/* Speech Button (only for Yui/AI messages) */}
                   {!isUser && (
                     <button
