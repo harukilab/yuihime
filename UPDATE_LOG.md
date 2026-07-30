@@ -1,6 +1,10 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.130] - 2026-07-30
+### Fix: Fix log level sync: Logger.level now updates live via setLevel()
+
+
 ## [4.129] - 2026-07-30
 ### Fix: Handle COGNITIVE_LOOP_ABORTED gracefully in cortexRouter.ts
 - cortexRouter.ts: tambah handler COGNITIVE_LOOP_ABORTED di streaming dan non-streaming path agar client disconnect tidak logged sebagai server error

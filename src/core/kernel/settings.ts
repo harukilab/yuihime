@@ -3,6 +3,7 @@ import fs from 'fs';
 import fsPromises from 'fs/promises';
 import path from 'path';
 import os from 'os';
+import { Logger, LogLevel } from '@shared/core/kernel/logger';
 
 // --- Global log level filtering ---
 // Levels (ascending): debug(0) < info(1) < warn(2) < error(3) < silent(4)
@@ -25,7 +26,6 @@ const METHOD_LEVEL: Record<string, number> = {
   error: 3
 };
 
-let appliedLogLevel = false;
 let currentLogLevelThreshold = LOG_LEVELS.info;
 
 /**
@@ -38,8 +38,10 @@ function applyLogLevelFilter(levelRaw: string | undefined): void {
   const normalized = String(levelRaw ?? 'warn').toLowerCase().trim();
   currentLogLevelThreshold = LOG_LEVELS[normalized] ?? LOG_LEVELS.warn;
 
-  if (appliedLogLevel) return;
-  appliedLogLevel = true;
+  const loggerLevel = (LogLevel as any)[normalized.toUpperCase()] ?? LogLevel.WARN;
+  try {
+    Logger.getInstance().setLevel(loggerLevel);
+  } catch {}
 
   for (const method of Object.keys(METHOD_LEVEL)) {
     const original = (console as any)[method].bind(console);

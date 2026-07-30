@@ -1,4 +1,4 @@
-enum LogLevel {
+export enum LogLevel {
   DEBUG,
   INFO,
   WARN,
@@ -16,6 +16,14 @@ export class Logger {
       Logger.instance = new Logger();
     }
     return Logger.instance;
+  }
+
+  public setLevel(level: LogLevel) {
+    this.level = level;
+  }
+
+  public getLevel(): LogLevel {
+    return this.level;
   }
 
   log(level: string, context: string, msg: string, ...args: any[]) {
