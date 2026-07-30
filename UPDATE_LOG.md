@@ -1,6 +1,10 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.133] - 2026-07-30
+### Fix: Add yuihime.sh startup script
+
+
 ## [4.132] - 2026-07-30
 ### Fix: Make tensorart fallback explicit: status=success with fallback=link_only
 
