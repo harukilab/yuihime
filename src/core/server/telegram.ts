@@ -738,11 +738,10 @@ async function trySendFileAttachment(ctx: any, responseText: string): Promise<bo
   // Tentukan apakah kita harus menggunakan mode webhook atau long polling berdasarkan environment Cloud Run
   const wsUrl = settings['connectionWebsocketUrl'] || '';
   let externalUrl = '';
-  if (wsUrl && (wsUrl.startsWith('wss://') || wsUrl.startsWith('ws://'))) {
-    externalUrl = wsUrl.replace(/^wss?:\/\//, 'https://').replace(/\/ws\/?$/, '');
-    if (wsUrl.startsWith('ws://')) {
-      externalUrl = wsUrl.replace('ws://', 'http://').replace(/\/ws\/?$/, '');
-    }
+  if (wsUrl.startsWith('wss://')) {
+    externalUrl = wsUrl.replace(/^wss:\/\//, 'https://').replace(/\/ws\/?$/, '');
+  } else if (wsUrl.startsWith('ws://')) {
+    externalUrl = wsUrl.replace(/^ws:\/\//, 'http://').replace(/\/ws\/?$/, '');
   }
 
   // NOTICE: AI Studio development app URLs are protected behind OAuth login (returning 302 for webhook posts).
@@ -754,9 +753,10 @@ async function trySendFileAttachment(ctx: any, responseText: string): Promise<bo
 
   // Jika berjalan di server publik Cloud Run, webhook jauh lebih handal (mencegah container disuspensi)
   let isWebhookDesired = !!externalUrl && 
-                         !externalUrl.includes('localhost') && 
-                         !externalUrl.includes('127.0.0.1') && 
-                         !externalUrl.includes('ais-dev-');
+                       externalUrl.startsWith('https://') &&
+                       !externalUrl.includes('localhost') && 
+                       !externalUrl.includes('127.0.0.1') && 
+                       !externalUrl.includes('ais-dev-');
 
   // Lakukan pre-flight check asinkron untuk memastikan domain publik (pre-release) benar-benar terjangkau dan aktif
   const checkWebhookAndLaunch = async () => {

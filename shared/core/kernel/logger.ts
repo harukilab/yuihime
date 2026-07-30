@@ -27,8 +27,8 @@ export class Logger {
   }
 
   log(level: string, context: string, msg: string, ...args: any[]) {
-    if (typeof window !== 'undefined' && context === 'REGISTRY' && (level === 'INFO' || level === 'DEBUG')) {
-      return; // Do not send verbose registry logs to the browser console
+    if (context === 'REGISTRY' && (level === 'INFO' || level === 'DEBUG')) {
+      return;
     }
     const lvl = (LogLevel as any)[level] || LogLevel.INFO;
     if (lvl >= this.level) {

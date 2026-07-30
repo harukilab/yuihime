@@ -68,12 +68,12 @@ try {
     }
   }
 
-  // Packaging Standalone Executables with pkg as fallback / distribution
-  console.log('\nPackaging Standalone Executables with pkg...');
+  // Packaging Standalone Executables with @yao-pkg/pkg as fallback / distribution
+  console.log('\nPackaging Standalone Executables with @yao-pkg/pkg...');
   try {
-    execSync('npx pkg . --out-path bin', { stdio: 'inherit' });
+    execSync('npx @yao-pkg/pkg . --out-path bin', { stdio: 'inherit' });
   } catch (pkgErr) {
-    console.warn('⚠️ pkg packaging note:', pkgErr.message);
+    console.warn('⚠️ @yao-pkg/pkg packaging note:', pkgErr.message);
   }
 
   // 4. Handle Native SQLite bindings

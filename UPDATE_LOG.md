@@ -1,6 +1,28 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.137] - 2026-07-30
+### Fix: Suppress verbose [INFO][REGISTRY] logs in Node.js
+- Remove browser-only guard in Logger so REGISTRY INFO/DEBUG are filtered in Node.js too
+- Revert unnecessary environment_details stripping (it is used by system prompt)
+
+
+## [4.136] - 2026-07-30
+### Fix: Strip environment_details leak in APIService and processor
+- Add environment_details regex stripping to APIService.cleanAIOutput as early sanitization layer
+- Fix broken unclosed-tag regex in processor.ts and add attribute-tolerant pattern
+
+
+## [4.135] - 2026-07-30
+### Refactor: Replace pkg with @yao-pkg/pkg
+- Migrate from vercel/pkg to @yao-pkg/pkg v6.21.0 for single-binary packaging
+- Update compile-binary.cjs to use @yao-pkg/pkg CLI
+
+
+## [4.134] - 2026-07-30
+### Fix: Fix: Remove internal <thought> tag from DEFAULT_OFFLINE_FALLBACK in ProviderGatewayModule to prevent internal reasoning text from leaking into user chat
+
+
 ## [4.133] - 2026-07-30
 ### Fix: Add yuihime.sh startup script
 

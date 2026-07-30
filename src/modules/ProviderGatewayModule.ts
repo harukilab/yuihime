@@ -8,7 +8,7 @@ import { LlmIoAuditor } from '../core/server/llmAuditor.js';
 import { buildOpenAITools } from '../core/openaiTools.js';
 import { SettingsManager } from '../core/kernel/settings.js';
 
-const DEFAULT_OFFLINE_FALLBACK = `<thought>Cognitive online circuit disconnected (quota exceeded/offline). Mounting backup subconscious transmitter.</thought>Halo user! Saat ini sirkuit kognitif Yui sedang berdiet internet (server sedang sibuk/habis kuota)`;
+const DEFAULT_OFFLINE_FALLBACK = `Halo user! Saat ini sirkuit kognitif Yui sedang berdiet internet (server sedang sibuk/habis kuota)`;
 
 const DEFAULT_NANO_NLP_THOUGHT = `<thought>Online cognitive circuit failed. Subconscious offline path activated dynamically.</thought>\${localResponse}`;
 

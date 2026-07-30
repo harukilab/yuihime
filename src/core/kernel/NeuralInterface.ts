@@ -789,7 +789,7 @@ export class NeuralInterface {
 
               db.transaction(() => {
                 db.prepare(
-                  'INSERT INTO memories (id, type, content, importance, speaker, context, timestamp, tags, sentiment) VALUES (?, \'summary\', ?, 0.85, \'system\', ?, ?, \'["abstraction","defragmented"]\', 0.6)'
+                  "INSERT INTO memories (id, type, content, importance, speaker, context, timestamp, tags, sentiment) VALUES (?, 'summary', ?, 0.85, 'system', ?, ?, '[\\\",\\\"abstraction\\\",\\\",\\\"defragmented\\\"]', 0.6)"
                 ).run(summaryId, '[Abstraksi Pengalaman]: ' + summary, contextId, Date.now() - 1000);
 
                 const ids = oldestRows.map(function(r) { return r.id; });

@@ -637,7 +637,7 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
                 (xmlParsed.thought || xmlParsed.thoughts || xmlParsed.final_answer || xmlParsed.speech || xmlParsed.opening_response || xmlParsed.tool_calls || xmlParsed.tools_to_call)) {
                 parsedPayload = {
                    thought: xmlParsed.thought || xmlParsed.thoughts || "Yuihime memproses intuisi batin menggunakan struktur XML/tag.",
-                   final_answer: xmlParsed.final_answer || xmlParsed.speech || xmlParsed.opening_response || rawResultStr,
+                    final_answer: xmlParsed.final_answer ?? xmlParsed.speech ?? xmlParsed.opening_response ?? rawResultStr,
                    animations: xmlParsed.animations || ["SMILE"],
                    tool_calls: xmlParsed.tool_calls || xmlParsed.tools_to_call || []
                 };
@@ -880,7 +880,11 @@ if (extractedFromSpeech) {
         rawToolsCall = [];
       }
 
-      const speechText = (parsedPayload.speech || parsedPayload.final_answer || parsedPayload.response || "").trim();
+      let speechText = (parsedPayload.speech || parsedPayload.final_answer || parsedPayload.response || "").trim();
+
+      if (speechText && (speechText.includes('<tool_call>') || /^[\s\S]*"tool_calls"\s*:\s*\[/.test(speechText))) {
+        speechText = "";
+      }
 
       if (rawToolsCall.length > 0) {
         const hasFinalReply = rawToolsCall.some((tc: any) => tc.tool === 'speak' || tc.tool === 'final_answer');
@@ -1838,14 +1842,17 @@ Explain what you did or found in a completely natural, non-technical, cute way. 
     finalAnswer = "Aduh... maaf ya user, sirkuit batin Yui sempat agak pusing barusan saat memproses permintaan user... 🥺 Tapi Yui tetap di sini kok! Ada yang bisa Yui bantu lagi? 💕";
   }
 
+  const speakCall = toolsToCall.find((tc: any) => tc.tool === 'final_answer');
+  const finalSpeech = speakCall?.args?.speech && typeof speakCall.args.speech === 'string' ? speakCall.args.speech : finalAnswer;
+
   const dedup = GlobalOutputDeduplicator.getInstance();
-  if (!dedup.isDuplicate(finalAnswer, contextId || 'web_default')) {
-    dedup.markSent(finalAnswer, contextId || 'web_default');
-    eventBus.emit('OUTPUT_EMITTED', { response: finalAnswer });
+  if (!dedup.isDuplicate(finalSpeech, contextId || 'web_default')) {
+    dedup.markSent(finalSpeech, contextId || 'web_default');
+    eventBus.emit('OUTPUT_EMITTED', { response: finalSpeech });
   }
 
-   const immediateResult = {
-     response: finalAnswer,
+    const immediateResult = {
+      response: finalSpeech,
      logs,
      nextMood: loopContext.moodImpact,
      moodImpact: loopContext.moodImpact,
