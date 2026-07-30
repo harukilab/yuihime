@@ -13,6 +13,7 @@ export interface CronTask {
   /** Job body / command (like crontab command). Executed as the LLM instruction when the job fires. */
   prompt?: string;
   lastRunMinuteStamp?: string;
+  running?: boolean;
 }
 
 /** Built-in system jobs that do not run as chat prompts. */
@@ -143,24 +144,36 @@ export class CronModule {
     if (ms !== null) {
       if (task.repeating) {
         const interval = setInterval(async () => {
-          try {
-            await task.action();
-            task.lastRun = Date.now();
-          } catch (e) {
-            console.error(`[CRON] Task ${task.name} failed:`, e);
+          if (task.running) {
+            console.warn(`[CRON] Task ${task.name} is still running from previous trigger. Skipping overlapping execution.`);
+            return;
           }
-        }, ms);
-        this.intervals.set(id, interval);
-        console.log(`[CRON] Repeating Interval Task started: ${task.name} (every ${ms}ms)`);
-      } else {
-        const timeout = setTimeout(async () => {
+          task.running = true;
           try {
             await task.action();
             task.lastRun = Date.now();
           } catch (e) {
             console.error(`[CRON] Task ${task.name} failed:`, e);
           } finally {
-            // Stop and clean up the non-repeating task
+            task.running = false;
+          }
+        }, ms);
+        this.intervals.set(id, interval);
+        console.log(`[CRON] Repeating Interval Task started: ${task.name} (every ${ms}ms)`);
+      } else {
+        const timeout = setTimeout(async () => {
+          if (task.running) {
+            console.warn(`[CRON] Task ${task.name} is still running. Skipping overlapping execution.`);
+            return;
+          }
+          task.running = true;
+          try {
+            await task.action();
+            task.lastRun = Date.now();
+          } catch (e) {
+            console.error(`[CRON] Task ${task.name} failed:`, e);
+          } finally {
+            task.running = false;
             this.removeTask(id);
           }
         }, ms);
@@ -243,12 +256,19 @@ export class CronModule {
       }
 
       if (isMatched) {
+        if (task.running) {
+          console.warn(`[CRON] Task ${task.name} is still running from previous trigger. Skipping overlapping execution.`);
+          return;
+        }
         task.lastRunMinuteStamp = currentMinuteStamp;
+        task.running = true;
         try {
           await task.action();
           task.lastRun = Date.now();
         } catch (e) {
           console.error(`[CRON] Task ${task.name} failed:`, e);
+        } finally {
+          task.running = false;
         }
       }
     }, 20000); // Check every 20 seconds

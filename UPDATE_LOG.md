@@ -1,6 +1,13 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.138] - 2026-07-30
+### Fix: Fix SQLite database locked error in cron tasks
+- Add SQLite retry logic with backoff to cron task database operations
+- Prevent overlapping cron task executions with running guard flag
+- Increase NeuralInterface worker thread SQLite timeout from 3s/100ms to 30s/30s
+
+
 ## [4.137] - 2026-07-30
 ### Fix: Suppress verbose [INFO][REGISTRY] logs in Node.js
 - Remove browser-only guard in Logger so REGISTRY INFO/DEBUG are filtered in Node.js too

@@ -752,9 +752,9 @@ export class NeuralInterface {
       (function run() {
         let db;
         try {
-          db = new Database(dbPath, { timeout: 3000 });
+          db = new Database(dbPath, { timeout: 30000 });
           db.pragma('journal_mode = WAL');
-          db.pragma('busy_timeout = 100');
+          db.pragma('busy_timeout = 30000');
 
           const fiveMinutesAgo = Date.now() - 300000;
 

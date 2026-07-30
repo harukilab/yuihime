@@ -161,6 +161,27 @@ export const broadcastTTSAudioStream = (base64Audio: string, text = '', isFinal 
 };
 
 // --- Server-Side Cron Action Builder ---
+function isSqliteBusy(err: any): boolean {
+  return err && (err.code === 'SQLITE_BUSY' || err.message?.includes('database is locked') || err.message?.includes('SQLITE_BUSY'));
+}
+
+async function withSqliteRetry<T>(label: string, db: any, fn: () => T): Promise<T> {
+  const maxRetries = 5;
+  let lastErr: any = null;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await Promise.resolve(fn());
+    } catch (err: any) {
+      lastErr = err;
+      if (!isSqliteBusy(err)) throw err;
+      const backoff = 200 * attempt;
+      console.warn(`[CRON_SQLITE_RETRY] ${label} hit SQLITE_BUSY (attempt ${attempt}/${maxRetries}). Retrying in ${backoff}ms...`);
+      await new Promise(resolve => setTimeout(resolve, backoff));
+    }
+  }
+  throw lastErr;
+}
+
 export const getCronAction = (id: string, name: string, repeating: boolean, db: any) => async () => {
   let taskName = name;
   console.log(`[CRON] Executing Task: ${name} (${id})`);
@@ -179,21 +200,22 @@ export const getCronAction = (id: string, name: string, repeating: boolean, db: 
     }
     
     if (repeating) {
-      db.prepare("UPDATE cron_tasks SET lastRun = ? WHERE id = ?").run(Date.now(), id);
+      await withSqliteRetry('update-cron-lastrun', db, () => db.prepare("UPDATE cron_tasks SET lastRun = ? WHERE id = ?").run(Date.now(), id));
     } else {
-      db.prepare("DELETE FROM cron_tasks WHERE id = ?").run(id);
+      await withSqliteRetry('delete-cron-task', db, () => db.prepare("DELETE FROM cron_tasks WHERE id = ?").run(id));
       CronModule.getInstance().stopTask(id);
     }
     return;
   }
   
+  await withSqliteRetry('fetch-cron-task', db, () => db.prepare("SELECT context_id, chat_type, sender_name, prompt, action, name FROM cron_tasks WHERE id = ?").get(id));
   let contextId = 'live_stream';
   let chatType = 'Live Chat';
   let senderName = 'System';
   let storedPrompt = '';
   let storedAction: string | null = null;
   try {
-    const task: any = db.prepare("SELECT context_id, chat_type, sender_name, prompt, action, name FROM cron_tasks WHERE id = ?").get(id);
+    const task: any = await withSqliteRetry('fetch-cron-task', db, () => db.prepare("SELECT context_id, chat_type, sender_name, prompt, action, name FROM cron_tasks WHERE id = ?").get(id));
     if (task) {
       contextId = task.context_id || contextId;
       chatType = task.chat_type || chatType;
@@ -208,15 +230,15 @@ export const getCronAction = (id: string, name: string, repeating: boolean, db: 
 
   // Add memory of the trigger
   const memoryId = Math.random().toString(36).substr(2, 9);
-  db.prepare(`
+  await withSqliteRetry('insert-cron-memory', db, () => db.prepare(`
     INSERT INTO memories (id, type, content, importance, speaker, context, timestamp)
     VALUES (?, 'system', ?, 0.8, 'System', ?, ?)
-  `).run(memoryId, `[SYSTEM_SIGNAL]: ${taskName} triggered.`, contextId, Date.now());
+  `).run(memoryId, `[SYSTEM_SIGNAL]: ${taskName} triggered.`, contextId, Date.now()));
 
   if (repeating) {
-    db.prepare("UPDATE cron_tasks SET lastRun = ? WHERE id = ?").run(Date.now(), id);
+    await withSqliteRetry('update-cron-lastrun', db, () => db.prepare("UPDATE cron_tasks SET lastRun = ? WHERE id = ?").run(Date.now(), id));
   } else {
-    db.prepare("DELETE FROM cron_tasks WHERE id = ?").run(id);
+    await withSqliteRetry('delete-cron-task', db, () => db.prepare("DELETE FROM cron_tasks WHERE id = ?").run(id));
     CronModule.getInstance().stopTask(id);
   }
 

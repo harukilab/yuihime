@@ -82,3 +82,4 @@ Peta struktur direktori pasca-pemisahan Web UI ↔ Daemon (lihat UPDATE_LOG `[4.
 - `build:bin`
 - `core:kernel,core:api`
 - `core:kernel`
+- `core:kernel,core:server`
