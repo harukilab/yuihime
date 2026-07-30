@@ -1,4 +1,4 @@
-import { initializeDatabase } from './database.js';
+import { getDb } from './database.js';
 
 export interface MemorySearchHit {
   id: string;
@@ -29,7 +29,7 @@ export async function searchMemories(
   if (!cleanQuery) return [];
 
   try {
-    const db = initializeDatabase();
+    const db = getDb();
     
     // We construct a query fetching matching FTS5 documents joined back to memories
     // to apply importance and recency decay inside the SQL scoring logic.

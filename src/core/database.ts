@@ -1,6 +1,6 @@
 import Database from "better-sqlite3";
 import path from "path";
-import { existsSync, renameSync, mkdirSync } from "fs";
+import { existsSync, renameSync, mkdirSync, unlinkSync } from "fs";
 import os from "os";
 import { AUTO_CLEANUP_LIMITS } from "../../shared/constants.js";
 
@@ -33,12 +33,21 @@ export function closeDatabase() {
   }
 }
 
+export function getDb() {
+  return initializeDatabase();
+}
+
 export function initializeDatabase() {
   if (cachedDb) return cachedDb;
   const dbDir = path.dirname(dbPath);
   if (!existsSync(dbDir)) {
     mkdirSync(dbDir, { recursive: true });
   }
+
+  // Bersihin stale WAL/SHM dari crash sebelumnya agar SQLite start fresh
+  try { if (existsSync(dbPath + '-wal')) unlinkSync(dbPath + '-wal'); } catch {}
+  try { if (existsSync(dbPath + '-shm')) unlinkSync(dbPath + '-shm'); } catch {}
+
   try {
     const db = new Database(dbPath, { timeout: 30000 });
     db.pragma('journal_mode = WAL');

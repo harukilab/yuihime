@@ -1,7 +1,7 @@
 import { Client, GatewayIntentBits, ChannelType, Message } from "discord.js";
 import { Kernel } from "../kernel/core.js";
 import { MultiChannelQueue } from "../kernel/MultiChannelQueue.js";
-import { initializeDatabase } from "../database.js";
+import { getDb } from "../database.js";
 import { getDynamicSandboxRoot, broadcastToWS } from "./apiRouter.js";
 import { extractChannelFileAttachments } from "./channelFileAttachment.js";
 import { describeImageFromBuffer } from "../../modules/YuiVisionModule.js";
@@ -43,7 +43,7 @@ export async function initializeDiscord(activeDb?: any, force = false) {
   if (activeDb) {
     db = activeDb;
   } else if (!db) {
-    db = initializeDatabase();
+    db = getDb();
   }
 
   const settings = Kernel.getInstance().getSettings().getAll();

@@ -1,11 +1,11 @@
 import { ToolModule } from '@shared/include/types';
-import { initializeDatabase } from '@/core/database.js';
+import { getDb } from '@/core/database.js';
 import manifest from './manifest.json';
 
 export const CalendarReminderTool: ToolModule = {
   metadata: manifest as any,
   execute: async (args: any, context?: any) => {
-    const db = initializeDatabase();
+    const db = getDb();
     const action = args.action;
 
     try {

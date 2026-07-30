@@ -1,9 +1,9 @@
-import { initializeDatabase, retryDbOperation } from "@/core/database.js";
+import { getDb, retryDbOperation } from "@/core/database.js";
 import { SettingsManager } from "@/core/kernel/settings.js";
 import fs from "fs";
 import path from "path";
 
-const db = initializeDatabase();
+const db = getDb();
 const workflowPath = path.join(process.cwd(), "workflow.json");
 
 export class StorageServer {

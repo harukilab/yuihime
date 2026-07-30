@@ -9,7 +9,7 @@ import { SettingsManager } from "@/core/kernel/settings";
 import { CronModule, extractCronPromptFromArgs, normalizeCronPromptForSave } from "../../kernel/cron.js";
 import { MultiChannelQueue } from "../../kernel/MultiChannelQueue.js";
 import { GlobalOutputDeduplicator } from "../../kernel/GlobalOutputDeduplicator.js";
-import { closeDatabase, initializeDatabase } from "../../database.js";
+import { closeDatabase, getDb } from "../../database.js";
 import { broadcastToWS, getCronAction } from "../apiRouter.js";
 import { NeuralInterface } from "../../kernel/NeuralInterface.js";
 import { eventBus } from "@shared/core/kernel/event-bus";
@@ -473,7 +473,7 @@ export function registerSystemRoutes(app: express.Express, db: any) {
       
       // 4. Re-open and reinitialize database handles
       console.log("[RESTORE] Reconnecting database pool to restored DB...");
-      const restoredDb = initializeDatabase();
+      const restoredDb = getDb();
       
       // Re-assign local register routing CLOSURE reference bound to 'db'
       db = restoredDb;

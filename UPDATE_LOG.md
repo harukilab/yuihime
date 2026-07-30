@@ -1,6 +1,13 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.121] - 2026-07-30
+### Refactor: Centralisasi akses database ke singleton getDb() + cleanup stale WAL/SHM
+- Tambah export getDb() — panggil initializeDatabase() secara lazy, semua akses DB via getDb()
+- Bersihin stale file -wal/-shm di initializeDatabase() sebelum buka koneksi baru, cegah lock saat boot setelah crash
+- Migrasi 16 file dari initializeDatabase() → getDb() — cuma server.ts entrypoint yang masih panggil initializeDatabase() langsung
+
+
 ## [4.120] - 2026-07-30
 ### Refactor: Hapus fungsi Reaction NLP dari Telegram
 - Hapus telegramReactionLearner.ts (NanoBrain sentiment classification, emoji selection, feedback loop)

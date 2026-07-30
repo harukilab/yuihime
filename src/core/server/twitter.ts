@@ -1,6 +1,6 @@
 import { Kernel } from "../kernel/core.js";
 import { MultiChannelQueue } from "../kernel/MultiChannelQueue.js";
-import { initializeDatabase } from "../database.js";
+import { getDb } from "../database.js";
 import { toSingleString } from "@/core/kernel/configNormalizer";
 
 let db: any = null;
@@ -11,7 +11,7 @@ export async function initializeTwitter(activeDb?: any, force = false) {
   if (activeDb) {
     db = activeDb;
   } else if (!db) {
-    db = initializeDatabase();
+    db = getDb();
   }
 
   const settings = Kernel.getInstance().getSettings().getAll();

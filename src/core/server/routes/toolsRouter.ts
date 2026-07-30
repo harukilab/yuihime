@@ -9,7 +9,7 @@ import { AIService } from "../../kernel/ai.js";
 import { SettingsManager } from "@/core/kernel/settings";
 import { apiCustomSystemRoot, verifySandboxPath, getDynamicSandboxRoot, resolveSystemRootPath, getYoloMode, getCommandBlacklist, getCommandWhitelist } from "../apiRouter.js";
 import { CustomToolsLoader } from "../../CustomToolsLoader.js";
-import { initializeDatabase } from "../../database.js";
+import { getDb } from "../../database.js";
 import { APIService } from "@shared/services/api";
 import { StorageServer } from "@shared/drivers/storageServer.js";
 import { searchMemories } from "../../memorySearch";
@@ -796,7 +796,7 @@ export function registerToolsRoutes(app: express.Express, db: any) {
       }
 
        if (!sent && recipient) {
-        const activeDb = initializeDatabase();
+        const activeDb = getDb();
         if (activeDb) {
           const cleanRec = recipient.trim();
           const cleanUsername = cleanRec.startsWith("@") ? cleanRec.substring(1) : cleanRec;

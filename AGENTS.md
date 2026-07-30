@@ -65,6 +65,7 @@
 
 ## Logging & Docs
 - `UPDATE_LOG.md` is very large. **Only read lines 1–15.** To prepend, edit below the `---` line (line 5). For review, read at most lines 1–35.
+- **Always update `UPDATE_LOG.md` via `python3 tools/update_log.py` on every change.** This is not optional.
 - `MODULES.md`: update when adding or changing modules.
 
 ## Versioning

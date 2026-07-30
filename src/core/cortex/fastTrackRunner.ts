@@ -5,7 +5,7 @@
 
 import { AgentState } from '@shared/include/types';
 import { Soul } from '../soul';
-import { initializeDatabase } from '../database.js';
+import { getDb } from '../database.js';
 import { Worker } from 'worker_threads';
 
 export class FastTrackRunner {
@@ -267,7 +267,7 @@ export class FastTrackRunner {
     if (isNode) {
       (async () => {
         try {
-          const db = initializeDatabase();
+          const db = getDb();
           
           if (db) {
             const now = Date.now();

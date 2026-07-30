@@ -2,7 +2,7 @@ import { CortexModule, ModuleType } from '@shared/include/types';
 import { PromptRegistry } from '../core/PromptRegistry';
 import { SystemRegistry } from '@shared/core/registry';
 import { StorageService } from '@shared/drivers/storage';
-import { initializeDatabase } from '../core/database.js';
+import { getDb } from '../core/database.js';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -529,7 +529,7 @@ export const PromptManagerModule: CortexModule = {
             let otherChatRows: any[] = [];
             if (typeof window === 'undefined') {
               try {
-                const db = initializeDatabase();
+                const db = getDb();
                 
                 const targetContexts = new Set<string>();
                 if (id.linkedAccounts) {

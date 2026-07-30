@@ -1,4 +1,4 @@
-import { initializeDatabase } from '../database.js';
+import { getDb } from '../database.js';
 
 export interface ToolCallEntry {
   name: string;
@@ -31,13 +31,9 @@ export interface LlmLogEntry {
 export class LlmIoAuditor {
   private static LOG_LIMIT = 50; // Cap to 50 logs to save storage space and tokens
 
-  private static getDb() {
-    return initializeDatabase();
-  }
-
   public static recordLog(entry: Omit<LlmLogEntry, 'id' | 'timestamp'>): void {
     try {
-      const db = this.getDb();
+      const db = getDb();
       const timestamp = Date.now();
       const id = 'llm_' + Math.random().toString(36).substring(2, 9);
       const newLog: LlmLogEntry = {
@@ -83,7 +79,7 @@ export class LlmIoAuditor {
    */
   public static recordToolExecution(data: { toolCalls: ToolCallEntry[]; toolResults: ToolResultEntry[] }): void {
     try {
-      const db = this.getDb();
+      const db = getDb();
       let logs: LlmLogEntry[] = [];
       try {
         const row = db.prepare('SELECT value FROM custom_storage WHERE key = ?').get('yuihime_llm_io_audit_logs') as any;
@@ -123,7 +119,7 @@ export class LlmIoAuditor {
 
   public static getLogs(): LlmLogEntry[] {
     try {
-      const db = this.getDb();
+      const db = getDb();
       const row = db.prepare('SELECT value FROM custom_storage WHERE key = ?').get('yuihime_llm_io_audit_logs') as any;
       if (row && row.value) {
         return JSON.parse(row.value);
@@ -136,7 +132,7 @@ export class LlmIoAuditor {
 
   public static clearLogs(): void {
     try {
-      const db = this.getDb();
+      const db = getDb();
       const stmt = db.prepare('DELETE FROM custom_storage WHERE key = ?');
       stmt.run('yuihime_llm_io_audit_logs');
     } catch (err) {

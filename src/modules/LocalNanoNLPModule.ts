@@ -1,4 +1,4 @@
-import { initializeDatabase } from '../core/database.js';
+import { getDb } from '../core/database.js';
 import { CortexModule, ModuleType, AgentState } from '@shared/include/types';
 import { StorageService } from '@shared/drivers/storage';
 import { NanoBrain, DecisionRouter, EpisodicMemory, CognitiveFatigue, predictWithTemperature } from '../core/neural/Brain';
@@ -281,7 +281,7 @@ async function triggerBackgroundTraining(intervalHours: number, triggerThreshold
   if (isTrainingInProgress || typeof window !== 'undefined') return;
 
   try {
-    const db = initializeDatabase();
+    const db = getDb();
 
     // Ensure metadata exists in customs
     const metaRow = db.prepare("SELECT value FROM custom_storage WHERE key = ?").get('yuihime_nano_nlp_markov_meta');

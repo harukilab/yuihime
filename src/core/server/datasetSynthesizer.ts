@@ -1,4 +1,4 @@
-import { initializeDatabase } from "../database.js";
+import { getDb } from "../database.js";
 import { AIService } from "../kernel/ai.js";
 import { SettingsManager } from "@/core/kernel/settings";
 import { toSingleString } from "@/core/kernel/configNormalizer";
@@ -58,7 +58,7 @@ Your response must be STRICTLY valid JSON ONLY. No markdown wraps, no extra prea
   };
 
   private constructor() {
-    this.db = initializeDatabase();
+    this.db = getDb();
     this.loadPersistedConfig();
   }
 

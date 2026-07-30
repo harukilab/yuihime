@@ -1,7 +1,6 @@
 import { SystemRegistry } from '@shared/core/registry';
 import { ModuleType, ModulePhase } from '@shared/include/types';
 import { CustomToolsLoader } from './CustomToolsLoader';
-import { initializeDatabase } from './database.js';
 import { CreativeAgent } from './agents/definitions/creativeAgent.js';
 import { ResearchAgent } from './agents/definitions/researchAgent.js';
 import { SubAgentRegistry } from './agents/SubAgentRegistry.js';

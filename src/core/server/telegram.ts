@@ -6,7 +6,7 @@ import fs from "fs/promises";
 import path from "path";
 import { Kernel } from "../kernel/core.js";
 import { MultiChannelQueue } from "../kernel/MultiChannelQueue.js";
-import { initializeDatabase, deduplicateAndMergeIdentities } from "../database.js";
+import { getDb, deduplicateAndMergeIdentities } from "../database.js";
 import { TelegramReactionLearner } from "./telegramReactionLearner.js";
 import { getDynamicSandboxRoot, broadcastToWS } from "./apiRouter.js";
 import { GlobalOutputDeduplicator } from "../kernel/GlobalOutputDeduplicator.js";
@@ -46,7 +46,7 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
   if (activeDb) {
     db = activeDb;
   } else if (!db) {
-    db = initializeDatabase();
+    db = getDb();
   }
 
   const reactionLearner = TelegramReactionLearner.getInstance();

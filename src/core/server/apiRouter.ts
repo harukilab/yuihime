@@ -18,14 +18,14 @@ import { SystemRegistry } from '@shared/core/registry';
 import { initializeBot, getActiveTelegramBot } from "./telegram.js";
 import { Cortex } from "../cortex.js";
 import { Soul } from "../soul.js";
-import { deduplicateAndMergeIdentities, initializeDatabase } from "../database.js";
+import { deduplicateAndMergeIdentities, getDb } from "../database.js";
 import { APIService } from "@shared/services/api";
 import { initializeCortexModules } from "../RegistryInitializer.js";
 
 // Register server-side persistent tool audit log handlers on globalThis
 (globalThis as any).getToolAuditLogs = () => {
   try {
-    const db = initializeDatabase();
+    const db = getDb();
     const row = db.prepare('SELECT value FROM custom_storage WHERE key = ?').get('yuihime_tool_audit_logs') as any;
     if (row && row.value) {
       let logs = JSON.parse(row.value);
@@ -50,7 +50,7 @@ import { initializeCortexModules } from "../RegistryInitializer.js";
 
 (globalThis as any).clearToolAuditLogs = () => {
   try {
-    const db = initializeDatabase();
+    const db = getDb();
     db.prepare('DELETE FROM custom_storage WHERE key = ?').run('yuihime_tool_audit_logs');
   } catch (err) {
     console.error('[SERVER] Error clearing tool audit logs from DB:', err);
@@ -59,7 +59,7 @@ import { initializeCortexModules } from "../RegistryInitializer.js";
 
 (globalThis as any).addToolAuditLog = (log: any) => {
   try {
-    const db = initializeDatabase();
+    const db = getDb();
     let logs: any[] = [];
     try {
       const row = db.prepare('SELECT value FROM custom_storage WHERE key = ?').get('yuihime_tool_audit_logs') as any;

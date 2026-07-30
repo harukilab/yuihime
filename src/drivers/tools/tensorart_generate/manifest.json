@@ -1,7 +1,7 @@
 {
   "id": "generate_image",
   "name": "Generate Image",
-  "description": "Generate high-quality visuals and anime art using TensorArt API's txt2img diffusion stages. You (Yui) MUST decide the model (toolName) and dimensions (width/height) yourself according to the user's request and desired art style — never leave them to a fixed default.",
+  "description": "Generate high-quality visuals, pictures, illustrations, anime art and images using TensorArt API's txt2img diffusion engine. When the user asks you to create, draw, generate, make, or produce any kind of image, picture, visual, illustration, artwork, anime art, or photo — you MUST IMMEDIATELY call this tool. Do NOT describe or imagine the image verbally — actually generate it using this tool. You (Yui) MUST decide the model (toolName) and dimensions (width/height) yourself according to the user's request and desired art style — never leave them to a fixed default.",
   "version": "1.0.0",
   "type": "TOOL",
   "order": 5,
