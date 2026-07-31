@@ -31,12 +31,12 @@ export class NeuralInterface {
   /**
    * Unified interface for processing input from any channel (Telegram, Discord, etc.)
    */
-  public static async processNeuralInput(input: string, senderName: string, contextId: string, chatType: string, isProactive: boolean = false, taskId?: string): Promise<string | null> {
-    const result = await NeuralInterface.processNeuralInputWithMeta(input, senderName, contextId, chatType, isProactive, taskId);
+  public static async processNeuralInput(input: string, senderName: string, contextId: string, chatType: string, isProactive: boolean = false, taskId?: string, signal?: AbortSignal): Promise<string | null> {
+    const result = await NeuralInterface.processNeuralInputWithMeta(input, senderName, contextId, chatType, isProactive, taskId, signal);
     return result ? result.text : null;
   }
 
-  public static async processNeuralInputWithMeta(input: string, senderName: string, contextId: string, chatType: string, isProactive: boolean = false, taskId?: string): Promise<NeuralReplyResult> {
+  public static async processNeuralInputWithMeta(input: string, senderName: string, contextId: string, chatType: string, isProactive: boolean = false, taskId?: string, signal?: AbortSignal): Promise<NeuralReplyResult> {
     const kernel = Kernel.getInstance();
     
     // Unify brain by running Cortex natively
@@ -401,7 +401,7 @@ export class NeuralInterface {
       taskId,
       undefined,
       undefined,
-      undefined,
+      signal,
       this.db
     );
 

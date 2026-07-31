@@ -1,6 +1,24 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.151] - 2026-07-31
+### fix: Fix freeze daemon: pisahkan jalur pesan dari pipeline neural (hard timeout + abort)
+- NeuralInterface: processNeuralInput/processNeuralInputWithMeta menerima signal?: AbortSignal, diteruskan ke cortex.think.
+- MultiChannelQueue: thinkWithTimeout (AbortController, 150s) + withHardTimeout; dipakai di processNext, processBackgroundMessage, checkAndResumeSuspendedTasks; watchdog tidak lagi hanya reset flag.
+- generateSegment.ts: stall timer 90s menutup headers+body, reset 60s per chunk; proxySegment/LocalProvider/CustomProvider/YuiVisionModule diberi AbortController (60-150s).
+- telegram.ts: download attachment diberi AbortController 45s.
+- Reaksi Telegram kini tetap dipicu saat balasan dikirim langsung via tool speak (jalur dedup-skip): trigger di onReply telegram.ts + eventBus TELEGRAM_REACTION dari MultiChannelQueue.
+
+
+## [4.151] - 2026-07-31
+### fix: Fix freeze daemon: pisahkan jalur pesan dari pipeline neural (hard timeout + abort)
+- NeuralInterface: processNeuralInput/processNeuralInputWithMeta menerima signal?: AbortSignal, diteruskan ke cortex.think.
+- MultiChannelQueue: thinkWithTimeout (AbortController, 150s) + withHardTimeout; dipakai di processNext, processBackgroundMessage, checkAndResumeSuspendedTasks; watchdog tidak lagi hanya reset flag.
+- generateSegment.ts: stall timer 90s menutup headers+body, reset 60s per chunk; proxySegment/LocalProvider/CustomProvider/YuiVisionModule diberi AbortController (60-150s).
+- telegram.ts: download attachment diberi AbortController 45s.
+- Reaksi Telegram kini tetap dipicu saat balasan dikirim langsung via tool speak (jalur dedup-skip): trigger di onReply telegram.ts + eventBus TELEGRAM_REACTION dari MultiChannelQueue.
+
+
 ## [4.150] - 2026-07-31
 ### Feature: Reaksi Telegram berdasarkan mood/emotion balasan Yui (bukan random)
 - NeuralInterface.processNeuralInputWithMeta(): kembalikan {text, mood, emotion, sentiment}; processNeuralInput tetap string (non-breaking).

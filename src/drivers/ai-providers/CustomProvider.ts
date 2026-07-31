@@ -189,16 +189,24 @@ export const CustomProvider: ProviderModule = {
 
       const endpointUrl = `${baseUrl}/chat/completions`;
 
-      const response = await fetch('/api/ai/proxy', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          url: endpointUrl,
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 150000);
+      let response: Response;
+      try {
+        response = await fetch('/api/ai/proxy', {
           method: 'POST',
-          headers: computedHeaders,
-          body: payload
-        })
-      });
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            url: endpointUrl,
+            method: 'POST',
+            headers: computedHeaders,
+            body: payload
+          }),
+          signal: controller.signal
+        });
+      } finally {
+        clearTimeout(timeout);
+      }
 
       if (!response.ok) {
         const errText = await response.text();

@@ -41,14 +41,22 @@ export async function proxyAIRequest(options: {
 
   let response: Response;
   try {
-    response = await fetch(url, {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-        ...processedHeaders
-      },
-      body: method !== 'GET' ? JSON.stringify(body) : undefined
-    });
+    // Hard timeout (120s) untuk mencegah hang selamanya pada upstream provider.
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 120000);
+    try {
+      response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          ...processedHeaders
+        },
+        body: method !== 'GET' ? JSON.stringify(body) : undefined,
+        signal: controller.signal
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
   } catch (e: any) {
     throw new Error(`AI Proxy Connectivity Error: ${e.message}`);
   }

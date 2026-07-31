@@ -16,6 +16,22 @@ const DEFAULT_PENDING_FEEDBACK = `[SYSTEM MESSAGE]: Koneksi saraf batin Yuihime 
 
 PromptRegistry.getInstance().register('multi-channel-queue:pending_feedback', DEFAULT_PENDING_FEEDBACK);
 
+const PIPELINE_TIMEOUT_FALLBACK = "Yui lagi gangguan saraf kognitif sebentar... Pesanmu ke-hold dulu, coba kirim ulang dalam beberapa saat ya~ 🌸";
+
+async function withHardTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs);
+      })
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 function isSqliteBusy(err: any): boolean {
   return err && (err.code === 'SQLITE_BUSY' || err.message?.includes('database is locked') || err.message?.includes('SQLITE_BUSY'));
 }
@@ -66,6 +82,10 @@ export class MultiChannelQueue {
   private processingStartTime = 0;
   private processingTimer: ReturnType<typeof setTimeout> | null = null;
   private static readonly PROCESSING_TIMEOUT_MS = 30000;
+
+  // Hard cap untuk seluruh pipeline kognitif (LLM + tool chain) agar jalur I/O pesan
+  // tidak pernah menunggu selamanya pada satu pesan yang macet.
+  private static readonly NEURAL_PIPELINE_TIMEOUT_MS = 150000;
   
   // Dynamic Background Worker Pool Configuration & Status Trackers
   private activeBgWorkers = 0;
@@ -328,9 +348,13 @@ export class MultiChannelQueue {
     console.log(`[QUEUE_BG_WORKER_START] Starting parallel cognitive processing (${this.activeBgWorkers}/${this.maxBgWorkers}) for ${pending.sender_name} (${pending.chat_type}) [ID: ${pending.id}]`);
 
     try {
-      // 2. Kirim ke nalar kognitif batin Yui (NeuralInterface)
+      // 2. Kirim ke nalar kognitif batin Yui (NeuralInterface), dengan hard timeout
       console.log(`[QUEUE_BG_WORKER_THINK] [ID: ${pending.id}] Yui is pondering response for ${pending.sender_name}...`);
-      const reply = await NeuralInterface.processNeuralInput(pending.input, pending.sender_name, pending.context_id, pending.chat_type);
+      const reply = await withHardTimeout(
+        NeuralInterface.processNeuralInput(pending.input, pending.sender_name, pending.context_id, pending.chat_type),
+        MultiChannelQueue.NEURAL_PIPELINE_TIMEOUT_MS,
+        `[ID: ${pending.id}] Background cognitive pipeline`
+      );
 
        if (reply && reply.trim()) {
          // Output dedup: skip if the same message was delivered within the dedup window
@@ -465,6 +489,39 @@ export class MultiChannelQueue {
     }
   }
 
+  /**
+   * Jalankan pipeline kognitif dengan hard timeout + AbortController.
+   * Saat timeout: abort sinyal LLM, kembali dengan fallback reply agar antrean
+   * tidak pernah macet menunggu satu pesan selamanya.
+   */
+  private async thinkWithTimeout(input: string, senderName: string, contextId: string, chatType: string, taskId?: string): Promise<{ processed: NeuralReplyResult | null; timedOut: boolean }> {
+    const controller = new AbortController();
+    const timeoutMs = MultiChannelQueue.NEURAL_PIPELINE_TIMEOUT_MS;
+
+    return await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        controller.abort();
+        console.warn(`[QUEUE_PIPELINE_TIMEOUT] Cognitive pipeline exceeded ${timeoutMs}ms for ${senderName}. Aborted to keep channel I/O flowing.`);
+        resolve({ processed: { text: PIPELINE_TIMEOUT_FALLBACK }, timedOut: true });
+      }, timeoutMs);
+
+      NeuralInterface.processNeuralInputWithMeta(input, senderName, contextId, chatType, false, taskId, controller.signal)
+        .then((result) => {
+          clearTimeout(timer);
+          resolve({ processed: result, timedOut: false });
+        })
+        .catch((err: any) => {
+          clearTimeout(timer);
+          if (controller.signal.aborted) {
+            console.warn(`[QUEUE_PIPELINE_ABORTED] Pipeline aborted for ${senderName}: ${err?.message || err}`);
+            resolve({ processed: { text: PIPELINE_TIMEOUT_FALLBACK }, timedOut: true });
+          } else {
+            reject(err);
+          }
+        });
+    });
+  }
+
   private async processNext() {
     if (this.processing) return;
     if (this.queue.length === 0) return;
@@ -485,8 +542,9 @@ export class MultiChannelQueue {
     try {
       console.log(`[QUEUE_EXEC] Running cognitive processing for ${item.senderName} (${item.chatType})...`);
       
-      // Jalankan proses berpikir neural Yui secara berurutan
-      const processed = await NeuralInterface.processNeuralInputWithMeta(item.input, item.senderName, item.contextId, item.chatType);
+      // Jalankan proses berpikir neural Yui secara berurutan, dengan hard timeout
+      // agar satu pesan yang macet tidak memblokir jalur pesan berikutnya.
+      const { processed, timedOut } = await this.thinkWithTimeout(item.input, item.senderName, item.contextId, item.chatType);
       const reply = processed ? processed.text : null;
       const replyMeta: ReplyMeta | undefined = processed ? {
         mood: processed.mood,
@@ -494,13 +552,16 @@ export class MultiChannelQueue {
         sentiment: processed.sentiment,
       } : undefined;
       
-      // Await delivery so Telegram/Discord send completes before the next queue item,
-      // and so floating promise rejections from async onReply are not lost.
-      if (reply && reply.trim()) {
-         console.log(`[QUEUE_EXEC] Cognitive reply ready for ${item.senderName}. Dispatching to channel...`);
-       } else {
-         console.warn(`[QUEUE_EXEC] Empty cognitive reply for ${item.senderName} (${item.chatType}).`);
+       // Await delivery so Telegram/Discord send completes before the next queue item,
+       // and so floating promise rejections from async onReply are not lost.
+       if (timedOut) {
+         console.warn(`[QUEUE_PIPELINE_TIMEOUT] Using fallback reply for ${item.senderName} (${item.chatType}).`);
        }
+       if (reply && reply.trim()) {
+          console.log(`[QUEUE_EXEC] Cognitive reply ready for ${item.senderName}. Dispatching to channel...`);
+        } else {
+          console.warn(`[QUEUE_EXEC] Empty cognitive reply for ${item.senderName} (${item.chatType}).`);
+        }
 
        // Output dedup: skip if the same message was delivered within the dedup window
        const outputHash = reply ?? "";
@@ -519,6 +580,16 @@ export class MultiChannelQueue {
           const dedup = GlobalOutputDeduplicator.getInstance();
           if (dedup.isDuplicate(reply ?? "", item.contextId)) {
             console.log(`[GLOBAL_DEDUP] Skipping duplicate main queue output for ${item.senderName} (${item.contextId}).`);
+            // Balasan sudah dikirim langsung (mis. via tool speak) sebelum pipeline selesai.
+            // Tetap picu reaksi emosi pada pesan user via eventBus (didengarkan channel layer).
+            try {
+              eventBus.emit('TELEGRAM_REACTION', {
+                contextId: item.contextId,
+                mood: replyMeta?.mood,
+                emotion: replyMeta?.emotion,
+                sentiment: replyMeta?.sentiment
+              });
+            } catch (_) {}
           } else {
             dedup.markSent(reply ?? "", item.contextId);
             await Promise.resolve(item.onReply(reply ?? "", replyMeta)).catch((deliveryErr: any) => {
@@ -915,14 +986,27 @@ Unggkit topik nyata tersebut dari memori jika ingin, sapa dia dengan manis, atau
     console.log(`[QUEUE_RESUME] Found suspended task ${task.taskId}. Resuming task in background...`);
 
     this.processing = true;
+    this.processingStartTime = Date.now();
+    this.processingTimer = setTimeout(() => {
+      if (this.processing) {
+        console.warn(`[QUEUE_WATCHDOG] Suspended-task resume stuck for ${Date.now() - this.processingStartTime}ms. Resetting processing flag to recover queue.`);
+        this.processing = false;
+        this.processingTimer = null;
+      }
+    }, MultiChannelQueue.PROCESSING_TIMEOUT_MS);
+
     try {
-      const reply = await NeuralInterface.processNeuralInput(
-        task.originalPrompt,
-        task.userName || 'user',
-        task.contextId || 'web_default',
-        task.chatType || 'web',
-        false, // isProactive
-        task.taskId // Pass the taskId to trigger resume!
+      const reply = await withHardTimeout(
+        NeuralInterface.processNeuralInput(
+          task.originalPrompt,
+          task.userName || 'user',
+          task.contextId || 'web_default',
+          task.chatType || 'web',
+          false, // isProactive
+          task.taskId // Pass the taskId to trigger resume!
+        ),
+        MultiChannelQueue.NEURAL_PIPELINE_TIMEOUT_MS,
+        `[QUEUE_RESUME] Task ${task.taskId}`
       );
 
         if (reply && reply.trim()) {
@@ -1016,6 +1100,10 @@ Unggkit topik nyata tersebut dari memori jika ingin, sapa dia dengan manis, atau
     } catch (err: any) {
       console.error(`[QUEUE_RESUME_FAIL] Failed to process resumed task ${task.taskId}:`, err.message || err);
     } finally {
+      if (this.processingTimer) {
+        clearTimeout(this.processingTimer);
+        this.processingTimer = null;
+      }
       this.processing = false;
     }
   }

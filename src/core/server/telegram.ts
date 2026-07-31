@@ -11,6 +11,7 @@ import { getDynamicSandboxRoot, broadcastToWS } from "./apiRouter.js";
 import { GlobalOutputDeduplicator } from "../kernel/GlobalOutputDeduplicator.js";
 import { extractChannelFileAttachments } from "./channelFileAttachment.js";
 import { describeImageFromBuffer } from "../../modules/YuiVisionModule.js";
+import { eventBus } from "@shared/core/kernel/event-bus";
 
 async function withDeliveryTimeout<T>(fn: () => Promise<T>, timeoutMs: number, label: string): Promise<T> {
   return Promise.race([
@@ -74,6 +75,54 @@ function emojiForReplyMeta(meta?: any, settings?: any): string {
   }
   return pickRandomReaction(settings);
 }
+
+/**
+ * Set reaksi emoji pada pesan user. Retry sekali dengan ❤️ bila emoji ditolak API.
+ */
+async function trySetTelegramReaction(chatId: number | string, messageId: number, emoji: string, botApi: any): Promise<void> {
+  try {
+    await botApi.callApi('setMessageReaction', {
+      chat_id: chatId,
+      message_id: messageId,
+      reaction: [{ type: 'emoji', emoji: emoji as any }]
+    });
+  } catch (err: any) {
+    if (emoji !== '❤️') {
+      console.warn(`[TELEGRAM_REACTION] Emoji ${emoji} not supported (${err.message}), falling back to ❤️.`);
+      await trySetTelegramReaction(chatId, messageId, '❤️', botApi);
+    } else {
+      console.warn(`[TELEGRAM_REACTION] ❤️ fallback also failed:`, err.message);
+    }
+  }
+}
+
+// Cache reaksi target (chatId + messageId) per contextId agar reaksi tetap bisa
+// dipicu saat balasan dikirim langsung via tool speak (jalur dedup-skip).
+const pendingReactions = new Map<string, { chatId: number; messageId: number }>();
+const PENDING_REACTIONS_MAX = 200;
+function rememberPendingReaction(contextId: string, chatId: number, messageId: number) {
+  pendingReactions.set(contextId, { chatId, messageId });
+  if (pendingReactions.size > PENDING_REACTIONS_MAX) {
+    const oldestKey = pendingReactions.keys().next().value;
+    if (oldestKey !== undefined) pendingReactions.delete(oldestKey);
+  }
+}
+
+// Reaksi emosi juga dipicu untuk balasan yang dikirim lewat jalur lain (tool speak),
+// sehingga reaksi tidak bergantung pada jalur antrean utama.
+eventBus.on('TELEGRAM_REACTION', (data: any) => {
+  const { contextId, mood, emotion, sentiment } = data || {};
+  const target = contextId ? pendingReactions.get(contextId) : null;
+  if (!target) return;
+  const bot = activeTelegramBot;
+  if (!bot || !bot.telegram) return;
+  try {
+    const settings = Kernel.getInstance().getSettings().getAll() || {};
+    if (settings['telegram_bridge']?.autoAcknowledge === false) return;
+    const emoji = emojiForReplyMeta({ mood, emotion, sentiment }, settings);
+    void trySetTelegramReaction(target.chatId, target.messageId, emoji, bot.telegram);
+  } catch (e) {}
+});
 
 // Initialize AI for Bot
 const botGenAI = () => {
@@ -430,41 +479,47 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
       if (fileId) {
         const fileLink = await ctx.telegram.getFileLink(fileId);
         const fileUrl = fileLink.toString();
-        const resFile = await fetch(fileUrl);
-        if (resFile.ok) {
-          const sandboxDir = getDynamicSandboxRoot();
-          await fs.mkdir(sandboxDir, { recursive: true });
+        const downloadController = new AbortController();
+        const downloadTimeout = setTimeout(() => downloadController.abort(), 45000);
+        try {
+          const resFile = await fetch(fileUrl, { signal: downloadController.signal });
+          if (resFile.ok) {
+            const sandboxDir = getDynamicSandboxRoot();
+            await fs.mkdir(sandboxDir, { recursive: true });
 
-          const safeFilename = originalName || `file_${Date.now()}`;
-          const safePath = path.resolve(sandboxDir, safeFilename);
-          
-          if (safePath.startsWith(sandboxDir)) {
-            const arrayBuffer = await resFile.arrayBuffer();
-            const buffer = Buffer.from(arrayBuffer);
-            await fs.writeFile(safePath, buffer);
+            const safeFilename = originalName || `file_${Date.now()}`;
+            const safePath = path.resolve(sandboxDir, safeFilename);
+            
+            if (safePath.startsWith(sandboxDir)) {
+              const arrayBuffer = await resFile.arrayBuffer();
+              const buffer = Buffer.from(arrayBuffer);
+              await fs.writeFile(safePath, buffer);
 
-            let visualDesc = "";
-            const isImg = photo || safeFilename.match(/\.(jpe?g|png|webp|gif|bmp)$/i);
-            if (isImg) {
-              const ext = path.extname(safeFilename).toLowerCase();
-              let mimeType = "image/jpeg";
-              if (ext === ".png") mimeType = "image/png";
-              else if (ext === ".webp") mimeType = "image/webp";
-              else if (ext === ".gif") mimeType = "image/gif";
+              let visualDesc = "";
+              const isImg = photo || safeFilename.match(/\.(jpe?g|png|webp|gif|bmp)$/i);
+              if (isImg) {
+                const ext = path.extname(safeFilename).toLowerCase();
+                let mimeType = "image/jpeg";
+                if (ext === ".png") mimeType = "image/png";
+                else if (ext === ".webp") mimeType = "image/webp";
+                else if (ext === ".gif") mimeType = "image/gif";
 
-              try {
-                const desc = await describeImageFromBuffer(buffer, mimeType);
-                if (desc) {
-                  visualDesc = ` Sensory input analysis of this uploaded image indicates: "${desc}"`;
+                try {
+                  const desc = await describeImageFromBuffer(buffer, mimeType);
+                  if (desc) {
+                    visualDesc = ` Sensory input analysis of this uploaded image indicates: "${desc}"`;
+                  }
+                } catch (ev: any) {
+                  console.error("[TELEGRAM_VISION] Vision analysis error:", ev.message || ev);
                 }
-              } catch (ev: any) {
-                console.error("[TELEGRAM_VISION] Vision analysis error:", ev.message || ev);
               }
-            }
 
-            attachmentInfo = `\n\n[SYSTEM_ATTACHMENT_RECEIVED: File saved as "${safeFilename}" in sandbox workspace. You can read, list, and manipulate it using your tools.${visualDesc}]`;
-            attachmentProcessed = true;
+              attachmentInfo = `\n\n[SYSTEM_ATTACHMENT_RECEIVED: File saved as "${safeFilename}" in sandbox workspace. You can read, list, and manipulate it using your tools.${visualDesc}]`;
+              attachmentProcessed = true;
+            }
           }
+        } finally {
+          clearTimeout(downloadTimeout);
         }
       }
     } catch (attachmentErr: any) {
@@ -532,6 +587,10 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
         }
       });
 
+       // Simpan target reaksi (chatId + messageId) agar event TELEGRAM_REACTION
+       // dari jalur speak-langsung (dedup-skip) tetap tahu kemana harus bereaksi.
+       rememberPendingReaction(contextId, ctx.chat.id, ctx.message.message_id);
+
        MultiChannelQueue.getInstance().addMessage(
          userMessage,
          senderName,
@@ -542,6 +601,10 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
               const dedup = GlobalOutputDeduplicator.getInstance();
               if (dedup.isDuplicate(response, contextId)) {
                 console.log(`[GLOBAL_DEDUP] Skipping duplicate Telegram reply for ${senderName} (${contextId}).`);
+                // Balasan sudah dikirim langsung (mis. via tool speak). Tetap picu reaksi emosi.
+                if (currentSettings['telegram_bridge']?.autoAcknowledge !== false) {
+                  void trySetTelegramReaction(ctx.chat.id, ctx.message.message_id, emojiForReplyMeta(meta, currentSettings), ctx.telegram);
+                }
               } else {
                 dedup.markSent(response, contextId);
                 try {
@@ -561,27 +624,7 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
 
                 // Reaksi emoji dipilih berdasarkan emosi/mood balasan Yui (fallback random)
                 if (currentSettings['telegram_bridge']?.autoAcknowledge !== false) {
-                  const tryReact = async (emoji: string): Promise<void> => {
-                    try {
-                      if (typeof (ctx as any).react === 'function') {
-                        await (ctx as any).react(emoji as any);
-                      } else {
-                        await ctx.telegram.callApi('setMessageReaction', {
-                          chat_id: ctx.chat.id,
-                          message_id: ctx.message.message_id,
-                          reaction: [{ type: 'emoji', emoji: emoji as any }]
-                        });
-                      }
-                    } catch (err: any) {
-                      if (emoji !== '❤️') {
-                        console.warn(`[TELEGRAM_REACTION] Emoji ${emoji} not supported (${err.message}), falling back to ❤️.`);
-                        await tryReact('❤️');
-                      } else {
-                        console.warn(`[TELEGRAM_REACTION] ❤️ fallback also failed:`, err.message);
-                      }
-                    }
-                  };
-                  void tryReact(emojiForReplyMeta(meta, currentSettings));
+                  void trySetTelegramReaction(ctx.chat.id, ctx.message.message_id, emojiForReplyMeta(meta, currentSettings), ctx.telegram);
                 }
               }
 

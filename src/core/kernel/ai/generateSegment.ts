@@ -353,18 +353,29 @@ export async function generateContent(
           }
 
           const fetchController = new AbortController();
-          const requestTimeout = setTimeout(() => fetchController.abort(), 90000); // 90 second generation limit
-          
+          let stallTimer: ReturnType<typeof setTimeout> | null = null;
+          const armStallTimeout = (ms: number) => {
+            if (stallTimer) clearTimeout(stallTimer);
+            stallTimer = setTimeout(() => fetchController.abort(), ms);
+          };
+          const clearStallTimeout = () => {
+            if (stallTimer) { clearTimeout(stallTimer); stallTimer = null; }
+          };
+
+          // Stall timeout covering headers AND body (streaming/json) — body read
+          // previously had no timeout and could hang the queue forever.
+          armStallTimeout(90000);
+
           const res = await fetch(finalTargetUrl, {
             method: 'POST',
             headers,
             body: JSON.stringify(requestBody),
             signal: fetchController.signal
           });
-          clearTimeout(requestTimeout);
 
           if (!res.ok) {
             const errText = await res.text();
+            clearStallTimeout();
             throw new Error(`HTTP Error ${res.status}: ${errText}`);
           }
 
@@ -384,6 +395,8 @@ export async function generateContent(
             let lastParsedIndex = 0;
 
             for await (const rawChunk of reader as any) {
+              // Reset stall timer on every chunk: active streams survive, stalled ones die.
+              armStallTimeout(60000);
               const chunkStr = typeof rawChunk === 'string' ? rawChunk : decoder.decode(rawChunk, { stream: true });
               accumulated += chunkStr;
 
@@ -512,9 +525,11 @@ export async function generateContent(
             }
             
             console.log(`[SERVER_AI] Sirkuit kognitif streaming sukses dengan ${attempt.label}.`);
+            clearStallTimeout();
             return fullText;
           } else {
             const resJson: any = await res.json();
+            clearStallTimeout();
             const parts = resJson.candidates?.[0]?.content?.parts || [];
             let text = '';
             const mainPart = parts.find((p: any) => p.text && !p.thought);

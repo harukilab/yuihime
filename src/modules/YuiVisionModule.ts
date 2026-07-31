@@ -179,11 +179,19 @@ export async function describeImageFromBuffer(buffer: Buffer, mimeType: string):
         headers['x-goog-api-key'] = apiKey;
       }
 
-      const fetchRes = await fetch(targetUrl, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(requestBody)
-      });
+      const visionController = new AbortController();
+      const visionTimeout = setTimeout(() => visionController.abort(), 45000);
+      let fetchRes: Response;
+      try {
+        fetchRes = await fetch(targetUrl, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(requestBody),
+          signal: visionController.signal
+        });
+      } finally {
+        clearTimeout(visionTimeout);
+      }
 
       if (!fetchRes.ok) {
         const errText = await fetchRes.text();
@@ -259,11 +267,19 @@ export async function describeImageFromBuffer(buffer: Buffer, mimeType: string):
         ]
       };
 
-      const fetchRes = await fetch(targetUrl, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(requestBody)
-      });
+      const visionController = new AbortController();
+      const visionTimeout = setTimeout(() => visionController.abort(), 45000);
+      let fetchRes: Response;
+      try {
+        fetchRes = await fetch(targetUrl, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(requestBody),
+          signal: visionController.signal
+        });
+      } finally {
+        clearTimeout(visionTimeout);
+      }
 
       if (!fetchRes.ok) {
         const errText = await fetchRes.text();
@@ -320,11 +336,19 @@ export async function describeImageFromBuffer(buffer: Buffer, mimeType: string):
         ]
       };
 
-      const fetchRes = await fetch(targetUrl, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(requestBody)
-      });
+      const visionController = new AbortController();
+      const visionTimeout = setTimeout(() => visionController.abort(), 45000);
+      let fetchRes: Response;
+      try {
+        fetchRes = await fetch(targetUrl, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(requestBody),
+          signal: visionController.signal
+        });
+      } finally {
+        clearTimeout(visionTimeout);
+      }
 
       if (!fetchRes.ok) {
         const errText = await fetchRes.text();
