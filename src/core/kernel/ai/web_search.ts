@@ -31,6 +31,13 @@ function summarizeAiError(error: any): string {
 }
 
 export async function executeGoogleSearch(query: string): Promise<any[]> {
+  const startTime = Date.now();
+  const MAX_TOTAL_MS = 15000;
+  
+  function hasTimedOut(): boolean {
+    return Date.now() - startTime > MAX_TOTAL_MS;
+  }
+  
   const settings = SettingsManager.getInstance();
   
   const providersTable = (settings.get('providers') as any) || {};
@@ -273,7 +280,8 @@ export async function executeGoogleSearch(query: string): Promise<any[]> {
     return results;
   };
 
-  try {
+try {
+    if (hasTimedOut()) return searchResults;
     console.log(`[SERVER_SEARCH_GROUNDING] Querying Zero-Key DuckDuckGo Web Scraper for: ${query}`);
     const ddgUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
     const ddgRes = await fetch(ddgUrl, {
@@ -300,7 +308,7 @@ export async function executeGoogleSearch(query: string): Promise<any[]> {
     console.warn(`[SERVER_SEARCH_GROUNDING] DuckDuckGo zero-key scraper attempt failed:`, ddgErr.message);
   }
 
-  if (searchResults.length < 3) {
+  if (searchResults.length < 3 && !hasTimedOut()) {
     try {
       console.log(`[SERVER_SEARCH_GROUNDING] Querying Zero-Key Qwant Lite for: ${query}`);
       const qwantUrl = `https://lite.qwant.com/?q=${encodeURIComponent(query)}`;
@@ -329,7 +337,7 @@ export async function executeGoogleSearch(query: string): Promise<any[]> {
     }
   }
 
-  if (searchResults.length < 3) {
+  if (searchResults.length < 3 && !hasTimedOut()) {
     try {
       console.log(`[SERVER_SEARCH_GROUNDING] Querying Zero-Key Yandex for: ${query}`);
       const yandexUrl = `https://yandex.com/search/?text=${encodeURIComponent(query)}`;
@@ -346,8 +354,8 @@ export async function executeGoogleSearch(query: string): Promise<any[]> {
         const html = await yandexRes.text();
         const yandexResults = scrapeHtmlResults(html, {
           resultBlock: /<li class="[^"]*serp-item[^"]*"[^>]*>([\s\S]*?)<\/li>/g,
-          title: /<h2[^>]*>[\s\S]*?<a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<\/h2>/,
-          link: /<h2[^>]*>[\s\S]*?<a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<\/h2>/,
+          title: /<h2[^>]*>[\s\S]*?<a[^>]*href="([^"]+)"[^>]*>[\s\S]*?<\/h2>/,
+          link: /<h2[^>]*>[\s\S]*?<a[^>]*href="([^"]+)"[^>]*>[\s\S]*?<\/h2>/,
           snippet: /<div class="[^"]*text-[^"]*"[^>]*>([\s\S]*?)<\/div>/
         });
         searchResults.push(...yandexResults);
@@ -358,7 +366,7 @@ export async function executeGoogleSearch(query: string): Promise<any[]> {
     }
   }
 
-  if (searchResults.length < 3) {
+  if (searchResults.length < 3 && !hasTimedOut()) {
     const searxInstances = [
       'https://searx.be',
       'https://search.sapti.me',
@@ -394,8 +402,7 @@ export async function executeGoogleSearch(query: string): Promise<any[]> {
     }
   }
 
-  if (searchResults.length < 3) {
-    const queryKeywords = query.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+  if (searchResults.length < 3 && !hasTimedOut()) {
     const rssFeeds = [
       { url: 'https://feeds.bbci.co.uk/news/world/rss.xml', name: 'BBC World', type: 'rss' as const },
       { url: 'https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml', name: 'NYT Tech', type: 'rss' as const },
@@ -405,6 +412,7 @@ export async function executeGoogleSearch(query: string): Promise<any[]> {
     ];
 
     for (const feed of rssFeeds) {
+      if (hasTimedOut()) break;
       try {
         console.log(`[SERVER_SEARCH_GROUNDING] Querying RSS feed (${feed.name}) for: ${query}`);
         const res = await fetch(feed.url, {
@@ -474,6 +482,7 @@ export async function executeGoogleSearch(query: string): Promise<any[]> {
       }
     }
   }
+  if (!hasTimedOut()) {
   try {
     console.log(`[SERVER_SEARCH_GROUNDING] Performing Zero-Key Wikipedia Multi-Lang query for: ${query}`);
     const targetLangs = ['id', 'en'];
@@ -515,6 +524,7 @@ export async function executeGoogleSearch(query: string): Promise<any[]> {
     }
   } catch (globalWikiErr: any) {
     console.error(`[SERVER_SEARCH_GROUNDING] Wikipedia search API completely failed:`, globalWikiErr.message);
+  }
   }
 
   if (searchResults.length > 0) {
