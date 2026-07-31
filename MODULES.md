@@ -83,3 +83,4 @@ Peta struktur direktori pasca-pemisahan Web UI ↔ Daemon (lihat UPDATE_LOG `[4.
 - `core:kernel,core:api`
 - `core:kernel`
 - `core:kernel,core:server`
+- `src/core/database.ts — add logDbRetry for file-based DB retry logging`

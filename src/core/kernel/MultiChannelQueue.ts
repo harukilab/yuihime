@@ -10,6 +10,7 @@ import { activeTelegramBot } from "../server/telegram.js";
 import { GlobalOutputDeduplicator } from "./GlobalOutputDeduplicator.js";
 import { Kernel } from "../kernel/core.js";
 import { stateMachine } from "./state-machine.js";
+import { logDbRetry } from "../database.js";
 
 const DEFAULT_PENDING_FEEDBACK = `[SYSTEM MESSAGE]: Koneksi saraf batin Yuihime dengan kognisi LLM sedang sangat padat atau terputus sementara 📡. Tapi jangan khawatir! Pesanmu ("\${inputPreview}") sudah aman dalam antrean tunggu kognisi Yui. Yui akan membalas secara otomatis setelah tautan saraf sinkron kembali! 🌸`;
 
@@ -30,9 +31,11 @@ async function withSqliteRetry<T>(label: string, db: any, fn: () => T): Promise<
       if (!isSqliteBusy(err)) throw err;
       const backoff = 200 * attempt;
       console.warn(`[QUEUE_SQLITE_RETRY] ${label} hit SQLITE_BUSY (attempt ${attempt}/${maxRetries}). Retrying in ${backoff}ms...`);
+      logDbRetry(label, `SQLITE_BUSY (attempt ${attempt}/${maxRetries}), retrying in ${backoff}ms`);
       await new Promise(resolve => setTimeout(resolve, backoff));
     }
   }
+  logDbRetry(label, `FAILED after ${maxRetries} retries`);
   throw lastErr;
 }
 

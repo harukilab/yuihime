@@ -1,6 +1,13 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.140] - 2026-07-31
+### Fix: Fix SQLITE_BUSY locking: centralized DB connection + file-based retry logging
+- Replace worker-thread DB connection in performForgetfulnessProtocol with centralized getDb() singleton to eliminate SQLITE_BUSY contention
+- Add logDbRetry file logging to database.ts (db-retry.log) and integrate into retryDbOperation and withSqliteRetry
+- Remove worker_threads dependency from NeuralInterface.ts — forgetfulness protocol now runs on main thread's centralized connection
+
+
 ## [4.139] - 2026-07-30
 ### fix: Fix literal ~ directory creation from unexpanded tilde in systemRouter.ts, settings.ts, and SOPModule.ts
 - Fixed ~ expansion bug in systemRouter.ts (primary cause of ~ dir in project root), settings.ts, and SOPModule.ts

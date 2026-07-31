@@ -1,6 +1,6 @@
 import Database from "better-sqlite3";
 import path from "path";
-import { existsSync, renameSync, mkdirSync, unlinkSync } from "fs";
+import { appendFileSync, existsSync, renameSync, mkdirSync, unlinkSync } from "fs";
 import os from "os";
 import { AUTO_CLEANUP_LIMITS } from "../../shared/constants.js";
 
@@ -17,6 +17,20 @@ const rootEnvVal = resolveHomePath(process.env.YUIHIME_SYSTEM_ROOT || process.en
 const defaultSystemRoot = path.isAbsolute(rootEnvVal) ? rootEnvVal : path.join(process.cwd(), rootEnvVal);
 const defaultDataDir = process.env.YUIHIME_DATA_DIR ? resolveHomePath(process.env.YUIHIME_DATA_DIR) : path.join(defaultSystemRoot, "data");
 export let dbPath = process.env.YUIHIME_DB_PATH ? resolveHomePath(process.env.YUIHIME_DB_PATH) : path.join(defaultDataDir, "yuihime.db");
+
+const dbLogPath = path.join(defaultDataDir, "db-retry.log");
+
+export function logDbRetry(label: string, message: string): void {
+  try {
+    const logDir = path.dirname(dbLogPath);
+    if (!existsSync(logDir)) {
+      mkdirSync(logDir, { recursive: true });
+    }
+    const timestamp = new Date().toISOString();
+    const line = `[${timestamp}] [${label}] ${message}\n`;
+    appendFileSync(dbLogPath, line, "utf-8");
+  } catch {}
+}
 
 let cachedDb: any = null;
 
@@ -90,9 +104,13 @@ export async function retryDbOperation<T>(operation: () => T, label = 'DB operat
       const msg = err?.message || '';
       if (msg.includes('database is locked') || msg.includes('SQLITE_BUSY')) {
         attempt++;
-        if (attempt > maxRetries) throw err;
+        if (attempt > maxRetries) {
+          logDbRetry(label, `FAILED after ${maxRetries} retries: ${msg}`);
+          throw err;
+        }
         const delay = Math.min(1000 * Math.pow(2, attempt - 1), 8000);
         console.warn(`[DB_RETRY] ${label} locked (attempt ${attempt}/${maxRetries}), retrying in ${delay}ms...`);
+        logDbRetry(label, `locked (attempt ${attempt}/${maxRetries}), retrying in ${delay}ms`);
         await new Promise(r => setTimeout(r, delay));
         continue;
       }

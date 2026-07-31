@@ -1,14 +1,12 @@
 import { readFileSync } from "fs";
 import path from "path";
-import { Worker } from "worker_threads";
 import { Kernel } from "./core.js";
 import { AIService } from "./ai.js";
 import { Soul } from "../soul.js";
-import Database from "better-sqlite3";
 import { Cortex } from "../cortex.js";
 import { Memory, Dream, Identity } from "@shared/include/types";
 import { DEFAULT_NEURAL_CORES } from "@shared/constants";
-import { deduplicateAndMergeIdentities, dbPath } from "../database.js";
+import { deduplicateAndMergeIdentities, getDb, retryDbOperation } from "../database.js";
 
 import { broadcastToWS } from "../server/apiRouter";
 import { BackgroundToolDispatcher } from "./BackgroundToolDispatcher.js";
@@ -738,114 +736,62 @@ export class NeuralInterface {
     if (!contextId || !NeuralInterface.db) return;
 
     const cleanContextId = contextId.split("|")[0];
-    const resolvedDbPath = dbPath;
-
-    // Jalankan seluruh operasi di Worker Thread terpisah.
-    // Dengan ini, better-sqlite3 (synchronous) berjalan di thread lain
-    // dan event loop utama (TG in/out, LLM reply delivery) TIDAK PERNAH diblokir.
-    const workerCode = `
-      const { workerData, parentPort } = require('worker_threads');
-      const Database = require('better-sqlite3');
-
-      const { dbPath, contextId } = workerData;
-
-      (function run() {
-        let db;
-        try {
-          db = new Database(dbPath, { timeout: 30000 });
-          db.pragma('journal_mode = WAL');
-          db.pragma('busy_timeout = 30000');
-
-          const fiveMinutesAgo = Date.now() - 300000;
-
-          // DECAY: single-pass UPDATE via composite index
-          const decayResult = db.prepare(
-            'UPDATE memories SET importance = MAX(0.0, importance - 0.05) WHERE context = ? AND speaker != ? AND timestamp < ?'
-          ).run(contextId, 'system', fiveMinutesAgo);
-
-          // PURGE: single-pass DELETE via composite index
-          // FTS5 trigger runs per-row — batch in transaction to minimize overhead
-          const purgeResult = db.transaction(() => {
-            return db.prepare(
-              'DELETE FROM memories WHERE context = ? AND importance < 0.15 AND speaker != ? AND timestamp < ?'
-            ).run(contextId, 'system', fiveMinutesAgo);
-          })();
-
-          // CONSOLIDATE: kompres 30 tertua jika total > 150
-          const countRow = db.prepare('SELECT COUNT(*) as count FROM memories WHERE context = ?').get(contextId);
-          const totalCount = countRow ? countRow.count : 0;
-
-          let consolidated = false;
-          if (totalCount > 150) {
-            const oldestRows = db.prepare(
-              'SELECT id, timestamp FROM memories WHERE context = ? AND speaker != ? ORDER BY timestamp ASC LIMIT 30'
-            ).all(contextId, 'system');
-
-            if (oldestRows.length >= 20) {
-              const start = new Date(oldestRows[0].timestamp).toLocaleTimeString();
-              const end = new Date(oldestRows[oldestRows.length - 1].timestamp).toLocaleTimeString();
-              const summary = 'user membahas beberapa topik hangat antara pukul ' + start + ' dan ' + end + '. user mengekspresikan hobi, pemikiran, dan rasa pedulinya kepada Yui secara tulus, memperdalam simpul batin kita secara harmoni dan saling pengertian.';
-              const summaryId = 'abstract_' + Math.random().toString(36).substr(2, 9);
-
-              db.transaction(() => {
-                db.prepare(
-                  "INSERT INTO memories (id, type, content, importance, speaker, context, timestamp, tags, sentiment) VALUES (?, 'summary', ?, 0.85, 'system', ?, ?, '[\\\",\\\"abstraction\\\",\\\",\\\"defragmented\\\"]', 0.6)"
-                ).run(summaryId, '[Abstraksi Pengalaman]: ' + summary, contextId, Date.now() - 1000);
-
-                const ids = oldestRows.map(function(r) { return r.id; });
-                const placeholders = ids.map(function() { return '?'; }).join(',');
-                db.prepare('DELETE FROM memories WHERE id IN (' + placeholders + ')').run.apply(db.prepare('DELETE FROM memories WHERE id IN (' + placeholders + ')'), ids);
-              })();
-
-              consolidated = true;
-            }
-          }
-
-          parentPort.postMessage({
-            success: true,
-            decayed: decayResult.changes,
-            purged: purgeResult.changes,
-            totalCount,
-            consolidated
-          });
-        } catch (err) {
-          parentPort.postMessage({ success: false, error: err.message });
-        } finally {
-          try { if (db) db.close(); } catch (_) {}
-        }
-      })();
-    `;
 
     try {
-      await new Promise<void>((resolve) => {
-        const worker = new Worker(workerCode, {
-          eval: true,
-          workerData: { dbPath: resolvedDbPath, contextId: cleanContextId }
-        });
+      const db = getDb();
+      const fiveMinutesAgo = Date.now() - 300000;
 
-        worker.on('message', (msg: any) => {
-          if (msg.success) {
-            console.log(`[FORGETFULNESS_ALGORITHM] Worker done — decayed: ${msg.decayed}, purged: ${msg.purged}, total: ${msg.totalCount}, consolidated: ${msg.consolidated}`);
-          } else {
-            console.warn(`[FORGETFULNESS_ALGORITHM] Worker reported error: ${msg.error}`);
-          }
-          resolve();
-        });
+      const decayResult = await retryDbOperation(
+        () => db.prepare(
+          'UPDATE memories SET importance = MAX(0.0, importance - 0.05) WHERE context = ? AND speaker != ? AND timestamp < ?'
+        ).run(cleanContextId, 'system', fiveMinutesAgo),
+        'forgetfulness-decay'
+      );
 
-        worker.on('error', (err: any) => {
-          console.warn(`[FORGETFULNESS_ALGORITHM] Worker thread error: ${err?.message || err}`);
-          resolve();
-        });
+      const purgeResult = await retryDbOperation(
+        () => db.transaction(() => {
+          return db.prepare(
+            'DELETE FROM memories WHERE context = ? AND importance < 0.15 AND speaker != ? AND timestamp < ?'
+          ).run(cleanContextId, 'system', fiveMinutesAgo);
+        })(),
+        'forgetfulness-purge'
+      );
 
-        worker.on('exit', (code: number) => {
-          if (code !== 0) {
-            console.warn(`[FORGETFULNESS_ALGORITHM] Worker exited with code ${code}`);
-          }
-          resolve();
-        });
-      });
+      const countRow = db.prepare('SELECT COUNT(*) as count FROM memories WHERE context = ?').get(cleanContextId) as { count: number } | undefined;
+      const totalCount = countRow ? countRow.count : 0;
+
+      let consolidated = false;
+      if (totalCount > 150) {
+        const oldestRows = db.prepare(
+          'SELECT id, timestamp FROM memories WHERE context = ? AND speaker != ? ORDER BY timestamp ASC LIMIT 30'
+        ).all(cleanContextId, 'system') as { id: string; timestamp: number }[];
+
+        if (oldestRows.length >= 20) {
+          const start = new Date(oldestRows[0].timestamp).toLocaleTimeString();
+          const end = new Date(oldestRows[oldestRows.length - 1].timestamp).toLocaleTimeString();
+          const summary = 'user membahas beberapa topik hangat antara pukul ' + start + ' dan ' + end + '. user mengekspresikan hobi, pemikiran, dan rasa pedulinya kepada Yui secara tulus, memperdalam simpul batin kita secara harmoni dan saling pengertian.';
+          const summaryId = 'abstract_' + Math.random().toString(36).substr(2, 9);
+
+          await retryDbOperation(
+            () => db.transaction(() => {
+              db.prepare(
+                "INSERT INTO memories (id, type, content, importance, speaker, context, timestamp, tags, sentiment) VALUES (?, 'summary', ?, 0.85, 'system', ?, ?, '[\"abstraction\",\"defragmented\"]', 0.6)"
+              ).run(summaryId, '[Abstraksi Pengalaman]: ' + summary, cleanContextId, Date.now() - 1000);
+
+              const ids = oldestRows.map((r) => r.id);
+              const placeholders = ids.map(() => '?').join(',');
+              db.prepare('DELETE FROM memories WHERE id IN (' + placeholders + ')').run(...ids);
+            })(),
+            'forgetfulness-consolidate'
+          );
+
+          consolidated = true;
+        }
+      }
+
+      console.log(`[FORGETFULNESS_ALGORITHM] Centralized DB — decayed: ${decayResult.changes}, purged: ${purgeResult.changes}, total: ${totalCount}, consolidated: ${consolidated}`);
     } catch (err: any) {
-      console.warn(`[FORGETFULNESS_ALGORITHM] Failed to launch worker: ${err?.message || err}`);
+      console.warn(`[FORGETFULNESS_ALGORITHM] Failed: ${err?.message || err}`);
     }
   }
 }
