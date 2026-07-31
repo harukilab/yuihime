@@ -84,7 +84,6 @@ function serverModuleStubPlugin(): Plugin {
     '@/core/server/llmAuditor',
     '@/core/server/channelFileAttachment',
     '@/core/server/datasetSynthesizer',
-    '@/core/server/telegramReactionLearner',
     '@/core/tts/OfficialStreamingSpeechTTS',
     '@/core/tts/OfficialSpeechTTS',
     '@/core/tts/OpenRouterTTS',

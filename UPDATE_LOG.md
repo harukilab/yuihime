@@ -1,6 +1,27 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.149] - 2026-07-31
+### Refactor: Hapus reaction NLP Telegram (random emoji) + log khusus TensorArt
+- Hapus telegramReactionLearner.ts (self-training NanoBrain, sentiment, feedback); reaksi kini random dari pool reactionEmojis config.
+- Hapus tabel & index telegram_reaction_feedback (database.ts) dan stub telegramReactionLearner (web/vite.config.ts).
+- TensorArt generate mencatat log 'tensorart' (appendLog): prompt, model, jobId, downloadUrl, localPath.
+
+
+## [4.148] - 2026-07-31
+### Feature: Log khusus TensorArt: prompt, model, generate ID, link download
+- tensorart_generate kini mencatat ke log kategori 'tensorart' (appendLog/fileLogger, rotasi harian + retensi 7 hari): event generate, prompt, model (toolName), jobId (generate ID TensorArt), downloadUrl + localPath.
+- Log terbaca Yui via tool view_logs (category=tensorart, termasuk arsip).
+
+
+## [4.147] - 2026-07-31
+### Refactor: Final removal of Telegram reaction NLP (self-training + learner), auto-react jadi random emoji
+- Hapus telegramReactionLearner.ts (NanoBrain self-training, klasifikasi sentimen, feedback loop).
+- telegram.ts: hapus import/init learner, pendingReactionFeedback, flushPreviousReactionFeedback; reaksi kini random dari pool reactionEmojis config (difilter ke emoji Telegram yang didukung).
+- database.ts: hapus tabel & index telegram_reaction_feedback.
+- web/vite.config.ts: hapus stub serverModule telegramReactionLearner; build web+server sukses, lint lulus.
+
+
 ## [4.146] - 2026-07-31
 ### Feature: Background chat summary engine: idle-gap + daily, boot catch-up, log rotation, chat_log tool
 - ChatSummaryEngine (baru): ringkasan latar belakang jeda hening 120s (min 30 pesan) & daily summary otomatis saat tanggal berganti; disimpan ke DB memories + file, tidak diucapkan.

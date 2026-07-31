@@ -307,17 +307,6 @@ export async function setupSchema(db: any) {
         message_id INTEGER
       );
     `,
-    telegram_reaction_feedback: `
-      CREATE TABLE IF NOT EXISTS telegram_reaction_feedback (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        chat_id INTEGER NOT NULL,
-        tg_id INTEGER NOT NULL,
-        sentiment_class TEXT NOT NULL,
-        emoji_used TEXT NOT NULL,
-        user_replied INTEGER DEFAULT 0,
-        timestamp INTEGER DEFAULT (strftime('%s', 'now') * 1000)
-      )
-    `,
     custom_personas: `
       CREATE TABLE IF NOT EXISTS custom_personas (
         id TEXT PRIMARY KEY,
@@ -364,8 +353,7 @@ export async function setupSchema(db: any) {
     idx_history_timestamp: "CREATE INDEX IF NOT EXISTS idx_history_timestamp ON history(timestamp);",
     idx_cron_tasks_next: "CREATE INDEX IF NOT EXISTS idx_cron_tasks_next ON cron_tasks(nextRun);",
     idx_tg_users_last_seen: "CREATE INDEX IF NOT EXISTS idx_tg_users_last_seen ON telegram_users(last_seen);",
-    idx_tg_update_ids_chat: "CREATE INDEX IF NOT EXISTS idx_tg_update_ids_chat ON telegram_update_ids(chat_id, processed_at);",
-    idx_tg_reaction_feedback: "CREATE INDEX IF NOT EXISTS idx_tg_reaction_feedback ON telegram_reaction_feedback(chat_id, tg_id, sentiment_class, emoji_used);"
+    idx_tg_update_ids_chat: "CREATE INDEX IF NOT EXISTS idx_tg_update_ids_chat ON telegram_update_ids(chat_id, processed_at);"
   };
 
   for (const [indexName, ddl] of Object.entries(indexes)) {

@@ -7,7 +7,6 @@ import path from "path";
 import { Kernel } from "../kernel/core.js";
 import { MultiChannelQueue } from "../kernel/MultiChannelQueue.js";
 import { getDb, deduplicateAndMergeIdentities, retryDbOperation } from "../database.js";
-import { TelegramReactionLearner } from "./telegramReactionLearner.js";
 import { getDynamicSandboxRoot, broadcastToWS } from "./apiRouter.js";
 import { GlobalOutputDeduplicator } from "../kernel/GlobalOutputDeduplicator.js";
 import { extractChannelFileAttachments } from "./channelFileAttachment.js";
@@ -28,12 +27,23 @@ let db: any = null;
 export let activeTelegramBot: any = null;
 export let activeTelegramToken: string | null = null;
 
-const pendingReactionFeedback = new Map<
-  string,
-  { chatId: number; tgId: number; messageText: string; emoji: string; timestamp: number }
->();
+const TELEGRAM_ALLOWED_REACTIONS = new Set([
+  '👍', '👎', '❤️', '🔥', '🥰', '👏', '😁', '🤔', '🤨', '😐',
+  '😢', '😭', '😡', '🥱', '😱', '🤯', '🤩', '😍', '🤗', '🤔',
+  '😅', '😎', '🥳', '💯', '🤝', '✅', '🤡', '🤮', '🥲', '🤤',
+  '🤑', '😱'
+]);
 
-const FEEDBACK_REPLY_WINDOW_MS = 2 * 60 * 1000;
+const DEFAULT_REACTION_EMOJIS = ['❤️', '🔥', '🥰', '👍', '😁'];
+
+function pickRandomReaction(settings: any): string {
+  const configured = String(settings?.['telegram_bridge']?.reactionEmojis || '')
+    .split(',')
+    .map(e => e.trim())
+    .filter(e => e && TELEGRAM_ALLOWED_REACTIONS.has(e));
+  const pool = configured.length > 0 ? configured : DEFAULT_REACTION_EMOJIS;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
 
 // Initialize AI for Bot
 const botGenAI = () => {
@@ -48,10 +58,6 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
   } else if (!db) {
     db = getDb();
   }
-
-  const reactionLearner = TelegramReactionLearner.getInstance();
-  reactionLearner.setDb(db);
-  await reactionLearner.init().catch(() => {});
 
   const settings = Kernel.getInstance().getSettings().getAll();
   const botToken = settings['telegram_bridge']?.botToken || process.env.TELEGRAM_BOT_TOKEN;
@@ -449,43 +455,9 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
 
     if (!userMessage.trim()) return;
 
-    const flushPreviousReactionFeedback = async () => {
-      const key = `${ctx.chat.id}|${ctx.from.id}`;
-      const pending = pendingReactionFeedback.get(key);
-      if (pending && Date.now() - pending.timestamp <= FEEDBACK_REPLY_WINDOW_MS) {
-        await TelegramReactionLearner.getInstance().recordReaction(
-          pending.chatId,
-          pending.tgId,
-          pending.messageText,
-          pending.emoji,
-          true
-        );
-        pendingReactionFeedback.delete(key);
-      }
-    };
-
-    await flushPreviousReactionFeedback();
-
     // Immediate acknowledgment if enabled
     if (currentSettings['telegram_bridge']?.autoAcknowledge !== false) {
       ctx.sendChatAction('typing').catch(() => {});
-
-      const sentiment = reactionLearner.classify(rawInput || '');
-      const chosenEmoji = await reactionLearner.pickEmoji(
-        ctx.chat.id,
-        ctx.from.id,
-        rawInput || ''
-      );
-
-      pendingReactionFeedback.set(`${ctx.chat.id}|${ctx.from.id}`, {
-        chatId: ctx.chat.id,
-        tgId: ctx.from.id,
-        messageText: rawInput || '',
-        emoji: chosenEmoji,
-        timestamp: Date.now()
-      });
-
-      void reactionLearner.recordReaction(ctx.chat.id, ctx.from.id, rawInput || '', chosenEmoji, false);
 
       const tryReact = async (emoji: string): Promise<void> => {
         try {
@@ -508,9 +480,7 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
         }
       };
 
-      if (chosenEmoji) {
-        void tryReact(chosenEmoji);
-      }
+      void tryReact(pickRandomReaction(currentSettings));
     }
 
     // Simulate Agent Thinking

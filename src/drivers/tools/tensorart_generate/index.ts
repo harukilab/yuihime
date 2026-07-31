@@ -4,6 +4,7 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 import fsp from "fs/promises";
+import { appendLog } from "@/core/fileLogger";
 
 interface GenerateArgs {
   action?: "generate" | "list_tools" | "upload_file";
@@ -505,6 +506,22 @@ export const TensorArtGenerateTool: ToolModule = {
             metadata: { width, height },
             downloadSucceeded: !!localPath,
           };
+
+          try {
+            appendLog('tensorart', {
+              event: 'generate',
+              prompt,
+              model: toolName,
+              jobId,
+              downloadUrl: imageUrl,
+              localPath: localPath || null,
+              width,
+              height,
+            });
+            console.log(`[TENSORART_GENERATE] Logged to tensorart log (jobId=${jobId}).`);
+          } catch (logErr: any) {
+            console.warn("[TENSORART_GENERATE] Failed to write tensorart log:", logErr.message || logErr);
+          }
           
           if (!localPath) {
             resultData.fallback = "link_only";
