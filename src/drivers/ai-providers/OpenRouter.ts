@@ -13,7 +13,7 @@ export const OpenRouter: ProviderModule = {
     models: ['openai/gpt-4o', 'anthropic/claude-3.5-sonnet', 'google/gemini-2.0-flash-001'],
     configSchema: {
       fields: {
-        apiKey: { type: 'password', label: 'API Key', description: 'OpenRouter API Key' },
+        apiKey: { type: 'textarea', label: 'OpenRouter API Key Pool', description: 'Satu baris = satu API Key. Disarankan gunakan minimal 2 key agar pool rotasi aktif.', default: '' },
         model: { 
           type: 'select', 
           label: 'Model Selection', 

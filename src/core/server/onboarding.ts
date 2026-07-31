@@ -67,6 +67,13 @@ function askSync(query: string, defaultValue = ""): string {
   return answer || defaultValue;
 }
 
+function normalizeApiKeyInput(raw: string): string | string[] {
+  if (!raw) return raw;
+  const parts = raw.split(/[\n,;]+/).map((k) => k.trim()).filter((k) => k.length > 0 && !k.toLowerCase().includes('your_api_key'));
+  if (parts.length <= 1) return raw;
+  return parts;
+}
+
 // Interactive Choice Selector Menu
 function chooseOptionSync(title: string, options: string[], defaultIdx = 0): number {
   console.log(`\n\x1b[1;36m${title}\x1b[0m`);
@@ -425,7 +432,7 @@ try {
 
       if (selectedProvider !== "ollama") {
         apiKey = askSync(`Masukkan API Key / Token untuk ${selectedProvider.toUpperCase()}`, apiKey);
-        configData[selectedProvider].apiKey = apiKey;
+        configData[selectedProvider].apiKey = normalizeApiKeyInput(apiKey);
       }
 
       const modelOpts = ["Discover and Fetch Models dynamically (Real-time)", "Input Model ID manually"];
@@ -466,7 +473,7 @@ try {
         
         let fKey = configData[fallbackProv].apiKey || "";
         fKey = askSync(`Masukkan API Key untuk ${fallbackProv.toUpperCase()}`, fKey);
-        configData[fallbackProv].apiKey = fKey;
+        configData[fallbackProv].apiKey = normalizeApiKeyInput(fKey);
         
         let fModel = configData[fallbackProv].model || "";
         fModel = askSync(`Masukkan Model ID untuk ${fallbackProv.toUpperCase()}`, fModel);
@@ -489,7 +496,7 @@ try {
       configData.discord_bridge.botToken = askSync("Discord Bot Token (kosongkan jika tidak pakai)", configData.discord_bridge.botToken);
 
       if (!configData.twitter_bridge) configData.twitter_bridge = {};
-      configData.twitter_bridge.apiKey = askSync("Twitter/X API Key (kosongkan jika tidak pakai)", configData.twitter_bridge.apiKey);
+      configData.twitter_bridge.apiKey = normalizeApiKeyInput(askSync("Twitter/X API Key (kosongkan jika tidak pakai)", configData.twitter_bridge.apiKey));
 
       // -------------------------------------------------------------
       // STEP 5: AGNOSTIC TUNNELING PROXY
@@ -525,7 +532,7 @@ try {
 
       const enableTts = askSync("Aktifkan ElevenLabs TTS? (y/N)", configData["modular-settings"].enable_tts ? "y" : "n");
       if (enableTts.toLowerCase() === "y" || enableTts.toLowerCase() === "ya") {
-        configData.elevenlabs.apiKey = askSync("  ElevenLabs API Key", configData.elevenlabs.apiKey);
+        configData.elevenlabs.apiKey = normalizeApiKeyInput(askSync("  ElevenLabs API Key", configData.elevenlabs.apiKey));
         configData.elevenlabs.voiceId = askSync("  ElevenLabs Voice ID", configData.elevenlabs.voiceId);
         configData["modular-settings"].enable_tts = true;
         configData.ttsProvider = "elevenlabs";

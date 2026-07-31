@@ -1,6 +1,11 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.139] - 2026-07-30
+### fix: Fix literal ~ directory creation from unexpanded tilde in systemRouter.ts, settings.ts, and SOPModule.ts
+- Fixed ~ expansion bug in systemRouter.ts (primary cause of ~ dir in project root), settings.ts, and SOPModule.ts
+
+
 ## [4.138] - 2026-07-30
 ### Fix: Fix SQLite database locked error in cron tasks
 - Add SQLite retry logic with backoff to cron task database operations

@@ -4,6 +4,7 @@ import fs from "fs/promises";
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync, rmSync, unlinkSync, renameSync } from "fs";
 import { exec } from "child_process";
 import { promisify } from "util";
+import os from "os";
 import * as toml from "smol-toml";
 import { SettingsManager } from "@/core/kernel/settings";
 import { CronModule, extractCronPromptFromArgs, normalizeCronPromptForSave } from "../../kernel/cron.js";
@@ -40,7 +41,17 @@ async function saveWorkflow(workflow: any) {
 }
 
 // --- Addon System ---
-const apiRootEnvStr = process.env.YUIHIME_SYSTEM_ROOT || process.env.YUIHIME_ROOT || "~/.yuihime";
+let apiRootEnvStr = process.env.YUIHIME_SYSTEM_ROOT || process.env.YUIHIME_ROOT || "~/.yuihime";
+if (apiRootEnvStr.startsWith("~")) {
+  apiRootEnvStr = path.join(os.homedir(), apiRootEnvStr.substring(1));
+} else if (apiRootEnvStr.includes("$HOME")) {
+  apiRootEnvStr = apiRootEnvStr.replace(/\$HOME/g, os.homedir());
+} else if (apiRootEnvStr.includes("$home")) {
+  apiRootEnvStr = apiRootEnvStr.replace(/\$home/g, os.homedir());
+} else if (apiRootEnvStr.includes("%USERPROFILE%")) {
+  apiRootEnvStr = apiRootEnvStr.replace(/%USERPROFILE%/g, os.homedir());
+}
+apiRootEnvStr = apiRootEnvStr.replace(/^['"]|['"]$/g, "");
 const apiCustomSystemRoot = path.isAbsolute(apiRootEnvStr) ? apiRootEnvStr : path.join(process.cwd(), apiRootEnvStr);
 const addonsDir = process.env.YUIHIME_ADDONS_PATH || path.join(apiCustomSystemRoot, "addons");
 async function discoverAddons() {
@@ -143,7 +154,7 @@ export function registerSystemRoutes(app: express.Express, db: any) {
   app.get("/api/settings", async (req, res) => {
     const settingsInstance = SettingsManager.getInstance();
     const sets = await settingsInstance.load();
-    res.json(sets);
+    res.json(SettingsManager.denormalizeForWeb(sets));
   });
 
   app.post("/api/settings", async (req, res) => {

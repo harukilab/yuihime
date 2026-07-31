@@ -750,7 +750,7 @@ app.use("/models", express.static(modelsDir));
   // Serve the Web UI unless explicitly disabled via --no-ui / YUIHIME_NO_UI
   const noUi = process.env.YUIHIME_NO_UI === "1" || process.env.YUIHIME_NO_UI === "true" || (argsOverride as any).noUi === true;
   if (!noUi) {
-    await serveWebUI(app);
+    await serveWebUI(app, PORT);
   }
 
   const server = app.listen(PORT, "0.0.0.0", () => {
@@ -758,8 +758,16 @@ app.use("/models", express.static(modelsDir));
     const configKey = settings.getApiKey();
     const masked = configKey ? `${configKey.substring(0, 6)}...${configKey.substring(configKey.length - 4)}` : "MISSING";
 
+    try {
+      process.stdout.write("\x1b]0;YuiHime\x07");
+    } catch {}
+    process.title = "YuiHime";
+
+    const wsPort = PORT + 1;
+
     const bootRows: [string, string][] = [
       ["Port", String(PORT)],
+      ["WS Port", String(wsPort)],
       ["Environment", process.env.NODE_ENV || "development"],
       ["Neural Key", masked],
       ["Bot Status", settings.get("telegram_bridge")?.botToken ? "ACTIVE" : "DISABLED"],
@@ -787,7 +795,8 @@ app.use("/models", express.static(modelsDir));
   __globalServer = server;
 
   // --- WebSocket Gateway Initialization ---
-  const wss = new WebSocketServer({ server, path: "/ws" });
+  const wsPort = PORT + 1;
+  const wss = new WebSocketServer({ port: wsPort, path: "/ws" });
 
   __globalWss = wss;
 
@@ -948,7 +957,11 @@ app.use("/models", express.static(modelsDir));
 
 // Serve the Web UI (Vite dev middleware or static built assets).
 // Vite is lazily imported so the headless daemon bundle stays lean.
-async function serveWebUI(app: any) {
+async function serveWebUI(app: any, backendPort: number) {
+  const wsPort = backendPort + 1;
+  process.env.VITE_BACKEND_PORT = String(backendPort);
+  process.env.VITE_WS_PORT = String(wsPort);
+
   // Always run in Vite dev mode (middlewareMode) so `npm run dev` reflects
   // sources live and never falls back to serving the static built bundle.
   const publicDir = path.join(process.cwd(), "public");
@@ -972,6 +985,7 @@ async function serveWebUI(app: any) {
     try {
       const url = req.originalUrl;
       let template = await fs.readFile(path.join(process.cwd(), "web", "index.html"), "utf-8");
+      template = template.replace("</head>", `<script>window.__YUIHIME_WS_PORT__=${wsPort};</script></head>`);
       template = await vite.transformIndexHtml(url, template);
       res.status(200).set({ "Content-Type": "text/html" }).end(template);
     } catch (e) {
@@ -992,45 +1006,46 @@ process.on('unhandledRejection', (reason: any, promise) => {
 
 // Graceful shutdown handlers
 async function gracefulShutdown(sig: string) {
-  console.log(`\n[SYSTEM] Received ${sig}, initiating graceful shutdown...`);
+  const log = (msg: string) => process.stderr.write(msg + '\n');
+  log(`\n[SYSTEM] Received ${sig}, initiating graceful shutdown...`);
   try {
     if (yuihimeActiveTelegramBot) {
-      console.log('[SYSTEM] Stopping Telegram bot...');
+      log('[SYSTEM] Stopping Telegram bot...');
       yuihimeActiveTelegramBot.stop(sig);
     }
   } catch (e: any) {
-    console.warn('[SYSTEM] Telegram shutdown warning:', e.message || e);
+    log(`[SYSTEM] Telegram shutdown warning: ${e.message || e}`);
   }
   try {
     if (yuihimeActiveDiscordClient) {
-      console.log('[SYSTEM] Destroying Discord client...');
+      log('[SYSTEM] Destroying Discord client...');
       yuihimeActiveDiscordClient.destroy();
     }
   } catch (e: any) {
-    console.warn('[SYSTEM] Discord shutdown warning:', e.message || e);
+    log(`[SYSTEM] Discord shutdown warning: ${e.message || e}`);
   }
   try {
     if (yuihimeActiveTwitterInterval) {
-      console.log('[SYSTEM] Clearing Twitter polling interval...');
+      log('[SYSTEM] Clearing Twitter polling interval...');
       clearInterval(yuihimeActiveTwitterInterval);
     }
   } catch (e: any) {
-    console.warn('[SYSTEM] Twitter shutdown warning:', e.message || e);
+    log(`[SYSTEM] Twitter shutdown warning: ${e.message || e}`);
   }
   if (__globalWss) {
-    console.log('[SYSTEM] Closing WebSocket server...');
+    log('[SYSTEM] Closing WebSocket server...');
     __globalWss.close();
   }
   if (__globalServer) {
-    console.log('[SYSTEM] Closing HTTP server...');
+    log('[SYSTEM] Closing HTTP server...');
     __globalServer.close(() => {
-      console.log('[SYSTEM] HTTP server closed.');
+      log('[SYSTEM] HTTP server closed.');
       try { closeDatabase(); } catch {}
       process.exit(0);
     });
   }
   setTimeout(() => {
-    console.log('[SYSTEM] Graceful shutdown timed out, forcefully exiting.');
+    log('[SYSTEM] Graceful shutdown timed out, forcefully exiting.');
     process.exit(0);
   }, 3000);
 }

@@ -81,7 +81,14 @@ export class SocketService {
     this.explicitDisconnect = false;
     const loc = window.location;
     const proto = loc.protocol === 'https:' ? 'wss:' : 'ws:';
-    this.serverUrl = customUrl || `${proto}//${loc.host}/ws`;
+    const injectedWsPort = (window as any).__YUIHIME_WS_PORT__;
+    let wsPort = injectedWsPort;
+    if (wsPort === undefined || wsPort === null) {
+      const parsed = parseInt(loc.port || (loc.protocol === 'https:' ? '443' : '80'), 10);
+      wsPort = isNaN(parsed) ? null : parsed + 1;
+    }
+    const host = wsPort ? `${loc.hostname}:${wsPort}` : loc.hostname;
+    this.serverUrl = customUrl || `${proto}//${host}/ws`;
 
     this.updateStatus('connecting');
 

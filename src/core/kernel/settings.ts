@@ -4,6 +4,7 @@ import fsPromises from 'fs/promises';
 import path from 'path';
 import os from 'os';
 import { Logger, LogLevel } from '@shared/core/kernel/logger';
+import { toKeyArray, toSingleString } from './configNormalizer.js';
 
 // --- Global log level filtering ---
 // Levels (ascending): debug(0) < info(1) < warn(2) < error(3) < silent(4)
@@ -60,6 +61,39 @@ interface AppSettings {
   [key: string]: any;
 }
 
+const API_KEY_FIELDS = new Set(['apiKey', 'api_key', 'apiKeys', 'api_keys']);
+
+function normalizeApiKeysForToml(obj: any): void {
+  if (!obj || typeof obj !== 'object') return;
+  if (Array.isArray(obj)) {
+    for (const item of obj) normalizeApiKeysForToml(item);
+    return;
+  }
+  for (const [key, value] of Object.entries(obj)) {
+    if (API_KEY_FIELDS.has(key) && typeof value === 'string') {
+      const keys = toKeyArray(value);
+      obj[key] = keys.length > 1 ? keys : value;
+    } else if (value && typeof value === 'object') {
+      normalizeApiKeysForToml(value);
+    }
+  }
+}
+
+function denormalizeApiKeysForWeb(obj: any): void {
+  if (!obj || typeof obj !== 'object') return;
+  if (Array.isArray(obj)) {
+    for (const item of obj) denormalizeApiKeysForWeb(item);
+    return;
+  }
+  for (const [key, value] of Object.entries(obj)) {
+    if (API_KEY_FIELDS.has(key) && Array.isArray(value)) {
+      obj[key] = value.join('\n');
+    } else if (value && typeof value === 'object') {
+      denormalizeApiKeysForWeb(value);
+    }
+  }
+}
+
 export class SettingsManager {
   private static instance: SettingsManager;
   private settings: AppSettings = {};
@@ -77,8 +111,18 @@ export class SettingsManager {
 public static async applyBootLogLevel(): Promise<void> {
      if (typeof window !== 'undefined') return;
      try {
-       const rootEnv = process.env.YUIHIME_SYSTEM_ROOT || process.env.YUIHIME_ROOT || '~/.yuihime';
-      const fallbackRoot = path.isAbsolute(rootEnv) ? rootEnv : path.join(process.cwd(), rootEnv);
+        let rootEnv = process.env.YUIHIME_SYSTEM_ROOT || process.env.YUIHIME_ROOT || '~/.yuihime';
+        if (rootEnv.startsWith('~')) {
+          rootEnv = path.join(os.homedir(), rootEnv.substring(1));
+        } else if (rootEnv.includes('$HOME')) {
+          rootEnv = rootEnv.replace(/\$HOME/g, os.homedir());
+        } else if (rootEnv.includes('$home')) {
+          rootEnv = rootEnv.replace(/\$home/g, os.homedir());
+        } else if (rootEnv.includes('%USERPROFILE%')) {
+          rootEnv = rootEnv.replace(/%USERPROFILE%/g, os.homedir());
+        }
+        rootEnv = rootEnv.replace(/^['"]|['"]$/g, "");
+        const fallbackRoot = path.isAbsolute(rootEnv) ? rootEnv : path.join(process.cwd(), rootEnv);
       const p = process.env.YUIHIME_CONFIG || path.join(fallbackRoot, 'data', 'config.toml');
       if (!fs.existsSync(p)) return;
       const parsed = toml.parse(fs.readFileSync(p, 'utf-8')) as AppSettings;
@@ -109,7 +153,23 @@ private async ensureNodeModules() {
     }
     await this.ensureNodeModules();
     const rootEnvStr = process.env.YUIHIME_SYSTEM_ROOT || process.env.YUIHIME_ROOT || '~/.yuihime';
-    const fallbackRoot = this.pathModule ? (this.pathModule.isAbsolute(rootEnvStr) ? rootEnvStr : this.pathModule.join(process.cwd(), rootEnvStr)) : rootEnvStr;
+    const expandedRoot = this.pathModule ? (() => {
+      let trimmed = rootEnvStr.trim();
+      if (trimmed.startsWith('~')) {
+        return this.pathModule.join(os.homedir(), trimmed.slice(1));
+      }
+      if (trimmed.includes('$HOME')) {
+        trimmed = trimmed.replace(/\$HOME/g, os.homedir());
+      }
+      if (trimmed.includes('$home')) {
+        trimmed = trimmed.replace(/\$home/g, os.homedir());
+      }
+      if (trimmed.includes('%USERPROFILE%')) {
+        trimmed = trimmed.replace(/%USERPROFILE%/g, os.homedir());
+      }
+      return trimmed;
+    })() : rootEnvStr;
+    const fallbackRoot = this.pathModule ? (this.pathModule.isAbsolute(expandedRoot) ? expandedRoot : this.pathModule.join(process.cwd(), expandedRoot)) : expandedRoot;
     const fallbackDataDir = this.pathModule ? this.pathModule.join(fallbackRoot, 'data') : 'data';
     const fallbackConfigPath = this.pathModule ? this.pathModule.join(fallbackDataDir, 'config.toml') : 'config.toml';
     this.settingsPath = process.env.YUIHIME_CONFIG || fallbackConfigPath;
@@ -137,20 +197,20 @@ private async ensureNodeModules() {
     // LLM Providers
     const geminiKey = getVal(geminiConf, 'apiKey', 'api_key');
     if (geminiKey) {
-      const firstKey = String(geminiKey).split(/[\n,;]+/).map(k => k.trim()).filter(k => k.length > 0)[0] || geminiKey;
-      process.env.GEMINI_API_KEY = firstKey;
+      const keys = toKeyArray(geminiKey);
+      process.env.GEMINI_API_KEY = keys[0] || '';
     }
 
     const anthropicKey = getVal(anthropicConf, 'apiKey', 'api_key');
-    if (anthropicKey) process.env.ANTHROPIC_API_KEY = anthropicKey;
+    if (anthropicKey) process.env.ANTHROPIC_API_KEY = toSingleString(anthropicKey);
 
     const openrouterKey = getVal(openrouterConf, 'apiKey', 'api_key');
-    if (openrouterKey) process.env.OPENROUTER_API_KEY = openrouterKey;
+    if (openrouterKey) process.env.OPENROUTER_API_KEY = toSingleString(openrouterKey);
 
     // TTS Providers
     const elevenlabsConf = this.settings.elevenlabs || {};
     const elevenlabsKey = getVal(elevenlabsConf, 'apiKey', 'api_key');
-    if (elevenlabsKey) process.env.VITE_ELEVENLABS_API_KEY = elevenlabsKey;
+    if (elevenlabsKey) process.env.VITE_ELEVENLABS_API_KEY = toSingleString(elevenlabsKey);
 
     const elevenlabsVoice = getVal(elevenlabsConf, 'voiceId', 'voice_id');
     if (elevenlabsVoice) process.env.VITE_ELEVENLABS_VOICE_ID = elevenlabsVoice;
@@ -158,15 +218,15 @@ private async ensureNodeModules() {
     // Bridges/Channels
     const telegramBridgeConf = this.settings.telegram_bridge || {};
     const telegramToken = getVal(telegramBridgeConf, 'botToken', 'bot_token');
-    if (telegramToken) process.env.TELEGRAM_BOT_TOKEN = telegramToken;
+    if (telegramToken) process.env.TELEGRAM_BOT_TOKEN = toSingleString(telegramToken);
 
     const discordBridgeConf = this.settings.discord_bridge || {};
     const discordToken = getVal(discordBridgeConf, 'token', 'token');
-    if (discordToken) process.env.DISCORD_BOT_TOKEN = discordToken;
+    if (discordToken) process.env.DISCORD_BOT_TOKEN = toSingleString(discordToken);
 
     const twitchBridgeConf = this.settings.twitch_bridge || {};
     const twitchOauth = getVal(twitchBridgeConf, 'oauth', 'oauth');
-    if (twitchOauth) process.env.TWITCH_OAUTH_TOKEN = twitchOauth;
+    if (twitchOauth) process.env.TWITCH_OAUTH_TOKEN = toSingleString(twitchOauth);
 
     // Sandbox / Physical Path Jail locations synchronization
     const sandboxPathsConf = this.settings.sandbox_paths || {};
@@ -247,6 +307,7 @@ private async ensureNodeModules() {
       return;
     }
     await this.ensureNodeModules();
+    normalizeApiKeysForToml(this.settings);
     const p = await this.getSettingsPath();
     const content = toml.stringify(this.settings);
     await this.fsModule.writeFile(p, content);
@@ -262,19 +323,18 @@ private async ensureNodeModules() {
     return this.settings;
   }
 
+  static denormalizeForWeb(settings: AppSettings): AppSettings {
+    const clone = JSON.parse(JSON.stringify(settings));
+    denormalizeApiKeysForWeb(clone);
+    return clone;
+  }
+
   getApiKey(): string {
     const providersTable = this.settings.providers || {};
     const geminiConf = providersTable.gemini || this.settings.gemini || {};
     const configKey = geminiConf.apiKey !== undefined ? geminiConf.apiKey : geminiConf.api_key;
-    
-    const splitKey = (raw: string | undefined): string => {
-      if (!raw) return '';
-      const first = String(raw).split(/[\n,;]+/).map(k => k.trim()).filter(k => k.length > 0 && !k.toLowerCase().includes('your_api_key'))[0];
-      return first || '';
-    };
-    
-    const cleaned = splitKey(configKey);
-    if (cleaned) return cleaned;
+    const keys = toKeyArray(configKey);
+    if (keys.length > 0) return keys[0];
     
     if (typeof window !== 'undefined') return '';
 
