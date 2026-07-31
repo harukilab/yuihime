@@ -1,6 +1,13 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.150] - 2026-07-31
+### Feature: Reaksi Telegram berdasarkan mood/emotion balasan Yui (bukan random)
+- NeuralInterface.processNeuralInputWithMeta(): kembalikan {text, mood, emotion, sentiment}; processNeuralInput tetap string (non-breaking).
+- MultiChannelQueue: onReply kini menerima ReplyMeta (mood/emotion/sentiment) dari hasil proses balasan.
+- telegram.ts: reaksi emoji dipilih dari mood/emotion balasan Yui (love/hype/anger/sad/tease/curious), fallback random; reaksi dipicu setelah balasan terkirim, bukan saat pesan masuk.
+
+
 ## [4.149] - 2026-07-31
 ### Refactor: Hapus reaction NLP Telegram (random emoji) + log khusus TensorArt
 - Hapus telegramReactionLearner.ts (self-training NanoBrain, sentiment, feedback); reaksi kini random dari pool reactionEmojis config.

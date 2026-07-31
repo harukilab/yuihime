@@ -4,13 +4,20 @@ import { Kernel } from "./core.js";
 import { AIService } from "./ai.js";
 import { Soul } from "../soul.js";
 import { Cortex } from "../cortex.js";
-import { Memory, Dream, Identity } from "@shared/include/types";
+import { Memory, Dream, Identity, MoodState, EmotionState } from "@shared/include/types";
 import { DEFAULT_NEURAL_CORES } from "@shared/constants";
 import { deduplicateAndMergeIdentities, getDb, retryDbOperation } from "../database.js";
 
 import { broadcastToWS } from "../server/apiRouter";
 import { BackgroundToolDispatcher } from "./BackgroundToolDispatcher.js";
 
+
+export interface NeuralReplyResult {
+  text: string | null;
+  mood?: MoodState;
+  emotion?: EmotionState;
+  sentiment?: number;
+}
 
 export class NeuralInterface {
   private static db: any;
@@ -24,7 +31,12 @@ export class NeuralInterface {
   /**
    * Unified interface for processing input from any channel (Telegram, Discord, etc.)
    */
-  public static async processNeuralInput(input: string, senderName: string, contextId: string, chatType: string, isProactive: boolean = false, taskId?: string) {
+  public static async processNeuralInput(input: string, senderName: string, contextId: string, chatType: string, isProactive: boolean = false, taskId?: string): Promise<string | null> {
+    const result = await NeuralInterface.processNeuralInputWithMeta(input, senderName, contextId, chatType, isProactive, taskId);
+    return result ? result.text : null;
+  }
+
+  public static async processNeuralInputWithMeta(input: string, senderName: string, contextId: string, chatType: string, isProactive: boolean = false, taskId?: string): Promise<NeuralReplyResult> {
     const kernel = Kernel.getInstance();
     
     // Unify brain by running Cortex natively
@@ -336,7 +348,7 @@ export class NeuralInterface {
             timestamp: Date.now(),
             speaker: 'system'
           });
-          return pendingReply;
+          return { text: pendingReply };
         } else if (pendingSet.status === 'completed' && pendingSet.results && pendingSet.results.length > 0) {
           const results = await BackgroundToolDispatcher.getInstance().drain(contextId);
           for (let idx = 0; idx < results.length; idx++) {
@@ -724,7 +736,12 @@ export class NeuralInterface {
         }
       });
 
-      return responseText;
+      return {
+        text: responseText,
+        mood: updatedMood,
+        emotion: updatedEmotion,
+        sentiment: updatedSentiment,
+      };
     }
 
     return null;

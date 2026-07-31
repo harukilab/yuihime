@@ -45,6 +45,36 @@ function pickRandomReaction(settings: any): string {
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
+/**
+ * Pilih reaksi emoji berdasarkan mood/emotion balasan Yui (meta dari NeuralInterface).
+ * Fallback ke acak bila meta tidak tersedia.
+ */
+function emojiForReplyMeta(meta?: any, settings?: any): string {
+  const pick = (pool: string[]) => pool[Math.floor(Math.random() * pool.length)];
+  const m = meta?.mood || {};
+  const e = meta?.emotion || {};
+
+  if ((m.joy ?? 50) >= 65 || ((e.valence ?? 50) >= 65 && (e.rapport ?? 50) >= 55)) {
+    return pick(['❤️', '🥰', '😍', '🔥']);
+  }
+  if ((m.anger ?? 0) >= 40 || (m.irritation ?? 0) >= 45 || (m.stress ?? 0) >= 55) {
+    return pick(['😡', '🤨', '😐', '👎']);
+  }
+  if ((m.sadness ?? 0) >= 40 || (e.valence ?? 50) <= 35) {
+    return pick(['😢', '🥲', '🤗', '😭']);
+  }
+  if ((m.excitement ?? 0) >= 60 || (e.arousal ?? 50) >= 70) {
+    return pick(['😁', '🔥', '🤩', '🤯', '🥳']);
+  }
+  if ((m.embarrassment ?? 0) >= 40) {
+    return pick(['😅', '😁', '😎', '🤗']);
+  }
+  if ((m.curiosity ?? 0) >= 60) {
+    return pick(['🤔', '🤨', '✅']);
+  }
+  return pickRandomReaction(settings);
+}
+
 // Initialize AI for Bot
 const botGenAI = () => {
   const settings = Kernel.getInstance().getSettings();
@@ -455,32 +485,9 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
 
     if (!userMessage.trim()) return;
 
-    // Immediate acknowledgment if enabled
+    // Immediate acknowledgment if enabled — typing indicator only, reaksi emoji dipicu saat balasan dikirim
     if (currentSettings['telegram_bridge']?.autoAcknowledge !== false) {
       ctx.sendChatAction('typing').catch(() => {});
-
-      const tryReact = async (emoji: string): Promise<void> => {
-        try {
-          if (typeof (ctx as any).react === 'function') {
-            await (ctx as any).react(emoji as any);
-          } else {
-            await ctx.telegram.callApi('setMessageReaction', {
-              chat_id: ctx.chat.id,
-              message_id: ctx.message.message_id,
-              reaction: [{ type: 'emoji', emoji: emoji as any }]
-            });
-          }
-        } catch (err: any) {
-          if (emoji !== '❤️') {
-            console.warn(`[TELEGRAM_REACTION] Emoji ${emoji} not supported (${err.message}), falling back to ❤️.`);
-            await tryReact('❤️');
-          } else {
-            console.warn(`[TELEGRAM_REACTION] ❤️ fallback also failed:`, err.message);
-          }
-        }
-      };
-
-      void tryReact(pickRandomReaction(currentSettings));
     }
 
     // Simulate Agent Thinking
@@ -530,7 +537,7 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
          senderName,
          contextId,
          chatType,
-          async (response) => {
+          async (response, meta) => {
             if (response && String(response).trim()) {
               const dedup = GlobalOutputDeduplicator.getInstance();
               if (dedup.isDuplicate(response, contextId)) {
@@ -550,6 +557,31 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
                   } catch (retryErr: any) {
                     console.error(`[TELEGRAM_DELIVERY_ERR] Retry also failed:`, retryErr?.message || retryErr);
                   }
+                }
+
+                // Reaksi emoji dipilih berdasarkan emosi/mood balasan Yui (fallback random)
+                if (currentSettings['telegram_bridge']?.autoAcknowledge !== false) {
+                  const tryReact = async (emoji: string): Promise<void> => {
+                    try {
+                      if (typeof (ctx as any).react === 'function') {
+                        await (ctx as any).react(emoji as any);
+                      } else {
+                        await ctx.telegram.callApi('setMessageReaction', {
+                          chat_id: ctx.chat.id,
+                          message_id: ctx.message.message_id,
+                          reaction: [{ type: 'emoji', emoji: emoji as any }]
+                        });
+                      }
+                    } catch (err: any) {
+                      if (emoji !== '❤️') {
+                        console.warn(`[TELEGRAM_REACTION] Emoji ${emoji} not supported (${err.message}), falling back to ❤️.`);
+                        await tryReact('❤️');
+                      } else {
+                        console.warn(`[TELEGRAM_REACTION] ❤️ fallback also failed:`, err.message);
+                      }
+                    }
+                  };
+                  void tryReact(emojiForReplyMeta(meta, currentSettings));
                 }
               }
 

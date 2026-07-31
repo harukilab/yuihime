@@ -1,4 +1,4 @@
-import { NeuralInterface } from "./NeuralInterface.js";
+import { NeuralInterface, NeuralReplyResult } from "./NeuralInterface.js";
 import { eventBus } from "@shared/core/kernel/event-bus";
 import { ChatSummaryEngine } from "./ChatSummaryEngine.js";
 import { CognitiveScheduler } from "./CognitiveScheduler.js";
@@ -39,13 +39,19 @@ async function withSqliteRetry<T>(label: string, db: any, fn: () => T): Promise<
   throw lastErr;
 }
 
+export interface ReplyMeta {
+  mood?: NeuralReplyResult['mood'];
+  emotion?: NeuralReplyResult['emotion'];
+  sentiment?: number;
+}
+
 export interface QueueItem {
   input: string;
   senderName: string;
   contextId: string;
   chatType: string;
   timestamp: number;
-  onReply: (reply: string) => void;
+  onReply: (reply: string, meta?: ReplyMeta) => void;
   onError?: (err: any) => void;
   attempts?: number;
 }
@@ -154,7 +160,7 @@ export class MultiChannelQueue {
     senderName: string,
     contextId: string,
     chatType: string,
-    onReply: (reply: string) => void,
+    onReply: (reply: string, meta?: ReplyMeta) => void,
     onError?: (err: any) => void
   ) {
     const timestamp = Date.now();
@@ -480,7 +486,13 @@ export class MultiChannelQueue {
       console.log(`[QUEUE_EXEC] Running cognitive processing for ${item.senderName} (${item.chatType})...`);
       
       // Jalankan proses berpikir neural Yui secara berurutan
-      const reply = await NeuralInterface.processNeuralInput(item.input, item.senderName, item.contextId, item.chatType);
+      const processed = await NeuralInterface.processNeuralInputWithMeta(item.input, item.senderName, item.contextId, item.chatType);
+      const reply = processed ? processed.text : null;
+      const replyMeta: ReplyMeta | undefined = processed ? {
+        mood: processed.mood,
+        emotion: processed.emotion,
+        sentiment: processed.sentiment,
+      } : undefined;
       
       // Await delivery so Telegram/Discord send completes before the next queue item,
       // and so floating promise rejections from async onReply are not lost.
@@ -509,7 +521,7 @@ export class MultiChannelQueue {
             console.log(`[GLOBAL_DEDUP] Skipping duplicate main queue output for ${item.senderName} (${item.contextId}).`);
           } else {
             dedup.markSent(reply ?? "", item.contextId);
-            await Promise.resolve(item.onReply(reply ?? "")).catch((deliveryErr: any) => {
+            await Promise.resolve(item.onReply(reply ?? "", replyMeta)).catch((deliveryErr: any) => {
               console.error(`[QUEUE_DELIVERY_ERR] Failed to deliver reply to ${item.senderName}:`, deliveryErr?.message || deliveryErr);
               if (item.onError) item.onError(deliveryErr);
             });
