@@ -1,5 +1,6 @@
 import express from "express";
 import { broadcastToWS } from "../apiRouter.js";
+import { retryDbOperation } from "../../database.js";
 
 export function registerStorageRoutes(app: express.Express, db: any) {
   console.log("[STORAGE_ROUTE_INIT] registerStorageRoutes executed!");
@@ -39,7 +40,7 @@ export function registerStorageRoutes(app: express.Express, db: any) {
     }
   });
 
-  app.post("/api/storage/memories", (req, res) => {
+  app.post("/api/storage/memories", async (req, res) => {
     try {
       const memory = req.body;
       const id = memory.id || Math.random().toString(36).substr(2, 9);
@@ -64,16 +65,19 @@ export function registerStorageRoutes(app: express.Express, db: any) {
           timestamp = excluded.timestamp,
           speaker = excluded.speaker
       `);
-      stmt.run(
-        id,
-        type,
-        content,
-        importance,
-        JSON.stringify(tags),
-        context,
-        sentiment,
-        timestamp,
-        memory.speaker || 'System'
+      await retryDbOperation(() =>
+        stmt.run(
+          id,
+          type,
+          content,
+          importance,
+          JSON.stringify(tags),
+          context,
+          sentiment,
+          timestamp,
+          memory.speaker || 'System'
+        ),
+        'storage-insert-memory'
       );
       const savedMemory = { id, type, content, importance, tags, context, sentiment, timestamp, speaker: memory.speaker || 'System' };
       broadcastToWS({ type: "memory_update", data: savedMemory });
@@ -84,7 +88,7 @@ export function registerStorageRoutes(app: express.Express, db: any) {
     }
   });
 
-  app.delete("/api/storage/memories", (req, res) => {
+  app.delete("/api/storage/memories", async (req, res) => {
     try {
       const context = req.query.context as string;
       const type = req.query.type as string;
@@ -95,13 +99,13 @@ export function registerStorageRoutes(app: express.Express, db: any) {
 
       if (id) {
         const stmt = db.prepare("DELETE FROM memories WHERE id = ?");
-        info = stmt.run(id);
+        info = await retryDbOperation(() => stmt.run(id), 'storage-delete-single-id');
       } else if (ids) {
         const idList = ids.split(',').filter(x => x.trim().length > 0);
         if (idList.length > 0) {
           const placeholders = idList.map(() => '?').join(',');
           const stmt = db.prepare(`DELETE FROM memories WHERE id IN (${placeholders})`);
-          info = stmt.run(...idList);
+          info = await retryDbOperation(() => stmt.run(...idList), 'storage-delete-batch-ids');
         }
       } else if (context) {
         if (context === "cron_trigger") {
@@ -112,21 +116,23 @@ export function registerStorageRoutes(app: express.Express, db: any) {
         if (type) {
           if (context.includes('%')) {
             stmt = db.prepare("DELETE FROM memories WHERE context LIKE ? AND type = ?");
+            info = await retryDbOperation(() => stmt.run(context, type), 'storage-delete-context-type-like');
           } else {
             stmt = db.prepare("DELETE FROM memories WHERE context = ? AND type = ?");
+            info = await retryDbOperation(() => stmt.run(context, type), 'storage-delete-context-type');
           }
-          info = stmt.run(context, type);
         } else {
           if (context.includes('%')) {
             stmt = db.prepare("DELETE FROM memories WHERE context LIKE ?");
+            info = await retryDbOperation(() => stmt.run(context), 'storage-delete-context-like');
           } else {
             stmt = db.prepare("DELETE FROM memories WHERE context = ?");
+            info = await retryDbOperation(() => stmt.run(context), 'storage-delete-context');
           }
-          info = stmt.run(context);
         }
       } else if (type) {
         const stmt = db.prepare("DELETE FROM memories WHERE type = ?");
-        info = stmt.run(type);
+        info = await retryDbOperation(() => stmt.run(type), 'storage-delete-type');
       } else {
         return res.status(400).json({ error: "At least one target criteria is required" });
       }
@@ -153,26 +159,28 @@ export function registerStorageRoutes(app: express.Express, db: any) {
     }
   });
 
-  app.post("/api/storage/dreams", (req, res) => {
+  app.post("/api/storage/dreams", async (req, res) => {
     try {
       const dreams = req.body;
-      db.transaction(() => {
-        db.prepare("DELETE FROM dreams").run();
-        const stmt = db.prepare(`
-          INSERT INTO dreams (id, concept, abstractions, strength, lastReinforced, underlyingMemories)
-          VALUES (?, ?, ?, ?, ?, ?)
-        `);
-        for (const d of dreams) {
-          stmt.run(
-            d.id || Math.random().toString(36).substr(2, 9),
-            d.concept,
-            JSON.stringify(d.abstractions || []),
-            d.strength,
-            d.lastReinforced || Date.now(),
-            JSON.stringify(d.underlyingMemories || [])
-          );
-        }
-      })();
+      await retryDbOperation(async () => {
+        db.transaction(() => {
+          db.prepare("DELETE FROM dreams").run();
+          const stmt = db.prepare(`
+            INSERT INTO dreams (id, concept, abstractions, strength, lastReinforced, underlyingMemories)
+            VALUES (?, ?, ?, ?, ?, ?)
+          `);
+          for (const d of dreams) {
+            stmt.run(
+              d.id || Math.random().toString(36).substr(2, 9),
+              d.concept,
+              JSON.stringify(d.abstractions || []),
+              d.strength,
+              d.lastReinforced || Date.now(),
+              JSON.stringify(d.underlyingMemories || [])
+            );
+          }
+        })();
+      }, 'storage-update-dreams');
       broadcastToWS({ type: "dream_update", data: dreams });
       res.json({ success: true });
     } catch (error: any) {

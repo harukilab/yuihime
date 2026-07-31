@@ -1,4 +1,4 @@
-import { getDb } from "../database.js";
+import { getDb, retryDbOperation } from "../database.js";
 import { AIService } from "../kernel/ai.js";
 import { SettingsManager } from "@/core/kernel/settings";
 import { toSingleString } from "@/core/kernel/configNormalizer";
@@ -198,9 +198,18 @@ Your response must be STRICTLY valid JSON ONLY. No markdown wraps, no extra prea
     try {
       const db = this.db;
       // Reset synthesized, retry & failed entries back to raw imported airi_train type
-      const count1 = db.prepare("UPDATE memories SET type = 'airi_train' WHERE type = 'airi_synthesized'").run().changes;
-      const count2 = db.prepare("UPDATE memories SET type = 'airi_train', tags = '[]' WHERE type = 'airi_retry'").run().changes;
-      const count3 = db.prepare("UPDATE memories SET type = 'airi_train', tags = '[]' WHERE type = 'airi_failed'").run().changes;
+      const count1 = await retryDbOperation(() =>
+        db.prepare("UPDATE memories SET type = 'airi_train' WHERE type = 'airi_synthesized'").run().changes,
+        'synthesis-reset-synthesized'
+      );
+      const count2 = await retryDbOperation(() =>
+        db.prepare("UPDATE memories SET type = 'airi_train', tags = '[]' WHERE type = 'airi_retry'").run().changes,
+        'synthesis-reset-retry'
+      );
+      const count3 = await retryDbOperation(() =>
+        db.prepare("UPDATE memories SET type = 'airi_train', tags = '[]' WHERE type = 'airi_failed'").run().changes,
+        'synthesis-reset-failed'
+      );
       this.addLog(`🔄 Reset completed. Restored ${count1 + count2 + count3} records back to pending (raw) state.`);
     } catch (err: any) {
       this.addLog(`❌ [ERROR] Reset failed: ${err.message}`);
@@ -211,8 +220,14 @@ Your response must be STRICTLY valid JSON ONLY. No markdown wraps, no extra prea
     try {
       const db = this.db;
       // Convert all retry and failed records back to standard pending airi_train type
-      const count1 = db.prepare("UPDATE memories SET type = 'airi_train', tags = '[]' WHERE type = 'airi_retry'").run().changes;
-      const count2 = db.prepare("UPDATE memories SET type = 'airi_train', tags = '[]' WHERE type = 'airi_failed'").run().changes;
+      const count1 = await retryDbOperation(() =>
+        db.prepare("UPDATE memories SET type = 'airi_train', tags = '[]' WHERE type = 'airi_retry'").run().changes,
+        'synthesis-retry-pool-retry'
+      );
+      const count2 = await retryDbOperation(() =>
+        db.prepare("UPDATE memories SET type = 'airi_train', tags = '[]' WHERE type = 'airi_failed'").run().changes,
+        'synthesis-retry-pool-failed'
+      );
       this.addLog(`🔁 Force Retry initiated. Restored ${count1 + count2} failed/retry records back to active pending queue.`);
     } catch (err: any) {
       this.addLog(`❌ [ERROR] Force retry failed: ${err.message}`);
@@ -372,11 +387,14 @@ Your response must be STRICTLY valid JSON ONLY. No markdown wraps, no extra prea
       };
       const finalizedJsonStr = JSON.stringify(sftDataToStore, null, 2);
 
-      this.db.prepare(`
-        UPDATE memories 
-        SET type = 'airi_synthesized', content = ?, tags = ? 
-        WHERE id = ?
-      `).run(finalizedJsonStr, JSON.stringify(["airi", "synthesized", "mhcp_v1"]), row.id);
+      await retryDbOperation(() =>
+        this.db.prepare(`
+          UPDATE memories 
+          SET type = 'airi_synthesized', content = ?, tags = ? 
+          WHERE id = ?
+        `).run(finalizedJsonStr, JSON.stringify(["airi", "synthesized", "mhcp_v1"]), row.id),
+        `synthesis-update-success-${row.id}`
+      );
 
       this.addLog(`✨ [SUCCESS] Record ${row.id} successfully synthesized into Cortex JSON.`);
       return { success: true, result: parsed };
@@ -397,14 +415,20 @@ Your response must be STRICTLY valid JSON ONLY. No markdown wraps, no extra prea
 
       if (retries >= this.config.maxRetries) {
         this.addLog(`🛑 [FAIL] Record ${row.id} reached maximum retries. Holding.`);
-        this.db.prepare("UPDATE memories SET type = 'airi_failed', tags = ? WHERE id = ?").run(
-          JSON.stringify(["airi", "sft_failed", `attempts_${retries}`]),
-          row.id
+        await retryDbOperation(() =>
+          this.db.prepare("UPDATE memories SET type = 'airi_failed', tags = ? WHERE id = ?").run(
+            JSON.stringify(["airi", "sft_failed", `attempts_${retries}`]),
+            row.id
+          ),
+          `synthesis-update-failed-${row.id}`
         );
       } else {
-        this.db.prepare("UPDATE memories SET type = 'airi_retry', tags = ? WHERE id = ?").run(
-          JSON.stringify(["airi", "sft_retry", `retry_${retries}`]),
-          row.id
+        await retryDbOperation(() =>
+          this.db.prepare("UPDATE memories SET type = 'airi_retry', tags = ? WHERE id = ?").run(
+            JSON.stringify(["airi", "sft_retry", `retry_${retries}`]),
+            row.id
+          ),
+          `synthesis-update-retry-${row.id}`
         );
       }
 

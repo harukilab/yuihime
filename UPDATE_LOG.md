@@ -1,6 +1,52 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.146] - 2026-07-31
+### Feature: Background chat summary engine: idle-gap + daily, boot catch-up, log rotation, chat_log tool
+- ChatSummaryEngine (baru): ringkasan latar belakang jeda hening 120s (min 30 pesan) & daily summary otomatis saat tanggal berganti; disimpan ke DB memories + file, tidak diucapkan.
+- Boot catch-up: scan chat_logs 7 hari untuk tanggal tanpa daily summary, diisi saat idle; scheduler skip tanggal yang sudah ada.
+- fileLogger.ts: rotasi harian otomatis (<category>.YYYY-MM-DD.log) + retensi 7 hari + includeArchives di view_logs.
+- API chat-summary/daily (GET/POST), tool daily_summary (read/generate) & tool chat_log (baca raw daily chat log).
+
+
+## [4.145] - 2026-07-31
+### Feature: Tool baru chat_log untuk membaca raw daily chat log
+- ChatSummaryEngine.readDailyLog(): baca file chat_logs/YYYY-MM-DD.log (default kemarin) dengan opsi limit/tail; getLogDir() publik.
+- Tool baru ChatLogTool (chat_log) — Yui kini bisa membaca pesan mentah per hari sebelum membuat/memeriksa daily summary.
+
+
+## [4.144] - 2026-07-31
+### Feature: Rotasi & retensi 7 hari untuk log kategori fileLogger.ts
+- fileLogger.appendLog(): rotasi otomatis saat tanggal berganti — file aktif <category>.log diarsipkan ke <category>.<YYYY-MM-DD>.log (bila arsip sudah ada, data digabung bukan dihapus).
+- fileLogger.cleanupLogs(): hapus arsip harian dan .rot lebih dari 7 hari (throttle 1 jam; force untuk panggilan eksplisit).
+- fileLogger.readLogLines(): opsi includeArchives menggabungkan arsip harian (tertua→terbaru) + file aktif.
+- view_logs tool kini membaca includeArchives agar hari sebelumnya tetap terlihat di tool.
+
+
+## [4.143] - 2026-07-31
+### Feature: Boot catch-up daily summary saat aplikasi mati (missed rollover)
+- ChatSummaryEngine.scanPendingDailySummaries(): saat boot, scan chat_logs 7 hari terakhir untuk tanggal yang punya log harian tapi belum ada daily summary di DB; tandai pending.
+- ChatSummaryEngine.processPendingDailySummaries(): jalankan generateDailySummary untuk tanggal pending saat idle (tidak ada aktivitas chat); retry otomatis bila LLM gagal.
+- Scheduler harian kini skip tanggal yang sudah punya summary (hasDailySummary) agar tidak menimpa saat multi-day gap.
+- generateDailySummary menghapus tanggal dari daftar pending setelah sukses.
+
+
+## [4.142] - 2026-07-31
+### Refactor: Rework chat summary mechanism: idle-gap trigger + daily summary (file & DB storage)
+- Replace every-10-messages summarizer with ChatSummaryEngine (src/core/kernel/ChatSummaryEngine.ts): idle-gap trigger after 120s silence, only when >=30 messages accumulated since previous summary (cap 80/session).
+- All incoming chat messages are now written to a per-day chat log (data/chat_logs/YYYY-MM-DD.log); logs & summaries retained 7 days by date then auto-cleaned.
+- Daily summary auto-generated at date rollover from that day's log file, stored in DB memories (type=daily_summary) + YYYY-MM-DD.summary.log; manual trigger via POST/GET /api/cortex/chat-summary/daily.
+- Summaries are now background-only: no longer spoken to chat / broadcast via WS (OUTPUT_EMITTED + remote_response_sent removed).
+- New daily_summary tool (read/generate) so Yui answers 'kemarin apa?' from stored daily summaries instead of scanning all raw messages.
+
+
+## [4.141] - 2026-07-31
+### Fix: Fix literal ~ directory creation from unexpanded tilde in server.ts, PromptManager.ts, and fileLogger.ts
+- Expand ~/.yuihime in server.ts modelsDir setup (root cause of ~ folder in project root)
+- Use resolveHomePath in PromptManager.ts instead of naive os.homedir() join
+- Resolve tilde for YUIHIME_SYSTEM_ROOT in fileLogger.ts DEFAULT_LOG_DIR
+
+
 ## [4.140] - 2026-07-31
 ### Fix: Fix SQLITE_BUSY locking: centralized DB connection + file-based retry logging
 - Replace worker-thread DB connection in performForgetfulnessProtocol with centralized getDb() singleton to eliminate SQLITE_BUSY contention

@@ -63,9 +63,11 @@ export function initializeDatabase() {
   try { if (existsSync(dbPath + '-shm')) unlinkSync(dbPath + '-shm'); } catch {}
 
   try {
-    const db = new Database(dbPath, { timeout: 30000 });
+    const db = new Database(dbPath, { timeout: 60000 });
     db.pragma('journal_mode = WAL');
-    db.pragma('busy_timeout = 30000');
+    db.pragma('busy_timeout = 60000');
+    db.pragma('synchronous = NORMAL');
+    db.pragma('wal_autocheckpoint = 100000');
     try {
       db.pragma('wal_checkpoint(TRUNCATE)');
     } catch (checkpointErr: any) {
@@ -117,6 +119,17 @@ export async function retryDbOperation<T>(operation: () => T, label = 'DB operat
       throw err;
     }
   }
+}
+
+/**
+ * Synchronous wrapper untuk retryDbOperation
+ * Gunakan untuk db.prepare().run() calls yang perlu retry
+ */
+export function withDbRetry<T>(
+  operation: () => T,
+  label: string = 'DB operation'
+): T {
+  return retryDbOperation(() => Promise.resolve(operation()), label, 5) as any;
 }
 
 export async function setupSchema(db: any) {

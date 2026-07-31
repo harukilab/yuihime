@@ -6,7 +6,7 @@ import fs from "fs/promises";
 import path from "path";
 import { Kernel } from "../kernel/core.js";
 import { MultiChannelQueue } from "../kernel/MultiChannelQueue.js";
-import { getDb, deduplicateAndMergeIdentities } from "../database.js";
+import { getDb, deduplicateAndMergeIdentities, retryDbOperation } from "../database.js";
 import { TelegramReactionLearner } from "./telegramReactionLearner.js";
 import { getDynamicSandboxRoot, broadcastToWS } from "./apiRouter.js";
 import { GlobalOutputDeduplicator } from "../kernel/GlobalOutputDeduplicator.js";
@@ -156,7 +156,10 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
       }
 
       if (matchedRow.expires_at < Date.now()) {
-        db.prepare("DELETE FROM pairing_codes WHERE code = ?").run(matchedRow.code);
+        await retryDbOperation(() =>
+          db.prepare("DELETE FROM pairing_codes WHERE code = ?").run(matchedRow.code),
+          'telegram-delete-expired-pairing-code'
+        );
         return ctx.reply("❌ Kode OTP ini telah kedaluwarsa. Silakan menghasilkan kode baru di Web UI.");
       }
 
@@ -192,9 +195,12 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
 
       accounts = [...new Set(accounts)];
 
-      db.prepare("UPDATE identities SET linkedAccounts = ? WHERE id = ?").run(
-        JSON.stringify(accounts),
-        identity.id
+      await retryDbOperation(() => 
+        db.prepare("UPDATE identities SET linkedAccounts = ? WHERE id = ?").run(
+          JSON.stringify(accounts),
+          identity.id
+        ),
+        'telegram-update-identity-accounts'
       );
 
       // Gabungkan profil duplikat (seperti akun chat mandiri vs akun web)
@@ -204,20 +210,29 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
         console.error("[TELEGRAM_PAIR] Failed to merge duplicate identities inline:", mergeErr);
       }
 
-      db.prepare("DELETE FROM pairing_codes WHERE code = ?").run(matchedRow.code);
+      await retryDbOperation(() =>
+        db.prepare("DELETE FROM pairing_codes WHERE code = ?").run(matchedRow.code),
+        'telegram-delete-pairing-code-after-merge'
+      );
 
-      db.prepare("INSERT OR REPLACE INTO telegram_users (tg_id, username, context, last_seen) VALUES (?, ?, ?, ?)")
-        .run(ctx.from.id, tgUsername || senderName, `linked_identity:${identity.id}`, Date.now());
+      await retryDbOperation(() =>
+        db.prepare("INSERT OR REPLACE INTO telegram_users (tg_id, username, context, last_seen) VALUES (?, ?, ?, ?)")
+          .run(ctx.from.id, tgUsername || senderName, `linked_identity:${identity.id}`, Date.now()),
+        'telegram-insert-user'
+      );
 
       const memoryId = Math.random().toString(36).substr(2, 9);
-      db.prepare(`
-        INSERT INTO memories (id, type, content, importance, speaker, context, timestamp)
-        VALUES (?, 'system', ?, 0.9, 'System', ?, ?)
-      `).run(
-        memoryId,
-        `[SYSTEM_LINK]: Pengguna Telegram ${senderName} (tg_id: ${ctx.from.id}) berhasil dipasangkan dengan identitas Web: ${identity.perceivedName}.`,
-        `tg_${ctx.chat.id}`,
-        Date.now()
+      await retryDbOperation(() =>
+        db.prepare(`
+          INSERT INTO memories (id, type, content, importance, speaker, context, timestamp)
+          VALUES (?, 'system', ?, 0.9, 'System', ?, ?)
+        `).run(
+          memoryId,
+          `[SYSTEM_LINK]: Pengguna Telegram ${senderName} (tg_id: ${ctx.from.id}) berhasil dipasangkan dengan identitas Web: ${identity.perceivedName}.`,
+          `tg_${ctx.chat.id}`,
+          Date.now()
+        ),
+        'telegram-insert-system-memory'
       );
 
       return ctx.reply(`✨ Kognisi Terhubung! Hubungan lintas-platform berhasil dikaitkan.\n\nAkun Telegram kamu (${senderName}) sekarang terhubung dengan sesi Web (${identity.perceivedName}). Yuihime is now aware of your cross-platform presence.`);
@@ -227,10 +242,13 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
     }
   }
 
-  bot.start((ctx) => {
+  bot.start(async (ctx) => {
     ctx.reply("System Online. Neural Link established with Yuihime Core. How can I assist you today?");
-    db.prepare("INSERT OR IGNORE INTO telegram_users (tg_id, username, last_seen) VALUES (?, ?, ?)")
-      .run(ctx.from.id, ctx.from.username, Date.now());
+    await retryDbOperation(() =>
+      db.prepare("INSERT OR IGNORE INTO telegram_users (tg_id, username, last_seen) VALUES (?, ?, ?)")
+        .run(ctx.from.id, ctx.from.username, Date.now()),
+      'telegram-insert-user-start'
+    );
   });
 
   bot.command("pair", async (ctx) => {

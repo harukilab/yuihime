@@ -37,7 +37,7 @@ async function ensureInitialized() {
   if (initialized) return;
     if (typeof window === 'undefined') {
       try {
-        const rootEnvStr = process.env.YUIHIME_SYSTEM_ROOT || process.env.YUIHIME_ROOT || '~/.yuihime';
+        const rootEnvStr = resolveHomePath(process.env.YUIHIME_SYSTEM_ROOT || process.env.YUIHIME_ROOT || '~/.yuihime');
         const customSystemRoot = path.isAbsolute(rootEnvStr) ? rootEnvStr : path.join(os.homedir(), rootEnvStr);
         const agentDir = process.env.YUIHIME_AGENT_PATH || path.join(customSystemRoot, 'agent');
 
@@ -458,7 +458,7 @@ export const PromptManagerModule: CortexModule = {
 
     if (typeof window === 'undefined') {
       try {
-        const rootEnvStr = process.env.YUIHIME_SYSTEM_ROOT || process.env.YUIHIME_ROOT || '~/.yuihime';
+        const rootEnvStr = resolveHomePath(process.env.YUIHIME_SYSTEM_ROOT || process.env.YUIHIME_ROOT || '~/.yuihime');
         const customSystemRoot = path.isAbsolute(rootEnvStr) ? rootEnvStr : path.join(os.homedir(), rootEnvStr);
         const agentDir = process.env.YUIHIME_AGENT_PATH || path.join(customSystemRoot, 'agent');
 

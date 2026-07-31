@@ -486,44 +486,52 @@ export class NeuralInterface {
     if (result.newMemories && result.newMemories.length > 0) {
       for (const m of result.newMemories) {
         // Only insert if it doesn't already exist to avoid constraints
-        const exists = this.db.prepare("SELECT 1 FROM memories WHERE id = ?").get(m.id);
-        if (!exists) {
-          this.db.prepare(`
-            INSERT INTO memories (id, type, content, importance, speaker, context, timestamp, tags, sentiment)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `).run(
-            m.id || Math.random().toString(36).substr(2, 9),
-            m.type || 'interaction',
-            m.content,
-            m.importance || 0.4,
-            m.speaker || 'agent',
-            cleanContextId,
-            m.timestamp || Date.now(),
-            m.tags ? JSON.stringify(m.tags) : '[]',
-            updatedSentiment
-          );
-        }
+        await retryDbOperation(async () => {
+          const exists = this.db.prepare("SELECT 1 FROM memories WHERE id = ?").get(m.id);
+          if (!exists) {
+            this.db.prepare(`
+              INSERT INTO memories (id, type, content, importance, speaker, context, timestamp, tags, sentiment)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(
+              m.id || Math.random().toString(36).substr(2, 9),
+              m.type || 'interaction',
+              m.content,
+              m.importance || 0.4,
+              m.speaker || 'agent',
+              cleanContextId,
+              m.timestamp || Date.now(),
+              m.tags ? JSON.stringify(m.tags) : '[]',
+              updatedSentiment
+            );
+          }
+        }, 'insert-memory-from-newMemories');
       }
     } else {
       if (isProactive) {
         const systemEventMemoryId = Math.random().toString(36).substr(2, 9);
-        this.db.prepare(`
-          INSERT INTO memories (id, type, content, importance, speaker, context, timestamp, tags, sentiment)
-          VALUES (?, 'event', ?, 0.2, 'system', ?, ?, '["impulse", "proactive"]', ?)
-        `).run(systemEventMemoryId, `[System event]: Yui felt a longing impulse and initiated contact.`, cleanContextId, Date.now(), updatedSentiment);
+        await retryDbOperation(async () => {
+          this.db.prepare(`
+            INSERT INTO memories (id, type, content, importance, speaker, context, timestamp, tags, sentiment)
+            VALUES (?, 'event', ?, 0.2, 'system', ?, ?, '["impulse", "proactive"]', ?)
+          `).run(systemEventMemoryId, `[System event]: Yui felt a longing impulse and initiated contact.`, cleanContextId, Date.now(), updatedSentiment);
+        }, 'insert-memory-proactive-event');
       } else {
         const userMemoryId = Math.random().toString(36).substr(2, 9);
-        this.db.prepare(`
-          INSERT INTO memories (id, type, content, importance, speaker, context, timestamp, tags, sentiment)
-          VALUES (?, 'interaction', ?, 0.4, ?, ?, ?, '[]', ?)
-        `).run(userMemoryId, input, senderName, cleanContextId, Date.now(), updatedSentiment);
+        await retryDbOperation(async () => {
+          this.db.prepare(`
+            INSERT INTO memories (id, type, content, importance, speaker, context, timestamp, tags, sentiment)
+            VALUES (?, 'interaction', ?, 0.4, ?, ?, ?, '[]', ?)
+          `).run(userMemoryId, input, senderName, cleanContextId, Date.now(), updatedSentiment);
+        }, 'insert-memory-user-interaction');
       }
 
       const agentMemoryId = Math.random().toString(36).substr(2, 9);
-      this.db.prepare(`
-        INSERT INTO memories (id, type, content, importance, speaker, context, timestamp, tags, sentiment)
-        VALUES (?, 'interaction', ?, 0.5, 'agent', ?, ?, '[]', ?)
-      `).run(agentMemoryId, result.response, cleanContextId, Date.now() + 10, updatedSentiment);
+      await retryDbOperation(async () => {
+        this.db.prepare(`
+          INSERT INTO memories (id, type, content, importance, speaker, context, timestamp, tags, sentiment)
+          VALUES (?, 'interaction', ?, 0.5, 'agent', ?, ?, '[]', ?)
+        `).run(agentMemoryId, result.response, cleanContextId, Date.now() + 10, updatedSentiment);
+      }, 'insert-memory-agent-response');
     }
 
     // 9. Update identity updates
@@ -546,27 +554,29 @@ export class NeuralInterface {
         }
       }
 
-      this.db.prepare(`
-        UPDATE identities SET 
-          perceivedName = ?, 
-          realName = ?, 
-          habits = ?, 
-          importantFacts = ?, 
-          linkedAccounts = ?,
-          lastInteraction = ?
-        WHERE id = ?
-      `).run(
-        result.perceivedNameUpdate || receiverIdentity.perceivedName,
-        result.viewerProfileUpdate?.realName || 
-          (result.perceivedNameUpdate && (!receiverIdentity.realName || receiverIdentity.realName === 'Belum diisikan' || receiverIdentity.realName === senderName)
-            ? result.perceivedNameUpdate
-            : receiverIdentity.realName) || senderName,
-        JSON.stringify(currentHabits),
-        JSON.stringify(currentFacts),
-        JSON.stringify(currentLinks),
-        Date.now(),
-        receiverIdentity.id
-      );
+      await retryDbOperation(async () => {
+        this.db.prepare(`
+          UPDATE identities SET 
+            perceivedName = ?, 
+            realName = ?, 
+            habits = ?, 
+            importantFacts = ?, 
+            linkedAccounts = ?,
+            lastInteraction = ?
+          WHERE id = ?
+        `).run(
+          result.perceivedNameUpdate || receiverIdentity.perceivedName,
+          result.viewerProfileUpdate?.realName || 
+            (result.perceivedNameUpdate && (!receiverIdentity.realName || receiverIdentity.realName === 'Belum diisikan' || receiverIdentity.realName === senderName)
+              ? result.perceivedNameUpdate
+              : receiverIdentity.realName) || senderName,
+          JSON.stringify(currentHabits),
+          JSON.stringify(currentFacts),
+          JSON.stringify(currentLinks),
+          Date.now(),
+          receiverIdentity.id
+        );
+      }, 'update-identity-profile');
     }
 
     let responseText = result.response;
@@ -575,10 +585,12 @@ export class NeuralInterface {
         console.log(`[NEURAL_INTERFACE] Gateway fallback triggered for ${senderName} (${chatType}) but response is empty. Saving to pending queue.`);
         try {
           const pendingId = "pending_" + Math.random().toString(36).substr(2, 9);
-          this.db.prepare(`
-            INSERT INTO pending_messages (id, input, sender_name, context_id, chat_type, timestamp, attempts, status)
-            VALUES (?, ?, ?, ?, ?, ?, 0, 'pending')
-          `).run(pendingId, input, senderName, contextId, chatType, Date.now());
+          await retryDbOperation(async () => {
+            this.db.prepare(`
+              INSERT INTO pending_messages (id, input, sender_name, context_id, chat_type, timestamp, attempts, status)
+              VALUES (?, ?, ?, ?, ?, ?, 0, 'pending')
+            `).run(pendingId, input, senderName, contextId, chatType, Date.now());
+          }, 'insert-pending-message');
         } catch (dbErr: any) {
           console.error("[NEURAL_INTERFACE_FALLBACK_ERR] Gagal menyimpan pesan fallback ke database:", dbErr.message);
         }
@@ -606,66 +618,62 @@ export class NeuralInterface {
       // persistence bookkeeping and don't need to complete before the user sees the reply.
       queueMicrotask(async () => {
         try {
-          const runDbLight = async (label: string, fn: () => void) => {
-            const maxRetries = 3;
-            for (let attempt = 1; attempt <= maxRetries; attempt++) {
-              try { fn(); return; }
-              catch (err: any) {
-                const isBusy = err.code === 'SQLITE_BUSY' || err.message?.includes('database is locked');
-                if (!isBusy || attempt === maxRetries) { return; }
-                await new Promise(r => setTimeout(r, 50 * attempt));
-              }
-            }
-          };
-
-          await runDbLight('deferred-update-identity', () => {
+          await retryDbOperation(async () => {
             this.db.prepare("UPDATE identities SET trust = ?, affection = ?, reputation = ?, lastInteraction = ? WHERE id = ?")
               .run(dbTrust, dbAffection, dbReputation, Date.now(), receiverIdentity.id);
-          });
+          }, 'deferred-update-identity');
 
-          await runDbLight('deferred-update-agent-state', () => {
+          await retryDbOperation(async () => {
             this.db.prepare("UPDATE agent_state SET mood = ?, emotion = ?, relation = ?, systemHealth = ?, activePersonaId = ?, currentPlan = ? WHERE id = 1")
               .run(JSON.stringify(updatedMood), JSON.stringify(updatedEmotion), JSON.stringify(updatedRelation), JSON.stringify(state.systemHealth), state.activePersonaId || 'auto', result.updatedPlan ? JSON.stringify(result.updatedPlan) : (state.currentPlan ? JSON.stringify(state.currentPlan) : null));
-          });
+          }, 'deferred-update-agent-state');
 
           if (result.newMemories && result.newMemories.length > 0) {
             for (const m of result.newMemories) {
-              const exists = this.db.prepare("SELECT 1 FROM memories WHERE id = ?").get(m.id);
-              if (!exists) {
-                this.db.prepare(`
-                  INSERT INTO memories (id, type, content, importance, speaker, context, timestamp, tags, sentiment)
-                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                `).run(
-                  m.id || Math.random().toString(36).substr(2, 9),
-                  m.type || 'interaction',
-                  m.content,
-                  m.importance || 0.4,
-                  m.speaker || 'agent',
-                  cleanContextId,
-                  m.timestamp || Date.now(),
-                  m.tags ? JSON.stringify(m.tags) : '[]',
-                  updatedSentiment
-                );
-              }
+              await retryDbOperation(async () => {
+                const exists = this.db.prepare("SELECT 1 FROM memories WHERE id = ?").get(m.id);
+                if (!exists) {
+                  this.db.prepare(`
+                    INSERT INTO memories (id, type, content, importance, speaker, context, timestamp, tags, sentiment)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                  `).run(
+                    m.id || Math.random().toString(36).substr(2, 9),
+                    m.type || 'interaction',
+                    m.content,
+                    m.importance || 0.4,
+                    m.speaker || 'agent',
+                    cleanContextId,
+                    m.timestamp || Date.now(),
+                    m.tags ? JSON.stringify(m.tags) : '[]',
+                    updatedSentiment
+                  );
+                }
+              }, 'deferred-insert-memory');
             }
           } else if (isProactive) {
             const systemEventMemoryId = Math.random().toString(36).substr(2, 9);
-            this.db.prepare(`
-              INSERT INTO memories (id, type, content, importance, speaker, context, timestamp, tags, sentiment)
-              VALUES (?, 'event', ?, 0.2, 'system', ?, ?, '["impulse", "proactive"]', ?)
-            `).run(systemEventMemoryId, `[System event]: Yui felt a longing impulse and initiated contact.`, cleanContextId, Date.now(), updatedSentiment);
+            await retryDbOperation(async () => {
+              this.db.prepare(`
+                INSERT INTO memories (id, type, content, importance, speaker, context, timestamp, tags, sentiment)
+                VALUES (?, 'event', ?, 0.2, 'system', ?, ?, '["impulse", "proactive"]', ?)
+              `).run(systemEventMemoryId, `[System event]: Yui felt a longing impulse and initiated contact.`, cleanContextId, Date.now(), updatedSentiment);
+            }, 'deferred-insert-proactive-event');
           } else {
             const userMemoryId = Math.random().toString(36).substr(2, 9);
-            this.db.prepare(`
-              INSERT INTO memories (id, type, content, importance, speaker, context, timestamp, tags, sentiment)
-              VALUES (?, 'interaction', ?, 0.4, ?, ?, ?, '[]', ?)
-            `).run(userMemoryId, input, senderName, cleanContextId, Date.now(), updatedSentiment);
+            await retryDbOperation(async () => {
+              this.db.prepare(`
+                INSERT INTO memories (id, type, content, importance, speaker, context, timestamp, tags, sentiment)
+                VALUES (?, 'interaction', ?, 0.4, ?, ?, ?, '[]', ?)
+              `).run(userMemoryId, input, senderName, cleanContextId, Date.now(), updatedSentiment);
+            }, 'deferred-insert-user-memory');
 
             const agentMemoryId = Math.random().toString(36).substr(2, 9);
-            this.db.prepare(`
-              INSERT INTO memories (id, type, content, importance, speaker, context, timestamp, tags, sentiment)
-              VALUES (?, 'interaction', ?, 0.5, 'agent', ?, ?, '[]', ?)
-            `).run(agentMemoryId, result.response, cleanContextId, Date.now() + 10, updatedSentiment);
+            await retryDbOperation(async () => {
+              this.db.prepare(`
+                INSERT INTO memories (id, type, content, importance, speaker, context, timestamp, tags, sentiment)
+                VALUES (?, 'interaction', ?, 0.5, 'agent', ?, ?, '[]', ?)
+              `).run(agentMemoryId, result.response, cleanContextId, Date.now() + 10, updatedSentiment);
+            }, 'deferred-insert-agent-memory');
           }
 
           if (result.viewerProfileUpdate || result.perceivedNameUpdate || result.linkedAccountUpdate) {
@@ -687,27 +695,29 @@ export class NeuralInterface {
               }
             }
 
-            this.db.prepare(`
-              UPDATE identities SET 
-                perceivedName = ?, 
-                realName = ?, 
-                habits = ?, 
-                importantFacts = ?, 
-                linkedAccounts = ?,
-                lastInteraction = ?
-              WHERE id = ?
-            `).run(
-              result.perceivedNameUpdate || receiverIdentity.perceivedName,
-              result.viewerProfileUpdate?.realName ||
-                (result.perceivedNameUpdate && (!receiverIdentity.realName || receiverIdentity.realName === 'Belum diisikan' || receiverIdentity.realName === senderName)
-                  ? result.perceivedNameUpdate
-                  : receiverIdentity.realName) || senderName,
-              JSON.stringify(currentHabits),
-              JSON.stringify(currentFacts),
-              JSON.stringify(currentLinks),
-              Date.now(),
-              receiverIdentity.id
-            );
+            await retryDbOperation(async () => {
+              this.db.prepare(`
+                UPDATE identities SET 
+                  perceivedName = ?, 
+                  realName = ?, 
+                  habits = ?, 
+                  importantFacts = ?, 
+                  linkedAccounts = ?,
+                  lastInteraction = ?
+                WHERE id = ?
+              `).run(
+                result.perceivedNameUpdate || receiverIdentity.perceivedName,
+                result.viewerProfileUpdate?.realName ||
+                  (result.perceivedNameUpdate && (!receiverIdentity.realName || receiverIdentity.realName === 'Belum diisikan' || receiverIdentity.realName === senderName)
+                    ? result.perceivedNameUpdate
+                    : receiverIdentity.realName) || senderName,
+                JSON.stringify(currentHabits),
+                JSON.stringify(currentFacts),
+                JSON.stringify(currentLinks),
+                Date.now(),
+                receiverIdentity.id
+              );
+            }, 'deferred-update-identity-profile');
           }
         } catch (dbErr: any) {
           console.warn("[NEURAL_INTERFACE_DEFERRED_DB] background DB write failed:", dbErr?.message || dbErr);

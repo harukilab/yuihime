@@ -4,6 +4,8 @@ import { fileURLToPath } from "url";
 import * as toml from "smol-toml";
 import os from "os";
 import { execSync } from "child_process";
+import { getDb, withDbRetry } from "../database.js";
+import { appendLog } from "../fileLogger.js";
 
 let __filename = "";
 let __dirname = "";
@@ -677,6 +679,33 @@ try {
     } catch (e: any) {
       if (isInteractive) console.warn(`[ONBOARDING] Gagal menyalin addons bawaan ke sandbox:`, e.message);
     }
+  }
+
+  // First-run device onboarding: create marker and enqueue initial auto-response so Yui aktif otomatis
+  try {
+    const markerPath = path.join(resolvedDataDir, '.first_run_done');
+    if (!existsSync(markerPath)) {
+      // create marker file
+      try { writeFileSync(markerPath, String(Date.now()), 'utf-8'); } catch (e) {}
+
+      // Append welcome to logs for traceability
+      try {
+        appendLog('system', { event: 'first_run', message: 'First run detected on this device. Auto-responder activated.' });
+      } catch (e) {}
+
+      // Best-effort: insert a pending welcome message to pending_messages so user sees it when connected
+      try {
+        const db = getDb();
+        const pendingId = 'pending_' + Math.random().toString(36).substr(2, 9);
+        withDbRetry(() => {
+          db.prepare(`INSERT INTO pending_messages (id, input, sender_name, context_id, chat_type, timestamp, attempts, status) VALUES (?, ?, ?, ?, ?, ?, 0, 'pending')`).run(pendingId, 'Halo! Yui sudah aktif di perangkat ini. Bagaimana kabarmu hari ini? ✨', 'system', 'web_default', 'web', Date.now());
+        }, 'onboarding-insert-pending-welcome');
+      } catch (e) {
+        // ignore
+      }
+    }
+  } catch (e) {
+    // ignore onboarding marker errors
   }
 
   if (!isInteractive) {

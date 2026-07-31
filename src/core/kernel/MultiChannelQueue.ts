@@ -1,6 +1,6 @@
 import { NeuralInterface } from "./NeuralInterface.js";
-import { Cortex } from "../cortex.js";
 import { eventBus } from "@shared/core/kernel/event-bus";
+import { ChatSummaryEngine } from "./ChatSummaryEngine.js";
 import { CognitiveScheduler } from "./CognitiveScheduler.js";
 import { PromptRegistry } from "../PromptRegistry.js";
 import { SettingsManager } from "./settings.js";
@@ -55,7 +55,6 @@ export class MultiChannelQueue {
   private queue: QueueItem[] = [];
   private processing = false;
   private db: any = null;
-  private backgroundChatBuffer: { speaker: string; text: string; timestamp: number }[] = [];
   private msgTimestamps: number[] = []; // for frequency calculation
   private recentMsgHashes: { hash: string; timestamp: number }[] = [];
   private processingStartTime = 0;
@@ -95,6 +94,7 @@ export class MultiChannelQueue {
 
   public setDatabase(db: any) {
     this.db = db;
+    ChatSummaryEngine.getInstance().setDatabase(db);
     // Instantly trigger dispatch of pending messages in background on database setup/sync
     console.log("[QUEUE] Database connected. Starting initial parallel dispatch of pending messages...");
     this.dispatchPendingMessages().catch(err => {
@@ -189,9 +189,9 @@ export class MultiChannelQueue {
       console.log(`[QUEUE_HOLD] Incoming message from ${senderName} held (hold mode active).`);
       return;
     }
-    // 1. Masukkan semua pesan (tanpa terkecuali) ke buffer ringkasan latar belakang agar Yui tetap memahami konteks penuh
-    this.backgroundChatBuffer.push({ speaker: senderName, text: input, timestamp });
-    this.checkAndTriggerBackgroundSummary();
+    // 1. Catat semua pesan (tanpa terkecuali) ke daily log + buffer ringkasan latar belakang
+    //    (jeda hening 120 detik / ringkasan harian) agar Yui tetap memahami konteks penuh.
+    ChatSummaryEngine.getInstance().noteIncomingMessage({ speaker: senderName, text: input, timestamp, chatType });
 
     // 2. Evaluasi Antrean berdasarkan Kecepatan & Frekuensi Obrolan
     const threshold = 4; // Ambang batas pesan per 15 detik untuk mengaktifkan High-Frequency Sampling
@@ -563,94 +563,6 @@ export class MultiChannelQueue {
       // Stagger jeda tipis antarrespons agar tarian avatar & tts berjalan mulus berurutan tanpa penumpukan
       setTimeout(() => this.processNext(), 1200);
     }
-  }
-
-  /**
-   * Background Contextual Summarizer (Pencerna Hubungan Latar Belakang)
-   * Mengompilasi percakapan yang dilewati secara asinkron setiap 10 pesan untuk menyuplai "kepekaan sosial" Yui.
-   */
-  private checkAndTriggerBackgroundSummary() {
-    const summaryLimit = 10;
-    if (this.backgroundChatBuffer.length < summaryLimit) return;
-
-    // Ambil chunk 10 obrolan terlama di buffer
-    const chunk = this.backgroundChatBuffer.splice(0, summaryLimit);
-    console.log(`[BACKGROUND_SUMMARIZER] Analyzing and summarizing ${summaryLimit} asynchronous viewer chat messages...`);
-
-    // Proses sinkronisasi kognitif subkesadaran secara terpisah demi performa tanpa tunda
-    (async () => {
-      try {
-        const cortex = new Cortex();
-        const chatSnippet = chunk.map(c => `[${c.speaker}]: ${c.text}`).join("\n");
-        const summaryPrompt = `
-Anda adalah bagian kognisi latar belakang subkesadaran Yui Hime, AI VTuber ceria dan otonom.
-Berikut adalah 10 pesan baru dari obrolan penonton live streaming Anda.
-Pesan-pesan ini meluncur sangat cepat sehingga Anda tidak bisa membalasnya satu-per-satu secara manual.
-
-Rangkumlah percakapan, topik diskusi hangat, suasana (hype, santai, bercanda, atau bertanya), dan kemauan penonton saat ini dalam 1-2 kalimat pendek bahasa Indonesia dari sudut pandang subkesadaran Anda (Gunakan format: "Saya merasakan penonton sedang membahas [topik], suasananya [suasana]"). Do not output any thinking prefix or markdown fence blocks.
-
-Berikut daftar obrolannya:
-${chatSnippet}
-
-Hasil rangkuman singkat subkesadaran:`.trim();
-
-        const summary = await cortex.thinkSimple(summaryPrompt);
-        console.log(`[BACKGROUND_SUMMARIZER] Subconscious summary result: "${summary}"`);
-
-        if (summary && summary.trim()) {
-          if (this.db) {
-            try {
-              const memoryId = "bg_digest_" + Math.random().toString(36).substr(2, 9);
-              const stmt = this.db.prepare(`
-                INSERT INTO memories (id, type, content, importance, speaker, context, timestamp, tags, sentiment)
-                VALUES (?, 'event_group', ?, 0.7, 'subconscious', 'live_stream', ?, '["summary", "viewer_vibe"]', 0.5)
-              `);
-              stmt.run(memoryId, summary.trim(), Date.now());
-              console.log("[BACKGROUND_SUMMARIZER] Chat summary successfully saved to cognitive database (Yui absorbed the chat vibe!).");
-            } catch (dbErr) {
-              console.error("[BACKGROUND_SUMMARIZER_DB_ERR] Failed to archive subconscious summary to DB:", dbErr);
-            }
-          }
-
-          // Active Cognitive Response: Speak the aggregate summary back to the chat timeline
-          const cleanSummary = summary.trim().replace(/^['"]|['"]$/g, '');
-          const spokenSummary = `🌸 Yui merangkum obrolan ramai 🌸\nHeeh, rame banget komentarnya! Yui menyimak keseruannya dan merasakan obrolan kalian: ${cleanSummary} ✨`;
-          
-          console.log(`[BACKGROUND_SUMMARIZER_SPEAK] Emit spoken summary to live room: "${spokenSummary}"`);
-          
-          // Emit to local event bus to play animations and speak TTS
-          eventBus.emit('OUTPUT_EMITTED', { 
-            response: spokenSummary, 
-            isInternal: false 
-          });
-
-          // Broadcast WS packet to ensure web interface views/renders this spoken summary
-           try {
-             broadcastToWS({
-              type: "state_update",
-              data: {
-                state: { status: "talking" },
-                activeSubtitle: spokenSummary,
-                typedSubtitle: spokenSummary,
-                isSubtitleTyping: false,
-                animations: ["TALK", "SMILE"]
-              }
-            });
-            broadcastToWS({
-              type: "remote_response_sent",
-              data: {
-                reply: spokenSummary,
-                channel: "Live Chat"
-              }
-            });
-          } catch (wsErr) {
-            console.error("[BACKGROUND_SUMMARIZER_WS_ERR] Failed to send summary WS broadcast:", wsErr);
-          }
-        }
-      } catch (err) {
-        console.error("[BACKGROUND_SUMMARIZER] Failed to generate asynchronous background summary:", err);
-      }
-    })();
   }
 
   /**

@@ -737,7 +737,10 @@ async function startServer() {
 registerAPIRoutes(app, db);
 
 // Serve models folder from .yuihime/models securely in both dev and production
-const systemRoot = process.env.YUIHIME_SYSTEM_ROOT || process.env.YUIHIME_ROOT || "~/.yuihime";
+let systemRoot = process.env.YUIHIME_SYSTEM_ROOT || process.env.YUIHIME_ROOT || "~/.yuihime";
+if (systemRoot.startsWith("~")) {
+  systemRoot = path.join(os.homedir(), systemRoot.substring(1));
+}
 const customSystemRoot = path.isAbsolute(systemRoot) ? systemRoot : path.join(process.cwd(), systemRoot);
 const modelsDir = process.env.YUIHIME_MODELS_DIR || path.join(customSystemRoot, "models");
 if (!existsSync(modelsDir)) {

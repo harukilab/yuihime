@@ -84,3 +84,6 @@ Peta struktur direktori pasca-pemisahan Web UI ↔ Daemon (lihat UPDATE_LOG `[4.
 - `core:kernel`
 - `core:kernel,core:server`
 - `src/core/database.ts — add logDbRetry for file-based DB retry logging`
+- `src/core/kernel/ChatSummaryEngine.ts — Chat Summary Engine (idle-gap + daily summary; daily chat log file; 7-day retention).`
+- `src/core/fileLogger.ts — Rotated & retention file logger (per-category daily rotation, 7-day retention).`
+- `src/drivers/tools/chat_log/ — Chat Log tool (raw daily chat log reader).`

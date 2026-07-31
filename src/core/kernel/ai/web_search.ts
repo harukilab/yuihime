@@ -411,6 +411,12 @@ try {
       { url: 'https://www.theverge.com/rss/index.xml', name: 'The Verge', type: 'atom' as const }
     ];
 
+    // Build a simple keyword array from the query to guard RSS filtering
+    const queryKeywords = (typeof query === 'string' ? query.toLowerCase() : '')
+      .split(/\s+/)
+      .map(k => k.replace(/[^\w]/g, '').trim())
+      .filter(Boolean);
+
     for (const feed of rssFeeds) {
       if (hasTimedOut()) break;
       try {

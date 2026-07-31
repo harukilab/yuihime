@@ -5,6 +5,7 @@ import { APIService } from "@shared/services/api";
 import { eventBus } from "@shared/core/kernel/event-bus";
 import { activeStreamClients, broadcastToWS, activeWSConnections } from "../apiRouter.js";
 import { MultiChannelQueue } from "../../kernel/MultiChannelQueue.js";
+import { ChatSummaryEngine } from "../../kernel/ChatSummaryEngine.js";
 import { Soul } from "../../soul.js";
 import { SettingsManager } from "@/core/kernel/settings";
 import { deduplicateAndMergeIdentities } from "../../database.js";
@@ -130,6 +131,35 @@ export function registerCortexRoutes(app: express.Express, db: any) {
         res.status(500).json({ error: "Kegagalan neural sync asinkron di antrean." });
       }
     );
+  });
+
+  // --- Chat Summary API (Manual daily summary trigger + read) ---
+  app.post("/api/cortex/chat-summary/daily", async (req, res) => {
+    try {
+      const date = req.body?.date ? String(req.body.date).trim() : undefined;
+      const result = await ChatSummaryEngine.getInstance().generateDailySummary(date);
+      if (!result.success) {
+        return res.status(400).json({ success: false, date: result.date, reason: result.reason, error: result.error || null });
+      }
+      res.json({ success: true, date: result.date, summary: result.summary });
+    } catch (err: any) {
+      console.error("[SERVER] POST /api/cortex/chat-summary/daily error:", err);
+      res.status(500).json({ success: false, error: err.message || String(err) });
+    }
+  });
+
+  app.get("/api/cortex/chat-summary/daily", (req, res) => {
+    try {
+      const date = req.query?.date ? String(req.query.date).trim() : undefined;
+      const result = ChatSummaryEngine.getInstance().getDailySummary(date);
+      if (!result) {
+        return res.status(404).json({ success: false, error: `Daily summary not found for ${date || "yesterday"}. Generate it first.` });
+      }
+      res.json({ success: true, date: result.date, summary: result.summary, timestamp: result.timestamp });
+    } catch (err: any) {
+      console.error("[SERVER] GET /api/cortex/chat-summary/daily error:", err);
+      res.status(500).json({ success: false, error: err.message || String(err) });
+    }
   });
 
   // --- Cortex Think Server-side Entry Point ---

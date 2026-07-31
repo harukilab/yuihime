@@ -105,6 +105,8 @@ import { OCRTool } from '../drivers/tools/ocr/index.js';
 import { ManagePairingTool } from '../drivers/tools/manage_pairing/index.js';
 import { FileManagerTool } from '../drivers/tools/file_manager/index.js';
 import { FileWriteTool } from '../drivers/tools/write_file/index.js';
+import { DailySummaryTool } from '../drivers/tools/daily_summary/index.js';
+import { ChatLogTool } from '../drivers/tools/chat_log/index.js';
 
 let initPromise: Promise<void> | null = null;
 
@@ -463,6 +465,8 @@ export function initializeCortexModules(): Promise<void> {
         EmotionAdjustTool, FileListTool, CalculatorTool, GitHubTool,
         GetCurrentTimeTool, MessagingTool, BgProcTool, ManageIdentitiesTool, CronTool,
         OCRTool, ManagePairingTool, FileManagerTool, FileWriteTool,
+        DailySummaryTool,
+        ChatLogTool,
         SendFinalReplyTool, SendStatusUpdateTool
       ];
 

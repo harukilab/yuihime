@@ -1,5 +1,5 @@
 import express from "express";
-import { deduplicateAndMergeIdentities } from "../../database.js";
+import { deduplicateAndMergeIdentities, retryDbOperation } from "../../database.js";
 import { Cortex } from "../../cortex.js";
 import { APIService } from "@shared/services/api";
 
@@ -164,7 +164,7 @@ export function registerIdentitiesRoutes(app: express.Express, db: any) {
     }
   });
 
-  app.post("/api/pair/claim", (req, res) => {
+  app.post("/api/pair/claim", async (req, res) => {
     try {
       const { code, perceivedName } = req.body;
       if (!code || !perceivedName) {
@@ -178,7 +178,10 @@ export function registerIdentitiesRoutes(app: express.Express, db: any) {
       }
 
       if (row.expires_at < Date.now()) {
-        db.prepare("DELETE FROM pairing_codes WHERE code = ?").run(code);
+        await retryDbOperation(() =>
+          db.prepare("DELETE FROM pairing_codes WHERE code = ?").run(code),
+          'pair-claim-delete-expired'
+        );
         return res.status(400).json({ error: "Kode penyandingan telah kedaluwarsa." });
       }
 
@@ -198,9 +201,12 @@ export function registerIdentitiesRoutes(app: express.Express, db: any) {
       let currentAccounts = identity.linkedAccounts ? JSON.parse(identity.linkedAccounts) : [];
       currentAccounts = Array.from(new Set([...currentAccounts, ...pending]));
 
-      db.prepare("UPDATE identities SET linkedAccounts = ? WHERE id = ?").run(
-        JSON.stringify(currentAccounts),
-        identity.id
+      await retryDbOperation(() =>
+        db.prepare("UPDATE identities SET linkedAccounts = ? WHERE id = ?").run(
+          JSON.stringify(currentAccounts),
+          identity.id
+        ),
+        'pair-claim-update-accounts'
       );
 
       // Merge duplicate identities if they exist
@@ -211,7 +217,10 @@ export function registerIdentitiesRoutes(app: express.Express, db: any) {
       }
 
       // Delete OTP
-      db.prepare("DELETE FROM pairing_codes WHERE code = ?").run(code);
+      await retryDbOperation(() =>
+        db.prepare("DELETE FROM pairing_codes WHERE code = ?").run(code),
+        'pair-claim-delete-code'
+      );
 
       res.json({
         success: true,
@@ -224,7 +233,7 @@ export function registerIdentitiesRoutes(app: express.Express, db: any) {
     }
   });
 
-  app.post("/api/pair/generate-code-tool", (req, res) => {
+  app.post("/api/pair/generate-code-tool", async (req, res) => {
     try {
       const { claimedName, chatType, userName, contextId } = req.body;
       if (!claimedName) {
@@ -235,10 +244,13 @@ export function registerIdentitiesRoutes(app: express.Express, db: any) {
       let identity = db.prepare("SELECT * FROM identities WHERE LOWER(perceivedName) = ?").get(claimedName.toLowerCase());
       if (!identity) {
         const id = Math.random().toString(36).substr(2, 9);
-        db.prepare(`
-          INSERT INTO identities (id, perceivedName, realName, habits, importantFacts, linkedAccounts, lastInteraction, ownerId, trust, affection, reputation)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(id, claimedName, claimedName, '[]', '[]', '[]', Date.now(), 'local_user', 50, 50, 50);
+        await retryDbOperation(() =>
+          db.prepare(`
+            INSERT INTO identities (id, perceivedName, realName, habits, importantFacts, linkedAccounts, lastInteraction, ownerId, trust, affection, reputation)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `).run(id, claimedName, claimedName, '[]', '[]', '[]', Date.now(), 'local_user', 50, 50, 50),
+          'pair-generate-insert-identity'
+        );
         identity = db.prepare("SELECT * FROM identities WHERE id = ?").get(id);
       }
 
@@ -283,8 +295,11 @@ export function registerIdentitiesRoutes(app: express.Express, db: any) {
       const expires_at = Date.now() + 10 * 60 * 1000; // 10 mins
       const pending_account = JSON.stringify(targetAccounts);
 
-      db.prepare("INSERT OR REPLACE INTO pairing_codes (code, identity_id, expires_at, pending_account) VALUES (?, ?, ?, ?)")
-        .run(code, identity.id, expires_at, pending_account);
+      await retryDbOperation(() =>
+        db.prepare("INSERT OR REPLACE INTO pairing_codes (code, identity_id, expires_at, pending_account) VALUES (?, ?, ?, ?)")
+          .run(code, identity.id, expires_at, pending_account),
+        'pair-generate-insert-code'
+      );
 
       res.json({
         success: true,
@@ -299,7 +314,7 @@ export function registerIdentitiesRoutes(app: express.Express, db: any) {
     }
   });
 
-  app.post("/api/identities/tool-update", (req, res) => {
+  app.post("/api/identities/tool-update", async (req, res) => {
     try {
       const { action, perceivedName, realName, fact, yuiPerspective, contextId, userName, chatType, viewerId } = req.body;
       if (!action) {
@@ -340,7 +355,10 @@ export function registerIdentitiesRoutes(app: express.Express, db: any) {
         if (!perceivedName || !perceivedName.trim()) {
           return res.status(400).json({ success: false, error: "perceivedName wajib diisikan." });
         }
-        db.prepare("UPDATE identities SET perceivedName = ? WHERE id = ?").run(perceivedName.trim(), identity.id);
+        await retryDbOperation(() =>
+          db.prepare("UPDATE identities SET perceivedName = ? WHERE id = ?").run(perceivedName.trim(), identity.id),
+          'identity-tool-update-nickname'
+        );
         return res.json({ 
           success: true, 
           message: `Sinyal kognitif Yui diperbarui! Nama panggilan user dalam memori Yui berhasil diubah menjadi: ${perceivedName.trim()} 🌸` 
@@ -351,7 +369,10 @@ export function registerIdentitiesRoutes(app: express.Express, db: any) {
         if (!realName || !realName.trim()) {
           return res.status(400).json({ success: false, error: "realName wajib diisikan." });
         }
-        db.prepare("UPDATE identities SET realName = ? WHERE id = ?").run(realName.trim(), identity.id);
+        await retryDbOperation(() =>
+          db.prepare("UPDATE identities SET realName = ? WHERE id = ?").run(realName.trim(), identity.id),
+          'identity-tool-set-real-name'
+        );
         return res.json({ 
           success: true, 
           message: `Sinyal kognitif batin Yui diperbarui! Nama asli user sekarang terekam dengan indah sebagai: ${realName.trim()} 🌸` 
@@ -365,7 +386,10 @@ export function registerIdentitiesRoutes(app: express.Express, db: any) {
         const facts = identity.importantFacts ? JSON.parse(identity.importantFacts) : [];
         if (!facts.includes(fact.trim())) {
           facts.push(fact.trim());
-          db.prepare("UPDATE identities SET importantFacts = ? WHERE id = ?").run(JSON.stringify(facts), identity.id);
+          await retryDbOperation(() =>
+            db.prepare("UPDATE identities SET importantFacts = ? WHERE id = ?").run(JSON.stringify(facts), identity.id),
+            'identity-tool-add-fact'
+          );
         }
         return res.json({ success: true, message: `Fakta baru tentang user berhasil direkam dalam memori Yui! 🌸` });
       }
@@ -376,7 +400,10 @@ export function registerIdentitiesRoutes(app: express.Express, db: any) {
         }
         const facts = identity.importantFacts ? JSON.parse(identity.importantFacts) : [];
         const filtered = facts.filter((f: string) => f.toLowerCase() !== fact.trim().toLowerCase());
-        db.prepare("UPDATE identities SET importantFacts = ? WHERE id = ?").run(JSON.stringify(filtered), identity.id);
+        await retryDbOperation(() =>
+          db.prepare("UPDATE identities SET importantFacts = ? WHERE id = ?").run(JSON.stringify(filtered), identity.id),
+          'identity-tool-remove-fact'
+        );
         return res.json({ success: true, message: `Fakta berhasil dihapus dari memori batin Yui.` });
       }
 
@@ -384,7 +411,10 @@ export function registerIdentitiesRoutes(app: express.Express, db: any) {
         if (!yuiPerspective) {
           return res.status(400).json({ success: false, error: "yuiPerspective wajib diisikan." });
         }
-        db.prepare("UPDATE identities SET yuiPerspective = ? WHERE id = ?").run(yuiPerspective, identity.id);
+        await retryDbOperation(() =>
+          db.prepare("UPDATE identities SET yuiPerspective = ? WHERE id = ?").run(yuiPerspective, identity.id),
+          'identity-tool-update-perspective'
+        );
         return res.json({ success: true, message: `Sudut pandang batin subjektif Yui tentang user berhasil diperbarui! 🌸` });
       }
 
