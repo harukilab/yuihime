@@ -1,6 +1,14 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.173] - 2026-08-01
+### Feature: Perintah /new: chat baru bersih, obrolan lama diringkas + diarsipkan
+- /new memulai chat baru yang bersih untuk chat Telegram: obrolan lama diringkas via LLM (Bahasa Indonesia) dan disimpan ke tabel memories (type chat_reset, importance 0.85) sebagai data Yui yang awet.
+- Pesan interaksi lama untuk konteks chat dihapus setelah summary tersimpan, sehingga turn berikutnya berjalan dengan riwayat kosong — Yui tidak lupa total, hanya konteks obrolan yang di-refresh.
+- Tombol menu baru 🧹 New Chat (qt:new) + alias /reset /newchat /bersih.
+- Smoke test tg_img_toolkit kini 28 kasus (termasuk 6 kasus /new) hijau.
+
+
 ## [4.172] - 2026-08-01
 ### Fix: Fix model picker /img: unwrap payload list_tools + schema-aware generate
 - list_tools kini mengembalikan payload.data.tools (bukan bungkus {code,data}) sehingga filter ketat text-to-image benar-benar aktif; fallback walker tidak lagi mengambil tool non-gambar (upscaler/video).

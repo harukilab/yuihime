@@ -35,6 +35,9 @@ const mockProvider = {
   metadata: { id: 'gemini', type: 'provider', models: ['gemini-2.0-flash'] },
   generate: async (prompt: string, context: any) => {
     (globalThis as any).__lastProviderCall = { prompt, context };
+    if (String(prompt).includes('Summarize the past conversation')) {
+      return 'percakapan tentang rencana liburan ke jepang';
+    }
     if ((globalThis as any).__providerSilent) {
       return JSON.stringify({ toolName: 'jc_grassimoon', prompt: 'silent yui prompt' });
     }
@@ -137,6 +140,69 @@ async function main() {
   // 8. admin gate
   const r8 = await handleTgCallback('qt:img:default', makeTc(12345));
   assert(r8?.text!.includes('admin only'), 'non-admin blocked from img callbacks');
+
+  // 9. /new: clean chat — summarize + archive, then clear raw interactions
+  const rows: any[] = [
+    { content: 'halo yui', speaker: 'user', timestamp: Date.now() - 20000 },
+    { content: 'halo juga~ ada yang bisa kubantu?', speaker: 'agent', timestamp: Date.now() - 19000 },
+    { content: 'kita bahas rencana liburan ke jepang', speaker: 'user', timestamp: Date.now() - 18000 },
+    { content: 'wah seru! kita catat ya', speaker: 'agent', timestamp: Date.now() - 17000 }
+  ];
+  const fakeDb: any = {
+    rows: [...rows],
+    prepare(sql: string) {
+      const self = this;
+      return {
+        all(...args: any[]) {
+          if (sql.includes('FROM memories WHERE context = ?')) return [...self.rows];
+          return [];
+        },
+        run(...args: any[]) {
+          const params = args;
+          if (sql.trim().startsWith('INSERT INTO memories')) {
+            self.rows.push({ content: params[1], speaker: 'system' });
+            return { changes: 1 };
+          }
+          if (sql.includes('DELETE FROM memories')) {
+            const before = self.rows.length;
+            self.rows = self.rows.filter((r: any) => r.speaker === 'system');
+            return { changes: before - self.rows.length };
+          }
+          return { changes: 0 };
+        }
+      };
+    },
+    transaction(fn: Function) {
+      const self = this;
+      return (...args: any[]) => fn.apply(self, args);
+    }
+  };
+  (globalThis as any).__providerSilent = false;
+  const tcNew = makeTc(999000111);
+  tcNew.db = fakeDb;
+  const r9 = await handleTgQuickCommand('/new', tcNew);
+  assert(r9.handled === true, '/new handled');
+  assert(r9.reply!.text.includes('Chat baru dimulai'), '/new returns fresh-chat text');
+  assert(r9.reply!.text.includes('4'), '/new reports archived message count');
+  assert(fakeDb.rows.some((r: any) => r.speaker === 'system' && r.content.includes('RINGKASAN')), '/new stores summary memory');
+  assert(fakeDb.rows.filter((r: any) => r.speaker !== 'system').length === 0, '/new clears raw interactions');
+
+  // 10. /new on an already-clean chat
+  const fakeDb2: any = {
+    rows: [],
+    prepare(sql: string) {
+      const self = this;
+      return {
+        all() { return [...self.rows]; },
+        run(...args: any[]) { return { changes: 0 }; }
+      };
+    },
+    transaction(fn: Function) { const self = this; return (...args: any[]) => fn.apply(self, args); }
+  };
+  const tcNew2 = makeTc(999000111);
+  tcNew2.db = fakeDb2;
+  const r10 = await handleTgQuickCommand('/new', tcNew2);
+  assert(r10.reply!.text.includes('already clean'), '/new no-op on clean chat');
 
   console.log('\n=== SELESAI ===');
   if (process.exitCode) process.exit(process.exitCode);

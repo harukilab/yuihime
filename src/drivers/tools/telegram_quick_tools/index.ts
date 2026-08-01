@@ -506,6 +506,74 @@ function tgBaseUrl(): string {
   return `http://127.0.0.1:${process.env.PORT || '3000'}`;
 }
 
+/**
+ * /new — start a fresh clean chat for the current Telegram chat.
+ * The old conversation is summarized via the LLM and the summary is archived
+ * in the memories table (so Yui keeps the gist as durable data), then the raw
+ * interaction memories for this context are cleared so the next turn starts
+ * with an empty conversation history.
+ */
+async function runNewChat(tc: TgToolContext): Promise<TgReply> {
+  const chatId = tc.ctx?.chat?.id;
+  if (chatId == null) return { text: '⚠️ Cannot determine this chat.' };
+  if (!tc.db) return { text: 'Database unavailable.' };
+  const context = `tg_${chatId}`;
+
+  try {
+    const rows = tc.db.prepare(
+      "SELECT content, speaker, timestamp FROM memories WHERE context = ? AND speaker != 'system' ORDER BY timestamp ASC LIMIT 200"
+    ).all(context) as { content: string; speaker: string; timestamp: number }[] | undefined;
+
+    const msgs = (rows || []).filter(r => r && typeof r.content === 'string' && r.content.trim());
+    if (msgs.length < 2) {
+      return { text: '✨ This chat is already clean and fresh — nothing to summarize.' };
+    }
+
+    const transcript = msgs
+      .map(r => `${r.speaker === 'agent' ? 'Yui' : 'User'}: ${r.content.trim()}`)
+      .join('\n')
+      .slice(-16000);
+
+    let summary = '';
+    try {
+      const providerId = tc.settings?.provider || 'gemini';
+      const provider = SystemRegistry.getProvider(providerId);
+      if (provider) {
+        const instruction =
+          'You are Yui. Summarize the past conversation below into a concise recap (in Indonesian), ' +
+          'keeping the key topics, facts about the user, promises, preferences and emotional moments. ' +
+          'Plain text only, 3-8 sentences, no markdown, no JSON.\n\nConversation:\n' + transcript;
+        const raw: any = await provider.generate(instruction, {
+          config: tc.settings || {},
+          systemPrompt: 'You are Yui, writing a memory recap. Output plain text only.'
+        });
+        summary = String(raw?.text ?? raw?.response ?? raw ?? '').trim().replace(/^["']|["']$/g, '');
+      }
+    } catch (e: any) {
+      console.warn('[TG_NEW_CHAT] Summary LLM failed:', e?.message || e);
+    }
+    const finalSummary = summary || `[Auto recap] ${msgs.length} previous messages.`;
+
+    const tx = tc.db.transaction(() => {
+      tc.db.prepare(`
+        INSERT INTO memories (id, type, content, importance, speaker, context, timestamp, tags, sentiment)
+        VALUES (?, 'chat_reset', ?, 0.85, 'system', ?, ?, '["summary", "chat_reset"]', 0.6)
+      `).run(`chat_reset_${Date.now()}`, `[RINGKASAN CHAT SEBELUMNYA]: ${finalSummary}`, context, Date.now());
+
+      const cleared = tc.db.prepare("DELETE FROM memories WHERE context = ? AND speaker != 'system'").run(context);
+      return cleared?.changes || 0;
+    });
+    const cleared = tx();
+
+    return {
+      text: `🧹 Chat baru dimulai!\n\nDari ${msgs.length} pesan sebelumnya yang diringkas (${cleared} pesan diarsipkan), Yui tetap mengingat intinya:\n\n📝 ${finalSummary}\n\nYuk mulai topik baru~ 💖`
+    };
+  } catch (e: any) {
+    console.warn('[TG_NEW_CHAT] Failed:', e?.message || e);
+    return { text: `⚠️ Failed to reset chat: ${e?.message || e}` };
+  }
+}
+
 async function shellViaApi(command: string): Promise<string> {
   const res = await fetch(`${tgBaseUrl()}/api/tools/shell`, {
     method: 'POST',
@@ -697,6 +765,7 @@ function menuKeyboard(tc?: TgToolContext) {
     [{ text: '🪪 Identity', callback_data: 'qt:me' }, { text: '⚙️ Status', callback_data: 'qt:status' }],
     [{ text: '🏓 Ping', callback_data: 'qt:ping' }, { text: '💖 About', callback_data: 'qt:about' }]
   ];
+  rows.push([{ text: '🧹 New Chat', callback_data: 'qt:new' }]);
   if (tc && isAdmin(tc)) {
     rows.push([{ text: '🛠️ Daemon', callback_data: 'qt:daemon' }]);
     rows.push([{ text: '🧰 Tools', callback_data: 'qt:tools' }]);
@@ -854,6 +923,13 @@ export const tgQuickCommands: TgCommandDef[] = [
         text: `💖 Yuihime\n\nA neural AI assistant connected across platforms.\n\nThis command is processed directly by the daemon without involving the LLM.\n\nType /menu to open the quick menu.`
       };
     }
+  },
+  {
+    name: 'new',
+    aliases: ['reset', 'newchat', 'bersih'],
+    description: 'Start a fresh clean chat — summarize & archive the old conversation as Yui\u2019s memory',
+    usage: '/new',
+    handler: async (tc) => runNewChat(tc)
   },
   {
     name: 'daemon',
