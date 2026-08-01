@@ -4,7 +4,7 @@ import { fileURLToPath } from "url";
 import * as toml from "smol-toml";
 import os from "os";
 import { execSync } from "child_process";
-import { getDb, withDbRetry } from "../database.js";
+import { getDb, withDbRetry, retryDbOperation } from "../database.js";
 import { appendLog } from "../fileLogger.js";
 
 let __filename = "";
@@ -166,6 +166,22 @@ function discoverModelsSync(provider: string, apiKey: string, baseUrl?: string):
   } catch (e: any) {
     console.log(`\x1b[31m⚠️ Gagal melakukan dynamic discovery: ${e.message}\x1b[0m`);
     return [];
+  }
+}
+
+// Default cron task seed: memory consolidation every 6 hours (idempotent, ON CONFLICT DO NOTHING).
+// Dipanggil dari server.ts SETELAH setupSchema(db) supaya tabel cron_tasks sudah ada.
+export async function seedDefaultCronTask(db: any): Promise<void> {
+  try {
+    await retryDbOperation(() => {
+      db.prepare(`
+        INSERT INTO cron_tasks (id, name, schedule, enabled, repeating, context_id, chat_type, sender_name)
+        VALUES ('memory-consolidation', 'Memory Consolidation', '0 */6 * * *', 1, 1, 'live_stream', 'Live Chat', 'System')
+        ON CONFLICT(id) DO NOTHING
+      `).run();
+    }, 'seed cron_tasks');
+  } catch (e: any) {
+    console.warn("[ONBOARDING] Failed to seed default memory consolidation task:", e.message);
   }
 }
 

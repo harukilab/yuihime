@@ -146,7 +146,7 @@ process.on("warning", (warning: any) => {
   console.warn(warning.name, warning.message, warning.stack);
 });
 
-import { runOnboarding } from "./src/core/server/onboarding.js";
+import { runOnboarding, seedDefaultCronTask } from "./src/core/server/onboarding.js";
 
 // run first-time setup / system directories mapping outside binary
 runOnboarding();
@@ -348,13 +348,7 @@ async function bootstrap() {
   }
 
   try {
-    await retryDbOperation(() => {
-      db.prepare(`
-        INSERT INTO cron_tasks (id, name, schedule, enabled, repeating, context_id, chat_type, sender_name)
-        VALUES ('memory-consolidation', 'Memory Consolidation', '0 * * * *', 1, 1, 'live_stream', 'Live Chat', 'System')
-        ON CONFLICT(id) DO NOTHING
-      `).run();
-    }, 'seed cron_tasks');
+    await seedDefaultCronTask(db);
   } catch (e: any) {
     console.warn("[SERVER] Failed to seed default memory consolidation task:", e.message);
   }

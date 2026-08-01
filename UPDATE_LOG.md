@@ -1,6 +1,12 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.196] - 2026-08-01
+### Fix: Pindahkan seed cron ke onboarding.ts + jadwal 6 jam
+- seedDefaultCronTask(db) di src/core/server/onboarding.ts (dipanggil server.ts setelah setupSchema)
+- schedule memory-consolidation: 0 * * * * -> 0 */6 * * * (6 jam sekali); DB existing di-update
+
+
 ## [4.195] - 2026-08-01
 ### Fix: Dokumentasi otome/README.md
 - catatan langkah terakhir (4.191-4.194), setup config, cara jalankan, alur telegram, lokasi data, catatan keamanan token
