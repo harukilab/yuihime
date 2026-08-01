@@ -189,6 +189,74 @@ export function llmAvailable(): boolean {
   return Boolean(process.env.OPENROUTER_API_KEY || process.env.GEMINI_API_KEY);
 }
 
+export interface SceneImageContext {
+  sceneId: string;
+  sceneText: string;
+  petName: string;
+  affection: number;
+  affectionLevel: string;
+  flags: string[];
+  day: number;
+  finished?: string;
+}
+
+export function sceneSettingHint(sceneId: string): string {
+  const id = sceneId || '';
+  if (id.startsWith('cafe')) return 'cozy cafe, warm drinks, soft afternoon light';
+  if (id.startsWith('stargaze')) return 'open rooftop under a starry night sky, moonlight';
+  if (id.startsWith('arcade')) return 'retro arcade, colorful neon lights';
+  if (id.startsWith('home')) return 'cozy living room, warm blanket, movie night glow';
+  if (id.startsWith('couple')) return 'sweet relaxed couple moment, warm home atmosphere';
+  if (id.startsWith('intimate')) return 'romantic dim candlelit room, soft warm glow, intimate mood';
+  if (id.includes('confess')) return 'emotional confession moment, sunset or soft light';
+  if (id.startsWith('start')) return 'japanese girl room, window with evening light';
+  return 'casual date scenery, pleasant atmosphere';
+}
+
+export function sceneImageFallback(ctx: SceneImageContext): string {
+  const clean = ctx.sceneText
+    .replace(/Yui:/g, '')
+    .replace(/["'`]+/g, '')
+    .replace(/\s+/g, ' ')
+    .slice(0, 160)
+    .trim();
+  return [
+    'Yui Airi, anime girl, long silver hair, gentle smile',
+    `setting: ${sceneSettingHint(ctx.sceneId)}`,
+    `mood: ${ctx.affectionLevel}`,
+    `day ${ctx.day}, calling her ${ctx.petName}`,
+    clean || 'sharing a quiet moment',
+    '1girl, solo, masterpiece, best quality, highly detailed'
+  ].join(', ').replace(/["`]+/g, '').trim();
+}
+
+export async function sceneImageParams(ctx: SceneImageContext, availableModels: string[]): Promise<{ toolName: string; width: number; height: number; prompt: string } | null> {
+  const modelHint = availableModels.length
+    ? `Available TensorArt models: ${availableModels.join(', ')}. Pick the best anime one from this list.`
+    : 'Preferred default model: anime_lab_wai_illustrious.';
+  const instruction =
+    'You are Yui, director of an otome visual novel. Turn the current scene narration into ONE detailed english anime illustration prompt for a diffusion model. ' +
+    'Keep the character consistent: "Yui Airi, anime girl, long silver hair, gentle smile". Capture setting, mood, and the relationship moment. ' +
+    'Return ONLY valid JSON with keys: "toolName" (a TensorArt model id from the list), "width" (int), "height" (int), "prompt" (detailed english prompt, no JSON wrapper). ' +
+    `${modelHint}\n` +
+    `Scene id: ${ctx.sceneId}\nDay: ${ctx.day}\nCalling her: "${ctx.petName}"\nMood: ${ctx.affectionLevel}\nFlags: ${(ctx.flags || []).join(', ') || 'none'}\n\nScene narration:\n${ctx.sceneText}`;
+  const result = await viaSystemPool(instruction, 'You are Yui, visual novel director. Output JSON only.');
+  if (!result) return null;
+  try {
+    const m = result.match(/\{[\s\S]*\}/);
+    if (!m) return null;
+    const parsed = JSON.parse(m[0]);
+    return {
+      toolName: typeof parsed.toolName === 'string' && parsed.toolName.trim() ? parsed.toolName.trim() : 'anime_lab_wai_illustrious',
+      width: typeof parsed.width === 'number' && parsed.width > 0 ? Math.min(Math.round(parsed.width), 2048) : 1024,
+      height: typeof parsed.height === 'number' && parsed.height > 0 ? Math.min(Math.round(parsed.height), 2048) : 1024,
+      prompt: typeof parsed.prompt === 'string' && parsed.prompt.trim() ? parsed.prompt.trim() : sceneImageFallback(ctx)
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function pickImageParams(request: string, availableModels: string[]): Promise<{ toolName: string; width: number; height: number; prompt: string } | null> {
   const modelHint = availableModels.length
     ? `Available TensorArt models: ${availableModels.join(', ')}. Pick the best one from this list.`

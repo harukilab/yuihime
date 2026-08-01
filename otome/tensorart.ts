@@ -200,6 +200,7 @@ export async function generateImages(opts: GenerateImageOpts): Promise<GenerateI
   const height = opts.height || 1024;
   const count = Math.max(1, Math.min(Math.round(Number(opts.count) || 1), 4));
   const toolName = opts.toolName || 'anime_lab_wai_illustrious';
+  const prompt = String(opts.prompt || '').replace(/["`]+/g, ' ').replace(/\s+/g, ' ').trim();
   const timeoutMs = opts.timeoutMs || 120000;
   const pollIntervalMs = Math.max(1000, opts.pollIntervalMs || 3000);
   const maxAttempts = Math.max(1, Math.floor(timeoutMs / pollIntervalMs));
@@ -208,8 +209,8 @@ export async function generateImages(opts: GenerateImageOpts): Promise<GenerateI
 
   try {
     const tools = await listTools(accessKey);
-    const inputs = buildToolInputs(tools, toolName, opts.prompt, width, height, count) || [
-      { type: 'STRING', value: opts.prompt },
+    const inputs = buildToolInputs(tools, toolName, prompt, width, height, count) || [
+      { type: 'STRING', value: prompt },
       { type: 'INTEGER', value: width },
       { type: 'INTEGER', value: height },
       { type: 'INTEGER', value: count }
@@ -279,7 +280,7 @@ export async function generateImages(opts: GenerateImageOpts): Promise<GenerateI
           })
         );
 
-        appendLog({ event: 'generate', prompt: opts.prompt, model: toolName, jobId, width, height, count: imageUrls.length });
+        appendLog({ event: 'generate', prompt, model: toolName, jobId, width, height, count: imageUrls.length });
         return { status: 'success', imageUrls, localPaths, jobId, toolName, width, height };
       }
 

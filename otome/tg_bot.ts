@@ -4,7 +4,7 @@ import path from 'path';
 import os from 'os';
 import fs from 'fs';
 import { OtomeGame, affectionLevel, petNameFor } from './engine.js';
-import { yuiReaction, pickImageParams, llmAvailable } from './llm.js';
+import { yuiReaction, pickImageParams, sceneImageParams, sceneImageFallback, llmAvailable } from './llm.js';
 import { generateImages, getAccessKey, listTools, loadOtomeConfig } from './tensorart.js';
 
 const SAVE_DIR = path.join(os.homedir(), '.yuihime', 'otome_saves');
@@ -48,7 +48,7 @@ function renderScene(game: OtomeGame): { text: string; hasChoices: boolean } {
   return { text: lines.join('\n'), hasChoices: scene.choices.length > 0 };
 }
 
-function keyboardFor(game: OtomeGame): any[][] {
+function keyboardFor(game: OtomeGame, withFoto: boolean): any[][] {
   const choices = game.availableChoices();
   const kb: any[][] = [];
   for (let i = 0; i < choices.length; i++) {
@@ -59,13 +59,14 @@ function keyboardFor(game: OtomeGame): any[][] {
     else if (c.affection) label = `${label} [${c.affection > 0 ? '+' : ''}${c.affection}]`;
     kb.push([{ text: label, callback_data: `otome:${i}` }]);
   }
+  if (withFoto) kb.push([{ text: '📸 Foto adegan ini', callback_data: 'otome_foto' }]);
   return kb;
 }
 
-async function showGame(ctx: any, game: OtomeGame): Promise<void> {
+async function showGame(ctx: any, game: OtomeGame, withFoto: boolean): Promise<void> {
   const { text, hasChoices } = renderScene(game);
   const opts: any = { parse_mode: 'Markdown' };
-  if (hasChoices) opts.reply_markup = { inline_keyboard: keyboardFor(game) };
+  if (hasChoices || withFoto) opts.reply_markup = { inline_keyboard: keyboardFor(game, withFoto) };
   try {
     await ctx.reply(text, opts);
   } catch {
@@ -122,14 +123,14 @@ async function main(): Promise<void> {
 
   bot.command('start', (ctx) => {
     const game = loadGame(ctx.from.id);
-    return showGame(ctx, game);
+    return showGame(ctx, game, Boolean(tensorKey));
   });
 
   bot.command('new', (ctx) => {
     const game = loadGame(ctx.from.id);
     game.newDay();
     game.save(`tg_${ctx.from.id}.json`);
-    return showGame(ctx, game);
+    return showGame(ctx, game, Boolean(tensorKey));
   });
 
   bot.command('status', (ctx) => {
@@ -238,13 +239,78 @@ async function main(): Promise<void> {
       const next = renderScene(game);
       const full = `${reaction}${next.text}`;
       const opts: any = { parse_mode: 'Markdown' };
-      if (next.hasChoices) opts.reply_markup = { inline_keyboard: keyboardFor(game) };
+      if (next.hasChoices || tensorKey) opts.reply_markup = { inline_keyboard: keyboardFor(game, Boolean(tensorKey)) };
       await ctx.editMessageText(full, opts).catch(async () => {
         const { text } = renderScene(game);
         await ctx.reply(text, opts);
       });
     } catch (e: any) {
       console.error('[OTOME-TG] action error:', e?.message || e);
+      await ctx.answerCbQuery('Terjadi error.').catch(() => {});
+    }
+  });
+
+  bot.action('otome_foto', async (ctx) => {
+    try {
+      await ctx.answerCbQuery();
+      if (!tensorKey) {
+        await ctx.reply('⚠️ TensorArt API key belum diatur.');
+        return;
+      }
+      const game = loadGame(ctx.from.id);
+      const scene = game.currentScene();
+      const sceneCtx = {
+        sceneId: scene.id,
+        sceneText: scene.text,
+        petName: petNameFor(game.state.affection),
+        affection: game.state.affection,
+        affectionLevel: affectionLevel(game.state.affection),
+        flags: game.state.flags,
+        day: game.state.day,
+        finished: game.state.finished
+      };
+      const statusMsg = await ctx.reply('✨ Yui lagi pose buat adegan ini... sebentar ya~');
+
+      let params: { toolName: string; width: number; height: number; prompt: string };
+      try {
+        const models = await listTools(tensorKey, 8000).then(ts => {
+          const names = new Set<string>();
+          for (const t of ts) {
+            const n = String(t?.name || t?.tool_id || t?.toolId || '').trim();
+            if (n && n.length < 60) names.add(n);
+          }
+          return Array.from(names);
+        });
+        const picked = llmOn ? await sceneImageParams(sceneCtx, models) : null;
+        params = picked || { toolName: cfg.defaultModel || 'anime_lab_wai_illustrious', width: 1024, height: 1024, prompt: sceneImageFallback(sceneCtx) };
+      } catch {
+        params = { toolName: cfg.defaultModel || 'anime_lab_wai_illustrious', width: 1024, height: 1024, prompt: sceneImageFallback(sceneCtx) };
+      }
+
+      const result = await generateImages({
+        prompt: params.prompt,
+        toolName: params.toolName,
+        width: params.width,
+        height: params.height,
+        count: 1,
+        onProgress: (msg) => ctx.telegram.editMessageText(ctx.chat.id, statusMsg.message_id, undefined, `✨ ${msg}`).catch(() => {})
+      });
+
+      if (result.status !== 'success' || result.imageUrls.length === 0) {
+        await ctx.telegram.editMessageText(ctx.chat.id, statusMsg.message_id, undefined, `❌ Gagal: ${result.error || 'unknown'}`).catch(() => {});
+        return;
+      }
+
+      await ctx.telegram.deleteMessage(ctx.chat.id, statusMsg.message_id).catch(() => {});
+      const caption = `📖 Adegan: ${scene.id}\n💗 ${meterText(game.state.affection)}\n_Yui buat kamu._`;
+      const src = result.localPaths[0] ? { source: fs.createReadStream(result.localPaths[0] as string) } : { url: result.imageUrls[0] };
+      try {
+        await ctx.replyWithPhoto(src, { caption, parse_mode: 'Markdown' });
+      } catch {
+        await ctx.reply(`📖 Adegan: ${scene.id}\nFoto: ${result.imageUrls[0]}`);
+      }
+    } catch (e: any) {
+      console.error('[OTOME-TG] foto error:', e?.message || e);
       await ctx.answerCbQuery('Terjadi error.').catch(() => {});
     }
   });

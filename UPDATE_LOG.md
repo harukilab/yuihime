@@ -1,6 +1,13 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.194] - 2026-08-01
+### Fix: Tombol "Foto adegan ini" per scene
+- keyboard tiap scene + tombol otome_foto (hanya jika key TensorArt ada); prompt auto dari scene.id + text + petName + afeksi + flags
+- sceneImageParams (LLM pool) ubah narasi Indonesia -> prompt Inggris; fallback sceneImageFallback template tanpa LLM
+- fix: quote di prompt merusak render template TensorArt API -> sanitasi ["`] global di generateImages + fallback; verified PNG 1.5MB
+
+
 ## [4.193] - 2026-08-01
 ### Fix: Download foto pakai curl + retry background
 - ganti downloadImage fetch -> curl (-sS -fL --retry 5 --retry-all-errors --connect-timeout 15 --max-time); download semua gambar paralel (Promise.all) tanpa blok
