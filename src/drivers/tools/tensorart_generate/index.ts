@@ -4,10 +4,10 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 import fsp from "fs/promises";
-import { appendLog } from "@/core/fileLogger";
+import { appendLog, readLogLines } from "@/core/fileLogger";
 
 interface GenerateArgs {
-  action?: "generate" | "list_tools" | "upload_file";
+  action?: "generate" | "list_tools" | "upload_file" | "list_history";
   prompt?: string;
   toolName?: string;
   width?: number;
@@ -18,6 +18,7 @@ interface GenerateArgs {
   timeoutMs?: number;
   pollIntervalMs?: number;
   retryLimit?: number;
+  limit?: number;
 }
 
 /** Lazy Node builtins — never statically imported so browser eager-glob stays safe. */
@@ -434,6 +435,41 @@ export const TensorArtGenerateTool: ToolModule = {
     const toolId = "generate_image";
     const action = args.action || "generate";
 
+    const startTime = Date.now();
+
+    if (action === "list_history") {
+      try {
+        const limit = args.limit || 20;
+        const lines = readLogLines('tensorart', { includeArchives: true, tail: true, limit: 500 });
+        const items: any[] = [];
+        const seen = new Set<string>();
+        for (let i = lines.length - 1; i >= 0; i--) {
+          try {
+            const entry = JSON.parse(lines[i]);
+            if (entry?.event !== 'generate') continue;
+            const key = entry.jobId || `${entry.downloadUrl || ''}${entry.ts || ''}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            items.push({
+              ts: entry.ts || null,
+              prompt: entry.prompt || '',
+              model: entry.model || '',
+              width: entry.width || null,
+              height: entry.height || null,
+              localPath: entry.localPath || null,
+              downloadUrl: entry.downloadUrl || null,
+            });
+            if (items.length >= limit) break;
+          } catch {
+            // skip malformed lines
+          }
+        }
+        return buildEnvelope("success", { count: items.length, items }, null, Date.now() - startTime, toolId, 0);
+      } catch (err: any) {
+        return buildEnvelope("error", null, { code: "LIST_HISTORY_FAILED", message: err.message, retryable: false }, Date.now() - startTime, toolId, 0);
+      }
+    }
+
     const apiKey = await getAccessKey(settings);
     if (!apiKey) {
       return buildEnvelope("error", null, {
@@ -444,7 +480,6 @@ export const TensorArtGenerateTool: ToolModule = {
     }
 
     const baseUrl = getBaseUrl(apiKey);
-    const startTime = Date.now();
 
     if (action === "list_tools") {
       try {

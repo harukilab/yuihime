@@ -19,7 +19,8 @@
 #  Mode default: prod bila dist/server.cjs ada, selain itu dev.
 #  Env override:
 #    YUIHIME_SYSTEM_ROOT   Root data (default $HOME/.yuihime)
-#    YUIHIME_DAEMON_PORT   Port health check (default 3000)
+#    YUIHIME_DAEMON_PORT   Port health check & daemon (default 3000)
+#    YUIHIME_CWD           Direktori kerja daemon (default root proyek)
 # ==============================================================================
 set -uo pipefail
 
@@ -46,10 +47,16 @@ require_pm2() {
   fi
 }
 
+# server_bin: path binary prod — dist/server.cjs (repo) atau server.cjs (bundle portabel)
+server_bin() {
+  [ -f "$PROJECT_DIR/dist/server.cjs" ] && { echo "$PROJECT_DIR/dist/server.cjs"; return; }
+  [ -f "$PROJECT_DIR/server.cjs" ] && { echo "$PROJECT_DIR/server.cjs"; return; }
+}
+
 app_running() { [ -n "$(pm2 pid "$PM2_APP" 2>/dev/null)" ]; }
 
 default_mode() {
-  if [ -f "$PROJECT_DIR/dist/server.cjs" ]; then echo "prod"; else echo "dev"; fi
+  if [ -n "$(server_bin)" ]; then echo "prod"; else echo "dev"; fi
 }
 
 daemon_port() {
@@ -74,10 +81,20 @@ wait_healthy() {
 
 start_cmd() {
   local mode="$1"
+  local cwd="${YUIHIME_CWD:-$PROJECT_DIR}"
   if [ "$mode" = "prod" ]; then
-    pm2 start "$PROJECT_DIR/dist/server.cjs" --name "$PM2_APP" --cwd "$PROJECT_DIR"
+    local sbin; sbin=$(server_bin)
+    if [ -z "$sbin" ]; then
+      err "server.cjs tidak ditemukan. Jalankan 'npm run build' dulu (atau periksa layout bundle)."
+      return 1
+    fi
+    pm2 start "$sbin" --name "$PM2_APP" --cwd "$cwd" -- --port "$DEFAULT_PORT"
   else
-    pm2 start "$PROJECT_DIR/node_modules/.bin/tsx" --name "$PM2_APP" --cwd "$PROJECT_DIR" -- server.ts
+    if [ ! -f "$PROJECT_DIR/server.ts" ] || [ ! -x "$PROJECT_DIR/node_modules/.bin/tsx" ]; then
+      err "Mode dev butuh proyek sumber (server.ts + node_modules/.bin/tsx). Di bundle, gunakan mode prod."
+      return 1
+    fi
+    pm2 start "$PROJECT_DIR/node_modules/.bin/tsx" --name "$PM2_APP" --cwd "$cwd" -- server.ts --port "$DEFAULT_PORT"
   fi
 }
 

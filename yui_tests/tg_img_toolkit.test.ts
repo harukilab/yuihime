@@ -6,6 +6,18 @@ const FAKE_MODEL = 'anime_lab_wai_illustrious';
 const mockTool = {
   metadata: { id: 'generate_image', type: 'tool', name: 'generate_image' },
   execute: async (args: any, ctx: any) => {
+    if (args.action === 'list_history') {
+      return {
+        status: 'success',
+        data: {
+          count: 2,
+          items: [
+            { ts: Date.now() - 10000, prompt: 'nekomata cat girl', model: FAKE_MODEL, width: 1024, height: 1024, localPath: '/tmp/tensorart_1.png', downloadUrl: 'https://cdn/x.png' },
+            { ts: Date.now() - 20000, prompt: 'sunset anime', model: 'jc_grassimoon', width: 768, height: 512, localPath: '/tmp/tensorart_2.png', downloadUrl: 'https://cdn/y.png' }
+          ]
+        }
+      };
+    }
     if (args.action === 'list_tools') {
       return {
         status: 'success',
@@ -186,7 +198,6 @@ async function main() {
   assert(r9.reply!.text.includes('4'), '/new reports archived message count');
   assert(fakeDb.rows.some((r: any) => r.speaker === 'system' && r.content.includes('RINGKASAN')), '/new stores summary memory');
   assert(fakeDb.rows.filter((r: any) => r.speaker !== 'system').length === 0, '/new clears raw interactions');
-
   // 10. /new on an already-clean chat
   const fakeDb2: any = {
     rows: [],
@@ -203,6 +214,16 @@ async function main() {
   tcNew2.db = fakeDb2;
   const r10 = await handleTgQuickCommand('/new', tcNew2);
   assert(r10.reply!.text.includes('already clean'), '/new no-op on clean chat');
+
+  // 11. list_history: clean text list of past photos (not raw log)
+  const tool = SystemRegistry.getTool('generate_image');
+  assert(!!tool, 'generate_image tool registered');
+  const hist = await tool!.execute({ action: 'list_history' }, { settings: {}, contextId: 'tg_12345' });
+  assert(hist.status === 'success', 'list_history returns success');
+  assert(Array.isArray(hist.data?.items) && hist.data.items.length === 2, 'list_history returns 2 deduplicated items');
+  const first = hist.data?.items?.[0];
+  assert(first?.prompt === 'nekomata cat girl', 'list_history newest-first, has prompt');
+  assert(first?.model === FAKE_MODEL, 'list_history includes model');
 
   console.log('\n=== SELESAI ===');
   if (process.exitCode) process.exit(process.exitCode);

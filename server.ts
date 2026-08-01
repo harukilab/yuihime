@@ -966,37 +966,76 @@ async function serveWebUI(app: any, backendPort: number) {
   process.env.VITE_BACKEND_PORT = String(backendPort);
   process.env.VITE_WS_PORT = String(wsPort);
 
-  // Always run in Vite dev mode (middlewareMode) so `npm run dev` reflects
-  // sources live and never falls back to serving the static built bundle.
+  // Serve public assets (e.g. /lib/live2d) directly from express BEFORE the
+  // UI handler, so they are not caught by Vite's proxy rules (/lib -> :3000)
+  // which would otherwise loop back to this same server and return 500.
   const publicDir = path.join(process.cwd(), "public");
+  if (existsSync(publicDir)) {
+    app.use(express.static(publicDir));
+  }
 
-  // Serve public assets (e.g. /lib/live2d) directly from express BEFORE Vite,
-  // so they are not caught by Vite's proxy rules (/lib -> :3000) which would
-  // otherwise loop back to this same server and return 500.
-  app.use(express.static(publicDir));
-
-  const { createServer: createViteServer } = await import("vite");
-  const vite = await createViteServer({
-    root: path.join(process.cwd(), "web"),
-    server: { middlewareMode: true },
-    appType: "spa",
-    mode: "development",
-  });
-  app.use(vite.middlewares);
-
-  app.get("*", async (req: any, res: any, next: any) => {
-    if (req.url.startsWith("/api/")) return next();
-    try {
-      const url = req.originalUrl;
-      let template = await fs.readFile(path.join(process.cwd(), "web", "index.html"), "utf-8");
-      template = template.replace("</head>", `<script>window.__YUIHIME_WS_PORT__=${wsPort};</script></head>`);
-      template = await vite.transformIndexHtml(url, template);
-      res.status(200).set({ "Content-Type": "text/html" }).end(template);
-    } catch (e) {
-      vite.ssrFixStacktrace(e as Error);
-      next(e);
+  // Resolve web root: cwd first (dev source or bundle cwd), then __dirname
+  // (bundle layout where server.cjs sits next to a built web/ folder).
+  const webCandidates = [path.join(process.cwd(), "web"), path.join(__dirname, "web")];
+  let webRoot = "";
+  for (const w of webCandidates) {
+    if (existsSync(path.join(w, "index.html"))) {
+      webRoot = w;
+      break;
     }
-  });
+  }
+
+  // Inject runtime WS port so the UI knows which port to connect to.
+  const injectWsPort = (html: string) =>
+    html.replace("</head>", `<script>window.__YUIHIME_WS_PORT__=${wsPort};</script></head>`);
+
+  // Vite dev (source) mode: web/src exists → live-reload dev middleware.
+  if (webRoot && existsSync(path.join(webRoot, "src"))) {
+    const { createServer: createViteServer } = await import("vite");
+    const vite = await createViteServer({
+      root: webRoot,
+      server: { middlewareMode: true },
+      appType: "spa",
+      mode: "development",
+    });
+    app.use(vite.middlewares);
+
+    app.get("*", async (req: any, res: any, next: any) => {
+      if (req.url.startsWith("/api/")) return next();
+      try {
+        const url = req.originalUrl;
+        let template = await fs.readFile(path.join(webRoot, "index.html"), "utf-8");
+        template = injectWsPort(template);
+        template = await vite.transformIndexHtml(url, template);
+        res.status(200).set({ "Content-Type": "text/html" }).end(template);
+      } catch (e) {
+        vite.ssrFixStacktrace(e as Error);
+        next(e);
+      }
+    });
+    return;
+  }
+
+  // Static (bundled) UI mode: serve built assets + SPA fallback. Supports
+  // portable dist/ bundles moved to any system root without source files.
+  const staticCandidates = [
+    webRoot,
+    path.join(process.cwd(), "dist", "web"),
+    path.join(process.cwd(), "web", "dist"),
+    path.join(__dirname, "web"),
+  ];
+  for (const s of staticCandidates) {
+    if (!s || !existsSync(path.join(s, "index.html"))) continue;
+    app.use(express.static(s));
+    app.get("*", (req: any, res: any, next: any) => {
+      if (req.url.startsWith("/api/")) return next();
+      res.set({ "Content-Type": "text/html" }).send(injectWsPort(readFileSync(path.join(s, "index.html"), "utf8")));
+    });
+    console.log(`[SERVER] Serving built UI from ${s}`);
+    return;
+  }
+
+  console.warn("[SERVER] No web UI found (source or built) — running headless.");
 }
 
 // Resilience: Catch fatal process errors

@@ -27,3 +27,36 @@ pm2 logs yuihime-core
 ```
 
 Yuihime sekarang akan berjalan di latar belakang (Daemon) dan tidak akan mati meskipun window terminal ditutup. 🌸
+
+---
+
+## 5. Portabilitas & Mode Deployment
+
+Semua script menentukan lokasi data dari `$HOME` (default `~/.yuihime`, override `YUIHIME_SYSTEM_ROOT`)
+dan lokasi script itu sendiri — **tidak ada path absolut yang di-hardcode**, jadi aman dipindah antar
+user/mesin (tiap user punya instance data sendiri di home-nya).
+
+Dua jalur deployment resmi:
+
+**A. Tanpa PM2 (default)** — daemon 1 proses + watchdog lokal:
+```bash
+tools/yui-daemon.sh start prod      # start daemon + watchdog (restart saat hang/crash)
+```
+
+**B. Dengan PM2 (opsional)** — PM2 mengelola proses + watchdog PM2-aware melengkapi deteksi hang:
+```bash
+tools/yui-daemon.sh --pm2 start prod
+```
+PM2 menangani proses mati (auto-restart); watchdog PM2-aware men-probe `/api/health` dan menjalankan
+`pm2 restart yuihime` saat event-loop beku (yang tak terdeteksi PM2).
+
+### Boot Hook (auto-start setelah reboot)
+`scripts/boot.sh` bisa dipasang ke Termux:Boot, UserLAnd (command saat login), cron `@reboot`, atau init.d:
+```bash
+bash scripts/boot.sh [--pm2|--no-pm2] [dev|prod]
+```
+- Non-PM2 → `tools/yui-daemon.sh start` (daemon + watchdog).
+- PM2 → `pm2 resurrect` + pastikan app 'yuihime' jalan + watchdog PM2-aware.
+
+Di server/PC dengan systemd, untuk mode PM2 tetap bisa pakai `pm2 startup` + `pm2 save` (bagian 3 di atas);
+`scripts/boot.sh` menjadi alternatif yang berjalan di lingkungan tanpa systemd (Android/proot).

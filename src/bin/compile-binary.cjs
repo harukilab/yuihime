@@ -1,123 +1,171 @@
+#!/usr/bin/env node
+/*
+ * YuiHime Build & Bundle Assembler
+ *
+ * Membuat bundle portabel di `dist/` yang bisa dipindah ke mana saja
+ * (mis. /opt/yuihime) dan dijalankan global via perintah `yuihime`.
+ * Bundle berisi: server.cjs, web/ (UI statis), tools/*.sh, launcher
+ * `yuihime`, public/ (aset Live2D), dan node_modules runtime (better-sqlite3
+ * native + pendukungnya).
+ *
+ * Binary tunggal (SEA/pkg) TIDAK default karena native better-sqlite3 dan UI
+ * yang di-serve dari folder menyulitkan biner satu file yang andal. Dicoba
+ * best-effort hanya bila flag diaktifkan eksplisit.
+ *
+ * Usage:
+ *   node src/bin/compile-binary.cjs              -> bundle portabel (default)
+ *   node src/bin/compile-binary.cjs --server-only
+ *   node src/bin/compile-binary.cjs --web-only
+ *   node src/bin/compile-binary.cjs --pkg        -> + coba pkg (platform ini saja)
+ *   node src/bin/compile-binary.cjs --sea        -> + coba Node.js SEA
+ *   node src/bin/compile-binary.cjs --all        -> bundle + pkg + sea
+ */
 const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-console.log('\n=========================================');
-console.log('  Yuihime Single Executable Application  ');
-console.log('=========================================\n');
+const ROOT = path.join(__dirname, '..', '..');
+const DIST = path.join(ROOT, 'dist');
+const TOOLS_SRC = path.join(ROOT, 'tools');
 
 const args = process.argv.slice(2);
 const isServerOnly = args.includes('--server-only') || args.includes('--mode=server');
 const isWebOnly = args.includes('--web-only') || args.includes('--mode=web');
-const useSea = args.includes('--sea') || true; // Default to Node.js SEA preparation
+const doPkg = args.includes('--pkg') || args.includes('--all');
+const doSea = args.includes('--sea') || args.includes('--all');
 
-const buildMode = isServerOnly ? 'SERVER-ONLY' : (isWebOnly ? 'WEB-ONLY' : 'FULL (WEB + SERVER)');
-console.log(`[BUILD MODE]: ${buildMode}`);
+function sh(cmd) { execSync(cmd, { stdio: 'inherit' }); }
+function cp(src, dest) {
+  if (!fs.existsSync(src)) return false;
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  fs.cpSync(src, dest, { recursive: true, force: true });
+  return true;
+}
+function ok(msg) { console.log(`✓ ${msg}`); }
+function warn(msg) { console.warn(`⚠️  ${msg}`); }
+function step(n, msg) { console.log(`\n[${n}] ${msg}`); }
 
-try {
-  // 1. Build assets based on selected target
+function readmeText() {
+  return `YuiHime Portable Bundle
+========================
+
+Bundle ini siap dipindah ke lokasi sistem mana pun (mis. /opt/yuihime).
+Semua path di-resolve relatif terhadap lokasi folder, jadi bebas dipindah.
+
+INSTALL GLOBAL (symlink /usr/local/bin/yuihime):
+  tools/yuihime install
+
+PAKAI:
+  yuihime daemon start             jalankan daemon (background + watchdog)
+  yuihime daemon stop / status     hentikan / cek status
+  yuihime logs [N|-live]           lihat log
+  yuihime start [--port N]         daemon foreground
+  yuihime settings                 Settings TUI
+  yuihime terminal                 Terminal sandbox
+  yuihime version                  versi build
+
+OVERRIDE:
+  YUIHIME_DAEMON_PORT=4000 yuihime daemon start
+  YUIHIME_CWD=/srv/yui  yuihime daemon start
+
+CATATAN:
+  - Butuh Node.js terinstall (node di PATH).
+  - Native better-sqlite3 dibuild untuk arsitektur ini; pindah ke mesin
+    dengan versi Node berbeda mungkin perlu rebuild (npm install).
+  - UI di-serve statis dari web/ (tanpa sumber Vite).
+`;
+}
+
+function buildAssets() {
   if (isWebOnly) {
-    console.log('[1/4] Compiling Web UI frontend assets (dist/web)...');
-    execSync('npm run build:web', { stdio: 'inherit' });
-    console.log('✓ Web UI build complete in dist/web.');
+    step('1/2', 'Compiling Web UI assets (dist/web)...');
+    sh('npm run build:web');
     process.exit(0);
   }
-
   if (isServerOnly) {
-    console.log('[1/4] Compiling Server daemon backend assets (dist/server.cjs)...');
-    execSync('npm run build:server', { stdio: 'inherit' });
+    step('1/3', 'Compiling Server daemon (dist/server.cjs)...');
+    sh('npm run build:server');
   } else {
-    console.log('[1/4] Compiling Web UI frontend and Server daemon backend...');
-    execSync('npm run build', { stdio: 'inherit' });
+    step('1/3', 'Compiling Web UI + Server daemon...');
+    sh('npm run build');
+  }
+}
+
+function assembleBundle() {
+  step('2/3', 'Assembling portable bundle in dist/ ...');
+
+  fs.mkdirSync(path.join(DIST, 'tools'), { recursive: true });
+  const toolsFiles = ['yui-daemon.sh', 'yui-debug.sh', 'yui-watchdog.sh', 'yui-pm2.sh', 'yuihime'];
+  for (const f of toolsFiles) {
+    if (cp(path.join(TOOLS_SRC, f), path.join(DIST, 'tools', f))) ok(`tools/${f}`);
+  }
+  const launcher = path.join(DIST, 'tools', 'yuihime');
+  if (fs.existsSync(launcher)) fs.chmodSync(launcher, 0o755);
+
+  if (cp(path.join(ROOT, 'public'), path.join(DIST, 'public'))) ok('public/ (aset Live2D)');
+
+  // Runtime deps yang di-external oleh esbuild (tidak di-bundle ke server.cjs).
+  const runtimePkgs = ['better-sqlite3', 'bindings', 'file-uri-to-path', 'abort-controller', 'event-target-shim'];
+  for (const p of runtimePkgs) {
+    if (cp(path.join(ROOT, 'node_modules', p), path.join(DIST, 'node_modules', p))) ok(`node_modules/${p}`);
   }
 
-  // 2. Prepare distribution directory 'bin'
-  console.log('\n[2/4] Preparing output directory "bin"...');
-  const binDir = path.join(__dirname, '..', '..', 'bin');
-  if (!fs.existsSync(binDir)) {
-    fs.mkdirSync(binDir, { recursive: true });
-  }
+  fs.writeFileSync(path.join(DIST, 'README.txt'), readmeText());
+  ok('README.txt');
+}
 
-  // 3. Node.js Single Executable Application (SEA) Blob Generation
-  if (useSea) {
-    console.log('\n[3/4] Generating Node.js SEA (Single Executable Application) Preparation Blob...');
-    const seaConfigPath = path.join(__dirname, '..', '..', 'sea-config.json');
-    if (fs.existsSync(seaConfigPath)) {
-      try {
-        execSync('node --experimental-sea-config sea-config.json', { stdio: 'inherit' });
-        console.log('✓ Generated Node.js SEA blob: dist/sea-prep.blob');
+function tryNativeBinary() {
+  let done = false;
 
-        // Copy current node binary to bin/yuihime-node-sea as starter template
-        const targetNodeBinary = path.join(binDir, process.platform === 'win32' ? 'yuihime-sea.exe' : 'yuihime-sea');
-        if (fs.existsSync(process.execPath)) {
-          fs.copyFileSync(process.execPath, targetNodeBinary);
-          console.log(`✓ Copied host Node executable to: ${targetNodeBinary}`);
-
-          // Inject SEA blob using postject if installed
-          try {
-            const fuseFlag = 'NODE_SEA_FUSE_fce680e432b4d0609bfac08d6163a3d0';
-            execSync(`npx postject "${targetNodeBinary}" NODE_SEA_BLOB dist/sea-prep.blob --sentinel-fuse ${fuseFlag}`, { stdio: 'inherit' });
-            console.log('✓ Injected SEA blob into single binary executable!');
-          } catch (postErr) {
-            console.log('ℹ️ Postject injection step deferred (SEA prep blob remains available at dist/sea-prep.blob).');
-          }
-        }
-      } catch (seaErr) {
-        console.warn('⚠️ SEA generation note:', seaErr.message);
-      }
+  if (doPkg) {
+    step('3/4', 'Packaging native binary via @yao-pkg/pkg (current platform only)...');
+    try {
+      const target = `node20-${process.platform}-${process.arch}`;
+      sh(`npx @yao-pkg/pkg . --targets ${target} --out-path ${path.join(DIST, 'bin')}`);
+      ok(`native binary di dist/bin/ (target ${target})`);
+      done = true;
+    } catch (e) {
+      warn('pkg gagal — biasanya karena native better-sqlite3. Bundle portabel tetap jadi jalur andal.');
     }
   }
 
-  // Packaging Standalone Executables with @yao-pkg/pkg as fallback / distribution
-  console.log('\nPackaging Standalone Executables with @yao-pkg/pkg...');
-  try {
-    execSync('npx @yao-pkg/pkg . --out-path bin', { stdio: 'inherit' });
-  } catch (pkgErr) {
-    console.warn('⚠️ @yao-pkg/pkg packaging note:', pkgErr.message);
+  if (doSea) {
+    step('3/4', 'Node.js SEA preparation (best-effort)...');
+    try {
+      sh('node --experimental-sea-config sea-config.json');
+      const nodeBin = path.join(DIST, 'bin', process.platform === 'win32' ? 'yuihime-sea.exe' : 'yuihime-sea');
+      fs.mkdirSync(path.dirname(nodeBin), { recursive: true });
+      fs.copyFileSync(process.execPath, nodeBin);
+      try {
+        const fuse = 'NODE_SEA_FUSE_fce680e432b4d0609bfac08d6163a3d0';
+        sh(`npx postject "${nodeBin}" NODE_SEA_BLOB dist/sea-prep.blob --sentinel-fuse ${fuse}`);
+        ok(`SEA binary di ${nodeBin}`);
+        done = true;
+      } catch (postErr) {
+        warn('postject tidak terpasang / gagal. SEA blob tersisa di dist/sea-prep.blob.');
+      }
+    } catch (seaErr) {
+      warn(`SEA generation gagal: ${seaErr.message}`);
+    }
   }
 
-  // 4. Handle Native SQLite bindings
-  console.log('\n[4/4] Syncing native SQLite bindings (better-sqlite3)...');
-  const nativeSrc = path.join(
-    __dirname,
-    '..',
-    '..',
-    'node_modules',
-    'better-sqlite3',
-    'build',
-    'Release',
-    'better_sqlite3.node'
-  );
-
-  if (fs.existsSync(nativeSrc)) {
-    const bldPath = path.join(binDir, 'node_modules', 'better-sqlite3', 'build', 'Release');
-    fs.mkdirSync(bldPath, { recursive: true });
-    
-    const nativeDest = path.join(bldPath, 'better_sqlite3.node');
-    fs.copyFileSync(nativeSrc, nativeDest);
-    console.log(`✓ Copied SQLite binding to: ${nativeDest}`);
+  if (!done) {
+    console.log('ℹ️  Binary tunggal tidak diproduksi — gunakan bundle portabel (jalur utama).');
   }
+}
 
-  // 5. Place README info
-  fs.writeFileSync(
-    path.join(binDir, 'README.txt'),
-    `Yuihime Single Executable Application (SEA) Release\n` +
-    `====================================================\n\n` +
-    `Build Target Mode: ${buildMode}\n\n` +
-    `Untuk menjalankan Yuihime langsung tanpa Node.js:\n` +
-    `  ./yuihime-sea (atau ./yuihime-core-linux pada Linux)\n\n` +
-    `Mode Biner:\n` +
-    `- Default (Full): Menyematkan UI Web React SPA dan Server daemon sekaligus.\n` +
-    `- Server Only (--server-only): Menjalankan backend daemon tanpa static web UI.\n` +
-    `- Web Only (--web-only): Hanya membuat file build statis UI (dist/web).\n\n` +
-    `Node.js SEA (Single Executable Application):\n` +
-    `Gunakan "sea-config.json" dan "dist/sea-prep.blob" untuk mendistribusikan biner tunggal Node.js.\n`
-  );
+try {
+  buildAssets();
+  assembleBundle();
+  if (doPkg || doSea) tryNativeBinary();
 
   console.log('\n=========================================');
-  console.log(`✓ Success! Single Executable Application built inside "/bin/" [Mode: ${buildMode}]!`);
+  console.log('✓ Bundle portabel siap di dist/');
+  console.log('  - Pindahkan dist/ ke lokasi sistem (mis. /opt/yuihime)');
+  console.log('  - tools/yuihime install  →  symlink /usr/local/bin/yuihime');
+  console.log('  - Pakai: yuihime daemon start | yuihime status | yuihime logs');
   console.log('=========================================\n');
 } catch (error) {
-  console.error('\n🔴 Compilation aborted due to error:', error.message);
+  console.error('\n🔴 Compilation aborted:', error.message);
   process.exit(1);
 }

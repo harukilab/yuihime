@@ -1,0 +1,184 @@
+#!/usr/bin/env bash
+# ==============================================================================
+#  YuiHime — CLI global. Satu perintah untuk daemon + tooling.
+#
+#  Bisa dipakai dari mana saja (disimbolkan ke /usr/local/bin) baik dari
+#  repo sumber maupun dari bundle portabel (dist/ yang dipindah ke root
+#  system). Semua path di-resolve relatif terhadap lokasi script ini, jadi
+#  lokasi bundle bisa dipindah bebas.
+#
+#  Usage:
+#    yuihime daemon [start|stop|restart|status|logs|rebuild|autoboot] [--port N] [--cwd DIR]
+#    yuihime debug [start|stop|status|...]          Alat debug (yui-debug.sh)
+#    yuihime watchdog [start|stop|status|log]       Watchdog (yui-watchdog.sh)
+#    yuihime pm2 [start|stop|restart|status|logs]   Mode PM2 (yui-pm2.sh)
+#    yuihime start [args...]                        Jalankan daemon foreground
+#    yuihime settings                               Settings TUI
+#    yuihime terminal                               Terminal sandbox interaktif
+#    yuihime stop|status|restart|logs               Pintasan -> yui-daemon.sh
+#    yuihime rebuild                                Rebuild web + server (repo saja)
+#    yuihime install [DIR]                          Symlink ke /usr/local/bin (default)
+#    yuihime install --copy [--prefix DIR]          Install ala npm: salin ke folder aman
+#                                                   (/opt/yuihime global | ~/.local/share/yuihime user)
+#    yuihime uninstall [DIR]                        Hapus symlink
+#    yuihime uninstall --copy [--prefix DIR]        Hapus folder copy + symlink
+#    yuihime version                                Versi build
+#    yuihime help                                   Bantuan ini
+#
+#  Env:
+#    YUIHIME_BIN_DIR   Direktori install symlink (default /usr/local/bin)
+#    YUIHIME_HOME      Override lokasi bundle/repo (default: auto-detect)
+# ==============================================================================
+set -uo pipefail
+
+# Resolve lokasi nyata script (tahan symlink dari /usr/local/bin).
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+PROJECT_DIR="${YUIHIME_HOME:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+TOOLS_DIR="${YUIHIME_TOOLS_DIR:-$PROJECT_DIR/tools}"
+
+RED='\033[0;31m'; GREEN='\033[0;32m'; CYAN='\033[0;36m'; YELLOW='\033[1;33m'; NC='\033[0m'
+log()  { printf '%b%s%b\n' "$CYAN" "$*" "$NC"; }
+ok()   { printf '%b%s%b\n' "$GREEN" "✔ $*" "$NC"; }
+warn() { printf '%b%s%b\n' "$YELLOW" "⚠ $*" "$NC"; }
+err()  { printf '%b%s%b\n' "$RED" "✖ $*" "$NC" >&2; }
+
+server_bin() {
+  [ -f "$PROJECT_DIR/server.cjs" ] && { echo "$PROJECT_DIR/server.cjs"; return; }
+  [ -f "$PROJECT_DIR/dist/server.cjs" ] && { echo "$PROJECT_DIR/dist/server.cjs"; return; }
+}
+
+# run_server <args...> — jalankan daemon foreground (prod bila ada server.cjs,
+# selain itu tsx bila tersedia). --cwd dihormati, sisanya diteruskan ke daemon.
+run_server() {
+  local cwd="$PROJECT_DIR"
+  local all=("$@")
+  local fwd=() i=0
+  while [ $i -lt ${#all[@]} ]; do
+    if [ "${all[$i]}" = "--cwd" ] && [ $((i+1)) -lt ${#all[@]} ]; then
+      cwd="${all[$((i+1))]}"; i=$((i+2)); continue
+    fi
+    fwd+=("${all[$i]}"); i=$((i+1))
+  done
+  cd "$cwd" || { err "Direktori kerja tidak ditemukan: $cwd"; exit 1; }
+
+  local sbin; sbin=$(server_bin)
+  if [ -n "$sbin" ]; then
+    exec node "$sbin" "${fwd[@]}"
+  fi
+  if [ -f "$PROJECT_DIR/server.ts" ] && [ -x "$PROJECT_DIR/node_modules/.bin/tsx" ]; then
+    exec "$PROJECT_DIR/node_modules/.bin/tsx" "$PROJECT_DIR/server.ts" "${fwd[@]}"
+  fi
+  err "server.cjs / server.ts tidak ditemukan di $PROJECT_DIR. Jalankan 'yuihime rebuild' atau periksa bundle."
+  exit 1
+}
+
+cmd_install() {
+  local copy_mode=0 prefix="" bindir_arg=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --copy|-c) copy_mode=1; shift;;
+      --prefix)  prefix="${2:-}"; shift 2;;
+      *)         bindir_arg="$1"; shift;;
+    esac
+  done
+
+  if [ "$copy_mode" = "1" ]; then
+    log "Install ala npm — menyalin proyek ke folder aman (butuh waktu, npm install + build) ..."
+    local cmd=("bash" "$PROJECT_DIR/scripts/install.sh" "--copy")
+    [ -n "$prefix" ] && cmd+=("--prefix" "$prefix")
+    if [ "$(id -u)" = "0" ]; then cmd+=("--global"); else cmd+=("--user"); fi
+    "${cmd[@]}"
+    return $?
+  fi
+
+  local bindir="${bindir_arg:-${YUIHIME_BIN_DIR:-/usr/local/bin}}"
+  local target="$SCRIPT_DIR/yuihime"
+
+  if ! ln -sf "$target" "$bindir/yuihime" 2>/dev/null; then
+    if command -v sudo >/dev/null 2>&1 && sudo ln -sf "$target" "$bindir/yuihime" 2>/dev/null; then
+      : # via sudo
+    else
+      err "Tidak bisa menulis ke $bindir (butuh root). Coba manual:"
+      echo "  sudo ln -sf $target $bindir/yuihime"
+      return 1
+    fi
+  fi
+  ok "Terinstall: $bindir/yuihime -> $target"
+  log "Coba: yuihime daemon start | yuihime status | yuihime version"
+}
+
+cmd_uninstall() {
+  local copy_mode=0 prefix="" bindir_arg=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --copy|-c) copy_mode=1; shift;;
+      --prefix)  prefix="${2:-}"; shift 2;;
+      *)         bindir_arg="$1"; shift;;
+    esac
+  done
+
+  if [ "$copy_mode" = "1" ]; then
+    local cmd=("bash" "$PROJECT_DIR/scripts/install.sh" "--remove")
+    [ -n "$prefix" ] && cmd+=("--prefix" "$prefix")
+    if [ "$(id -u)" = "0" ]; then cmd+=("--global"); else cmd+=("--user"); fi
+    "${cmd[@]}"
+    return $?
+  fi
+
+  local bindir="${bindir_arg:-${YUIHIME_BIN_DIR:-/usr/local/bin}}"
+  if ! rm -f "$bindir/yuihime" 2>/dev/null; then
+    if command -v sudo >/dev/null 2>&1 && sudo rm -f "$bindir/yuihime" 2>/dev/null; then
+      : # via sudo
+    else
+      err "Tidak bisa menghapus $bindir/yuihime (butuh root). Coba manual: sudo rm -f $bindir/yuihime"
+      return 1
+    fi
+  fi
+  ok "Dihapus: $bindir/yuihime"
+}
+
+cmd_version() {
+  local v=""
+  local f
+  for f in "$PROJECT_DIR/build-info.json" "$PROJECT_DIR/dist/build-info.json"; do
+    if [ -f "$f" ] && command -v node >/dev/null 2>&1; then
+      v=$(node -e "try{const b=require('$f');process.stdout.write((b.version||b.buildVersion||'')+'')}catch(e){}" 2>/dev/null)
+      [ -n "$v" ] && break
+    fi
+  done
+  if [ -z "$v" ] && [ -f "$PROJECT_DIR/package.json" ] && command -v node >/dev/null 2>&1; then
+    v=$(node -e "console.log(require('$PROJECT_DIR/package.json').version)" 2>/dev/null)
+  fi
+  echo "YuiHime v${v:-unknown}  (root: $PROJECT_DIR)"
+}
+
+cmd_rebuild() {
+  if [ ! -f "$PROJECT_DIR/package.json" ]; then
+    err "Rebuild hanya untuk repo sumber — bundle tidak memuat sumber. Jalankan rebuild di repo."
+    return 1
+  fi
+  ok "Rebuild proyek (npm run build) ..."
+  ( cd "$PROJECT_DIR" && npm run build )
+}
+
+case "${1:-help}" in
+  daemon)
+    shift
+    if [ $# -eq 0 ]; then "$TOOLS_DIR/yui-daemon.sh" start; else "$TOOLS_DIR/yui-daemon.sh" "$@"; fi
+    ;;
+  debug)      shift; "$TOOLS_DIR/yui-debug.sh" "$@";;
+  watchdog)   shift; "$TOOLS_DIR/yui-watchdog.sh" "$@";;
+  pm2)        shift; "$TOOLS_DIR/yui-pm2.sh" "$@";;
+  start)      shift; run_server "$@";;
+  settings)   shift; run_server --settings "$@";;
+  terminal|sandbox) shift; run_server --terminal "$@";;
+  stop)       shift; "$TOOLS_DIR/yui-daemon.sh" stop;;
+  restart)    shift; "$TOOLS_DIR/yui-daemon.sh" restart "$@";;
+  status)     shift; "$TOOLS_DIR/yui-daemon.sh" status;;
+  logs)       shift; "$TOOLS_DIR/yui-daemon.sh" logs "$@";;
+  rebuild)    cmd_rebuild;;
+  install)    shift; cmd_install "$@";;
+  uninstall)  shift; cmd_uninstall "$@";;
+  version|--version|-V) cmd_version;;
+  help|-h|--help|*) sed -n '2,30p' "${BASH_SOURCE[0]}";;
+esac

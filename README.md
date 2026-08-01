@@ -1,4 +1,4 @@
-# 👑 Yuihime AI v4.173 - Autonomous VTuber Engine (Airi OS Core v2.39)
+# 👑 Yuihime AI v4.182 - Autonomous VTuber Engine (Airi OS Core v2.39)
 
 **Yuihime** adalah engine agen AI otonom untuk VTuber dengan arsitektur *daemon + web UI*.cognitive loop, memory jangka panjang (SQLite), eksekusi tool modular, dan antarmuka web real-time untuk kontrol kepribadian.
 
@@ -149,6 +149,127 @@ File konfigurasi dan data disimpan **di luar binary**:
 - `YUIHIME_DB_PATH` — path ke database
 - `YUIHIME_AGENT_PATH` — folder `agent/`
 - `YUIHIME_ADDONS_PATH` — folder `addons/`
+
+---
+
+## 🚀 Deployment & Auto-Start (Daemon + Boot Hook)
+
+All supervision scripts are fully portable: data paths resolve from `$HOME`
+(default `~/.yuihime`, override `YUIHIME_SYSTEM_ROOT`) and the script's own
+location — **no hardcoded absolute paths**, so it works on any server/PC/user
+(each user gets their own data instance under their home).
+
+### One-shot installer: `scripts/install.sh`
+
+Installs dependencies and wires up the global `yuihime` command, handling both
+scenarios automatically (fresh clone → `npm install`; already installed → skip):
+
+```bash
+bash scripts/install.sh                 # auto: global if root, user otherwise
+bash scripts/install.sh --global        # symlink to /usr/local/bin (root/sudo)
+bash scripts/install.sh --user          # ~/.local/bin + inject PATH to shell rc
+bash scripts/install.sh --build         # also run `npm run build`
+bash scripts/install.sh --no-deps       # skip dependency handling (already set up)
+```
+
+- **User mode** injects an idempotent PATH block into `~/.bashrc`, `~/.profile`,
+  and/or `~/.zshrc` (re-running never duplicates).
+- After install: `yuihime daemon start | yuihime status | yuihime help`.
+- Manual alternative: `tools/yuihime install|uninstall`.
+
+### npm-style install: `--copy`
+
+Installs the whole app into a safe, self-contained folder — like
+`npm install -g`. The source clone becomes unused at runtime and can be
+deleted/moved freely (runtime data always stays in `~/.yuihime`).
+
+```bash
+yuihime install --copy                # global: /opt/yuihime (sudo)
+                                      # user:   ~/.local/share/yuihime
+yuihime install --copy --prefix /opt/yuihime   # explicit folder
+bash scripts/install.sh --copy --prefix /opt/yuihime
+
+# update the copy after changes (re-runs npm install + build in place)
+bash scripts/install.sh --copy --prefix /opt/yuihime
+
+# remove it (folder + symlink; user data in ~/.yuihime is kept)
+yuihime uninstall --copy --prefix /opt/yuihime
+```
+
+- `--copy` copies the source (excluding `node_modules`/`.git`/`dist`), then runs
+  `npm install` + `npm run build` inside the target folder and symlinks
+  `<target>/tools/yuihime` into the bindir. Works with `sudo` (root install to
+  `/opt/yuihime`); use `sudo env "PATH=$PATH" bash scripts/install.sh --copy`
+  if `node` isn't in root's PATH.
+- It writes the boot marker `~/.yuihime/bin/project-root` + copies the
+  location-independent boot launcher, so `autoboot` keeps working after the
+  original clone is deleted. If you later move the installed folder manually,
+  re-run `yuihime daemon autoboot` to refresh the marker.
+
+### Deployment modes
+
+- **Non-PM2 (default)** — single local process supervised by `yui-watchdog.sh`
+  (probes `/api/health`, auto-restarts on hang/crash):
+  ```bash
+  tools/yui-daemon.sh start prod
+  ```
+- **PM2 (optional)** — PM2 manages the process (auto-restart on exit);
+  `yui-watchdog.sh --pm2` adds hang detection (health probe → `pm2 restart yuihime`):
+  ```bash
+  tools/yui-daemon.sh --pm2 start prod
+  ```
+
+### Boot hook: `scripts/boot.sh`
+
+Auto-starts the daemon + supervisor after a reboot. Works on Termux:Boot,
+UserLAnd, cron `@reboot`, or init.d.
+
+```bash
+# One-shot: detect the platform and install the right auto-start
+# (systemd unit | ~/.termux/boot | UserLAnd startup | cron @reboot)
+tools/yui-daemon.sh autoboot            # or: yuihime daemon autoboot
+tools/yui-daemon.sh autoboot prod       # explicit mode
+YUIHIME_PM2=1 tools/yui-daemon.sh autoboot   # PM2-aware wiring
+
+# Remove whatever autoboot installed (systemd unit | termux boot | cron line)
+tools/yui-daemon.sh autoboot off        # or: yuihime daemon autoboot off
+```
+
+**Location-independent:** auto-start hooks point to a stable launcher at
+`~/.yuihime/bin/yui-boot.sh` (copied by `autoboot`), which re-resolves the
+project folder at boot time — via the global `yuihime` command, the
+`~/.yuihime/bin/project-root` marker, or common locations. Clone/save the
+project anywhere, even move it after install; auto-start keeps working
+(re-run `yuihime daemon autoboot` to refresh the marker).
+
+# Defaults: non-PM2 + prod (dev if no dist/server.cjs), 10s boot delay,
+# data in ~/.yuihime, port 3000
+bash scripts/boot.sh
+
+# Explicit modes
+bash scripts/boot.sh prod            # non-PM2, prod
+bash scripts/boot.sh --pm2           # PM2, auto mode
+bash scripts/boot.sh --pm2 prod      # PM2 + prod
+
+# With environment overrides
+YUIHIME_BOOT_DELAY=5 YUIHIME_DAEMON_PORT=8080 bash scripts/boot.sh
+YUIHIME_PM2=1 bash scripts/boot.sh   # same as --pm2
+```
+
+Where to install it:
+- **Termux:Boot** — create `~/.termux/boot/yuihime.sh` containing:
+  ```bash
+  bash /home/<user>/YuiHime/scripts/boot.sh
+  ```
+- **UserLAnd** — set it as the login startup command.
+- **cron `@reboot`** — in `crontab -e`:
+  ```
+  @reboot /bin/bash /home/<user>/YuiHime/scripts/boot.sh
+  ```
+- **systemd server + PM2** — prefer `pm2 startup` + `pm2 save`
+  (see `docs/DEPLOYMENT_INFO.md`); `boot.sh` is the no-systemd alternative.
+
+Boot result logs land in `~/.yuihime/debug/boot.log`.
 
 ---
 

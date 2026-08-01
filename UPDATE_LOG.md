@@ -1,6 +1,92 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.182] - 2026-08-01
+### Fix: Instal ala npm: install.sh --copy ke folder aman (/opt/yuihime atau ~/.local/share/yuihime)
+- install.sh mode --copy: salin proyek (tanpa node_modules/.git/dist) ke PREFIX, lalu npm install + npm run build di sana; symlink tools/yuihime ke bindir. Default: global=/opt/yuihime (sudo), user=~/.local/share/yuihime; override --prefix DIR.
+- CLI: 'yuihime install --copy [--prefix DIR]' & 'yuihime uninstall --copy [--prefix DIR]' — clone asli bisa dihapus bebas setelah copy (runtime data tetap ~/.yuihime).
+- Copy install menulis marker ~/.yuihime/bin/project-root + menyalin boot launcher — autoboot tetap jalan walau clone asli hilang/dipindah manual (cukup re-run autoboot untuk refresh marker).
+- Perbaikan: cmd_remove kini hapus symlink sesuai mode (user → ~/.local/bin, bukan selalu /usr/local/bin); tambah chmod -R u+w sebelum rm -rf agar tahan file read-only dari npm install.
+- Diuji end-to-end di environment proot: install --copy (npm install+build OK, CLI version resolve ke prefix, launcher resolve ke prefix) dan uninstall --copy (prefix+symlink+marker terhapus). State tes dipulihkan (bashrc/.profile/marker/symlink).
+
+
+## [4.181] - 2026-08-01
+### Fix: Autoboot lokasi-independen: launcher stabil ~/.yuihime/bin/yui-boot.sh
+- tools/yui-boot.sh (baru): boot launcher yang re-resolve folder proyek saat boot — (1) perintah global 'yuihime' via readlink -f, (2) marker ~/.yuihime/bin/project-root, (3) scan lokasi umum. Flag --resolve untuk cek hasil resolusi.
+- autoboot kini menyalin launcher ke ~/.yuihime/bin/yui-boot.sh + menulis marker project-root; hook cron/systemd/Termux/UserLAnd menunjuk ke launcher stabil — pindah clone/lokasi tidak membuat autostart basi.
+- autoboot off menghapus launcher & marker. Perbaikan: output ok() di-install_boot_launcher dialihkan ke stderr agar path yang di-capture bersih dari kode warna.
+- Diuji: resolusi normal, simulasi pindah lokasi (case marker), revert, off — semua lolos di environment UserLAnd/proot.
+
+
+## [4.180] - 2026-08-01
+### Fix: Perintah baru 'yuihime daemon autoboot': auto-detect platform & pasang boot hook
+- Subperintah 'daemon autoboot' di tools/yuihime + tools/yui-daemon.sh: auto-detect platform (termux/proot/UserLAnd/android/systemd/generic).
+- Install otomatis: systemd unit (PC/server) | ~/.termux/boot (Termux:Boot) | instruksi UserLAnd 'Startup command' | fallback cron @reboot.
+- Mode OFF: 'autoboot off' menghapus yang terpasang (systemd unit disable+hapus | file termux boot | entri cron @reboot).
+- PM2-aware: '--pm2' otomatis pm2 save sebelum pasang unit systemd; boot hook pilih flag daemon/watchdog sesuai mode.
+- Idempoten: yui-daemon.sh start cek daemon_healthy dulu — aman di ~/.bashrc UserLAnd yang dimuat ulang tiap buka terminal.
+- Diuji live di environment UserLAnd/proot (TracerPid!=0, /sdcard, tanpa systemd & crontab) — cabang proot + routing 'yuihime daemon autoboot [off]' OK. Lint & bash -n lolos.
+
+
+## [4.180] - 2026-08-01
+### Fix: Perintah baru 'yuihime daemon autoboot': auto-detect platform & pasang boot hook
+- Subperintah 'daemon autoboot' di tools/yuihime + tools/yui-daemon.sh: auto-detect platform (termux/proot/UserLAnd/android/systemd/generic).
+- Install otomatis: systemd unit (PC/server) | ~/.termux/boot (Termux:Boot) | instruksi UserLAnd 'Startup command' | fallback cron @reboot.
+- PM2-aware: '--pm2' otomatis pm2 save sebelum pasang unit systemd; boot hook pilih flag daemon/watchdog sesuai mode.
+- Diuji live di environment UserLAnd/proot (TracerPid!=0, /sdcard, tanpa systemd & crontab) — cabang proot & routing 'yuihime daemon autoboot' OK.
+- Lint (tsc --noEmit) & bash -n sintaks skrip lolos.
+
+
+## [4.179] - 2026-08-01
+### Feature: Installer satu-perintah: scripts/install.sh (dua skenario + global command)
+- scripts/install.sh (baru): auto-detect skenario — clone baru (node_modules tidak ada) → npm install; sudah install → lewati + pastikan binding better-sqlite3 terbangun (npm rebuild bila perlu).
+- Override --deps (paksa npm install) / --no-deps (skip).
+- --build untuk npm run build (dist/server.cjs siap).
+- Pasang perintah global via tools/yuihime: --global symlink ke /usr/local/bin (root/sudo, YUIHIME_BIN_DIR), --user symlink ke ~/.local/bin + inject PATH idempotent ke ~/.bashrc/~/.profile/~/.zshrc (marker # >>> YuiHime >>>).
+- YUIHIME_HOME override lokasi repo/bundle (konsisten dengan tools/yuihime). Diuji 2 skenario + idempotensi + mode user dengan fake HOME.
+- README: tambah seksi 'One-shot installer: scripts/install.sh'.
+
+
+## [4.178] - 2026-08-01
+### Docs: README: bagian Deployment & Auto-Start (boot.sh) dalam bahasa Inggris
+- README.md: tambah seksi '🚀 Deployment & Auto-Start (Daemon + Boot Hook)' — penjelasan portabilitas lintas user/mesin, dua mode deployment (non-PM2 default & PM2), contoh pemakaian scripts/boot.sh + default-nya, dan cara pasang di Termux:Boot / UserLAnd / cron @reboot / systemd+PM2.
+
+
+## [4.177] - 2026-08-01
+### Feature: Watchdog PM2-aware + boot hook: penanganan hang di mode PM2 dan auto-start setelah reboot
+- yui-watchdog.sh: mode baru '--pm2' / YUIHIME_PM2=1 — daemon dikelola PM2, watchdog hanya probe /api/health dan saat hang/crash memanggil 'pm2 restart yuihime' (tidak menyentuh yui-debug.sh).
+- Deteksi stop manual di mode PM2 via pm2 pid (2 siklus konfirmasi); port dari env (meta tidak dikelola PM2).
+- Fix bug laten: 'start mode extra...' sebelumnya menjatuhkan semua argumen setelah mode (cmd_start hanya meneruskan $1); kini diteruskan penuh via "$@" — --port/--cwd/--pm2 sampai ke daemon.
+- yui-daemon.sh: mode --pm2 kini otomatis men-start watchdog PM2-aware setelah pm2 start (PM2 menangani proses mati, watchdog melengkapi deteksi hang).
+- scripts/boot.sh (baru): boot hook untuk Termux:Boot/UserLAnd/cron @reboot — non-PM2: tools/yui-daemon.sh start (daemon+watchdog); PM2: pm2 resurrect + pastikan app + watchdog PM2-aware. Jeda boot YUIHIME_BOOT_DELAY (default 10s), log ke ~/.yuihime/debug/boot.log, fallback PATH nvm.
+- Verifikasi: E2E hang (busy-loop event loop) → deteksi 2x probe → pm2 restart → pulih; rehearsal fresh HOME (user berbeda) + port terpisah: boot → crash-restart → cleanup semua jalan.
+
+
+## [4.176] - 2026-08-01
+### Fix: Watchdog: sinyal TERM/proot, restart-gagal, dan pembersihan skrip lama
+- yui-watchdog.sh: polling interval pakai sleep 1s + tenggat — di proot sinyal hanya diproses saat sleep selesai, sehingga stop kini selesai ~1s (sebelumnya molor s/d interval, lalu SIGKILL fallback memotong log graceful).
+- Trap SIGTERM menulis '=== Watchdog dihentikan (SIGTERM) ===' dan menghapus watchdog.pid; cmd_stop menunggu 5s sebelum SIGKILL fallback.
+- Restart otomatis yang GAGAL start tidak lagi dianggap 'stop manual': watchdog bertahan dan retry dibatasi RESTART_MAX (anti crash-loop), lewat flag we_restarting.
+- Health probe tanpa curl memakai /dev/tcp (probe_tcp); watchdog.log otomatis dirotasi >1MB ke .old.
+- Hapus yuihime.sh & kill-yuihime.sh (usang, digantikan tools/yuihime + tools/yui-debug.sh).
+
+
+## [4.175] - 2026-08-01
+### Feature: Port & cwd daemon configurable via env/CLI
+- yui-debug.sh: dukung YUIHIME_DAEMON_PORT/YUIHIME_CWD env + --port/--cwd CLI; path absolut untuk tsx/server.cjs; --port selalu diteruskan ke daemon.
+- yui-watchdog.sh: default port dari env; argumen tambahan (port/cwd) diteruskan saat start pertama & restart otomatis.
+- yui-daemon.sh: --port/--cwd dinormalisasi jadi env lalu di-forward ke watchdog/debug/pm2; extra args ikut diteruskan.
+- yui-pm2.sh: dukung YUIHIME_CWD (--cwd) dan --port pada start_cmd.
+
+
+## [4.174] - 2026-08-01
+### Feature: list_history: jawab riwayat foto sebagai daftar rapi
+- generate_image kini punya action 'list_history': membaca log tensorart (termasuk arsip harian), dedup per jobId, dan mengembalikan daftar bersih {ts, prompt, model, width, height, localPath, downloadUrl} terbaru-dulu.
+- Ketika user bertanya 'pernah bikin foto apa saja', Yui memanggil list_history lalu menjawab dengan daftar teks rapi (tanggal + prompt + model) — bukan isi log mentah.
+- list_history diproses sebelum cek API key karena operasi lokal (tidak butuh jaringan). Parameter baru: limit (default 20).
+- Smoke test tg_img_toolkit bertambah 4 kasus list_history (total 32).
+
+
 ## [4.173] - 2026-08-01
 ### Feature: Perintah /new: chat baru bersih, obrolan lama diringkas + diarsipkan
 - /new memulai chat baru yang bersih untuk chat Telegram: obrolan lama diringkas via LLM (Bahasa Indonesia) dan disimpan ke tabel memories (type chat_reset, importance 0.85) sebagai data Yui yang awet.

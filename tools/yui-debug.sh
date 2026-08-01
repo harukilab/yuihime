@@ -21,6 +21,10 @@
 #
 #  Catatan: stop mengirim SIGINT (graceful shutdown) lalu menunggu maksimal
 #  GRACEFUL_TIMEOUT detik sebelum memaksa SIGKILL.
+#
+#  Env override (diprioritaskan CLI):
+#    YUIHIME_DAEMON_PORT   Port daemon (default 3000) — setara arg --port
+#    YUIHIME_CWD           Direktori kerja daemon (default root proyek) — setara arg --cwd
 # ==============================================================================
 set -uo pipefail
 
@@ -37,7 +41,8 @@ SESSIONS_DIR="$DEBUG_DIR/sessions"
 CURRENT_LOG="$DEBUG_DIR/current.log"
 CURRENT_META="$DEBUG_DIR/current.meta"
 
-DEFAULT_PORT="3000"
+DEFAULT_PORT="${YUIHIME_DAEMON_PORT:-3000}"
+DAEMON_CWD="${YUIHIME_CWD:-$PROJECT_DIR}"
 GRACEFUL_TIMEOUT="${YUIHIME_DEBUG_GRACEFUL_TIMEOUT:-15}"   # detik tunggu SIGINT
 STARTUP_WAIT="${YUIHIME_DEBUG_STARTUP_WAIT:-5}"            # detik tunggu boot saat start
 
@@ -50,6 +55,12 @@ err()  { printf '%b%s%b\n' "$RED" "✖ $*" "$NC" >&2; }
 
 is_alive() {
   [ -n "${1:-}" ] && kill -0 "$1" 2>/dev/null
+}
+
+# server_bin: path binary prod — dist/server.cjs (repo) atau server.cjs (bundle portabel)
+server_bin() {
+  [ -f "$PROJECT_DIR/dist/server.cjs" ] && { echo "$PROJECT_DIR/dist/server.cjs"; return; }
+  [ -f "$PROJECT_DIR/server.cjs" ] && { echo "$PROJECT_DIR/server.cjs"; return; }
 }
 
 # signal_group <pid> <signal> — sinyal ke seluruh process group (setsid),
@@ -110,7 +121,28 @@ cmd_start() {
   fi
 
   local mode="${1:-dev}"; [ $# -gt 0 ] && shift
-  local extra=("$@")
+
+  local port="${YUIHIME_DAEMON_PORT:-3000}"
+  local cwd="${YUIHIME_CWD:-$PROJECT_DIR}"
+
+  # Parse --port/--cwd dari argumen (nilai dikonsumsi di sini), sisanya
+  # diteruskan ke daemon. --port tetap ikut diteruskan agar server.ts tahu.
+  local all=("$@")
+  local extra=() i arg
+  for ((i=0; i<${#all[@]}; i++)); do
+    arg="${all[$i]}"
+    case "$arg" in
+      --port)
+        [ $((i+1)) -lt ${#all[@]} ] && { port="${all[$((i+1))]}"; i=$((i+1)); }
+        ;;
+      --cwd)
+        [ $((i+1)) -lt ${#all[@]} ] && { cwd="${all[$((i+1))]}"; i=$((i+1)); }
+        ;;
+      *)
+        extra+=("$arg")
+        ;;
+    esac
+  done
 
   local existing
   existing=$(running_pid)
@@ -119,32 +151,29 @@ cmd_start() {
     exit 1
   fi
 
-  cd "$PROJECT_DIR" || exit 1
-  if [ ! -f .env ]; then
-    [ -f .env.example ] && cp .env.example .env
+  cd "$cwd" || { err "Direktori kerja tidak ditemukan: $cwd"; exit 1; }
+  if [ ! -f "$PROJECT_DIR/.env" ]; then
+    [ -f "$PROJECT_DIR/.env.example" ] && cp "$PROJECT_DIR/.env.example" "$PROJECT_DIR/.env"
   fi
 
   local cmd
   if [ "$mode" = "prod" ]; then
-    if [ ! -f dist/server.cjs ]; then
-      err "dist/server.cjs tidak ada. Jalankan 'npm run build' dulu."
+    local sbin; sbin=$(server_bin)
+    if [ -z "$sbin" ]; then
+      err "server.cjs tidak ditemukan. Jalankan 'npm run build' dulu (atau periksa layout bundle)."
       exit 1
     fi
-    cmd=(node dist/server.cjs)
+    cmd=(node "$sbin")
   else
     mode="dev"
-    cmd=("$PROJECT_DIR/node_modules/.bin/tsx" server.ts)
-  fi
-  cmd+=("${extra[@]}")
-
-  # Extract port untuk meta
-  local port="$DEFAULT_PORT"
-  local i
-  for ((i=0; i<${#extra[@]}; i++)); do
-    if [ "${extra[$i]}" = "--port" ] && [ $((i+1)) -lt ${#extra[@]} ]; then
-      port="${extra[$((i+1))]}"
+    if [ ! -f "$PROJECT_DIR/server.ts" ] || [ ! -x "$PROJECT_DIR/node_modules/.bin/tsx" ]; then
+      err "Mode dev butuh proyek sumber (server.ts + node_modules/.bin/tsx). Di bundle, gunakan mode prod."
+      exit 1
     fi
-  done
+    cmd=("$PROJECT_DIR/node_modules/.bin/tsx" "$PROJECT_DIR/server.ts")
+  fi
+  cmd+=("--port" "$port")
+  [ ${#extra[@]} -gt 0 ] && cmd+=("${extra[@]}")
 
   # Rotasi session sebelumnya
   if [ -f "$CURRENT_LOG" ]; then

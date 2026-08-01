@@ -1,7 +1,7 @@
 {
   "name": "yuihime",
   "private": true,
-  "version": "4.173",
+  "version": "4.182",
   "description": "YuiHime AI Engine - autonomous trans-dimensional virtual companion (AGI) with multi-provider LLM gateway, cognitive cortex, and multi-channel bridges.",
   "type": "module",
   "bin": "dist/server.cjs",
@@ -13,6 +13,7 @@
     "build:server": "tsx src/bin/generate-build-info.ts && esbuild server.ts --bundle --platform=node --format=cjs --external:better-sqlite3 --external:esbuild --external:vite --external:lightningcss --external:abort-controller --sourcemap --outfile=dist/server.cjs",
     "start": "NODE_OPTIONS=--no-deprecation node dist/server.cjs",
     "build:bin": "node src/bin/compile-binary.cjs",
+    "build:bundle": "node src/bin/compile-binary.cjs",
     "build:bin:server": "node src/bin/compile-binary.cjs --server-only",
     "build:bin:web": "node src/bin/compile-binary.cjs --web-only",
     "terminal": "tsx src/bin/terminal.ts",

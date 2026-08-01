@@ -10,7 +10,7 @@
     "properties": {
       "action": {
         "type": "string",
-        "description": "Operation mode: 'generate' (default), 'list_tools', or 'upload_file'.",
+        "description": "Operation mode: 'generate' (default), 'list_tools', 'upload_file', or 'list_history'. Use 'list_history' when the user asks about photos/pictures/images Yui has created before (e.g. 'pernah bikin foto apa saja', 'list my photos') — it returns a clean deduplicated list of past generations (date, prompt, model, file).",
         "default": "generate"
       },
       "prompt": {
@@ -61,6 +61,11 @@
         "type": "integer",
         "description": "Max retries on transient failure.",
         "default": 0
+      },
+      "limit": {
+        "type": "integer",
+        "description": "Max history items to return for action: 'list_history'.",
+        "default": 20
       },
       "sendToChat": {
         "type": "boolean",
