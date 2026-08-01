@@ -1,6 +1,15 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.189] - 2026-08-01
+### Feature: Otome: jalur intim (consent-gated) + nebeng provider pool sistem
+- Couple day: setelah LOVE ENDING, 'new' membuka hari pasangan (couple_start). Opsi 'Malam romantis' membuka jalur intim yang terkunci di afeksi tinggi.
+- Jalur intim berbasis consent: scene intimate_consent meminta kepastian pemain, opsi 'belum malam ini' justru +10 afeksi (batas dihormati), penulisan romantis-sensual tanpa detail eksplisit.
+- Ending love bervariasi via flag 'intimate' (epilog pagi setelah malam intim vs penembusan cinta biasa).
+- llm.ts kini NEBENG provider pool sistem: register provider (Gemini/OpenRouter/Anthropic/OpenAI) ke SystemRegistry lalu routing lewat ProviderGatewayModule dengan settings config.toml (provider/model bisa di-override via env YUIHIME_OTOME_PROVIDER/YUIHIME_OTOME_MODEL). Fallback: fetch langsung env, lalu script.
+- Fix REPL: ganti rl.question rekursif ke rl.on('line') agar input piped (non-TTY) jalan.
+
+
 ## [4.188] - 2026-08-01
 ### Feature: Prototipe Otome Simulator terisolasi (belum terintegrasi)
 - Folder otome/ mandiri: CLI dating-sim dengan Yui, TIDAK terhubung ke registry/daemon (sengaja dipisah dulu).

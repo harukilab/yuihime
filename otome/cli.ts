@@ -95,7 +95,8 @@ function main(): void {
   }
 
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  const prompt = () => rl.question(`${BOLD}> ${RESET}`, async (raw) => {
+  const writePrompt = () => process.stdout.write(`${BOLD}> ${RESET}`);
+  const handleLine = async (raw: string) => {
     const input = raw.trim().toLowerCase();
     if (input === 'quit' || input === 'q') {
       game.save('autosave.json');
@@ -105,7 +106,7 @@ function main(): void {
     }
     if (input === 'save') {
       console.log(`${GREEN}Disimpan ke ${game.save('autosave.json')}${RESET}`);
-      prompt();
+      writePrompt();
       return;
     }
     if (input === 'load') {
@@ -118,7 +119,7 @@ function main(): void {
       } else {
         console.log(`${YELLOW}Tidak ada save.${RESET}`);
       }
-      prompt();
+      writePrompt();
       return;
     }
     if (input === 'new' || input === 'newday') {
@@ -126,28 +127,28 @@ function main(): void {
       console.log(`${CYAN}Hari baru dimulai...${RESET}`);
       header(game);
       showScene(game);
-      prompt();
+      writePrompt();
       return;
     }
     if (input === 'status' || input === 's') {
       header(game);
-      prompt();
+      writePrompt();
       return;
     }
     if (input === 'help' || input === '?') {
       console.log(`${DIM}1-${game.availableChoices().length}: pilih opsi • save • load • new • status • quit${RESET}`);
-      prompt();
+      writePrompt();
       return;
     }
 
     const idx = Number(input);
     if (!Number.isInteger(idx) || idx < 1 || idx > game.availableChoices().length) {
       console.log(`${YELLOW}Coba ketik nomor opsi di atas, atau 'help'.${RESET}`);
-      prompt();
+      writePrompt();
       return;
     }
 
-    const { scene, delta, ending } = game.choose(idx - 1);
+    const { delta, ending } = game.choose(idx - 1);
     game.save('autosave.json');
     if (delta !== 0) {
       console.log(`${DIM}affeksi ${delta > 0 ? '+' : ''}${delta} → ${game.state.affection}${RESET}`);
@@ -156,18 +157,23 @@ function main(): void {
       showScene(game);
       console.log(`\n${BOLD}═══ ${ending.toUpperCase()} ENDING ═══${RESET}`);
       console.log(`Affeksi akhir: ${meter(game.state.affection)}`);
-      console.log(`${DIM}Ketik 'new' untuk hari baru (mulai ulang), 'quit' untuk keluar.${RESET}`);
-      prompt();
+      if (ending === 'love') {
+        console.log(`${PINK}💞 Kakak jadi pacar Yui! Ketik 'new' untuk lanjut sebagai pasangan (jalur malam intim terbuka di 'Malam romantis').${RESET}`);
+      } else {
+        console.log(`${DIM}Ketik 'new' untuk hari baru (mulai ulang), 'quit' untuk keluar.${RESET}`);
+      }
+      writePrompt();
       return;
     }
     await liveReaction(game);
     showScene(game);
-    prompt();
-  });
+    writePrompt();
+  };
+  rl.on('line', handleLine);
 
   header(game);
   showScene(game);
-  prompt();
+  writePrompt();
 }
 
 main();

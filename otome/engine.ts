@@ -50,7 +50,7 @@ export class OtomeGame {
 
   currentScene(): Scene {
     if (this.state.finished) {
-      return endingFor(this.state.affection);
+      return endingFor(this.state.affection, this.state.flags);
     }
     return SCENES[this.state.sceneId] ?? SCENES.start;
   }
@@ -80,15 +80,29 @@ export class OtomeGame {
     this.state.sceneId = choice.next;
 
     if (choice.next === 'ending_eval') {
-      const ending = endingFor(this.state.affection);
+      const ending = endingFor(this.state.affection, this.state.flags);
       this.state.sceneId = ending.id;
       this.state.finished = ending.ending ?? null;
       return { scene: ending, delta, ending: ending.ending ?? null };
+    }
+    const nextScene = SCENES[choice.next];
+    if (nextScene?.ending) {
+      this.state.sceneId = nextScene.id;
+      this.state.finished = nextScene.ending;
+      return { scene: nextScene, delta, ending: nextScene.ending };
     }
     return { scene: this.currentScene(), delta, ending: null };
   }
 
   newDay(): void {
+    if (this.state.finished === 'love') {
+      this.state.sceneId = 'couple_start';
+      if (!this.state.flags.includes('relationship')) this.state.flags.push('relationship');
+      this.state.finished = null;
+      this.state.day += 1;
+      this.history = [];
+      return;
+    }
     this.state = defaultState();
     this.state.day = (this.state.day || 1) + 1;
     this.history = [];

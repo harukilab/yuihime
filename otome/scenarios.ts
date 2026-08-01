@@ -149,18 +149,90 @@ export const SCENES: Record<string, Scene> = {
     id: 'ending_eval',
     text: '',
     choices: []
+  },
+
+  couple_start: {
+    id: 'couple_start',
+    text:
+      'Pagi yang hangat. Cahaya matahari masuk lewat tirai rumah Yui. Dia baru bangun, rambutnya sedikit berantakan, tapi tersenyum manis begitu melihatmu.\n\n' +
+      'Yui: "Hmm... Kakak masih di sini. Aku kira tadi cuma mimpi~ Hehe. Hari ini mau ngapain? Aku serahkan ke kamu. Tapi janji, kita habiskan bersama."',
+    choices: [
+      { label: 'Habiskan hari santai berdua di rumah.', next: 'couple_casual', affection: 5 },
+      { label: 'Malam romantis: lilin, musik pelan, dan dance.', next: 'intimate_build', affection: 8 },
+      { label: 'Bawa dia jalan-jalan keluar seharian.', next: 'couple_casual', affection: 5 }
+    ]
+  },
+
+  couple_casual: {
+    id: 'couple_casual',
+    text:
+      'Hari kalian berdua berjalan sederhana tapi penuh tawa kecil. Yui menggandeng lenganmu, sesekali menatapmu diam-diam.\n\n' +
+      'Yui: "Kak... aku suka begini. Nggak perlu yang muluk-muluk. Kamu, aku, dan waktu yang tenang. Itu udah cukup."',
+    choices: [
+      { label: '"Aku juga. Selama bersamamu, cukup."', next: 'ending_eval', affection: 8 },
+      { label: 'Kecup keningnya pelan.', next: 'ending_eval', affection: 10 }
+    ]
+  },
+
+  intimate_build: {
+    id: 'intimate_build',
+    text:
+      'Malam turun. Lampu diredupkan, lilin berkedip di meja, dan lagu pelan mengisi ruangan. Yui tersipu, mengulurkan tangan untuk berdansa bersamamu.\n\n' +
+      'Yui: "Kakak... tadi katanya mau malam romantis. Jangan cuma bilang doang ya. Ayo, deket dikit..."',
+    choices: [
+      { label: 'Rangkul pinggangnya dan bisikkan kalau malam ini mau lebih dekat dengannya.', next: 'intimate_consent', affection: 5 },
+      { label: 'Peluk pelan, tapi jaga batas: ajak ngobrol dulu.', next: 'intimate_decline', affection: 6 }
+    ]
+  },
+
+  intimate_consent: {
+    id: 'intimate_consent',
+    text:
+      'Yui berhenti sebentar. Matanya mencari-cari jawaban di wajahmu, lalu dia menggenggam tanganmu lebih erat. Suaranya pelan, agak gemetar.\n\n' +
+      'Yui: "Kak... aku serius nanya. Kamu yakin mau semalam ini bersama aku? Karena buat aku, ini nggak main-main. Sekali kita lewatin... aku mau jadi milik kamu beneran."',
+    choices: [
+      { label: '"Aku yakin. Aku mau malam ini bersamamu, Yui."', next: 'intimate_night', affection: 10, flags: ['intimate'] },
+      { label: '"Belum malam ini. Aku mau kita tetap nyaman dulu."', next: 'intimate_decline', affection: 10 }
+    ]
+  },
+
+  intimate_night: {
+    id: 'intimate_night',
+    text:
+      'Jawabanmu membuat Yui menghela napas lega dan tersenyum. Dia menundukkan wajah, lalu mendekat perlahan.\n\n' +
+      'Yui: "Oke... kalau gitu. Jaga aku baik-baik ya, Kakak."\n\n' +
+      'Dia menarikmu menuju kamar dengan genggaman yang hangat dan penuh kepercayaan. Musik pelan masih mengalun di ruang tamu.\n\n' +
+      '*Cahaya lilin redup. Detak jantung kalian terdengar, dan untuk pertama kalinya malam itu, tidak ada jarak sama sekali di antara kalian — keintiman yang dibangun dari kepercayaan, bukan hanya keinginan. Yang tersisa hanyalah kehangatan, bisikan-bisikan kecil, dan janji tanpa kata.*',
+    choices: [],
+    ending: 'love'
+  },
+
+  intimate_decline: {
+    id: 'intimate_decline',
+    text:
+      'Kamu menahan. Yui mengangkat wajahnya, dan alih-alih kecewa, matanya melembut dengan rasa terharu.\n\n' +
+      'Yui: "...Kakak. Kamu sadar kan, makin nahan gini, aku makin sayang? Nggak semua orang sabar kayak kamu."\n\n' +
+      'Dia menyandarkan kepalanya di bahumu. "Kalau begitu, temani aku sampai aku ketiduran, ya?" Malam itu jadi hangat dengan caranya sendiri.',
+    choices: [],
+    ending: 'love'
   }
 };
 
-export function endingFor(affection: number): Scene {
+export function endingFor(affection: number, flags: string[] = []): Scene {
   if (affection >= 60) {
+    const intimate = flags.includes('intimate');
     return {
       id: 'ending_love',
       text:
-        'Yui Airi tersenyum — tersenyum penuh, tanpa banyak bicara. Matanya berkaca-kaca tapi dia cepat mengusapnya.\n\n' +
-        'Yui: "...Hehe. Aku tungguin lama banget Kakak ngomong gitu. Aku... juga suka sama kamu. Iya deh, aku mau jadi pacar kamu."\n' +
-        'Yui: "Tapi inget ya. Kalau Kakak bikin aku sedih, aku bakal ngambek seminggu. Dan kali ini beneran."\n\n' +
-        'Dia menggenggam tanganmu, hangat dan pasti. Hari ini berakhir bahagia.',
+        intimate
+          ? 'Yui Airi terbangun di sampingmu keesokan paginya, wajahnya menghadapmu dengan senyum yang tenang dan tidak tergesa.\n\n' +
+            'Yui: "Pagi, Kakak~ Jadi... malam tadi bukan mimpi, kan? Hehe. Makasih udah nunggu sampai sejauh ini. Aku nggak akan pernah ngeluh soal itu."\n' +
+            'Dia menautkan jari-jarinya dengan milikmu di atas selimut. "Mulai hari ini, aku pacar kamu. Beneran. Dan aku nggak akan cuma jadi bayangan di layar."\n\n' +
+            'Kamu menyadari: keintiman itu bukan soal seberapa jauh kalian pergi semalam, tapi soal seberapa dekat kalian memilih untuk tinggal.'
+          : 'Yui Airi tersenyum — tersenyum penuh, tanpa banyak bicara. Matanya berkaca-kaca tapi dia cepat mengusapnya.\n\n' +
+            'Yui: "...Hehe. Aku tungguin lama banget Kakak ngomong gitu. Aku... juga suka sama kamu. Iya deh, aku mau jadi pacar kamu."\n' +
+            'Yui: "Tapi inget ya. Kalau Kakak bikin aku sedih, aku bakal ngambek seminggu. Dan kali ini beneran."\n\n' +
+            'Dia menggenggam tanganmu, hangat dan pasti. Hari ini berakhir bahagia.',
       choices: [],
       ending: 'love'
     };
