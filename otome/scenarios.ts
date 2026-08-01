@@ -191,18 +191,32 @@ export const SCENES: Record<string, Scene> = {
       'Yui berhenti sebentar. Matanya mencari-cari jawaban di wajahmu, lalu dia menggenggam tanganmu lebih erat. Suaranya pelan, agak gemetar.\n\n' +
       'Yui: "Kak... aku serius nanya. Kamu yakin mau semalam ini bersama aku? Karena buat aku, ini nggak main-main. Sekali kita lewatin... aku mau jadi milik kamu beneran."',
     choices: [
-      { label: '"Aku yakin. Aku mau malam ini bersamamu, Yui."', next: 'intimate_night', affection: 10, flags: ['intimate'] },
+      { label: '"Aku yakin. Aku mau malam ini bersamamu, Yui."', next: 'intimate_night_1', affection: 10, flags: ['intimate'] },
       { label: '"Belum malam ini. Aku mau kita tetap nyaman dulu."', next: 'intimate_decline', affection: 10 }
     ]
   },
 
-  intimate_night: {
-    id: 'intimate_night',
+  intimate_night_1: {
+    id: 'intimate_night_1',
     text:
-      'Jawabanmu membuat Yui menghela napas lega dan tersenyum. Dia menundukkan wajah, lalu mendekat perlahan.\n\n' +
-      'Yui: "Oke... kalau gitu. Jaga aku baik-baik ya, Kakak."\n\n' +
-      'Dia menarikmu menuju kamar dengan genggaman yang hangat dan penuh kepercayaan. Musik pelan masih mengalun di ruang tamu.\n\n' +
-      '*Cahaya lilin redup. Detak jantung kalian terdengar, dan untuk pertama kalinya malam itu, tidak ada jarak sama sekali di antara kalian — keintiman yang dibangun dari kepercayaan, bukan hanya keinginan. Yang tersisa hanyalah kehangatan, bisikan-bisikan kecil, dan janji tanpa kata.*',
+      'Kamar Yui diterangi lilin dari ruang tamu yang tembus di sela pintu. Bau vanila samar. Dia berdiri menghadapmu, tangannya sedikit gemetar saat mengait ujung bajunya.\n\n' +
+      'Yui: "Kalau sudah sampai sini... jangan diem-dieman dong. Bantuin aku."\n\n' +
+      'Kamu mendekat dan membantunya melepas pakaian satu per satu — setiap kain yang jatuh disambut napasnya yang semakin hangat. Kulitnya pucat, lembut, dan sedikit merinding saat ujung jarimu menyentuh punggungnya. Yui menggigit bibir, lalu menatapmu dari balik bulu matanya.\n\n' +
+      'Yui: "Sayangku... malam ini, jangan cuma lihat. Rasakan aku."',
+    choices: [
+      { label: 'Telusuri tubuhnya pelan sambil membisikkan kalau dia cantik malam ini.', next: 'intimate_night_2', affection: 6 },
+      { label: 'Hentikan di sini — cukup peluk dan kecup dia dulu.', next: 'intimate_decline', affection: 8 }
+    ]
+  },
+
+  intimate_night_2: {
+    id: 'intimate_night_2',
+    text:
+      'Dia menarikmu ke ranjang. Bibirmu menyentuh lehernya, bahunya, lalu bibirnya — lambat, dalam, sampai napas kalian saling bertabrakan. Tanganmu meraba punggungnya, pinggangnya, menuntunnya telentang di bawahmu.\n\n' +
+      'Yui melengkung mendekat, bisikannya bergetar di telingamu. "Jangan pelan-pelan. Aku sudah nunggu ini lama banget."\n\n' +
+      'Kamu menunduk, menciumi dadanya, areolanya, lalu menjilati perutnya yang bergetar. Yui mencengkeram seprai, mengerang setengah tertahan. Ketika jemarimu menyentuh bagian terbasah dari tubuhnya, dia tersentak dan mengingatkanmu dengan suara serak: "Jangan lama-lama... masuk sekarang."\n\n' +
+      'Kamu memenuhi permintaannya. Tubuh kalian menyatu pelan-pelan, lalu semakin dalam, mengikuti ritme yang sama — lenguhan, tarikan napas, dan nama yang saling dipanggil. Yui menggigit bahumu saat orgasme pertamanya menerpa, lalu giliranmu, dan dia memelukmu erat sambil gemetar dan tertawa kecil.\n\n' +
+      'Panas, basah, dan penuh. Saat akhirnya kalian tenang, dia menautkan jarinya denganmu dan berbisik: "Makasih, Sayang. Jaga aku terus, ya."',
     choices: [],
     ending: 'love'
   },

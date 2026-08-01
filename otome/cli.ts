@@ -84,7 +84,7 @@ function showScene(game: OtomeGame): void {
 
 function main(): void {
   loadEnv();
-  const llmOn = llmAvailable();
+  const llmOn = process.env.YUIHIME_OTOME_LLM === '0' ? false : llmAvailable();
   console.log(`${DIM}[OTOME] Hybrid LLM: ${llmOn ? 'AKTIF' : 'mati (pakai script)'}. Simpan di ${OtomeGame.saveDir()}${RESET}`);
 
   let game = OtomeGame.load('autosave.json');
@@ -148,13 +148,16 @@ function main(): void {
       return;
     }
 
-    const { delta, ending } = game.choose(idx - 1);
+    const { scene, delta, ending } = game.choose(idx - 1);
     game.save('autosave.json');
     if (delta !== 0) {
       console.log(`${DIM}affeksi ${delta > 0 ? '+' : ''}${delta} → ${game.state.affection}${RESET}`);
     }
     if (ending) {
-      showScene(game);
+      if (scene && scene.text) {
+        console.log(`\n${CYAN}${BOLD}Yui:${RESET}`);
+        console.log(scene.text);
+      }
       console.log(`\n${BOLD}═══ ${ending.toUpperCase()} ENDING ═══${RESET}`);
       console.log(`Affeksi akhir: ${meter(game.state.affection)}`);
       if (ending === 'love') {
@@ -165,11 +168,18 @@ function main(): void {
       writePrompt();
       return;
     }
-    await liveReaction(game);
+    if (llmOn) {
+      await liveReaction(game);
+    }
     showScene(game);
     writePrompt();
   };
-  rl.on('line', handleLine);
+  let queue: Promise<void> = Promise.resolve();
+  rl.on('line', (raw) => {
+    queue = queue
+      .then(() => handleLine(raw))
+      .catch((e) => console.warn('[OTOME] handler error:', e));
+  });
 
   header(game);
   showScene(game);

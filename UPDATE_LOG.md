@@ -1,6 +1,14 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.190] - 2026-08-01
+### Feature: Otome: adegan seks eksplisit + fix serialisasi input
+- Jalur intim kini eksplisit 2 stage: intimate_night_1 (foreplay/penelusuran tubuh, opsi mundur tetap ada) lalu intimate_night_2 (hubungan seksual eksplisit, saling menyenangkan, klimaks, aftercare).
+- Fix CLI: scene terminal (yang punya ending) sebelumnya tertimpa epilogue — kini teks scene ditampilkan dulu, banner ending menyusul.
+- Fix concurrency: handler rl.on('line') diserialisasi via promise queue (input piped dulu diproses bersamaan sehingga scene tercetak tak berurutan).
+- Toggle YUIHIME_OTOME_LLM=0 untuk mematikan reaksi LLM live (main full script, tanpa panggilan provider).
+
+
 ## [4.189] - 2026-08-01
 ### Feature: Otome: jalur intim (consent-gated) + nebeng provider pool sistem
 - Couple day: setelah LOVE ENDING, 'new' membuka hari pasangan (couple_start). Opsi 'Malam romantis' membuka jalur intim yang terkunci di afeksi tinggi.
