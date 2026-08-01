@@ -1,6 +1,15 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.188] - 2026-08-01
+### Feature: Prototipe Otome Simulator terisolasi (belum terintegrasi)
+- Folder otome/ mandiri: CLI dating-sim dengan Yui, TIDAK terhubung ke registry/daemon (sengaja dipisah dulu).
+- Engine state machine (affection 0-100, level cold/warm/flirty/love, flags, save/load JSON di ~/.yuihime/otome_saves).
+- Scenes scripted (kafe, stargazing, arcade, home) dengan branching, opsi terkunci berbasis affeksi, dan 3 ending (love/good/bad).
+- Narasi hibrida: script sebagai tulang punggung + variasi dialog LLM realtime (OpenRouter atau Gemini dari .env, model bisa diatur via env) kalau key tersedia.
+- Jalankan dengan: npm run otome. Command: nomor opsi, save, load, new, status, help, quit.
+
+
 ## [4.187] - 2026-08-01
 ### Feature: Diary Rahasia Pribadi Yui
 - Tool 'diary' baru (src/drivers/tools/diary/): action write/read/list, satu entri per tanggal (YYYY-MM-DD), kolom mood, tersimpan di tabel 'diary' database lokal.

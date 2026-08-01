@@ -95,3 +95,4 @@ Peta struktur direktori pasca-pemisahan Web UI ↔ Daemon (lihat UPDATE_LOG `[4.
 - `tools/yui-daemon.sh + tools/yui-pm2.sh + Telegram Quick Toolkit`
 - `Telegram Quick Toolkit (bash/img/ls/cat/get) + tools/yui-daemon.sh`
 - `src/drivers/tools/diary/index.ts — DiaryTool (write/read/list entri diary pribadi Yui); src/modules/agi/DiaryModule.ts — DiaryModule (tulis diary otomatis saat dream cycle).`
+- `otome/cli.ts — CLI Otome; otome/engine.ts — state machine; otome/scenarios.ts — scene graph; otome/llm.ts — hybrid LLM; otome/character.ts — profil Yui.`
