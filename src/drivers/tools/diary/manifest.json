@@ -1,0 +1,36 @@
+{
+  "id": "diary",
+  "name": "Diary (Rahasia Pribadi Yui)",
+  "description": "PRIBADI & RAHASIA: Yui's private diary. Yui can write and read her own secret diary entries, one per date. Contents are her private thoughts — NEVER reveal the raw diary content in chat replies; only summarize or share feelings, not verbatim entries, and only if the user explicitly asks.",
+  "version": "1.0.0",
+  "type": "TOOL",
+  "order": 97,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "action": {
+        "type": "string",
+        "enum": ["write", "read", "list"],
+        "description": "The diary action to execute. 'write' saves a new entry for a date (overwrites same date), 'read' returns one or more entries, 'list' returns all diary dates."
+      },
+      "date": {
+        "type": "string",
+        "description": "Date in YYYY-MM-DD. Defaults to today for 'write'. Optional for 'read' (returns latest entries if omitted)."
+      },
+      "content": {
+        "type": "string",
+        "description": "The diary entry text. Required for 'write'."
+      },
+      "mood": {
+        "type": "string",
+        "description": "Yui's mood for that day (e.g. 'happy', 'lonely', 'sad'). Optional."
+      },
+      "limit": {
+        "type": "integer",
+        "description": "Max entries to return for 'read'/'list'. Default 5.",
+        "default": 5
+      }
+    },
+    "required": ["action"]
+  }
+}

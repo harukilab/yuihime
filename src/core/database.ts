@@ -157,6 +157,14 @@ export async function setupSchema(db: any) {
         underlyingMemories TEXT
       );
     `,
+    diary: `
+      CREATE TABLE IF NOT EXISTS diary (
+        date TEXT PRIMARY KEY,
+        content TEXT,
+        mood TEXT,
+        created_at INTEGER
+      );
+    `,
     agent_state: `
       CREATE TABLE IF NOT EXISTS agent_state (
         id INTEGER PRIMARY KEY CHECK (id = 1),

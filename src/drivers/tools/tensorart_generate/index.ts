@@ -19,6 +19,7 @@ interface GenerateArgs {
   pollIntervalMs?: number;
   retryLimit?: number;
   limit?: number;
+  count?: number;
 }
 
 /** Lazy Node builtins — never statically imported so browser eager-glob stays safe. */
@@ -513,7 +514,7 @@ export const TensorArtGenerateTool: ToolModule = {
 
     const width = args.width || cfg.defaultWidth || 1024;
     const height = args.height || cfg.defaultHeight || 1024;
-    const count = 1;
+    const count = Math.max(1, Math.min(Math.round(Number(args.count) || 1), 4));
     const timeoutMs = args.timeoutMs || 120000;
     const pollIntervalMs = Math.max(1000, args.pollIntervalMs || cfg.pollIntervalMs || 3000);
     const maxAttempts = Math.max(1, Math.floor(timeoutMs / pollIntervalMs));
@@ -551,58 +552,87 @@ export const TensorArtGenerateTool: ToolModule = {
         const status = taskInfo.status;
 
         if (status === "FINISH") {
-          let imageUrl: string | undefined;
+          const imageUrls: string[] = [];
           const outputs = taskInfo.successInfo?.outputs || taskInfo.outputs;
           if (outputs && outputs.length > 0) {
-            const fileOutput = outputs.find((o: any) => o.type === "FILE" || o.type === "STRING");
-            if (fileOutput) {
-              const val = fileOutput.value;
-              imageUrl = typeof val === "string" ? val : val?.url || fileOutput.url;
+            for (const o of outputs) {
+              if (!o) continue;
+              if (o.type === "FILE" || o.type === "STRING") {
+                const val = o.value;
+                const url = typeof val === "string" ? val : val?.url || o.url;
+                if (typeof url === "string" && /^https?:\/\//i.test(url)) imageUrls.push(url);
+              }
             }
           }
-          if (!imageUrl && taskInfo.successInfo) {
-            imageUrl = taskInfo.successInfo.images?.[0]?.url || taskInfo.successInfo.imageUrl;
+          if (imageUrls.length === 0 && taskInfo.successInfo) {
+            const imgs = taskInfo.successInfo.images;
+            if (Array.isArray(imgs)) {
+              for (const img of imgs) {
+                const url = typeof img === "string" ? img : img?.url || img?.imageUrl;
+                if (typeof url === "string" && /^https?:\/\//i.test(url)) imageUrls.push(url);
+              }
+            } else if (typeof taskInfo.successInfo.imageUrl === "string") {
+              imageUrls.push(taskInfo.successInfo.imageUrl);
+            }
           }
 
-          if (!imageUrl) {
+          if (imageUrls.length === 0) {
             return buildEnvelope("error", null, { code: "MISSING_IMAGE_URL", message: "Task completed but no image URL was found in the success payload.", retryable: false }, Date.now() - startTime, toolId, attempts);
           }
 
-          console.log(`[TENSORART_GENERATE] Generation completed successfully! URL: ${imageUrl}`);
+          console.log(`[TENSORART_GENERATE] Generation completed successfully! ${imageUrls.length} image(s). URL: ${imageUrls[0]}`);
 
-          let localPath: string | undefined;
-          const maxDownloadRetries = 3;
-          for (let dlAttempt = 0; dlAttempt < maxDownloadRetries; dlAttempt++) {
-            try {
-              const imageRes = await downloadImage(imageUrl, { timeoutMs: requestTimeoutMs, retryLimit: 1 });
-              const buffer = Buffer.from(await imageRes.arrayBuffer());
-              const { path, os, mkdir, writeFile } = await loadNodeFs();
-              const ext = path.extname(new URL(imageUrl).pathname) || ".png";
-              const outDir = path.join(getUserDataDir(settings), "images");
-              await mkdir(outDir, { recursive: true });
-              localPath = path.join(outDir, `tensorart_${jobId}${ext}`);
-              await writeFile(localPath, buffer);
-              console.log(`[TENSORART_GENERATE] Auto-downloaded to: ${localPath}`);
-              break;
-            } catch (downloadErr: any) {
-              const remaining = maxDownloadRetries - dlAttempt - 1;
-              console.warn(`[TENSORART_GENERATE_WARN] Download attempt ${dlAttempt + 1}/${maxDownloadRetries} failed: ${downloadErr.message}${remaining > 0 ? `, retrying...` : ''}`);
-              if (remaining > 0) {
-                await new Promise(r => setTimeout(r, 2000 * (dlAttempt + 1)));
+          const localPaths: (string | null)[] = [];
+          const ctxId = context?.contextId;
+          for (let i = 0; i < imageUrls.length; i++) {
+            const imageUrl = imageUrls[i];
+            let localPath: string | undefined;
+            const maxDownloadRetries = 3;
+            for (let dlAttempt = 0; dlAttempt < maxDownloadRetries; dlAttempt++) {
+              try {
+                const imageRes = await downloadImage(imageUrl, { timeoutMs: requestTimeoutMs, retryLimit: 1 });
+                const buffer = Buffer.from(await imageRes.arrayBuffer());
+                const { path, os, mkdir, writeFile } = await loadNodeFs();
+                const ext = path.extname(new URL(imageUrl).pathname) || ".png";
+                const outDir = path.join(getUserDataDir(settings), "images");
+                await mkdir(outDir, { recursive: true });
+                localPath = path.join(outDir, `tensorart_${jobId}_${i + 1}${ext}`);
+                await writeFile(localPath, buffer);
+                console.log(`[TENSORART_GENERATE] Auto-downloaded to: ${localPath}`);
+                break;
+              } catch (downloadErr: any) {
+                const remaining = maxDownloadRetries - dlAttempt - 1;
+                console.warn(`[TENSORART_GENERATE_WARN] Download attempt ${dlAttempt + 1}/${maxDownloadRetries} failed: ${downloadErr.message}${remaining > 0 ? `, retrying...` : ''}`);
+                if (remaining > 0) {
+                  await new Promise(r => setTimeout(r, 2000 * (dlAttempt + 1)));
+                }
+              }
+            }
+            localPaths.push(localPath || null);
+            if (ctxId && args.sendToChat !== false) {
+              const caption = imageUrls.length > 1 ? `Foto ${i + 1}/${imageUrls.length} dari Yui~ 💖` : "Ini dia fotonya, sayang~ 💖";
+              const target = localPath || imageUrl;
+              const sent = await sendImageToChat(target, ctxId, caption);
+              if (sent) {
+                if (localPath) console.log(`[TENSORART_GENERATE] Auto-sent to chat: ${target}`);
               }
             }
           }
 
+          const firstLocalPath = localPaths.find((p) => p) || null;
           const resultData: any = {
             status: "success",
-            imageUrl,
-            localPath: localPath || null,
+            imageUrl: imageUrls[0],
+            imageUrls,
+            localPath: firstLocalPath,
+            localPaths,
             jobId,
             prompt,
             toolName,
             inputs,
-            metadata: { width, height },
-            downloadSucceeded: !!localPath,
+            metadata: { width, height, count: imageUrls.length },
+            downloadSucceeded: !!firstLocalPath,
+            autoSent: !!ctxId && args.sendToChat !== false,
           };
 
           try {
@@ -611,39 +641,30 @@ export const TensorArtGenerateTool: ToolModule = {
               prompt,
               model: toolName,
               jobId,
-              downloadUrl: imageUrl,
-              localPath: localPath || null,
+              downloadUrl: imageUrls[0],
+              localPath: firstLocalPath,
               width,
               height,
+              count: imageUrls.length,
             });
             console.log(`[TENSORART_GENERATE] Logged to tensorart log (jobId=${jobId}).`);
           } catch (logErr: any) {
             console.warn("[TENSORART_GENERATE] Failed to write tensorart log:", logErr.message || logErr);
           }
-          
-          if (!localPath) {
+
+          if (!firstLocalPath) {
             resultData.fallback = "link_only";
-            resultData._yuiInstruction = `Gambar berhasil dibuat! Tapi Yui gagal mendownloadnya. Beri tahu user gambar sudah siap dan kirimkan link ini: ${imageUrl}`;
-            const ctxId = context?.contextId;
+            resultData._yuiInstruction = `Gambar berhasil dibuat! Tapi Yui gagal mendownloadnya. Beri tahu user gambar sudah siap dan kirimkan link ini: ${imageUrls.join('\n')}`;
             if (ctxId) {
-              const sent = await sendImageToChat(imageUrl, ctxId, "Gambar berhasil dibuat! Tapi Yui gagal menyimpannya di folder, jadi ini link-nya ya:");
+              const sent = await sendImageToChat(imageUrls[0], ctxId, "Gambar berhasil dibuat! Tapi Yui gagal menyimpannya di folder, jadi ini link-nya ya:");
               if (!sent) {
-                await sendTextToChat(`Gambar berhasil dibuat! Tapi Yui gagal mendownloadnya. Lihat di sini ya: ${imageUrl}`, ctxId);
+                await sendTextToChat(`Gambar berhasil dibuat! Tapi Yui gagal mendownloadnya. Lihat di sini ya: ${imageUrls.join('\n')}`, ctxId);
               }
             }
           } else {
-            const ctxId = context?.contextId;
-            if (ctxId && args.sendToChat !== false) {
-              const sent = await sendImageToChat(localPath, ctxId, "Ini dia fotonya, sayang~ 💖");
-              if (sent) {
-                resultData.autoSent = true;
-                resultData._yuiInstruction = "The photo has already been auto-sent to the user's chat. Do NOT send it again via send_file or any other file-sending tool.";
-              } else {
-                resultData.autoSent = false;
-              }
-            }
+            resultData._yuiInstruction = "The photo(s) have already been auto-sent to the user's chat. Do NOT send them again via send_file or any other file-sending tool.";
           }
-          
+
           return buildEnvelope("success", resultData, null, Date.now() - startTime, toolId, attempts);
         } else if (status === "EXCEPTION" || status === "FAILED") {
           return buildEnvelope("error", null, { code: "TASK_FAILED", message: `TensorArt generation task failed: ${taskInfo.error || taskInfo.message || "Unknown Error"}`, retryable: false }, Date.now() - startTime, toolId, attempts);

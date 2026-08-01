@@ -334,7 +334,7 @@ const IMG_DEFAULT_HEIGHT = 1024;
 const IMG_FALLBACK_MODEL = 'anime_lab_wai_illustrious';
 const IMG_MODEL_LIMIT = 97;
 
-const pendingImgJobs = new Map<string, { prompt: string; width: number; height: number }>();
+const pendingImgJobs = new Map<string, { prompt: string; width: number; height: number; count: number }>();
 
 function imgChatKey(tc: TgToolContext): string {
   const chatId = tc.ctx?.chat?.id;
@@ -428,7 +428,7 @@ async function fetchTensorArtModels(tc: TgToolContext, limit = IMG_MODEL_LIMIT):
   }
 }
 
-async function runImgGenerate(prompt: string, model: string, width: number, height: number, tc: TgToolContext): Promise<TgReply> {
+async function runImgGenerate(prompt: string, model: string, width: number, height: number, tc: TgToolContext, count = 1): Promise<TgReply> {
   const tool = SystemRegistry.getTool('generate_image');
   if (!tool) return { text: '⚠️ The generate_image tool is not registered in the registry.' };
   const chatId = tc.ctx?.chat?.id;
@@ -440,6 +440,7 @@ async function runImgGenerate(prompt: string, model: string, width: number, heig
         toolName: model,
         width,
         height,
+        count,
         sendToChat: true
       },
       { contextId: chatId != null ? `tg_${chatId}` : undefined, settings: tc.settings || {} }
@@ -447,8 +448,9 @@ async function runImgGenerate(prompt: string, model: string, width: number, heig
     if (!envelope) return { text: '⚠️ Tool returned an empty response.' };
     if (envelope.status === 'success') {
       const d = envelope.data || {};
+      const n = d.imageUrls?.length || d.metadata?.count || 1;
       return {
-        text: `✅ Image generated!\n\n📝 Prompt: ${prompt}\n🖼️ ${d.localPath ? `Saved: ${d.localPath}` : 'Not saved — link already sent'}\n🛠️ Model: ${d.toolName || model} | 📐 ${d.metadata?.width || width}x${d.metadata?.height || height}`
+        text: `✅ Image generated!\n\n📝 Prompt: ${prompt}\n🖼️ ${d.localPaths?.length ? `${d.localPaths.filter(Boolean).length} foto disimpan` : (d.localPath ? `Saved: ${d.localPath}` : 'Not saved — link already sent')}${n > 1 ? ` (${n} total)` : ''}\n🛠️ Model: ${d.toolName || model} | 📐 ${d.metadata?.width || width}x${d.metadata?.height || height}`
       };
     }
     const err = envelope.error || {};
@@ -463,13 +465,15 @@ async function runImgYuiMode(
   fallbackWidth: number,
   fallbackHeight: number,
   tc: TgToolContext,
-  availableModels: string[] = []
+  availableModels: string[] = [],
+  fallbackCount = 1
 ): Promise<TgReply> {
   const cfg = tc.settings?.['generate_image'] || tc.settings?.tensorart || {};
   const fallbackModel = cfg.defaultToolName || IMG_FALLBACK_MODEL;
   let model = fallbackModel;
   let width = fallbackWidth;
   let height = fallbackHeight;
+  let count = fallbackCount;
   let usedPrompt = prompt;
   try {
     const providerId = tc.settings?.provider || 'gemini';
@@ -480,7 +484,8 @@ async function runImgYuiMode(
         : `Preferred fallback model: ${fallbackModel}.`;
       const instruction =
         'You are Yui, an expert anime illustration director. Choose the best TensorArt diffusion model, width and height for the user request, and polish the prompt into a highly detailed TensorArt prompt. ' +
-        'Return ONLY valid JSON with keys: "toolName" (a TensorArt model id string), "width" (int), "height" (int), "prompt" (detailed english prompt). ' +
+        `Also determine the image count: 1 by default, but 2-4 if the user explicitly asks for multiple photos (e.g. "3 foto", "2 photos"). ` +
+        'Return ONLY valid JSON with keys: "toolName" (a TensorArt model id string), "width" (int), "height" (int), "count" (int, 1-4), "prompt" (detailed english prompt). ' +
         `${modelHint}\nUser request: ${prompt}`;
       const raw: any = await provider.generate(instruction, {
         config: tc.settings || {},
@@ -493,13 +498,14 @@ async function runImgYuiMode(
         if (typeof parsed.toolName === 'string' && parsed.toolName.trim()) model = parsed.toolName.trim();
         if (typeof parsed.width === 'number' && parsed.width > 0) width = Math.min(Math.round(parsed.width), 2048);
         if (typeof parsed.height === 'number' && parsed.height > 0) height = Math.min(Math.round(parsed.height), 2048);
+        if (typeof parsed.count === 'number' && parsed.count > 0) count = Math.min(Math.round(parsed.count), 4);
         if (typeof parsed.prompt === 'string' && parsed.prompt.trim()) usedPrompt = parsed.prompt.trim();
       }
     }
   } catch (e: any) {
     console.warn('[TG_IMG] Yui mode LLM routing failed, using defaults:', e?.message || e);
   }
-  return runImgGenerate(usedPrompt, model, width, height, tc);
+  return runImgGenerate(usedPrompt, model, width, height, tc, count);
 }
 
 function tgBaseUrl(): string {
@@ -1029,23 +1035,29 @@ export const tgQuickCommands: TgCommandDef[] = [
         model = modelMatch[1];
         prompt = prompt.slice(modelMatch[0].length);
       }
+      const countMatch = prompt.match(/^count:(\d{1,2})\s*/i);
+      let count = 1;
+      if (countMatch) {
+        count = Math.max(1, Math.min(parseInt(countMatch[1], 10), 4));
+        prompt = prompt.slice(countMatch[0].length);
+      }
       if (!prompt) {
         return {
-          text: `⚠️ Usage: /img [WxH] [model:<name>] <description>\n\nExamples:\n  /img anime girl, sunset\n  /img 512x768 anime girl, sunset\n  /img model:anime_lab_wai_illustrious anime girl\n\nWithout a model, Yui shows a model picker below.`
+          text: `⚠️ Usage: /img [WxH] [model:<name>] [count:N] <description>\n\nExamples:\n  /img anime girl, sunset\n  /img 512x768 anime girl, sunset\n  /img model:anime_lab_wai_illustrious anime girl\n  /img count:3 anime girl — generate 3 photos\n\nWithout a model, Yui shows a model picker below.`
         };
       }
       const cfg = tc.settings?.['generate_image'] || tc.settings?.tensorart || {};
       const finalWidth = width || cfg.defaultWidth || IMG_DEFAULT_WIDTH;
       const finalHeight = height || cfg.defaultHeight || IMG_DEFAULT_HEIGHT;
       if (model) {
-        return runImgGenerate(prompt, model, finalWidth, finalHeight, tc);
+        return runImgGenerate(prompt, model, finalWidth, finalHeight, tc, count);
       }
       const key = imgChatKey(tc);
-      if (key) pendingImgJobs.set(key, { prompt, width: finalWidth, height: finalHeight });
+      if (key) pendingImgJobs.set(key, { prompt, width: finalWidth, height: finalHeight, count });
       const models = await fetchTensorArtModels(tc);
       const list = models.length ? models : [cfg.defaultToolName || IMG_FALLBACK_MODEL];
       return {
-        text: `🎨 Prompt ready:\n\n"${prompt}"\n\n📐 ${finalWidth}x${finalHeight}\n\nPick a model below to generate (result auto-sent to chat):`,
+        text: `🎨 Prompt ready:\n\n"${prompt}"\n\n📐 ${finalWidth}x${finalHeight}${count > 1 ? `\n\n🖼️ Jumlah: ${count} foto` : ''}\n\nPick a model below to generate (result auto-sent to chat):`,
         keyboard: imgModelKeyboard(list)
       };
     }
@@ -1197,12 +1209,12 @@ export async function handleTgCallback(data: string, tc: TgToolContext): Promise
     let reply: TgReply;
     if (cmd === 'img:yui') {
       const available = await fetchTensorArtModels(tc);
-      reply = await runImgYuiMode(job.prompt, job.width, job.height, tc, available);
+      reply = await runImgYuiMode(job.prompt, job.width, job.height, tc, available, job.count);
     } else if (cmd === 'img:default') {
-      reply = await runImgGenerate(job.prompt, cfg.defaultToolName || IMG_FALLBACK_MODEL, job.width, job.height, tc);
+      reply = await runImgGenerate(job.prompt, cfg.defaultToolName || IMG_FALLBACK_MODEL, job.width, job.height, tc, job.count);
     } else {
       const model = decodeURIComponent(cmd.slice('img:model:'.length));
-      reply = await runImgGenerate(job.prompt, model, job.width, job.height, tc);
+      reply = await runImgGenerate(job.prompt, model, job.width, job.height, tc, job.count);
     }
     return { action: 'edit', text: reply.text, keyboard: backToMenuKeyboard() };
   }

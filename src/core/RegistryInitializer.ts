@@ -60,6 +60,7 @@ import { CircadianRhythmModule } from '../modules/agi/CircadianRhythmModule.js';
 import { AdaptiveLearningModule } from '../modules/agi/AdaptiveLearningModule.js';
 import { AbstractReasoningModule } from '../modules/agi/AbstractReasoningModule.js';
 import { MetacognitionReflectModule, SelfAwarenessReflectModule } from '../modules/agi/AGIReflectModules.js';
+import { DiaryModule } from '../modules/agi/DiaryModule.js';
 
 import { LocalProvider } from '../drivers/ai-providers/LocalProvider.js';
 import { GeminiProvider } from '../drivers/ai-providers/GeminiProvider.js';
@@ -108,6 +109,7 @@ import { FileWriteTool } from '../drivers/tools/write_file/index.js';
 import { DailySummaryTool } from '../drivers/tools/daily_summary/index.js';
 import { ChatLogTool } from '../drivers/tools/chat_log/index.js';
 import { TelegramQuickToolkit } from '../drivers/tools/telegram_quick_tools/index.js';
+import { DiaryTool } from '../drivers/tools/diary/index.js';
 
 let initPromise: Promise<void> | null = null;
 
@@ -457,6 +459,7 @@ export function initializeCortexModules(): Promise<void> {
         MemoryConsolidationModule, HighOrderMetacognitionModule, DreamModule, ContinuousLearningMemoryModule,
         CognitiveReflexModule, CognitiveIntegrityGuardianModule, CognitiveHeuristicsModule, CircadianRhythmModule,
         AdaptiveLearningModule, AbstractReasoningModule, MetacognitionReflectModule, SelfAwarenessReflectModule,
+        DiaryModule,
         LocalProvider, GeminiProvider, CustomProvider, AnthropicProvider, OpenAIProvider,
         OfficialChatProvider, OpenRouter, OfficialSpeechTTS, ElevenLabsTTS, WebSpeechTTS,
         OpenRouterTTS, OfficialStreamingSpeechTTS, CustomAPITTS, GeminiTTS,
@@ -469,6 +472,7 @@ export function initializeCortexModules(): Promise<void> {
         DailySummaryTool,
         ChatLogTool,
         TelegramQuickToolkit,
+        DiaryTool,
         SendFinalReplyTool, SendStatusUpdateTool
       ];
 

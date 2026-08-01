@@ -71,6 +71,11 @@
         "type": "boolean",
         "description": "Whether to auto-send the generated image directly to the user's chat when the download succeeds. Defaults to true in chat contexts (tg_/dc_). Set to false to return the local path only.",
         "default": true
+      },
+      "count": {
+        "type": "integer",
+        "description": "Number of images to generate in this call (1-4, default 1). Use 2-4 only when the user explicitly asks for multiple photos.",
+        "default": 1
       }
     },
     "required": ["prompt"]

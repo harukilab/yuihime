@@ -1,6 +1,21 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.187] - 2026-08-01
+### Feature: Diary Rahasia Pribadi Yui
+- Tool 'diary' baru (src/drivers/tools/diary/): action write/read/list, satu entri per tanggal (YYYY-MM-DD), kolom mood, tersimpan di tabel 'diary' database lokal.
+- Tabel 'diary' (date, content, mood, created_at) ditambahkan ke setupSchema database.ts.
+- DiaryModule (src/modules/agi/DiaryModule.ts): menulis entri diary otomatis setiap siklus tidur/dream (atau trigger WRITE_DIARY), merangkum memori hari itu lewat context.think, prompt template bisa dikonfigurasi.
+- Diary bersifat PRIBADI & RAHASIA: isi tidak diekspos via API publik dan instruksi model melarang mengutipnya verbatim di chat.
+
+
+## [4.186] - 2026-08-01
+### Feature: Dukungan multi-foto (count 1-4) di generate_image & /img
+- Tool generate_image kini menerima arg count (1-4), mengumpulkan SEMUA URL output FINISH, mendownload semua ke ~/.yuihime/user_data/images/tensorart_{jobId}_{i}.png, dan mengirim setiap foto ke chat.
+- /img dukung sintaks 'count:N' (contoh /img count:3 dildo); Yui Mode bisa deteksi permintaan '3 foto' dari bahasa natural.
+- Update manifest tool + reply text menampilkan jumlah foto.
+
+
 ## [4.185] - 2026-08-01
 ### Fix: Tampilkan semua model TensorArt di picker /img (limit 20 ke 97)
 - Naikkan IMG_MODEL_LIMIT di telegram_quick_tools dari 20 ke 97 (batas maksimal tombol Telegram 100 dikurangi 3 tombol kontrol) agar semua model txt2img muncul di model picker /img.
