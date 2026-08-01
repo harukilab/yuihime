@@ -1,6 +1,11 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.185] - 2026-08-01
+### Fix: Tampilkan semua model TensorArt di picker /img (limit 20 ke 97)
+- Naikkan IMG_MODEL_LIMIT di telegram_quick_tools dari 20 ke 97 (batas maksimal tombol Telegram 100 dikurangi 3 tombol kontrol) agar semua model txt2img muncul di model picker /img.
+
+
 ## [4.184] - 2026-08-01
 ### Chore: Bersihkan repo: hapus yui_tests/ & file usang, pindah DOCS_SOCKET.md, ignore .yuihime
 - Hapus yui_tests/ (suite tes usang), sync_prompts.sh, docs/archive/AGENTS.md, session-ses_04eb.md.

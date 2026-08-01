@@ -332,7 +332,7 @@ const TOOLS_MAX_REPLY = 3000;
 const IMG_DEFAULT_WIDTH = 1024;
 const IMG_DEFAULT_HEIGHT = 1024;
 const IMG_FALLBACK_MODEL = 'anime_lab_wai_illustrious';
-const IMG_MODEL_LIMIT = 20;
+const IMG_MODEL_LIMIT = 97;
 
 const pendingImgJobs = new Map<string, { prompt: string; width: number; height: number }>();
 
