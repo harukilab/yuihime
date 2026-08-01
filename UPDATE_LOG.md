@@ -1,6 +1,13 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.183] - 2026-08-01
+### Fix: Script install/boot/CLI executable langsung (tanpa prefix bash)
+- chmod +x scripts/install.sh, scripts/boot.sh, tools/yuihime, tools/yui-*.sh (normalisasi 755) — kini bisa dijalankan langsung: ./scripts/install.sh --copy atau ./tools/yuihime version, tanpa 'bash'.
+- Mode 755 juga memastikan file executable untuk pengguna lain saat copy-install ke /opt/yuihime (instal sudo) dan untuk UserLAnd startup command.
+- Diverifikasi: ./scripts/install.sh --help, ./tools/yuihime version, ./tools/yui-boot.sh --resolve berjalan langsung; daemon tetap sehat.
+
+
 ## [4.182] - 2026-08-01
 ### Fix: Instal ala npm: install.sh --copy ke folder aman (/opt/yuihime atau ~/.local/share/yuihime)
 - install.sh mode --copy: salin proyek (tanpa node_modules/.git/dist) ke PREFIX, lalu npm install + npm run build di sana; symlink tools/yuihime ke bindir. Default: global=/opt/yuihime (sudo), user=~/.local/share/yuihime; override --prefix DIR.
