@@ -99,3 +99,5 @@ Peta struktur direktori pasca-pemisahan Web UI ↔ Daemon (lihat UPDATE_LOG `[4.
 - `otome/llm.ts — nebeng ProviderGatewayModule pool sistem.`
 - `otome/scenarios.ts — intimate_night_1/_2; otome/cli.ts — queue + scene terminal.`
 - `otome`
+- `otome`
+- `otome`

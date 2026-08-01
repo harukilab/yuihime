@@ -1,6 +1,20 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.193] - 2026-08-01
+### Fix: Download foto pakai curl + retry background
+- ganti downloadImage fetch -> curl (-sS -fL --retry 5 --retry-all-errors --connect-timeout 15 --max-time); download semua gambar paralel (Promise.all) tanpa blok
+- fallback ke fetch bila curl gagal; file PNG valid 1.5MB
+
+
+## [4.192] - 2026-08-01
+### Fix: Fix TensorArt key & schema list_tools
+- copy key ke ~/.yuihime/tensor_access_key; getAccessKey() export + fallback ~/.yuihime/tensor_access_key -> ~/.tensor_access_key
+- listTools() baca schema nested (data.data.tools) - return 22 tools valid
+- verified live: generateImages anime_lab_wai_illustrious sukses (PNG 1.6MB ke ~/.yuihime/otome_images)
+- tg_bot pakai getAccessKey() (await main), /foto tidak lagi blokir saat key di file
+
+
 ## [4.191] - 2026-08-01
 ### Fix: TG bot game otome terisolasi
 - clone pola telegram daemon (IPv4 agent, long polling, graceful shutdown); perintah /start /new /status /help /foto

@@ -5,7 +5,7 @@ import os from 'os';
 import fs from 'fs';
 import { OtomeGame, affectionLevel, petNameFor } from './engine.js';
 import { yuiReaction, pickImageParams, llmAvailable } from './llm.js';
-import { generateImages, listTools, loadOtomeConfig } from './tensorart.js';
+import { generateImages, getAccessKey, listTools, loadOtomeConfig } from './tensorart.js';
 
 const SAVE_DIR = path.join(os.homedir(), '.yuihime', 'otome_saves');
 
@@ -88,7 +88,7 @@ function helpText(): string {
   ].join('\n');
 }
 
-function main(): void {
+async function main(): Promise<void> {
   loadEnv();
   const cfg = loadOtomeConfig();
   if (!cfg.botToken) {
@@ -101,7 +101,8 @@ function main(): void {
   }
 
   const llmOn = process.env.YUIHIME_OTOME_LLM === '0' ? false : llmAvailable();
-  console.log(`[OTOME-TG] LLM: ${llmOn ? 'AKTIF' : 'mati'}. TensorArt key: ${cfg.tensorartApiKey ? 'ada' : 'TIDAK ADA (foto dinonaktifkan)'}`);
+  const tensorKey = await getAccessKey();
+  console.log(`[OTOME-TG] LLM: ${llmOn ? 'AKTIF' : 'mati'}. TensorArt key: ${tensorKey ? 'ada' : 'TIDAK ADA (foto dinonaktifkan)'}`);
 
   const ipv4Agent = new https.Agent({ family: 4, keepAlive: true, keepAliveMsecs: 10000 });
   const bot = new Telegraf(cfg.botToken, { telegram: { agent: ipv4Agent } } as any);
@@ -143,15 +144,14 @@ function main(): void {
     if (!prompt) {
       return ctx.reply('Contoh: /foto Yui berdiri di taman bunga sakura, senyum, anime style, 1girl, high quality');
     }
-    if (!cfg.tensorartApiKey) {
-      return ctx.reply('⚠️ TensorArt API key belum diatur. Isi tensorartApiKey di ~/.yuihime/otome_tg_config.json lalu restart bot.');
+    if (!tensorKey) {
+      return ctx.reply('⚠️ TensorArt API key belum diatur. Isi tensorartApiKey di ~/.yuihime/otome_tg_config.json atau salin key ke ~/.yuihime/tensor_access_key lalu restart bot.');
     }
     const statusMsg = await ctx.reply('✨ Yui lagi bikin foto... sebentar ya~');
 
     let params: { toolName: string; width: number; height: number; prompt: string };
     try {
-      const accessKey = cfg.tensorartApiKey || process.env.TENSORART_API_KEY || '';
-      const models = await listTools(accessKey, 8000).then(ts => {
+      const models = await listTools(tensorKey, 8000).then(ts => {
         const names = new Set<string>();
         for (const t of ts) {
           const n = String(t?.name || t?.tool_id || t?.toolId || '').trim();
@@ -266,4 +266,7 @@ function main(): void {
   console.log('[OTOME-TG] Bot berjalan (polling).');
 }
 
-main();
+main().catch((e) => {
+  console.error('[OTOME-TG] Fatal:', e?.message || e);
+  process.exit(1);
+});

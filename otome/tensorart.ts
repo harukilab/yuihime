@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { execFile } from 'child_process';
 
 export interface GenerateImageOpts {
   prompt: string;
@@ -57,13 +58,17 @@ function appendLog(entry: any): void {
   } catch { /* non-blocking */ }
 }
 
-async function getAccessKey(): Promise<string> {
+export async function getAccessKey(): Promise<string> {
   const cfg = loadOtomeConfig();
-  let fromFile = '';
-  try {
-    fromFile = fs.readFileSync(path.join(os.homedir(), '.tensor_access_key'), 'utf8').trim();
-  } catch { fromFile = ''; }
-  return cfg.tensorartApiKey || process.env.TENSORART_API_KEY || fromFile || '';
+  const readFile = (p: string): string => {
+    try {
+      const v = fs.readFileSync(p, 'utf8').trim();
+      return v || '';
+    } catch { return ''; }
+  };
+  const fromYuihime = readFile(path.join(os.homedir(), '.yuihime', 'tensor_access_key'));
+  const fromHome = readFile(path.join(os.homedir(), '.tensor_access_key'));
+  return cfg.tensorartApiKey || process.env.TENSORART_API_KEY || fromYuihime || fromHome || '';
 }
 
 function getBaseUrl(accessKey: string): string {
@@ -118,7 +123,7 @@ export async function listTools(accessKey: string, timeoutMs = 12000): Promise<a
   try {
     const baseUrl = getBaseUrl(accessKey);
     const data = await apiPost(baseUrl, accessKey, 'tool/list', {}, { timeoutMs, retryLimit: 1 });
-    const list = (Array.isArray(data) ? data : data?.tools || data?.tool_list || data?.list) || [];
+    const list = (Array.isArray(data) ? data : data?.tools || data?.list || data?.data?.tools || data?.data?.tool_list || data?.data?.list) || [];
     toolSchemaCache = { ts: Date.now(), tools: list };
     return list;
   } catch {
@@ -164,6 +169,24 @@ async function downloadImage(url: string, timeoutMs = 20000): Promise<Buffer> {
   const res = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
   if (!res.ok) throw new Error(`Image download HTTP ${res.status}`);
   return Buffer.from(await res.arrayBuffer());
+}
+
+function curlDownload(url: string, outPath: string, timeoutMs = 60000): Promise<void> {
+  return new Promise((resolve, reject) => {
+    execFile('curl', [
+      '-sS', '-fL',
+      '--retry', '5',
+      '--retry-delay', '2',
+      '--retry-all-errors',
+      '--connect-timeout', '15',
+      '--max-time', String(Math.max(30, Math.floor(timeoutMs / 1000))),
+      '-o', outPath,
+      url
+    ], { timeout: timeoutMs + 15000 }, (err) => {
+      if (err) reject(err);
+      else resolve();
+    });
+  });
 }
 
 export async function generateImages(opts: GenerateImageOpts): Promise<GenerateImageResult> {
@@ -237,23 +260,24 @@ export async function generateImages(opts: GenerateImageOpts): Promise<GenerateI
         }
 
         opts.onProgress?.(`Task selesai! ${imageUrls.length} gambar. Mendownload...`);
-        const localPaths: (string | null)[] = [];
-        for (let i = 0; i < imageUrls.length; i++) {
-          let localPath: string | null = null;
-          for (let dl = 0; dl < 3; dl++) {
+        const localPaths: (string | null)[] = await Promise.all(
+          imageUrls.map(async (url, i) => {
+            const ext = path.extname(new URL(url).pathname) || '.png';
+            const out = path.join(imageOutputDir(), `otome_${jobId}_${i + 1}${ext}`);
             try {
-              const buffer = await downloadImage(imageUrls[i], requestTimeoutMs);
-              const ext = path.extname(new URL(imageUrls[i]).pathname) || '.png';
-              const out = path.join(imageOutputDir(), `otome_${jobId}_${i + 1}${ext}`);
-              fs.writeFileSync(out, buffer);
-              localPath = out;
-              break;
+              await curlDownload(url, out, requestTimeoutMs * 3);
+              return out;
             } catch {
-              if (dl < 2) await new Promise(r => setTimeout(r, 2000 * (dl + 1)));
+              try {
+                const buffer = await downloadImage(url, requestTimeoutMs);
+                fs.writeFileSync(out, buffer);
+                return out;
+              } catch {
+                return null;
+              }
             }
-          }
-          localPaths.push(localPath);
-        }
+          })
+        );
 
         appendLog({ event: 'generate', prompt: opts.prompt, model: toolName, jobId, width, height, count: imageUrls.length });
         return { status: 'success', imageUrls, localPaths, jobId, toolName, width, height };
