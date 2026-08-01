@@ -303,6 +303,67 @@ async function sendImageToChat(imagePath: string, contextId?: string, caption?: 
   return false;
 }
 
+const TOOL_SCHEMA_CACHE_TTL = 10 * 60 * 1000;
+let toolSchemaCache: { ts: number; tools: any[] } | null = null;
+
+async function fetchToolSchemas(baseUrl: string, apiKey: string, timeoutMs = 12000): Promise<any[]> {
+  if (toolSchemaCache && Date.now() - toolSchemaCache.ts < TOOL_SCHEMA_CACHE_TTL) {
+    return toolSchemaCache.tools;
+  }
+  try {
+    const data = await apiPost(baseUrl, apiKey, "tool/list", {}, { timeoutMs, retryLimit: 1 });
+    const list = (Array.isArray(data) ? data : data?.tools || data?.tool_list || data?.list) || [];
+    toolSchemaCache = { ts: Date.now(), tools: list };
+    return list;
+  } catch {
+    return toolSchemaCache?.tools || [];
+  }
+}
+
+function simplifyRatio(w: number, h: number): string {
+  if (!w || !h) return "1:1";
+  let a = Math.round(w);
+  let b = Math.round(h);
+  let x = a;
+  let y = b;
+  while (y) { const t = x % y; x = y; y = t; }
+  a /= x;
+  b /= x;
+  if (a > 24 || b > 24) return "auto";
+  return `${a}:${b}`;
+}
+
+function pickImageSize(width: number, height: number): string {
+  const maxDim = Math.max(width || 1024, height || 1024);
+  if (maxDim > 2048) return "4K";
+  if (maxDim > 1024) return "2K";
+  return "1K";
+}
+
+function buildToolInputs(tools: any[], toolName: string, prompt: string, width: number, height: number, count: number): any[] | null {
+  const tool = (tools || []).find((t: any) => String(t?.name || t?.tool_id || t?.toolId) === toolName);
+  if (!tool || !Array.isArray(tool.inputs) || tool.inputs.length === 0) return null;
+  const inputs: any[] = [];
+  for (const field of tool.inputs) {
+    const desc = String(field?.description || "").toLowerCase();
+    const type = String(field?.type || "").toUpperCase();
+    if (type === "STRING" && /prompt/.test(desc)) {
+      inputs.push({ type: "STRING", value: prompt });
+    } else if (type === "INTEGER" && /width/.test(desc)) {
+      inputs.push({ type: "INTEGER", value: width });
+    } else if (type === "INTEGER" && /height/.test(desc)) {
+      inputs.push({ type: "INTEGER", value: height });
+    } else if (type === "INTEGER" && /count/.test(desc)) {
+      inputs.push({ type: "INTEGER", value: count });
+    } else if (type === "STRING" && /image size/.test(desc)) {
+      inputs.push({ type: "STRING", value: pickImageSize(width, height) });
+    } else if (type === "STRING" && /aspect ratio/.test(desc)) {
+      inputs.push({ type: "STRING", value: simplifyRatio(width, height) });
+    }
+  }
+  return inputs.length > 0 ? inputs : null;
+}
+
 function buildEnvelope(status: string, data: any, error: any, durationMs: number, toolId: string, attempt: number) {
   return {
     status,
@@ -387,8 +448,12 @@ export const TensorArtGenerateTool: ToolModule = {
 
     if (action === "list_tools") {
       try {
-        const data = await apiPost(baseUrl, apiKey, "tool/list", {}, { timeoutMs: cfg.requestTimeoutMs, retryLimit: cfg.retryLimit });
-        return buildEnvelope("success", data, null, Date.now() - startTime, toolId, 0);
+        const listTimeout = args.timeoutMs || Math.min(cfg.requestTimeoutMs || 20000, 12000);
+        const raw = await apiPost(baseUrl, apiKey, "tool/list", {}, { timeoutMs: listTimeout, retryLimit: cfg.retryLimit });
+        const payload = raw?.data || raw;
+        const tools = (Array.isArray(payload) ? payload : payload?.tools || payload?.tool_list || payload?.list) || [];
+        toolSchemaCache = { ts: Date.now(), tools };
+        return buildEnvelope("success", payload, null, Date.now() - startTime, toolId, 0);
       } catch (err: any) {
         return buildEnvelope("error", null, { code: "LIST_TOOLS_FAILED", message: err.message, retryable: isRetryable(err) }, Date.now() - startTime, toolId, 0);
       }
@@ -421,7 +486,7 @@ export const TensorArtGenerateTool: ToolModule = {
     const requestTimeoutMs = cfg.requestTimeoutMs || 20000;
     const retryLimit = args.retryLimit ?? cfg.retryLimit ?? 0;
 
-    const inputs = args.inputs || [
+    const inputs = args.inputs || buildToolInputs(toolSchemaCache?.tools || [], toolName, prompt, width, height, count) || [
       { type: "STRING", value: prompt },
       { type: "INTEGER", value: width },
       { type: "INTEGER", value: height },

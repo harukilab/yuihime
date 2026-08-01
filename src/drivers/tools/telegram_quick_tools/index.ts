@@ -364,14 +364,19 @@ interface TensorArtToolInfo {
   tool_id?: string;
   toolId?: string;
   taskType?: string;
+  description?: string;
   inputs?: { type?: string; description?: string }[];
 }
 
 function isTextToImageTool(t: TensorArtToolInfo): boolean {
   const inputs = Array.isArray(t.inputs) ? t.inputs : [];
-  const hasString = inputs.some(i => i?.type === 'STRING' && /prompt/i.test(String(i?.description || '')));
+  const hasPrompt = inputs.some(i => i?.type === 'STRING' && /prompt/i.test(String(i?.description || '')));
   const hasWidth = inputs.some(i => i?.type === 'INTEGER' && /width/i.test(String(i?.description || '')));
-  return hasString && hasWidth;
+  const hasSize = inputs.some(i => i?.type === 'STRING' && /image size|aspect ratio|width|height/i.test(String(i?.description || '')));
+  const isVideo = /video/i.test(String(t.description || ''));
+  const isEdit = /edit/i.test(String(t.description || '')) || /editing prompt/i.test(String(inputs.map(i => i?.description || '').join(' ')));
+  const needsFile = inputs.some(i => i?.type === 'FILE');
+  return !isVideo && !isEdit && !needsFile && hasPrompt && (hasWidth || hasSize);
 }
 
 /**
@@ -384,7 +389,7 @@ async function fetchTensorArtModels(tc: TgToolContext, limit = IMG_MODEL_LIMIT):
   if (!tool) return [];
   try {
     const envelope: any = await tool.execute(
-      { action: 'list_tools' },
+      { action: 'list_tools', timeoutMs: 8000 },
       { settings: tc.settings || {} }
     );
     if (envelope?.status !== 'success') return [];

@@ -1,6 +1,14 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.172] - 2026-08-01
+### Fix: Fix model picker /img: unwrap payload list_tools + schema-aware generate
+- list_tools kini mengembalikan payload.data.tools (bukan bungkus {code,data}) sehingga filter ketat text-to-image benar-benar aktif; fallback walker tidak lagi mengambil tool non-gambar (upscaler/video).
+- Filter isTextToImageTool diperluas: sertakan strong_text2image_wan27 & strong_text2image_nano_banana2 (input STRING size/ratio), kecualikan video/edit/tool butuh FILE; kini 5 model asli muncul di inline keyboard.
+- Generate schema-aware: buildToolInputs memetakan prompt/width/height/count ke skema asli tiap tool (INTEGER width/height atau STRING target image size/aspect ratio) dengan cache toolSchemaCache 10 menit.
+- fetchTensorArtModels memakai timeout 8s sehingga keyboard muncul cepat walau CDN lambat.
+
+
 ## [4.171] - 2026-08-01
 ### Feature: Toolkit Telegram English + daftar model TensorArt live
 - Semua teks user-facing di Telegram Quick Toolkit kini Bahasa Inggris (menu, tombol, help /tools /bash /img, pesan error, deskripsi command); versi manifest 1.3.0.
