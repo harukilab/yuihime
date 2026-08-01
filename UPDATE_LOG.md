@@ -1,6 +1,13 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.184] - 2026-08-01
+### Chore: Bersihkan repo: hapus yui_tests/ & file usang, pindah DOCS_SOCKET.md, ignore .yuihime
+- Hapus yui_tests/ (suite tes usang), sync_prompts.sh, docs/archive/AGENTS.md, session-ses_04eb.md.
+- Pindahkan DOCS_SOCKET.md ke docs/.
+- Git-ignore direktori runtime .yuihime.
+
+
 ## [4.183] - 2026-08-01
 ### Fix: Script install/boot/CLI executable langsung (tanpa prefix bash)
 - chmod +x scripts/install.sh, scripts/boot.sh, tools/yuihime, tools/yui-*.sh (normalisasi 755) — kini bisa dijalankan langsung: ./scripts/install.sh --copy atau ./tools/yuihime version, tanpa 'bash'.

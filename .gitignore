@@ -11,6 +11,7 @@ coverage/
 !**/config.toml
 
 # Ignore local runtime data directory (generated/synced at runtime)
+.yuihime
 
 # Ignore generated build manifest (artifact, not source of truth)
 src/share/prompts/build-info.json
