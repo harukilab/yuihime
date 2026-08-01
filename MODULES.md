@@ -102,3 +102,4 @@ Peta struktur direktori pasca-pemisahan Web UI ↔ Daemon (lihat UPDATE_LOG `[4.
 - `otome`
 - `otome`
 - `otome`
+- `otome`

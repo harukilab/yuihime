@@ -1,6 +1,11 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.195] - 2026-08-01
+### Fix: Dokumentasi otome/README.md
+- catatan langkah terakhir (4.191-4.194), setup config, cara jalankan, alur telegram, lokasi data, catatan keamanan token
+
+
 ## [4.194] - 2026-08-01
 ### Fix: Tombol "Foto adegan ini" per scene
 - keyboard tiap scene + tombol otome_foto (hanya jika key TensorArt ada); prompt auto dari scene.id + text + petName + afeksi + flags
