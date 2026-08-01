@@ -188,3 +188,29 @@ export function llmAvailable(): boolean {
   if (ensurePool()) return true;
   return Boolean(process.env.OPENROUTER_API_KEY || process.env.GEMINI_API_KEY);
 }
+
+export async function pickImageParams(request: string, availableModels: string[]): Promise<{ toolName: string; width: number; height: number; prompt: string } | null> {
+  const modelHint = availableModels.length
+    ? `Available TensorArt models: ${availableModels.join(', ')}. Pick the best one from this list.`
+    : 'Preferred default model: anime_lab_wai_illustrious.';
+  const instruction =
+    'You are Yui, an expert anime illustration director. Choose the best TensorArt diffusion model, width and height for the user request, and polish the prompt into a highly detailed TensorArt prompt. ' +
+    `Also determine the image count: 1 by default, but 2-4 if the user explicitly asks for multiple photos. ` +
+    'Return ONLY valid JSON with keys: "toolName" (a TensorArt model id string), "width" (int), "height" (int), "count" (int, 1-4), "prompt" (detailed english prompt). ' +
+    `${modelHint}\nUser request: ${request}`;
+  const result = await viaSystemPool(instruction, 'You are Yui, image director. Output JSON only.');
+  if (!result) return null;
+  try {
+    const m = result.match(/\{[\s\S]*\}/);
+    if (!m) return null;
+    const parsed = JSON.parse(m[0]);
+    return {
+      toolName: typeof parsed.toolName === 'string' && parsed.toolName.trim() ? parsed.toolName.trim() : 'anime_lab_wai_illustrious',
+      width: typeof parsed.width === 'number' && parsed.width > 0 ? Math.min(Math.round(parsed.width), 2048) : 1024,
+      height: typeof parsed.height === 'number' && parsed.height > 0 ? Math.min(Math.round(parsed.height), 2048) : 1024,
+      prompt: typeof parsed.prompt === 'string' && parsed.prompt.trim() ? parsed.prompt.trim() : request
+    };
+  } catch {
+    return null;
+  }
+}

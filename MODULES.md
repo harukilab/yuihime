@@ -98,3 +98,4 @@ Peta struktur direktori pasca-pemisahan Web UI ↔ Daemon (lihat UPDATE_LOG `[4.
 - `otome/cli.ts — CLI Otome; otome/engine.ts — state machine; otome/scenarios.ts — scene graph; otome/llm.ts — hybrid LLM; otome/character.ts — profil Yui.`
 - `otome/llm.ts — nebeng ProviderGatewayModule pool sistem.`
 - `otome/scenarios.ts — intimate_night_1/_2; otome/cli.ts — queue + scene terminal.`
+- `otome`

@@ -1,6 +1,13 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.191] - 2026-08-01
+### Fix: TG bot game otome terisolasi
+- clone pola telegram daemon (IPv4 agent, long polling, graceful shutdown); perintah /start /new /status /help /foto
+- scene render + inline keyboard + callback otome:<idx>; save per user di ~/.yuihime/otome_saves; akses dibatasi ownerId
+- /foto: pickImageParams (LLM pilih model TensorArt + polish prompt) lalu generateImages + kirim foto; live reaction via pool saat callback
+
+
 ## [4.190] - 2026-08-01
 ### Feature: Otome: adegan seks eksplisit + fix serialisasi input
 - Jalur intim kini eksplisit 2 stage: intimate_night_1 (foreplay/penelusuran tubuh, opsi mundur tetap ada) lalu intimate_night_2 (hubungan seksual eksplisit, saling menyenangkan, klimaks, aftercare).
