@@ -49,15 +49,21 @@ function yesterdayKey(): string {
  * - Log & ringkasan dipertahankan 7 hari berdasarkan tanggal lalu dibersihkan.
  */
 export class ChatSummaryEngine {
-  private static instance: ChatSummaryEngine | null = null;
-  private db: any = null;
-  private cortex: Cortex | null = null;
-  private buffer: BufferedMessage[] = [];
-  private idleTimer: ReturnType<typeof setTimeout> | null = null;
-  private isIdleSummaryRunning = false;
-  private lastDailyDate = "";
-  private pendingDailyDates: string[] = [];
-  private logDir = "";
+   private static instance: ChatSummaryEngine | null = null;
+   private db: any = null;
+   private cortex: Cortex | null = null;
+   private buffer: BufferedMessage[] = [];
+   private idleTimer: ReturnType<typeof setTimeout> | null = null;
+   private isIdleSummaryRunning = false;
+   private lastDailyDate = "";
+   private pendingDailyDates: string[] = [];
+   private logDir = "";
+    private stmtGetDailySummary: any = null;
+    private stmtInsertIdleSummary: any = null;
+    private stmtUpsertDailySummary: any = null;
+    private stmtDeleteOldDailySummaries: any = null;
+    private stmtGetAllDailySummaryIds: any = null;
+    private stmtGetLatestDailySummaryTimestamp: any = null;
 
   private constructor() {}
 
@@ -68,32 +74,45 @@ export class ChatSummaryEngine {
     return this.instance;
   }
 
-  public setDatabase(db: any) {
-    this.db = db;
-    try {
-      const dir = path.dirname(dbPath);
-      this.logDir = path.join(dir, "chat_logs");
-      mkdirSync(this.logDir, { recursive: true });
-    } catch (e: any) {
-      console.warn("[CHAT_SUMMARY] Failed to prepare chat log directory:", e?.message || e);
-    }
+   public setDatabase(db: any) {
+     this.db = db;
+     try {
+       const dir = path.dirname(dbPath);
+       this.logDir = path.join(dir, "chat_logs");
+       mkdirSync(this.logDir, { recursive: true });
+     } catch (e: any) {
+       console.warn("[CHAT_SUMMARY] Failed to prepare chat log directory:", e?.message || e);
+     }
 
-    try {
-      const row = this.db?.prepare("SELECT timestamp FROM memories WHERE type = 'daily_summary' AND timestamp >= ? ORDER BY timestamp DESC LIMIT 1").get(new Date(`${toDateKey(new Date())}T00:00:00`).getTime());
-      if (row && row.timestamp) {
-        this.lastDailyDate = toDateKey(new Date(row.timestamp));
-      }
-    } catch {}
+     this.stmtGetDailySummary = this.db.prepare("SELECT id FROM memories WHERE id = ?");
+     this.stmtInsertIdleSummary = this.db.prepare(`
+       INSERT INTO memories (id, type, content, importance, speaker, context, timestamp, tags, sentiment)
+       VALUES (?, 'event_group', ?, 0.7, 'subconscious', 'live_stream', ?, '["summary", "viewer_vibe"]', 0.5)
+     `);
+     this.stmtUpsertDailySummary = this.db.prepare(`
+       INSERT OR REPLACE INTO memories (id, type, content, importance, speaker, context, timestamp, tags, sentiment, meta)
+       VALUES (?, 'daily_summary', ?, 0.95, 'system', 'daily_summary', ?, '["daily", "summary"]', 0.6, ?)
+     `);
+      this.stmtDeleteOldDailySummaries = this.db.prepare("DELETE FROM memories WHERE type = 'daily_summary' AND timestamp < ?");
+      this.stmtGetAllDailySummaryIds = this.db.prepare("SELECT id FROM memories WHERE type = 'daily_summary'");
+      this.stmtGetLatestDailySummaryTimestamp = this.db.prepare("SELECT timestamp FROM memories WHERE type = 'daily_summary' AND timestamp >= ? ORDER BY timestamp DESC LIMIT 1");
 
-    if (!this.lastDailyDate) {
-      this.lastDailyDate = toDateKey(new Date());
-    }
+      try {
+        const row = this.stmtGetLatestDailySummaryTimestamp.get(new Date(`${toDateKey(new Date())}T00:00:00`).getTime());
+       if (row && row.timestamp) {
+         this.lastDailyDate = toDateKey(new Date(row.timestamp));
+       }
+     } catch {}
 
-    this.scanPendingDailySummaries();
-    this.startDailyScheduler();
-    this.runCleanup();
-    console.log(`[CHAT_SUMMARY] ChatSummaryEngine ready. Log dir: ${this.logDir} | idle gap: ${IDLE_TIMEOUT_MS / 1000}s | min idle msgs: ${MIN_IDLE_SUMMARY_MESSAGES} | retention: ${RETENTION_DAYS}d`);
-  }
+     if (!this.lastDailyDate) {
+       this.lastDailyDate = toDateKey(new Date());
+     }
+
+     this.scanPendingDailySummaries();
+     this.startDailyScheduler();
+     this.runCleanup();
+     console.log(`[CHAT_SUMMARY] ChatSummaryEngine ready. Log dir: ${this.logDir} | idle gap: ${IDLE_TIMEOUT_MS / 1000}s | min idle msgs: ${MIN_IDLE_SUMMARY_MESSAGES} | retention: ${RETENTION_DAYS}d`);
+   }
 
   /**
    * Dipanggil untuk setiap pesan masuk. Mencatat ke log harian, menambah buffer,
@@ -240,7 +259,7 @@ Hasil rangkuman singkat subkesadaran:`.trim();
    * Saat boot: cari tanggal dalam periode retensi yang punya file log harian
    * tapi belum punya daily summary di DB → tandai sebagai pending catch-up.
    */
-  private scanPendingDailySummaries() {
+private scanPendingDailySummaries() {
     if (!this.db || !this.logDir || !existsSync(this.logDir)) return;
     this.pendingDailyDates = [];
     const today = toDateKey(new Date());
@@ -253,10 +272,10 @@ Hasil rangkuman singkat subkesadaran:`.trim();
         const fileDate = file.slice(0, 10);
         const fileTs = new Date(`${fileDate}T00:00:00`).getTime();
         if (isNaN(fileTs) || fileTs < cutoffMs || fileDate >= today) continue;
-        if (this.hasDailySummary(fileDate)) continue;
         dates.add(fileDate);
       }
-      this.pendingDailyDates = Array.from(dates).sort();
+      const existing = this.hasDailySummariesBatch(Array.from(dates));
+      this.pendingDailyDates = Array.from(dates).filter(d => !existing.has(d)).sort();
       if (this.pendingDailyDates.length > 0) {
         console.log(`[CHAT_SUMMARY_DAILY] ${this.pendingDailyDates.length} daily summary terlewat terdeteksi saat boot (${this.pendingDailyDates.join(", ")}). Akan diisi saat idle.`);
       }
@@ -265,24 +284,37 @@ Hasil rangkuman singkat subkesadaran:`.trim();
     }
   }
 
-  private hasDailySummary(dateStr: string): boolean {
-    if (!this.db) return false;
+private hasDailySummary(dateStr: string): boolean {
+    if (!this.db || !this.stmtGetDailySummary) return false;
     try {
-      return !!this.db.prepare("SELECT id FROM memories WHERE id = ?").get(`daily_summary_${dateStr}`);
+      return !!this.stmtGetDailySummary.get(`daily_summary_${dateStr}`);
     } catch {
       return false;
     }
   }
 
-  private persistIdleSummary(chunk: BufferedMessage[], summary: string) {
-    if (!this.db) return;
+  private hasDailySummariesBatch(dateStrings: string[]): Set<string> {
+    if (!this.db || !this.stmtGetAllDailySummaryIds) return new Set();
+    try {
+      const rows = this.stmtGetAllDailySummaryIds.all() as { id: string }[];
+      const existing = new Set<string>();
+      for (const row of rows) {
+        const id = row.id || "";
+        if (id.startsWith("daily_summary_")) {
+          existing.add(id.slice("daily_summary_".length));
+        }
+      }
+      return existing;
+    } catch {
+      return new Set();
+    }
+  }
+
+   private persistIdleSummary(chunk: BufferedMessage[], summary: string) {
+    if (!this.db || !this.stmtInsertIdleSummary) return;
     try {
       const memoryId = "bg_digest_" + Math.random().toString(36).substr(2, 9);
-      const stmt = this.db.prepare(`
-        INSERT INTO memories (id, type, content, importance, speaker, context, timestamp, tags, sentiment)
-        VALUES (?, 'event_group', ?, 0.7, 'subconscious', 'live_stream', ?, '["summary", "viewer_vibe"]', 0.5)
-      `);
-      stmt.run(memoryId, `[RINGKASAN OBROLAN ${toDateKey(new Date(chunk[0]?.timestamp || Date.now()))}]: ${summary}`, chunk[chunk.length - 1]?.timestamp || Date.now());
+      this.stmtInsertIdleSummary.run(memoryId, `[RINGKASAN OBROLAN ${toDateKey(new Date(chunk[0]?.timestamp || Date.now()))}]: ${summary}`, chunk[chunk.length - 1]?.timestamp || Date.now());
     } catch (dbErr) {
       console.error("[CHAT_SUMMARY_IDLE_DB_ERR] Gagal menyimpan ringkasan jeda hening ke DB:", dbErr);
     }
@@ -346,15 +378,12 @@ Ringkasan harian:`.trim();
     }
   }
 
-  private persistDailySummary(targetDate: string, summary: string) {
-    if (!this.db) return;
+private persistDailySummary(targetDate: string, summary: string) {
+    if (!this.db || !this.stmtUpsertDailySummary) return;
     try {
       const endOfDay = new Date(`${targetDate}T23:59:59`).getTime();
       const memoryId = `daily_summary_${targetDate}`;
-      this.db.prepare(`
-        INSERT OR REPLACE INTO memories (id, type, content, importance, speaker, context, timestamp, tags, sentiment, meta)
-        VALUES (?, 'daily_summary', ?, 0.95, 'system', 'daily_summary', ?, '["daily", "summary"]', 0.6, ?)
-      `).run(memoryId, `[RINGKASAN HARIAN ${targetDate}]: ${summary}`, endOfDay, JSON.stringify({ date: targetDate }));
+      this.stmtUpsertDailySummary.run(memoryId, `[RINGKASAN HARIAN ${targetDate}]: ${summary}`, endOfDay, JSON.stringify({ date: targetDate }));
     } catch (dbErr) {
       console.error("[CHAT_SUMMARY_DAILY_DB_ERR] Gagal menyimpan daily summary ke DB:", dbErr);
     }
@@ -363,11 +392,11 @@ Ringkasan harian:`.trim();
   /**
    * Membaca daily summary yang tersimpan untuk tanggal tertentu (default: kemarin).
    */
-  public getDailySummary(dateStr?: string): { date: string; summary: string; timestamp: number } | null {
+public getDailySummary(dateStr?: string): { date: string; summary: string; timestamp: number } | null {
     const targetDate = dateStr && /^\d{4}-\d{2}-\d{2}$/.test(dateStr) ? dateStr : yesterdayKey();
-    if (!this.db) return null;
+    if (!this.db || !this.stmtGetDailySummary) return null;
     try {
-      const row = this.db.prepare("SELECT * FROM memories WHERE id = ?").get(`daily_summary_${targetDate}`);
+      const row = this.stmtGetDailySummary.get(`daily_summary_${targetDate}`);
       if (!row) return null;
       let summary = String(row.content || "");
       summary = summary.replace(/^\[RINGKASAN HARIAN [^\]]+\]:\s*/, "").trim();
@@ -445,9 +474,9 @@ Ringkasan harian:`.trim();
       console.warn("[CHAT_SUMMARY_CLEANUP_FILE_ERR]", e?.message || e);
     }
 
-    if (this.db) {
+if (this.db && this.stmtDeleteOldDailySummaries) {
       try {
-        this.db.prepare("DELETE FROM memories WHERE type = 'daily_summary' AND timestamp < ?").run(cutoffMs);
+        this.stmtDeleteOldDailySummaries.run(cutoffMs);
       } catch (e: any) {
         console.warn("[CHAT_SUMMARY_CLEANUP_DB_ERR]", e?.message || e);
       }

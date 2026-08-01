@@ -61,6 +61,11 @@
         "type": "integer",
         "description": "Max retries on transient failure.",
         "default": 0
+      },
+      "sendToChat": {
+        "type": "boolean",
+        "description": "Whether to auto-send the generated image directly to the user's chat when the download succeeds. Defaults to true in chat contexts (tg_/dc_). Set to false to return the local path only.",
+        "default": true
       }
     },
     "required": ["prompt"]

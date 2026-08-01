@@ -53,7 +53,7 @@ Peta struktur direktori pasca-pemisahan Web UI ↔ Daemon (lihat UPDATE_LOG `[4.
 - `web/src/ui/modular-settings/ProvidersTab.tsx — removed FLUX model size for Replicate`
 - `src/core/RegistryInitializer.ts — removed Imagen 3/FLUX/Midjourney from artistry config`
 - `docs/MISSING_TOOLS_PLAN.md — created`
-- `src/core/kernel/MultiChannelQueue.ts — Adjusted deduplication window logic`
+- `src/core/kernel/MultiChannelQueue.ts — Adjusted deduplication window logic; cached 13 prepared statements to reduce DB connections`
 - `src/drivers/tools/tensorart_generate/index.ts — Cleaned auto-send caption`
 - `src/core/server/routes/toolsRouter.ts — Enhanced JavaScript code execution route`
 - `src/core/PromptRegistry.ts — Enhanced autonomous profile memory prompt`
@@ -84,6 +84,6 @@ Peta struktur direktori pasca-pemisahan Web UI ↔ Daemon (lihat UPDATE_LOG `[4.
 - `core:kernel`
 - `core:kernel,core:server`
 - `src/core/database.ts — add logDbRetry for file-based DB retry logging`
-- `src/core/kernel/ChatSummaryEngine.ts — Chat Summary Engine (idle-gap + daily summary; daily chat log file; 7-day retention).`
+- `src/core/kernel/ChatSummaryEngine.ts — Chat Summary Engine (idle-gap + daily summary; daily chat log file; 7-day retention). Cached 6 prepared statements and batch query for daily summaries to reduce DB connections.`
 - `src/core/fileLogger.ts — Rotated & retention file logger (per-category daily rotation, 7-day retention).`
 - `src/drivers/tools/chat_log/ — Chat Log tool (raw daily chat log reader).`

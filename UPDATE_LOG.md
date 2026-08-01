@@ -1,6 +1,65 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.159] - 2026-08-01
+### Fix: freeze total proot — migrasi FTS5 external-content (hapus trigger per-row)
+- ROOT CAUSE TERKONFIRMASI: churn write per-row ke FTS5 (trigger trg_memories_ai/au/ad pada INSERT/UPDATE/DELETE memories) memicu freeze native di pager (pcache1FetchStage2 / __libc_pread). Repro mandiri: 400 iterasi churn -> beku; FTS trigger OFF -> selesai tanpa hang; mmap hanya menunda.
+- database.ts: memories_fts -> FTS5 external-content (content='memories', content_rowid='rowid'); hapus semua trigger per-row. Migrasi otomatis startup: deteksi tabel contentful -> drop trigger, rename legacy, rebuild 1 transaksi, drop legacy.
+- database.ts: +syncFtsIndex(db) (rebuild satu transaksi) + startFtsSyncScheduler (interval 30 menit) — index disegarkan berkala, bukan per-write.
+- memorySearch.ts: join FTS5 diubah ke m.rowid = fts.rowid (skema external-content).
+- Verifikasi: rebuild 212600 baris 2.2s, search 1ms, integrity ok, 0 trigger tersisa, insert/update/delete real-time, daemon tetap sehat. Stress 400 iterasi schema termigrasi: no freeze.
+- Tools: +flag --help & portabilitas — demo_server.py (--host/--port), dream.py (--port/--url/--token), full_scan_db_prepare.py (--root/--ext, ROOT hardcoded dihapus), yui_tests/stress_db.cjs (--help/-h, --iter/--db, mode --fresh & --copy).
+
+## [4.158] - 2026-08-01
+### Fix: Stabilisasi hang total di proot: kurangi beban DB + watchdog auto-restart
+- memorySearch.ts: tambah LIMIT (>=80) pada join FTS5->memories — istilah umum OR mencocokkan 100k+ baris dan menarik seluruh tabel ke pager (3114ms->115ms saat diuji, mengurangi storm baca halaman).
+- database.ts: tambah index komposit idx_memories_speaker_ts (speaker, timestamp) untuk query retrain nanonlp & prompt manager.
+- Reindex + optimize FTS5 (211k dokumen, integrity-check ok).
+- tools/yui-watchdog.sh: polling /api/health tiap 10s; jika event loop beku (hang native SQLite) force-restart daemon + cleanup esbuild orphan; anti crash-loop.
+
+
+## [4.157] - 2026-07-31
+### Fix: Fix: hang total setelah 1 pesan — SQLite page-cache loop di proot
+- diagnosis via ptrace: main thread spin selamanya di better_sqlite3.node (pcache1FetchStage2+0x148) — infinite loop di hash-chain page cache SQLite
+- root cause env: WAL+SHM rentan korupsi di proot/UserLAnd; app sendiri sudah hapus -wal/-shm tiap boot
+- journal_mode WAL -> DELETE (rollback journal) + cache_size dibatasi 64MB
+- busy_timeout 60s -> 15s agar lock-wait tidak membekukan event loop terlalu lama
+
+
+## [4.156] - 2026-07-31
+### Fix: Fix: foto generate_image selalu terkirim ke chat
+- kirim foto ke chat saat download sukses (sebelumnya hanya saat gagal)
+- dedup auto-send berbasis file path agar tiap job unik
+- timeout generate_image dinaikkan 60s->180s
+- watchdog queue 30s->200s agar image gen tidak terpotong
+
+
+## [4.155] - 2026-07-31
+### Feature: Tools: Debug Runner background + log capture untuk developer
+- tools/yui-debug.sh: jalankan Yui di background (setsid/process-group) dengan capture stdout+stderr ke session log
+- Subcommand: start/start -f, stop (SIGINT graceful -> SIGTERM -> SIGKILL), restart, status, logs, show, list, clean
+- Stop menargetkan proses server asli (bukan wrapper tsx) sehingga graceful shutdown tercatat penuh di log
+- npm scripts: debug, debug:start, debug:stop, debug:status, debug:logs
+
+
+## [4.154] - 2026-07-31
+### Refactor: Cache prepared statements and batch queries to reduce DB connections
+- ChatSummaryEngine: added 6 cached prepared statements (stmtGetDailySummary, stmtInsertIdleSummary, stmtUpsertDailySummary, stmtDeleteOldDailySummaries, stmtGetAllDailySummaryIds, stmtGetLatestDailySummaryTimestamp) and batch query scanPendingDailySummaries()
+- MultiChannelQueue: added 13 cached prepared statements replacing repeated db.prepare() calls in proactive engine and message dispatch
+
+
+## [4.153] - 2026-07-31
+### Fix: Resolve DB lock and restart stuck server
+- Killed stale YuiHime process (PID 19916) holding locked database
+- Removed stale WAL/SHM files to allow clean SQLite recovery
+- Restarted server with nvm environment; verified DB accessible and HTTP 200 on port 3000
+
+
+## [4.152] - 2026-07-31
+### Fix: Optimalkan koneksi DB ringkasan chat
+- Cache prepared statements di ChatSummaryEngine.ts dan MultiChannelQueue.ts; ganti db.prepare() inline dengan referensi cached. Tambah batch query untuk daily summaries.
+
+
 ## [4.151] - 2026-07-31
 ### fix: Fix freeze daemon: pisahkan jalur pesan dari pipeline neural (hard timeout + abort)
 - NeuralInterface: processNeuralInput/processNeuralInputWithMeta menerima signal?: AbortSignal, diteruskan ke cortex.think.

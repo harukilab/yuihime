@@ -58,21 +58,19 @@ export function initializeDatabase() {
     mkdirSync(dbDir, { recursive: true });
   }
 
-  // Bersihin stale WAL/SHM dari crash sebelumnya agar SQLite start fresh
+  // Bersihkan stale WAL/SHM dari crash sebelumnya agar SQLite start fresh
+  // (aman walau journal mode DELETE — tidak ada file tsb yang dibuat)
   try { if (existsSync(dbPath + '-wal')) unlinkSync(dbPath + '-wal'); } catch {}
   try { if (existsSync(dbPath + '-shm')) unlinkSync(dbPath + '-shm'); } catch {}
 
   try {
-    const db = new Database(dbPath, { timeout: 60000 });
-    db.pragma('journal_mode = WAL');
-    db.pragma('busy_timeout = 60000');
+    const db = new Database(dbPath, { timeout: 15000 });
+    // Journal DELETE (rollback journal) — WAL + proot (UserLAnd) terbukti memicu
+    // korupsi page-cache in-memory yang membuat SQLite loop tanpa henti (event loop beku).
+    db.pragma('journal_mode = DELETE');
+    db.pragma('busy_timeout = 15000');
     db.pragma('synchronous = NORMAL');
-    db.pragma('wal_autocheckpoint = 100000');
-    try {
-      db.pragma('wal_checkpoint(TRUNCATE)');
-    } catch (checkpointErr: any) {
-      console.warn('[DATABASE] Initial WAL checkpoint failed:', checkpointErr.message);
-    }
+    db.pragma('cache_size = -64000'); // batasi page cache (64MB) agar tidak membengkak tak terkendali
     cachedDb = db;
     return db;
   } catch (error) {
@@ -85,9 +83,9 @@ export function initializeDatabase() {
         console.log(`Successfully backed up corrupted database to ${backupPath}`);
       }
       
-      const db = new Database(dbPath, { timeout: 30000 });
-      db.pragma('journal_mode = WAL');
-      db.pragma('busy_timeout = 30000');
+      const db = new Database(dbPath, { timeout: 15000 });
+      db.pragma('journal_mode = DELETE');
+      db.pragma('busy_timeout = 15000');
       cachedDb = db;
       return db;
     } catch (recoveryError) {
@@ -172,7 +170,9 @@ export async function setupSchema(db: any) {
         activePersonaId TEXT,
         currentPlan TEXT,
         aiConfig TEXT,
-        avatarConfig TEXT
+        avatarConfig TEXT,
+        proactiveLocked INTEGER DEFAULT 0,
+        lastProactiveTimestamp INTEGER
       );
     `,
     knowledge: `
@@ -341,6 +341,7 @@ export async function setupSchema(db: any) {
   const indexes = {
     idx_memories_timestamp: "CREATE INDEX IF NOT EXISTS idx_memories_timestamp ON memories(timestamp);",
     idx_memories_speaker: "CREATE INDEX IF NOT EXISTS idx_memories_speaker ON memories(speaker);",
+    idx_memories_speaker_ts: "CREATE INDEX IF NOT EXISTS idx_memories_speaker_ts ON memories(speaker, timestamp);",
     idx_memories_type: "CREATE INDEX IF NOT EXISTS idx_memories_type ON memories(type);",
     idx_memories_context: "CREATE INDEX IF NOT EXISTS idx_memories_context ON memories(context);",
     // Composite indexes for forgetfulness protocol — eliminates full-table scans on decay/purge queries
@@ -364,52 +365,61 @@ export async function setupSchema(db: any) {
     }
   }
 
-  // --- Initialize FTS5 Search Index & Sync Triggers ---
+  // --- Initialize FTS5 Search Index (external-content, deferred sync) ---
+  // WHY external-content + scheduled rebuild instead of per-row triggers:
+  // under proot (UserLAnd ARM), hundreds of small FTS5 maintenance writes
+  // (segment insert/merge churn triggered on every memories INSERT/UPDATE/DELETE)
+  // corrupt the in-memory pager -> native infinite loop (event loop frozen,
+  // PC parked in libc pread / pcache1FetchStage2). Reproduced in a standalone
+  // stress process at ~360 iterations. A single bulk rebuild() is a single
+  // transaction and is proven safe (stress + migration tests). So memory
+  // writes never touch FTS5; search freshness is maintained by periodic sync.
   try {
-    // Create virtual table using FTS5 for content indexing
+    const ftsTable = db.prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='memories_fts'"
+    ).get();
+
+    if (ftsTable) {
+      const ftsCols = db.prepare("PRAGMA table_info(memories_fts)").all() as any[];
+      const legacy = ftsCols.some((c: any) => c.name === 'id');
+      if (legacy) {
+        console.log('[DATABASE] Migrating legacy contentful FTS5 (per-row triggers) to external-content sync...');
+        db.exec('DROP TRIGGER IF EXISTS trg_memories_ai');
+        db.exec('DROP TRIGGER IF EXISTS trg_memories_au');
+        db.exec('DROP TRIGGER IF EXISTS trg_memories_ad');
+        db.exec('ALTER TABLE memories_fts RENAME TO memories_fts_legacy');
+      }
+    }
+
     db.exec(`
       CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
-        id UNINDEXED,
         content,
-        tags
+        tags,
+        content='memories',
+        content_rowid='rowid'
       );
     `);
 
-    // Sync triggers for INSERT
-    db.exec(`
-      CREATE TRIGGER IF NOT EXISTS trg_memories_ai AFTER INSERT ON memories BEGIN
-        INSERT INTO memories_fts(id, content, tags) VALUES (new.id, new.content, new.tags);
-      END;
-    `);
-
-    // Sync triggers for UPDATE
-    db.exec(`
-      CREATE TRIGGER IF NOT EXISTS trg_memories_au AFTER UPDATE ON memories BEGIN
-        UPDATE memories_fts SET content = new.content, tags = new.tags WHERE id = old.id;
-      END;
-    `);
-
-    // Sync triggers for DELETE
-    db.exec(`
-      CREATE TRIGGER IF NOT EXISTS trg_memories_ad AFTER DELETE ON memories BEGIN
-        DELETE FROM memories_fts WHERE id = old.id;
-      END;
-    `);
+    const legacy = db.prepare(
+      "SELECT name FROM sqlite_master WHERE name='memories_fts_legacy'"
+    ).get();
+    if (legacy) {
+      syncFtsIndex(db);
+      db.exec('DROP TABLE memories_fts_legacy');
+      console.log('[DATABASE] FTS5 migrated to external-content mode.');
+    }
 
     // Backfill existing data if FTS5 is empty but memories has rows
     const ftsEmpty = db.prepare("SELECT COUNT(*) as count FROM memories_fts").get() as { count: number };
     if (ftsEmpty.count === 0) {
       const memoriesCount = db.prepare("SELECT COUNT(*) as count FROM memories").get() as { count: number };
       if (memoriesCount.count > 0) {
-        db.exec(`
-          INSERT INTO memories_fts(id, content, tags)
-          SELECT id, content, tags FROM memories;
-        `);
-        console.log(`[DATABASE] Backfilled ${memoriesCount.count} existing memories into FTS5 index.`);
+        syncFtsIndex(db);
+        console.log(`[DATABASE] Backfilled ${memoriesCount.count} memories into FTS5 index.`);
       }
     }
   } catch (ftsErr: any) {
-    console.error("ERROR: Failed to initialize FTS5 memory index or triggers:", ftsErr.message);
+    console.error("ERROR: Failed to initialize FTS5 memory index:", ftsErr.message);
   }
 
   // Schema Migration
@@ -441,7 +451,9 @@ export async function setupSchema(db: any) {
           { name: 'activePersonaId', type: 'TEXT' },
           { name: 'currentPlan', type: 'TEXT' },
           { name: 'aiConfig', type: 'TEXT' },
-          { name: 'avatarConfig', type: 'TEXT' }
+          { name: 'avatarConfig', type: 'TEXT' },
+          { name: 'proactiveLocked', type: 'INTEGER DEFAULT 0' },
+          { name: 'lastProactiveTimestamp', type: 'INTEGER' }
         ];
         for (const col of alterCols) {
           if (!columnNames.includes(col.name)) {
@@ -543,9 +555,9 @@ export async function setupSchema(db: any) {
   }
   
   try {
-    db.pragma('wal_checkpoint(TRUNCATE)');
+    db.pragma('optimize');
   } catch (checkpointErr: any) {
-    console.warn('[DATABASE] WAL checkpoint failed:', checkpointErr.message);
+    console.warn('[DATABASE] Final optimize failed:', checkpointErr.message);
   }
 }
 
@@ -1142,4 +1154,25 @@ export function startAutoCleanupScheduler(db: any): ReturnType<typeof setInterva
       console.warn('[AUTO_CLEANUP] Scheduled run failed:', e.message);
     }
   }, interval);
+}
+
+// --- FTS5 sync (external-content mode) ---
+// Single-transaction rebuild of the FTS5 index. Safe under proot (unlike the
+// per-row trigger churn that froze the pager). Run at startup (backfill) and
+// on a cadence to keep search results fresh.
+export function syncFtsIndex(db: any): void {
+  db.prepare("INSERT INTO memories_fts(memories_fts) VALUES('rebuild')").run();
+}
+
+const FTS_SYNC_INTERVAL_MS = 30 * 60 * 1000; // 30 min
+
+export function startFtsSyncScheduler(db: any): ReturnType<typeof setInterval> {
+  return setInterval(() => {
+    try {
+      syncFtsIndex(db);
+      console.log('[FTS_SYNC] Scheduled FTS5 index rebuild complete.');
+    } catch (e: any) {
+      console.warn('[FTS_SYNC] Scheduled rebuild failed:', e.message);
+    }
+  }, FTS_SYNC_INTERVAL_MS);
 }

@@ -291,7 +291,7 @@ async function discoverAddons() {
   }
 }
 
-import { initializeDatabase, setupSchema, startAutoCleanupScheduler, dbPath, retryDbOperation } from "./src/core/database.js";
+import { initializeDatabase, setupSchema, startAutoCleanupScheduler, startFtsSyncScheduler, dbPath, retryDbOperation } from "./src/core/database.js";
 
 let db: any = null;
 
@@ -329,6 +329,7 @@ async function bootstrap() {
   }
 
   startAutoCleanupScheduler(db);
+  startFtsSyncScheduler(db);
 
   (globalThis as any).yuihime_db = db;
   (globalThis as any).yuihime_initializeDatabase = initializeDatabase;

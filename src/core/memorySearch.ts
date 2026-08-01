@@ -44,7 +44,7 @@ export async function searchMemories(
         m.importance,
         (fts.rank * -1) as bm25_score
       FROM memories_fts fts
-      JOIN memories m ON m.id = fts.id
+      JOIN memories m ON m.rowid = fts.rowid
       WHERE memories_fts MATCH ?
     `;
     const params: any[] = [cleanQuery];
@@ -53,6 +53,13 @@ export async function searchMemories(
       sql += " AND m.type = ?";
       params.push(type);
     }
+
+    // Bound the join to a small candidate set before JS-side re-ranking.
+    // Without LIMIT, common OR'd terms can match 100k+ rows and pull the
+    // entire memories table into the pager (3114ms observed under proot).
+    const FETCH_LIMIT = Math.max(80, limit * 4);
+    sql += " LIMIT ?";
+    params.push(FETCH_LIMIT);
 
     const rows = db.prepare(sql).all(...params) as any[];
     if (rows.length === 0) return [];

@@ -4,24 +4,30 @@ import os
 import json
 import urllib.request
 import urllib.error
+import argparse
 
 def main():
-    print("=== YuiHime Dream Engine Consolidation CLI ===")
+    parser = argparse.ArgumentParser(
+        description="YuiHime Dream Engine Consolidation CLI (trigger /api/system/dream)"
+    )
+    parser.add_argument("--port", default=os.environ.get("PORT", "3000"), help="Port YuiHime (default dari env PORT atau 3000)")
+    parser.add_argument("--url", default=None, help="Base URL lengkap (mengalahkan --port), contoh http://localhost:3000")
+    parser.add_argument("--token", default=os.environ.get("YUIHIME_BEARER_TOKEN"), help="Bearer token (default dari env YUIHIME_BEARER_TOKEN)")
+    args = parser.parse_args()
+
+    port = args.port
+    base_url = args.url or f"http://localhost:{port}"
+    url = f"{base_url}/api/system/dream"
     
-    # Get port from environment or default to 3000
-    port = os.environ.get("PORT", "3000")
-    url = f"http://localhost:{port}/api/system/dream"
-    
-    print(f"Connecting to YuiHime instance on port {port}...")
+    print(f"Connecting to YuiHime instance at {url}...")
     
     # Prepare request
     req = urllib.request.Request(url, method="POST")
     req.add_header("Content-Type", "application/json")
     
-    # Optional bearer token from env for security authorization
-    token = os.environ.get("YUIHIME_BEARER_TOKEN")
-    if token:
-        req.add_header("Authorization", f"Bearer {token}")
+    # Optional bearer token for security authorization
+    if args.token:
+        req.add_header("Authorization", f"Bearer {args.token}")
         
     try:
         with urllib.request.urlopen(req) as response:

@@ -253,21 +253,19 @@ async function sendImageToChat(imagePath: string, contextId?: string, caption?: 
   if (!contextId) return false;
 
   const promptForDedup = caption?.replace(/^Generated:\s*/i, '')?.trim() || '';
-  if (promptForDedup) {
-    const dedupKey = `${contextId}::${promptForDedup}`;
-    const lastSent = recentAutoSends.get(dedupKey);
-    if (lastSent && Date.now() - lastSent < 60000) {
-      console.warn(`[TENSORART_GENERATE] Skipping duplicate auto-send for prompt "${promptForDedup}" to ${contextId} (sent ${Date.now() - lastSent}ms ago).`);
-      return true;
-    }
-    if (recentAutoSends.size > 100) {
-      const cutoff = Date.now() - 120000;
-      for (const [k, v] of recentAutoSends) {
-        if (v < cutoff) recentAutoSends.delete(k);
-      }
-    }
-    recentAutoSends.set(dedupKey, Date.now());
+  const dedupKey = `${contextId}::${promptForDedup || imagePath}`;
+  const lastSent = recentAutoSends.get(dedupKey);
+  if (lastSent && Date.now() - lastSent < 60000) {
+    console.warn(`[TENSORART_GENERATE] Skipping duplicate auto-send for prompt "${promptForDedup}" to ${contextId} (sent ${Date.now() - lastSent}ms ago).`);
+    return true;
   }
+  if (recentAutoSends.size > 100) {
+    const cutoff = Date.now() - 120000;
+    for (const [k, v] of recentAutoSends) {
+      if (v < cutoff) recentAutoSends.delete(k);
+    }
+  }
+  recentAutoSends.set(dedupKey, Date.now());
 
   const isUrl = /^https?:\/\//i.test(imagePath);
 
@@ -531,6 +529,17 @@ export const TensorArtGenerateTool: ToolModule = {
               const sent = await sendImageToChat(imageUrl, ctxId, "Gambar berhasil dibuat! Tapi Yui gagal menyimpannya di folder, jadi ini link-nya ya:");
               if (!sent) {
                 await sendTextToChat(`Gambar berhasil dibuat! Tapi Yui gagal mendownloadnya. Lihat di sini ya: ${imageUrl}`, ctxId);
+              }
+            }
+          } else {
+            const ctxId = context?.contextId;
+            if (ctxId && args.sendToChat !== false) {
+              const sent = await sendImageToChat(localPath, ctxId, "Ini dia fotonya, sayang~ 💖");
+              if (sent) {
+                resultData.autoSent = true;
+                resultData._yuiInstruction = "The photo has already been auto-sent to the user's chat. Do NOT send it again via send_file or any other file-sending tool.";
+              } else {
+                resultData.autoSent = false;
               }
             }
           }

@@ -1278,11 +1278,16 @@ if (typeof parsedArgs === 'string') {
             const toolExecutorConfig = settings['tool-executor'] || {};
             const generalTimeoutMs = toolExecutorConfig.timeoutMs !== undefined ? Number(toolExecutorConfig.timeoutMs) : 60000;
             const isShell = ['run_command', 'shell', 'execute_shell'].includes(tc.name || tc.tool);
+            const toolName = tc.name || tc.tool || '';
+            const TOOL_SPECIFIC_TIMEOUTS: Record<string, number> = {
+              generate_image: 180000,
+            };
+            const baseTimeoutMs = isShell
+              ? (toolExecutorConfig.shellTimeoutMs !== undefined ? Number(toolExecutorConfig.shellTimeoutMs) : 120000)
+              : generalTimeoutMs;
             const activeTimeoutMs = (metaTimeoutMs !== undefined)
               ? metaTimeoutMs
-              : (isShell
-                ? (toolExecutorConfig.shellTimeoutMs !== undefined ? Number(toolExecutorConfig.shellTimeoutMs) : 120000)
-                : generalTimeoutMs);
+              : Math.max(TOOL_SPECIFIC_TIMEOUTS[toolName] || 0, baseTimeoutMs);
 
             let attempts = 0;
             const maxAttempts = (toolExecutorConfig.retryLimit !== undefined ? Number(toolExecutorConfig.retryLimit) : 2) + 1;

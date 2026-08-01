@@ -81,7 +81,10 @@ export class MultiChannelQueue {
   private recentMsgHashes: { hash: string; timestamp: number }[] = [];
   private processingStartTime = 0;
   private processingTimer: ReturnType<typeof setTimeout> | null = null;
-  private static readonly PROCESSING_TIMEOUT_MS = 30000;
+  // Watchdog: jika satu pesan terjebak lebih lama dari ini (mis. generate_image bisa
+  // sampai ~180s), anggap stuck dan reset. Harus > NEURAL_PIPELINE_TIMEOUT_MS agar
+  // pipeline kognitif panjang (LLM + tool chain) tidak terpotong di tengah jalan.
+  private static readonly PROCESSING_TIMEOUT_MS = 200000;
 
   // Hard cap untuk seluruh pipeline kognitif (LLM + tool chain) agar jalur I/O pesan
   // tidak pernah menunggu selamanya pada satu pesan yang macet.
@@ -106,6 +109,21 @@ export class MultiChannelQueue {
   private holdOutgoing = false;
   private heldMessages: QueueItem[] = [];
 
+  // Cached prepared statements to reduce DB connection overhead
+  private stmtResetProactiveLock: any = null;
+  private stmtUpdatePendingFailed: any = null;
+  private stmtUpdatePendingRetry: any = null;
+  private stmtSelectProactiveState: any = null;
+  private stmtSelectAgentState: any = null;
+  private stmtUpdateAgentMood: any = null;
+  private stmtUpdateProactiveLock: any = null;
+  private stmtInsertPending: any = null;
+  private stmtInsertPendingFailed: any = null;
+  private stmtSelectPendingRows: any = null;
+  private stmtSelectLastInteraction: any = null;
+  private stmtSelectProactiveSent: any = null;
+  private stmtSelectRecentMessages: any = null;
+
   private constructor() {
     this.startPendingScheduler();
     this.startSuspendedTasksScheduler();
@@ -120,6 +138,44 @@ export class MultiChannelQueue {
 
   public setDatabase(db: any) {
     this.db = db;
+    this.stmtResetProactiveLock = this.db.prepare("UPDATE agent_state SET proactiveLocked = 0 WHERE id = 1");
+    this.stmtUpdatePendingFailed = this.db.prepare("UPDATE pending_messages SET attempts = ?, status = 'failed' WHERE id = ?");
+    this.stmtUpdatePendingRetry = this.db.prepare("UPDATE pending_messages SET attempts = ?, status = 'pending' WHERE id = ?");
+    this.stmtSelectProactiveState = this.db.prepare("SELECT proactiveLocked, lastProactiveTimestamp FROM agent_state WHERE id = 1");
+    this.stmtSelectAgentState = this.db.prepare("SELECT status, mood, relation FROM agent_state WHERE id = 1");
+    this.stmtUpdateAgentMood = this.db.prepare("UPDATE agent_state SET mood = ? WHERE id = 1");
+    this.stmtUpdateProactiveLock = this.db.prepare("UPDATE agent_state SET proactiveLocked = 1, lastProactiveTimestamp = ? WHERE id = 1");
+    this.stmtInsertPending = this.db.prepare(`
+      INSERT INTO pending_messages (id, input, sender_name, context_id, chat_type, timestamp, attempts, status)
+      VALUES (?, ?, ?, ?, ?, ?, 0, 'pending')
+    `);
+    this.stmtInsertPendingFailed = this.db.prepare(`
+      INSERT INTO pending_messages (id, input, sender_name, context_id, chat_type, timestamp, attempts, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'failed')
+    `);
+    this.stmtSelectPendingRows = this.db.prepare(`
+      SELECT * FROM pending_messages 
+      WHERE status = 'pending' AND attempts < 5 
+      ORDER BY timestamp ASC LIMIT ?
+    `);
+    this.stmtSelectLastInteraction = this.db.prepare(`
+      SELECT context, speaker, timestamp, chat_type FROM memories
+      WHERE type = 'interaction' AND speaker != 'agent' AND speaker != 'System' AND speaker != 'system' AND speaker != 'subconscious'
+      ORDER BY timestamp DESC LIMIT 1
+    `);
+    this.stmtSelectProactiveSent = this.db.prepare(`
+      SELECT 1 FROM memories
+      WHERE type = 'event' 
+        AND context = ? 
+        AND tags LIKE '%proactive%' 
+        AND timestamp > ?
+      LIMIT 1
+    `);
+    this.stmtSelectRecentMessages = this.db.prepare(`
+      SELECT speaker, content FROM memories 
+      WHERE type = 'interaction' AND speaker != 'System' AND speaker != 'system' AND speaker != 'subconscious'
+      ORDER BY timestamp DESC LIMIT 4
+    `);
     ChatSummaryEngine.getInstance().setDatabase(db);
     // Instantly trigger dispatch of pending messages in background on database setup/sync
     console.log("[QUEUE] Database connected. Starting initial parallel dispatch of pending messages...");
@@ -188,9 +244,9 @@ export class MultiChannelQueue {
     this.cleanTimestamps();
 
     // Reset proactive lock when user sends a new message
-    if (this.db) {
+    if (this.db && this.stmtResetProactiveLock) {
       try {
-        this.db.prepare("UPDATE agent_state SET proactiveLocked = 0 WHERE id = 1").run();
+        this.stmtResetProactiveLock.run();
       } catch (e) {}
     }
 
@@ -233,10 +289,7 @@ export class MultiChannelQueue {
         if (this.db) {
           try {
             const pendingId = "pending_" + Math.random().toString(36).substring(2, 11);
-            const stmt = this.db.prepare(`
-              INSERT INTO pending_messages (id, input, sender_name, context_id, chat_type, timestamp, attempts, status)
-              VALUES (?, ?, ?, ?, ?, ?, 0, 'pending')
-            `);
+            const stmt = this.stmtInsertPending;
             stmt.run(pendingId, input, senderName, contextId, chatType, timestamp);
             queued = true;
           } catch (dbErr) {
@@ -304,11 +357,7 @@ export class MultiChannelQueue {
     try {
       // Ambil seluruh pesan pending yang belum mencapai percobaan maksimum
       const maxToFetch = this.maxBgWorkers * 3;
-      const pendingRows: any[] = this.db.prepare(`
-        SELECT * FROM pending_messages 
-        WHERE status = 'pending' AND attempts < 5 
-        ORDER BY timestamp ASC LIMIT ?
-      `).all(maxToFetch);
+      const pendingRows: any[] = this.stmtSelectPendingRows.all(maxToFetch);
 
       if (!pendingRows || pendingRows.length === 0) {
         return;
@@ -460,7 +509,7 @@ export class MultiChannelQueue {
       if (isNeuralGatewayMissing || attempts >= maxRetries) {
         try {
           await withSqliteRetry(`update-failed-${pending.id}`, this.db, () => {
-            this.db.prepare("UPDATE pending_messages SET attempts = ?, status = 'failed' WHERE id = ?").run(attempts, pending.id);
+            this.stmtUpdatePendingFailed.run(attempts, pending.id);
           });
           console.warn(`[QUEUE_BG_WORKER_FAILED] [ID: ${pending.id}] ${isNeuralGatewayMissing ? 'Neural Gateway missing. Marked as failed.' : `Max retries (${maxRetries}) reached.`}`);
         } catch (dbErr: any) {
@@ -469,7 +518,7 @@ export class MultiChannelQueue {
       } else {
         try {
           await withSqliteRetry(`update-retry-${pending.id}`, this.db, () => {
-            this.db.prepare("UPDATE pending_messages SET attempts = ?, status = 'pending' WHERE id = ?").run(attempts, pending.id);
+            this.stmtUpdatePendingRetry.run(attempts, pending.id);
           });
           console.warn(`[QUEUE_BG_WORKER_RETRY] [ID: ${pending.id}] Attempt ${attempts}/${maxRetries}. Will retry.`, err.message || err);
         } catch (dbErr: any) {
@@ -619,10 +668,7 @@ export class MultiChannelQueue {
             try {
               await withSqliteRetry(`insert-failed-${Date.now()}`, this.db, () => {
                 const id = "pending_" + Math.random().toString(36).substr(2, 9);
-                const stmt = this.db.prepare(`
-                  INSERT INTO pending_messages (id, input, sender_name, context_id, chat_type, timestamp, attempts, status)
-                  VALUES (?, ?, ?, ?, ?, ?, ?, 'failed')
-                `);
+                const stmt = this.stmtInsertPendingFailed;
                 stmt.run(id, item.input, item.senderName, item.contextId, item.chatType, item.timestamp, maxRetries);
                 if (!this.holdOutgoing) {
                   item.onReply("Maaf, pesan Anda gagal diproses setelah beberapa percobaan. Silakan coba lagi nanti.");
@@ -713,18 +759,14 @@ export class MultiChannelQueue {
       this.isProactiveRunning = true;
 
       // Single-shot per idle session: if already locked, skip
-      const proactiveState = this.db.prepare("SELECT proactiveLocked, lastProactiveTimestamp FROM agent_state WHERE id = 1").get() as any;
+      const proactiveState = this.stmtSelectProactiveState.get() as any;
       if (proactiveState?.proactiveLocked) {
         this.isProactiveRunning = false;
         return;
       }
 
       // Cari obrolan non-agent terakhir untuk menentukan target / channel aktif
-      const lastInteraction = this.db.prepare(`
-        SELECT context, speaker, timestamp, chat_type FROM memories
-        WHERE type = 'interaction' AND speaker != 'agent' AND speaker != 'System' AND speaker != 'system' AND speaker != 'subconscious'
-        ORDER BY timestamp DESC LIMIT 1
-      `).get();
+      const lastInteraction = this.stmtSelectLastInteraction.get();
 
       if (!lastInteraction) {
         this.isProactiveRunning = false;
@@ -734,14 +776,7 @@ export class MultiChannelQueue {
       const contextId = lastInteraction.context || 'web_default';
 
       // Advanced Anti-Flood Logic: If we've already sent a proactive message since the last user message, prevent doing it again recursively.
-      const hasSentProactive = this.db.prepare(`
-        SELECT 1 FROM memories
-        WHERE type = 'event' 
-          AND context = ? 
-          AND tags LIKE '%proactive%' 
-          AND timestamp > ?
-        LIMIT 1
-      `).get(contextId, lastInteraction.timestamp);
+      const hasSentProactive = this.stmtSelectProactiveSent.get(contextId, lastInteraction.timestamp);
 
       if (hasSentProactive) {
         this.isProactiveRunning = false;
@@ -756,7 +791,7 @@ export class MultiChannelQueue {
       estimatedLoneliness = Math.min(100, Math.max(5, estimatedLoneliness));
 
       // Ambil status, kaitan relasi, dan mood untuk sinkronisasi
-      const stateRow = this.db.prepare("SELECT status, mood, relation FROM agent_state WHERE id = 1").get();
+      const stateRow = this.stmtSelectAgentState.get();
       const status = stateRow?.status || 'idle';
       const relation = stateRow?.relation ? JSON.parse(stateRow.relation) : {};
       const moodState = stateRow?.mood ? JSON.parse(stateRow.mood) : {};
@@ -770,7 +805,7 @@ export class MultiChannelQueue {
       // Persist the loneliness back into the database agent_state so that the UI can sync or reflect it in real-time
       try {
         moodState.loneliness = calculatedLoneliness;
-        this.db.prepare("UPDATE agent_state SET mood = ? WHERE id = 1").run(JSON.stringify(moodState));
+        this.stmtUpdateAgentMood.run(JSON.stringify(moodState));
       } catch (dbErr) {
         console.error("[PROACTIVE_ENGINE_DB] Failed to synchronize loneliness status to DB:", dbErr);
       }
@@ -829,11 +864,7 @@ export class MultiChannelQueue {
           // Ambil riwayat chat nyata terakhir guna penataan memori murni / anti-halusinasi (Memory Resonance)
           let recentContext = "Tidak ada obrolan terdahulu.";
           try {
-            const recentMessages = this.db.prepare(`
-              SELECT speaker, content FROM memories 
-              WHERE type = 'interaction' AND speaker != 'System' AND speaker != 'system' AND speaker != 'subconscious'
-              ORDER BY timestamp DESC LIMIT 4
-            `).all() as any[];
+            const recentMessages = this.stmtSelectRecentMessages.all() as any[];
 
             if (recentMessages && recentMessages.length > 0) {
               recentContext = recentMessages.reverse().map(m => `${m.speaker || "user"}: ${m.content}`).join('\n');
@@ -942,7 +973,7 @@ Unggkit topik nyata tersebut dari memori jika ingin, sapa dia dengan manis, atau
 
               // Lock proactive for this idle session after successful send
               try {
-                this.db.prepare("UPDATE agent_state SET proactiveLocked = 1, lastProactiveTimestamp = ? WHERE id = 1").run(dedupNow);
+                this.stmtUpdateProactiveLock.run(dedupNow);
               } catch (lockErr) {
                 console.error("[PROACTIVE_ENGINE_LOCK_ERR] Failed to lock proactive state:", lockErr);
               }

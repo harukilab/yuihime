@@ -4,6 +4,7 @@
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import json
 import datetime
+import argparse
 
 class YuiHandler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -26,8 +27,15 @@ class YuiHandler(BaseHTTPRequestHandler):
         print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] {format % args}")
 
 if __name__ == "__main__":
-    host = "127.0.0.1"
-    port = 9876
+    parser = argparse.ArgumentParser(
+        description="Demo HTTP server untuk test background task Yui"
+    )
+    parser.add_argument("--host", default="127.0.0.1", help="Host untuk listen (default 127.0.0.1)")
+    parser.add_argument("--port", type=int, default=9876, help="Port (default 9876)")
+    args = parser.parse_args()
+
+    host = args.host
+    port = args.port
     server = HTTPServer((host, port), YuiHandler)
     print(f"🌸 Yui Demo Server running at http://{host}:{port}")
     print("Tekan Ctrl+C untuk stop.")

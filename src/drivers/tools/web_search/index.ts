@@ -80,11 +80,15 @@ export const WebSearchTool: ToolModule = {
       }
     );
 
-    if (execution.feedback.status === 'success') {
+    if (execution.feedback.status === 'success' && Array.isArray(execution.output) && execution.output.length > 0) {
       return execution.output;
     }
 
-    return [];
+    return [{
+      title: 'Pencarian Web Sedang Dalam Perbaikan',
+      snippet: 'Layanan pencarian web Yui sedang dalam perbaikan dan gagal merespons tepat waktu (kendala teknis/network). Sampaikan ke user bahwa fitur pencarian web sedang diperbaiki, lalu bantu dengan jawaban terbaikmu tanpa data web real-time.',
+      url: ''
+    }];
   }
 };
 

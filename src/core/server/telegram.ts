@@ -96,6 +96,13 @@ async function trySetTelegramReaction(chatId: number | string, messageId: number
   }
 }
 
+// Reaksi emoji cepat yang dipicu segera saat pesan masuk (sebelum pipeline diproses),
+// agar pengguna langsung melihat aktivitas Yui dan tidak mengira bot membeku.
+function immediateAckReaction(botApi: any, chatId: number | string, messageId: number, settings: any): void {
+  const emoji = pickRandomReaction(settings);
+  void trySetTelegramReaction(chatId, messageId, emoji, botApi);
+}
+
 // Cache reaksi target (chatId + messageId) per contextId agar reaksi tetap bisa
 // dipicu saat balasan dikirim langsung via tool speak (jalur dedup-skip).
 const pendingReactions = new Map<string, { chatId: number; messageId: number }>();
@@ -574,6 +581,11 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
           console.log(`[TELEGRAM_GROUP] Ignoring message from group "${chatTitle}" — not tagged/mentioned.`);
           return;
         }
+      }
+
+      // Reaksi emoji langsung saat pesan masuk (fire-and-forget) agar tidak terlihat beku
+      if (currentSettings['telegram_bridge']?.autoAcknowledge !== false) {
+        immediateAckReaction(ctx.telegram, ctx.chat.id, ctx.message.message_id, currentSettings);
       }
 
       // Broadcast the incoming remote Telegram message to connected WebClients
