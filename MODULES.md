@@ -87,3 +87,10 @@ Peta struktur direktori pasca-pemisahan Web UI ↔ Daemon (lihat UPDATE_LOG `[4.
 - `src/core/kernel/ChatSummaryEngine.ts — Chat Summary Engine (idle-gap + daily summary; daily chat log file; 7-day retention). Cached 6 prepared statements and batch query for daily summaries to reduce DB connections.`
 - `src/core/fileLogger.ts — Rotated & retention file logger (per-category daily rotation, 7-day retention).`
 - `src/drivers/tools/chat_log/ — Chat Log tool (raw daily chat log reader).`
+- `Telegram Quick Toolkit (src/drivers/tools/telegram_quick_tools/)`
+- `Telegram Quick Toolkit (src/drivers/tools/telegram_quick_tools/): /daemon + /rebuild`
+- `tools/yui-daemon.sh`
+- `tools/yui-daemon.sh + Telegram Quick Toolkit (usePm2)`
+- `tools/yui-pm2.sh + tools/yui-daemon.sh + Telegram Quick Toolkit (usePm2)`
+- `tools/yui-daemon.sh + tools/yui-pm2.sh + Telegram Quick Toolkit`
+- `Telegram Quick Toolkit (bash/img/ls/cat/get) + tools/yui-daemon.sh`

@@ -1,6 +1,7 @@
 import { StorageService } from '@shared/drivers/storage';
 import { LearningEngine } from '../learning';
 import type { Cortex } from '../cortex';
+import { getTzOffsetHours, localDaypart } from '../utils/dualClock.js';
 
 /**
  * Executes a self-directed background thinking cycle (Cortex Background Loop).
@@ -136,13 +137,7 @@ export async function executeCortexSelfDirectedThought(cortex: Cortex): Promise<
      if (loneliness > 45 || playfulness > 60 || Math.random() <= triggerChance) {
        console.log(`[CORTEX_BG_LOOP] Triggers autonomous message initiative! Loneliness: ${loneliness}, Playfulness: ${playfulness}, Trigger Chance: ${triggerChance}`);
        
-       const timeOfDay = (() => {
-         const hour = new Date().getHours();
-         if (hour >= 5 && hour < 11) return "Pagi";
-         if (hour >= 11 && hour < 15) return "Siang";
-         if (hour >= 15 && hour < 19) return "Sore";
-         return "Malam";
-       })();
+        const timeOfDay = localDaypart(getTzOffsetHours());
 
        const capabilities = await StorageService.getCapabilities();
        const dreams = await StorageService.getDreams();

@@ -1,0 +1,1147 @@
+import { ModuleType } from '@shared/include/types';
+import { SystemRegistry } from '@shared/core/registry';
+import { spawn, spawnSync } from 'child_process';
+import path from 'path';
+import fs from 'fs';
+import os from 'os';
+import manifest from './manifest.json';
+import { getTzOffsetHours, formatLocalFullEn, formatLocalDateKey, tzLabel } from '../../../core/utils/dualClock.js';
+
+export interface TgReply {
+  text: string;
+  keyboard?: any;
+}
+
+export interface TgToolContext {
+  ctx: any;
+  db: any;
+  settings: Record<string, any>;
+  bot: any;
+  startedAt?: number;
+}
+
+export interface TgCommandDef {
+  name: string;
+  aliases?: string[];
+  description: string;
+  adminOnly?: boolean;
+  usage?: string;
+  handler: (tc: TgToolContext, args: string) => Promise<TgReply>;
+}
+
+// ───────────────────────── Daemon management ─────────────────────────
+const DEBUG_SCRIPT = 'tools/yui-debug.sh';
+const WATCHDOG_SCRIPT = 'tools/yui-watchdog.sh';
+const PM2_SCRIPT = 'tools/yui-pm2.sh';
+const PM2_APP = 'yuihime';
+
+function debugDir(): string {
+  return path.join(os.homedir(), '.yuihime', 'debug');
+}
+
+function projectDir(): string {
+  const cwd = process.cwd();
+  const candidates = [
+    cwd,
+    path.resolve(cwd, '..')
+  ];
+  for (const c of candidates) {
+    try {
+      if (fs.existsSync(path.join(c, 'tools', 'yui-debug.sh'))) return c;
+    } catch {}
+  }
+  return cwd;
+}
+
+function hasDist(p: string): boolean {
+  try { return fs.existsSync(path.join(p, 'dist', 'server.cjs')); } catch { return false; }
+}
+
+function daemonMode(p: string): string {
+  return hasDist(p) ? 'prod' : 'dev';
+}
+
+function processAlive(pid: number): boolean {
+  if (!pid || !Number.isInteger(pid)) return false;
+  try { process.kill(pid, 0); return true; } catch { return false; }
+}
+
+function daemonRunning(): boolean {
+  try {
+    const meta = path.join(debugDir(), 'current.meta');
+    if (!fs.existsSync(meta)) return false;
+    const pid = parseInt(String(fs.readFileSync(meta, 'utf8').split('\n')[0]).trim(), 10);
+    return processAlive(pid);
+  } catch { return false; }
+}
+
+function watchdogRunning(): boolean {
+  try {
+    const pidfile = path.join(debugDir(), 'watchdog.pid');
+    if (!fs.existsSync(pidfile)) return false;
+    const pid = parseInt(fs.readFileSync(pidfile, 'utf8').trim(), 10);
+    return processAlive(pid);
+  } catch { return false; }
+}
+
+function pm2Available(): boolean {
+  try {
+    spawnSync('bash', ['-c', 'command -v pm2 >/dev/null 2>&1'], { stdio: 'ignore' });
+    return true;
+  } catch { return false; }
+}
+
+function usePm2Setting(tc: TgToolContext): boolean {
+  return tc.settings?.['telegram_quick_tools']?.usePm2 === true;
+}
+
+interface ShellResult {
+  ok: boolean;
+  code: number;
+  stdout: string;
+  stderr: string;
+}
+
+function runShell(cmd: string, opts: { cwd: string; timeoutMs?: number; maxBuffer?: number }): Promise<ShellResult> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const cap = opts.maxBuffer || 1024 * 1024;
+    let stdout = '';
+    let stderr = '';
+    let child: any;
+    try {
+      child = spawn('bash', ['-c', cmd], {
+        cwd: opts.cwd,
+        detached: true,
+        stdio: ['ignore', 'pipe', 'pipe']
+      });
+    } catch (e: any) {
+      resolve({ ok: false, code: -1, stdout: '', stderr: e?.message || String(e) });
+      return;
+    }
+    const timer = setTimeout(() => {
+      try { child.kill('SIGKILL'); } catch {}
+    }, opts.timeoutMs || 60000);
+    child.stdout?.on('data', (d: Buffer) => { stdout = (stdout + d.toString()).slice(-cap); });
+    child.stderr?.on('data', (d: Buffer) => { stderr = (stderr + d.toString()).slice(-cap); });
+    child.on('error', (e: Error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({ ok: false, code: -1, stdout, stderr: e.message });
+    });
+    child.on('close', (code: number) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({ ok: code === 0, code: code ?? -1, stdout, stderr });
+    });
+  });
+}
+
+async function pm2Info(cwd: string): Promise<string> {
+  if (!pm2Available()) return 'Not installed';
+  const r = await runShell('pm2 jlist', { cwd, timeoutMs: 8000, maxBuffer: 512 * 1024 });
+  if (!r.ok) return 'Installed (query failed)';
+  try {
+    const m = r.stdout.match(/\[[\s\S]*\]/);
+    if (!m) return 'Installed (no apps)';
+    const list = JSON.parse(m[0]);
+    const app = (list || []).find((p: any) => String(p?.name || '').toLowerCase() === PM2_APP);
+    if (!app) return 'Installed (no "yuihime" app)';
+    return `Installed — ${app.name}: ${app?.pm2_env?.status || '?'}`;
+  } catch {
+    return 'Installed (parse failed)';
+  }
+}
+
+const DAEMON_HELP =
+  '🛠️ DAEMON COMMANDS (admin only)\n\n' +
+  '/daemon status — daemon, watchdog & PM2 status\n' +
+  '/daemon start — start daemon (DEFAULT: watchdog + yui-debug.sh)\n' +
+  '/daemon stop — stop daemon safely\n' +
+  '/daemon restart — restart daemon\n' +
+  '/daemon logs [N] — show last N log lines (default 40; live only in terminal)\n' +
+  '/daemon help — this help\n\n' +
+  '🐘 PM2 MODE (optional):\n' +
+  '  Enable the "usePm2" setting in Modules → Telegram Quick Tools.\n' +
+  '  When on, /daemon start/restart runs YuiHime under a PM2 daemon\n' +
+  '  via tools/yui-pm2.sh (local watchdog skipped). Default = no PM2.\n\n' +
+  '🔨 TOOL REBUILD\n' +
+  '/rebuild — rebuild project (npm run build: web + server)\n' +
+  '/rebuild help — rebuild help\n' +
+  '  Runs in the background; result is sent to this chat when done (~30-60s).';
+
+const REBUILD_HELP =
+  '🔨 TOOL REBUILD\n\n' +
+  'Usage:\n' +
+  '  /rebuild — run npm run build in the background\n' +
+  '  /rebuild help — this help\n\n' +
+  'What it does:\n' +
+  '  - web: Vite build (dist/web)\n' +
+  '  - server: esbuild bundle (dist/server.cjs)\n\n' +
+  'Result is sent to this chat when finished.\n' +
+  'Requires: npm available + write access to the project. Time: ~30-60 seconds.';
+
+function sendDaemonNote(tc: TgToolContext, text: string) {
+  const chatId = tc.ctx?.chat?.id;
+  if (chatId == null) return;
+  try {
+    tc.ctx?.telegram?.sendMessage(chatId, text).catch((e: any) => {
+      console.warn('[TG_DAEMON] Failed to send notification:', e?.message || e);
+    });
+  } catch (e: any) {
+    console.warn('[TG_DAEMON] Failed to send notification:', e?.message || e);
+  }
+}
+
+function startRebuild(tc: TgToolContext, proj: string) {
+  let out = '';
+  const cap = 256 * 1024;
+  let child: any;
+  try {
+    child = spawn('npm', ['run', 'build'], {
+      cwd: proj,
+      detached: true,
+      stdio: ['ignore', 'pipe', 'pipe']
+    });
+  } catch (e: any) {
+    sendDaemonNote(tc, `❌ Failed to run npm: ${e?.message || e}`);
+    return;
+  }
+  child.stdout?.on('data', (d: Buffer) => { out = (out + d.toString()).slice(-cap); });
+  child.stderr?.on('data', (d: Buffer) => { out = (out + d.toString()).slice(-cap); });
+  child.on('error', (e: Error) => {
+    sendDaemonNote(tc, `❌ Failed to run npm: ${e?.message || e}`);
+  });
+  child.on('close', (code: number) => {
+    const tail = out.trim().split('\n').slice(-18).join('\n') || '(no output)';
+    const head = code === 0 ? '✅ Rebuild SUCCESS' : `❌ Rebuild FAILED (exit ${code ?? '?'})`;
+    sendDaemonNote(tc, `${head}\n\n${tail}`);
+  });
+}
+
+async function ensureWatchdogPath(lines: string[], proj: string, mode: string) {
+  if (watchdogRunning()) {
+    lines.push('🛡️ Watchdog: already active (supervising daemon)');
+  } else {
+    const w = await runShell(`${WATCHDOG_SCRIPT} start ${mode}`, { cwd: proj, timeoutMs: 30000 });
+    lines.push('🛡️ Watchdog: ' + (w.ok ? 'active (supervising daemon)' : `failed — ${w.stderr.trim().slice(0, 200) || w.stdout.trim().slice(0, 200) || 'check logs'}`));
+  }
+}
+
+async function daemonSub(sub: string, tc: TgToolContext, args?: string): Promise<TgReply> {
+  const proj = projectDir();
+  const mode = daemonMode(proj);
+  const extra = args || '';
+
+  switch (sub) {
+    case 'help':
+      return { text: DAEMON_HELP };
+
+    case 'status': {
+      const s = await runShell(`${DEBUG_SCRIPT} status`, { cwd: proj, timeoutMs: 20000 });
+      const debugOut = s.ok
+        ? s.stdout.trim().split('\n').slice(0, 12).join('\n')
+        : `(yui-debug.sh failed: ${s.stderr.trim().slice(0, 300) || 'no output'})`;
+      const wd = watchdogRunning() ? '🟢 ACTIVE' : '🔴 DOWN';
+      const pm = await pm2Info(proj);
+      const pmMode = usePm2Setting(tc) ? 'ACTIVE (usePm2 setting)' : 'INACTIVE (default)';
+      return { text: `⚙️ Daemon Status\n\n${debugOut}\n\n🛡️ Watchdog: ${wd}\n🐘 PM2 mode: ${pmMode}\n🐘 PM2 app: ${pm}` };
+    }
+
+    case 'start': {
+      const lines: string[] = ['🟢 Start Daemon'];
+      const usePm2 = usePm2Setting(tc);
+      if (usePm2 && pm2Available()) {
+        if (daemonRunning()) {
+          lines.push('🐘 PM2: local daemon is still running — stop it first (avoid port conflict): /daemon stop');
+        } else {
+          const r = await runShell(`${PM2_SCRIPT} start ${mode}`, { cwd: proj, timeoutMs: 60000 });
+          lines.push('🐘 PM2: ' + (r.ok
+            ? 'started via tools/yui-pm2.sh OK'
+            : `failed — ${r.stderr.trim().slice(0, 200) || r.stdout.trim().slice(0, 200) || 'see /daemon logs'}`));
+        }
+      } else if (usePm2 && !pm2Available()) {
+        lines.push('🐘 PM2: enabled but PM2 is not installed — falling back to watchdog + yui-debug.sh');
+        await ensureWatchdogPath(lines, proj, mode);
+      } else {
+        lines.push('🐘 PM2: INACTIVE (default) — using watchdog + yui-debug.sh (single-process daemon)');
+        await ensureWatchdogPath(lines, proj, mode);
+      }
+      lines.push(`📁 Mode: ${mode} | Project: ${proj}`);
+      return { text: lines.join('\n') };
+    }
+
+    case 'stop': {
+      const usePm2 = usePm2Setting(tc);
+      const body = usePm2 && pm2Available()
+        ? '⏹️ Stopping daemon...\n\n- PM2: tools/yui-pm2.sh stop\n- Local daemon: graceful SIGINT (if any)'
+        : '⏹️ Stopping daemon...\n\n- Watchdog: stopped\n- Daemon: graceful SIGINT (SIGKILL fallback)';
+      setTimeout(() => {
+        const cmd = usePm2 && pm2Available()
+          ? `${PM2_SCRIPT} stop; ${DEBUG_SCRIPT} stop`
+          : `${WATCHDOG_SCRIPT} stop; ${DEBUG_SCRIPT} stop`;
+        void runShell(cmd, { cwd: proj, timeoutMs: 60000 });
+      }, 2500);
+      return { text: body };
+    }
+
+    case 'restart': {
+      const usePm2 = usePm2Setting(tc);
+      if (usePm2 && pm2Available()) {
+        setTimeout(() => {
+          void runShell(`${PM2_SCRIPT} restart ${mode}`, { cwd: proj, timeoutMs: 120000 });
+        }, 2500);
+        return { text: `🔄 Restarting daemon via PM2 (mode ${mode})...\n\nReply is sent first, then the PM2 app '${PM2_APP}' is restarted.` };
+      }
+      setTimeout(() => {
+        void runShell(`${WATCHDOG_SCRIPT} stop; ${DEBUG_SCRIPT} restart ${mode}; ${WATCHDOG_SCRIPT} start ${mode}`, { cwd: proj, timeoutMs: 120000 });
+      }, 2500);
+      return { text: `🔄 Restarting daemon (mode ${mode})...\n\nReply is sent first, then the daemon is restarted (watchdog + yui-debug.sh).` };
+    }
+
+    case 'logs': {
+      if (/live|^-f$|^-live$/i.test(extra.trim())) {
+        return { text: '📡 LIVE logs are terminal-only:\n\n  tools/yui-daemon.sh logs -live   (watchdog)\n  tools/yui-pm2.sh logs -live      (PM2)\n\nIn Telegram, use: /daemon logs [N] — last N lines (max 300).' };
+      }
+      const num = /^\d+$/.test(extra.trim()) ? Math.min(parseInt(extra.trim(), 10), 300) : 40;
+      const r = await runShell(`${DEBUG_SCRIPT} show ${num}`, { cwd: proj, timeoutMs: 10000, maxBuffer: 512 * 1024 });
+      const body = r.ok
+        ? r.stdout.trim().slice(-3000)
+        : (r.stderr.trim().slice(0, 500) || '(failed to fetch logs)');
+      return { text: `📜 Daemon logs (last ${num} lines)\n\n${body}` };
+    }
+
+    case 'rebuild':
+      return startRebuildReply(tc, proj);
+
+    default:
+      return { text: DAEMON_HELP };
+  }
+}
+
+function startRebuildReply(tc: TgToolContext, proj: string): TgReply {
+  startRebuild(tc, proj);
+  return { text: '🔨 Rebuild started (npm run build)...\n\nRuns in the background. Result will be sent to this chat when done (~30-60s).' };
+}
+
+// ───────────────────────── Internal tools (admin) ─────────────────────────
+const TOOLS_MAX_REPLY = 3000;
+
+const IMG_DEFAULT_WIDTH = 1024;
+const IMG_DEFAULT_HEIGHT = 1024;
+const IMG_FALLBACK_MODEL = 'anime_lab_wai_illustrious';
+const IMG_MODEL_LIMIT = 20;
+
+const pendingImgJobs = new Map<string, { prompt: string; width: number; height: number }>();
+
+function imgChatKey(tc: TgToolContext): string {
+  const chatId = tc.ctx?.chat?.id;
+  return chatId != null ? `tg_${chatId}` : '';
+}
+
+function imgModelKeyboard(models: string[]): any {
+  const rows: any[][] = [];
+  const unique = Array.from(new Set(models.map(m => String(m).trim()).filter(Boolean)));
+  for (let i = 0; i < unique.length; i += 2) {
+    const row = unique.slice(i, i + 2).map(m => ({
+      text: m.length > 24 ? m.slice(0, 24) + '…' : m,
+      callback_data: `qt:img:model:${m.slice(0, 45)}`
+    }));
+    rows.push(row);
+  }
+  rows.push([
+    { text: '🧠 Yui Mode', callback_data: 'qt:img:yui' },
+    { text: '🎲 Default', callback_data: 'qt:img:default' }
+  ]);
+  rows.push([{ text: '✖️ Cancel', callback_data: 'qt:img:cancel' }]);
+  return { inline_keyboard: rows };
+}
+
+interface TensorArtToolInfo {
+  name?: string;
+  tool_id?: string;
+  toolId?: string;
+  taskType?: string;
+  inputs?: { type?: string; description?: string }[];
+}
+
+function isTextToImageTool(t: TensorArtToolInfo): boolean {
+  const inputs = Array.isArray(t.inputs) ? t.inputs : [];
+  const hasString = inputs.some(i => i?.type === 'STRING' && /prompt/i.test(String(i?.description || '')));
+  const hasWidth = inputs.some(i => i?.type === 'INTEGER' && /width/i.test(String(i?.description || '')));
+  return hasString && hasWidth;
+}
+
+/**
+ * Fetch the real TensorArt model list (POST /openworks/v1/tool/list).
+ * Returns text-to-image tool ids (field `name` from the API) so they can be
+ * passed straight to the generate action as `toolName`.
+ */
+async function fetchTensorArtModels(tc: TgToolContext, limit = IMG_MODEL_LIMIT): Promise<string[]> {
+  const tool = SystemRegistry.getTool('generate_image');
+  if (!tool) return [];
+  try {
+    const envelope: any = await tool.execute(
+      { action: 'list_tools' },
+      { settings: tc.settings || {} }
+    );
+    if (envelope?.status !== 'success') return [];
+    const data = envelope?.data;
+    const list: any[] = (Array.isArray(data) ? data : data?.tools || data?.tool_list || data?.list) || [];
+
+    const models = new Set<string>();
+    for (const item of list) {
+      if (!item || typeof item !== 'object') continue;
+      const name = String(item.name || item.tool_id || item.toolId || '').trim();
+      if (!name || name.length < 2 || name.length > 60 || !/^[a-zA-Z0-9_.:-]+$/.test(name)) continue;
+      if (item.taskType && String(item.taskType).toUpperCase() !== 'TENSOR_ART_V1') continue;
+      if (!isTextToImageTool(item)) continue;
+      models.add(name);
+    }
+    if (models.size > 0) return Array.from(models).slice(0, limit);
+
+    // Fallback walker: robust to unknown response shapes
+    const ids = new Set<string>();
+    const walk = (node: any): void => {
+      if (Array.isArray(node)) { for (const item of node) walk(item); return; }
+      if (node && typeof node === 'object') {
+        const id = node.id || node.tool_id || node.toolId || node.name;
+        if (typeof id === 'string' && id.length > 1 && id.length < 60 && /^[a-zA-Z0-9_.:-]+$/.test(id)) {
+          ids.add(id);
+        }
+        for (const v of Object.values(node)) {
+          if (v && typeof v === 'object') walk(v);
+        }
+      }
+    };
+    walk(data);
+    return Array.from(ids).slice(0, limit);
+  } catch {
+    return [];
+  }
+}
+
+async function runImgGenerate(prompt: string, model: string, width: number, height: number, tc: TgToolContext): Promise<TgReply> {
+  const tool = SystemRegistry.getTool('generate_image');
+  if (!tool) return { text: '⚠️ The generate_image tool is not registered in the registry.' };
+  const chatId = tc.ctx?.chat?.id;
+  try {
+    const envelope: any = await tool.execute(
+      {
+        action: 'generate',
+        prompt,
+        toolName: model,
+        width,
+        height,
+        sendToChat: true
+      },
+      { contextId: chatId != null ? `tg_${chatId}` : undefined, settings: tc.settings || {} }
+    );
+    if (!envelope) return { text: '⚠️ Tool returned an empty response.' };
+    if (envelope.status === 'success') {
+      const d = envelope.data || {};
+      return {
+        text: `✅ Image generated!\n\n📝 Prompt: ${prompt}\n🖼️ ${d.localPath ? `Saved: ${d.localPath}` : 'Not saved — link already sent'}\n🛠️ Model: ${d.toolName || model} | 📐 ${d.metadata?.width || width}x${d.metadata?.height || height}`
+      };
+    }
+    const err = envelope.error || {};
+    return { text: `⚠️ Generation failed: ${err?.message || JSON.stringify(err) || 'unknown error'}` };
+  } catch (e: any) {
+    return { text: `⚠️ Generation failed: ${e?.message || e}` };
+  }
+}
+
+async function runImgYuiMode(
+  prompt: string,
+  fallbackWidth: number,
+  fallbackHeight: number,
+  tc: TgToolContext,
+  availableModels: string[] = []
+): Promise<TgReply> {
+  const cfg = tc.settings?.['generate_image'] || tc.settings?.tensorart || {};
+  const fallbackModel = cfg.defaultToolName || IMG_FALLBACK_MODEL;
+  let model = fallbackModel;
+  let width = fallbackWidth;
+  let height = fallbackHeight;
+  let usedPrompt = prompt;
+  try {
+    const providerId = tc.settings?.provider || 'gemini';
+    const provider = SystemRegistry.getProvider(providerId);
+    if (provider) {
+      const modelHint = availableModels.length
+        ? `Available TensorArt models: ${availableModels.join(', ')}.\nPick the best one from this list.`
+        : `Preferred fallback model: ${fallbackModel}.`;
+      const instruction =
+        'You are Yui, an expert anime illustration director. Choose the best TensorArt diffusion model, width and height for the user request, and polish the prompt into a highly detailed TensorArt prompt. ' +
+        'Return ONLY valid JSON with keys: "toolName" (a TensorArt model id string), "width" (int), "height" (int), "prompt" (detailed english prompt). ' +
+        `${modelHint}\nUser request: ${prompt}`;
+      const raw: any = await provider.generate(instruction, {
+        config: tc.settings || {},
+        systemPrompt: 'You are Yui, image director. Output JSON only.'
+      });
+      const text = String(raw?.text ?? raw?.response ?? raw ?? '');
+      const m = String(text).match(/\{[\s\S]*\}/);
+      if (m) {
+        const parsed = JSON.parse(m[0]);
+        if (typeof parsed.toolName === 'string' && parsed.toolName.trim()) model = parsed.toolName.trim();
+        if (typeof parsed.width === 'number' && parsed.width > 0) width = Math.min(Math.round(parsed.width), 2048);
+        if (typeof parsed.height === 'number' && parsed.height > 0) height = Math.min(Math.round(parsed.height), 2048);
+        if (typeof parsed.prompt === 'string' && parsed.prompt.trim()) usedPrompt = parsed.prompt.trim();
+      }
+    }
+  } catch (e: any) {
+    console.warn('[TG_IMG] Yui mode LLM routing failed, using defaults:', e?.message || e);
+  }
+  return runImgGenerate(usedPrompt, model, width, height, tc);
+}
+
+function tgBaseUrl(): string {
+  return `http://127.0.0.1:${process.env.PORT || '3000'}`;
+}
+
+async function shellViaApi(command: string): Promise<string> {
+  const res = await fetch(`${tgBaseUrl()}/api/tools/shell`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ command })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) return `⚠️ HTTP ${res.status}: ${data?.error || data?.stderr || 'failed'}`;
+  const stdout = String(data?.stdout || '').trim();
+  const stderr = String(data?.stderr || '').trim();
+  if (!stdout && !stderr) return '✅ Done (no output).';
+  return stdout + (stderr ? (stdout ? '\n\n[stderr]\n' : '[stderr]\n') + stderr : '');
+}
+
+const SYSTEM_ROOT = path.join(os.homedir(), '.yuihime');
+
+function expandHome(p: string): string {
+  if (p === '~') return os.homedir();
+  if (p.startsWith('~/') || p.startsWith('~\\')) return path.join(os.homedir(), p.slice(2));
+  return p;
+}
+
+function resolveAllowedPath(raw: string): string | null {
+  const roots = [path.resolve(SYSTEM_ROOT), path.resolve(projectDir())];
+  const expanded = expandHome(String(raw || '').trim() || '.');
+  let abs: string;
+  if (path.isAbsolute(expanded)) {
+    abs = path.resolve(expanded);
+  } else {
+    abs = path.resolve(roots[1], expanded);
+    for (const r of roots) {
+      const cand = path.resolve(r, expanded);
+      if (fs.existsSync(cand)) { abs = cand; break; }
+    }
+  }
+  for (const r of roots) {
+    if (abs === r || abs.startsWith(r + path.sep)) return abs;
+  }
+  return null;
+}
+
+function fmtSize(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+function dirEntries(dir: string, max: number): string {
+  let entries: { name: string; dir: boolean; size: number }[] = [];
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true }).map(e => {
+      let size = 0;
+      try { if (e.isFile()) size = fs.statSync(path.join(dir, e.name)).size; } catch {}
+      return { name: e.name, dir: e.isDirectory(), size };
+    });
+  } catch (e: any) {
+    return `⚠️ Failed to read directory: ${e?.message || e}`;
+  }
+  entries.sort((a, b) => (a.dir === b.dir ? a.name.localeCompare(b.name) : a.dir ? -1 : 1));
+  const total = entries.length;
+  const shown = entries.slice(0, max);
+  const lines = shown.map(e => `${e.dir ? '📁' : '📄'} ${e.name}${e.dir ? '/' : ` (${fmtSize(e.size)})`}`);
+  return lines.join('\n') + (total > max ? `\n… and ${total - max} more (${total} entries total)` : `\nTotal: ${total} entries`);
+}
+
+function readFileSnippet(abs: string, mode: string, n: number, maxChars: number): string {
+  let content: string;
+  try {
+    content = fs.readFileSync(abs, 'utf8');
+  } catch (e: any) {
+    return `⚠️ Failed to read file: ${e?.message || e}`;
+  }
+  const lines = content.split(/\r?\n/);
+  if (mode === 'tail') {
+    content = lines.slice(-Math.max(1, n)).join('\n');
+  } else if (mode === 'head') {
+    content = lines.slice(0, Math.max(1, n)).join('\n');
+  }
+  if (content.length > maxChars) {
+    content = content.slice(0, maxChars) + `\n… (truncated, ${content.length}+ chars total)`;
+  }
+  return content || '(empty file)';
+}
+
+async function sendDocumentToChat(tc: TgToolContext, abs: string): Promise<string> {
+  const chatId = tc.ctx?.chat?.id;
+  if (chatId == null) return '⚠️ Chat ID unavailable.';
+  const bot = tc.ctx?.telegram || (globalThis as any).activeTelegramBot?.telegram;
+  if (!bot) return '⚠️ Telegram bot is not active.';
+  try {
+    await bot.sendDocument(chatId, { source: fs.createReadStream(abs), filename: path.basename(abs) });
+    return `✅ File sent: ${path.basename(abs)} (${fmtSize(fs.statSync(abs).size)})`;
+  } catch (e: any) {
+    return `⚠️ Failed to send file: ${e?.message || e}`;
+  }
+}
+
+const TOOLS_HELP =
+  '🧰 YUI INTERNAL TOOLS (admin only)\n\n' +
+  '💻 BASH — run shell commands (sandbox + blacklist):\n' +
+  '  /bash <command>\n' +
+  '  /bash ls -lah\n' +
+  '  /bash cat ~/.yuihime/debug/watchdog.log | tail -20\n\n' +
+  '🎨 IMAGE GENERATE — TensorArt (auto-sent to chat):\n' +
+  '  /img <description> — show model picker + Yui Mode (inline)\n' +
+  '  /img 512x768 anime girl, sunset — set dimensions\n' +
+  '  /img model:anime_lab_wai_illustrious <description> — force model\n\n' +
+  '📂 FILE — inspect & fetch (limited to ~/.yuihime + project):\n' +
+  '  /ls [path] — list directory contents\n' +
+  '  /cat <file> [head|tail] [N] — view file contents\n' +
+  '  /get <file> — send file to this chat\n\n' +
+  'Yui Mode (🧠) = Yui picks model & dimensions automatically via LLM.\n' +
+  'Without Yui Mode, everything is processed directly by the daemon (no LLM).';
+
+const TOOLS_BASH_HELP =
+  '💻 BASH — run shell commands on the Yui server (sandbox + blacklist, admin)\n\n' +
+  'Usage:\n' +
+  '  /bash <command>\n\n' +
+  'Examples:\n' +
+  '  /bash ls -lah\n' +
+  '  /bash df -h\n' +
+  '  /bash cat ~/.yuihime/debug/current.meta\n' +
+  '  /bash grep ERROR ~/.yuihime/debug/current.log | tail -20\n\n' +
+  'stdout + stderr are sent to the chat (truncated to 3000 chars).';
+
+const TOOLS_IMG_HELP =
+  '🎨 IMAGE GENERATE — TensorArt, auto-sent to chat (admin)\n\n' +
+  'Usage:\n' +
+  '  /img <description>\n\n' +
+  'Inline options:\n' +
+  '  /img 512x768 <description> — set dimensions (default 1024x1024)\n' +
+  '  /img model:<name> <description> — force a model directly\n\n' +
+  'Without a model, Yui shows the model picker keyboard (live list from TensorArt):\n' +
+  '  • model button → generate immediately with that model\n' +
+  '  • 🧠 Yui Mode → Yui picks model & dimensions automatically via LLM\n' +
+  '  • 🎲 Default → use the default model from settings\n\n' +
+  'The result is auto-sent to this chat (~30-90s).';
+
+const TOOLS_FILES_HELP =
+  '📂 FILE — inspect & fetch files (admin, limited to ~/.yuihime + project)\n\n' +
+  'Usage:\n' +
+  '  /ls [path] — list directory contents\n' +
+  '  /cat <file> [head|tail] [N] — view file contents\n' +
+  '  /get <file> — send file as a document to this chat\n\n' +
+  'Examples:\n' +
+  '  /ls ~/.yuihime/debug\n' +
+  '  /cat config.toml head 30\n' +
+  '  /cat current.log tail 50\n' +
+  '  /get ~/.yuihime/debug/current.log\n\n' +
+  'Paths outside ~/.yuihime and the project are rejected.';
+
+// ───────────────────────── UI helpers ─────────────────────────
+function fmtUptime(ms: number): string {
+  const totalSec = Math.max(0, Math.floor(ms / 1000));
+  const d = Math.floor(totalSec / 86400);
+  const h = Math.floor((totalSec % 86400) / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  const parts: string[] = [];
+  if (d > 0) parts.push(`${d} day${d > 1 ? 's' : ''}`);
+  if (h > 0) parts.push(`${h} hr`);
+  if (m > 0) parts.push(`${m} min`);
+  parts.push(`${s} sec`);
+  return parts.join(' ');
+}
+
+function fmtTimestamp(ts?: number | null): string {
+  if (!ts) return '—';
+  try {
+    return new Date(ts).toLocaleString('en-US', {
+      day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+    });
+  } catch {
+    return '—';
+  }
+}
+
+function isAdmin(tc: TgToolContext): boolean {
+  const adminId = String(tc.settings?.['telegram_bridge']?.adminId || '').trim();
+  if (!adminId) return false;
+  const fromId = tc.ctx?.from?.id;
+  if (fromId == null) return false;
+  return adminId.split(',').map(s => s.trim()).includes(String(fromId));
+}
+
+function menuKeyboard(tc?: TgToolContext) {
+  const rows: any[][] = [
+    [{ text: '🕒 Time', callback_data: 'qt:time' }, { text: '📌 My ID', callback_data: 'qt:id' }],
+    [{ text: '🪪 Identity', callback_data: 'qt:me' }, { text: '⚙️ Status', callback_data: 'qt:status' }],
+    [{ text: '🏓 Ping', callback_data: 'qt:ping' }, { text: '💖 About', callback_data: 'qt:about' }]
+  ];
+  if (tc && isAdmin(tc)) {
+    rows.push([{ text: '🛠️ Daemon', callback_data: 'qt:daemon' }]);
+    rows.push([{ text: '🧰 Tools', callback_data: 'qt:tools' }]);
+  }
+  rows.push([{ text: '✖️ Close Menu', callback_data: 'qt:close' }]);
+  return { inline_keyboard: rows };
+}
+
+function daemonMenuKeyboard() {
+  return {
+    inline_keyboard: [
+      [{ text: '🛠️ Status', callback_data: 'qt:daemon:status' }, { text: '🟢 Start', callback_data: 'qt:daemon:start' }],
+      [{ text: '⏹️ Stop', callback_data: 'qt:daemon:stop' }, { text: '🔄 Restart', callback_data: 'qt:daemon:restart' }],
+      [{ text: '🔨 Rebuild', callback_data: 'qt:daemon:rebuild' }, { text: '📜 Logs', callback_data: 'qt:daemon:logs' }],
+      [{ text: '🧰 Tools', callback_data: 'qt:tools' }, { text: '❓ Help', callback_data: 'qt:daemon:help' }],
+      [{ text: '« Back', callback_data: 'qt:menu' }]
+    ]
+  };
+}
+
+function toolsMenuKeyboard() {
+  return {
+    inline_keyboard: [
+      [{ text: '💻 Bash', callback_data: 'qt:tools:bash' }, { text: '🎨 Image', callback_data: 'qt:tools:img' }],
+      [{ text: '📂 File', callback_data: 'qt:tools:files' }, { text: '❓ Help', callback_data: 'qt:tools' }],
+      [{ text: '« Menu', callback_data: 'qt:menu' }]
+    ]
+  };
+}
+
+function backToMenuKeyboard() {
+  return {
+    inline_keyboard: [
+      [{ text: '« Back to Menu', callback_data: 'qt:menu' }]
+    ]
+  };
+}
+
+function commandListText(): string {
+  return tgQuickCommands
+    .map(c => `/${c.name}${c.adminOnly ? ' (admin)' : ''} — ${c.description}`)
+    .join('\n');
+}
+
+export function menuText(): string {
+  return `🎛️ Quick Command Menu\n\nCommands below are processed directly without the LLM:\n\n${commandListText()}\n\nUse the buttons below for quick access.`;
+}
+
+// ───────────────────────── Command registry ─────────────────────────
+export const tgQuickCommands: TgCommandDef[] = [
+  {
+    name: 'menu',
+    aliases: ['help', 'bantuan', 'perintah'],
+    description: 'Open the inline keyboard menu',
+    handler: async (tc) => ({ text: menuText(), keyboard: menuKeyboard(tc) })
+  },
+  {
+    name: 'ping',
+    description: 'Check bot connection & latency',
+    handler: async (tc) => {
+      const latency = tc.startedAt ? Date.now() - tc.startedAt : null;
+      const uptimeSec = (typeof process !== 'undefined' && process.uptime ? process.uptime() : 0);
+      return {
+        text: `🏓 Pong!\n\n⚡ Latency: ${latency != null ? `${latency} ms` : 'n/a'}\n⏱️ Daemon uptime: ${fmtUptime(uptimeSec * 1000)}`
+      };
+    }
+  },
+  {
+    name: 'time',
+    description: 'Current date & time (local + UTC)',
+    handler: async (tc) => {
+      const offset = getTzOffsetHours(tc.settings);
+      const localFull = formatLocalFullEn(offset);
+      const utcTime = new Date().toLocaleTimeString('en-US', { timeZone: 'UTC', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const utcDate = new Date().toLocaleDateString('en-US', { timeZone: 'UTC', day: 'numeric', month: 'short', year: 'numeric' });
+      return {
+        text: `🕒 Current time:\n\n📍 Local (${tzLabel(offset)}):\n${localFull}\n\n🌐 UTC:\n📅 ${utcDate}\n⏰ ${utcTime}\n\nℹ️ Change local zone: Settings → Circadian Rhythm → "Timezone Offset (GMT+X)".`
+      };
+    }
+  },
+  {
+    name: 'id',
+    description: 'Show your Telegram ID info',
+    handler: async (tc) => {
+      const from = tc.ctx?.from || {};
+      const chat = tc.ctx?.chat || {};
+      return {
+        text: `📌 Telegram Identity Info\n\n👤 Name: ${from.first_name || '—'}${from.last_name ? ' ' + from.last_name : ''}\n🆔 User ID: ${from.id ?? '—'}\n🧑‍💻 Username: @${from.username || '—'}\n\n💬 Chat ID: ${chat.id ?? '—'}\n🏷️ Chat Type: ${chat.type || '—'}`
+      };
+    }
+  },
+  {
+    name: 'me',
+    description: 'Your identity as Yuihime sees it',
+    handler: async (tc) => {
+      const from = tc.ctx?.from || {};
+      const tgId = from.id;
+      if (!tc.db) return { text: 'Database unavailable.' };
+      let identity: any = null;
+      try {
+        const tgUser = tc.db.prepare('SELECT * FROM telegram_users WHERE tg_id = ?').get(tgId);
+        if (tgUser?.context && String(tgUser.context).startsWith('linked_identity:')) {
+          identity = tc.db.prepare('SELECT * FROM identities WHERE id = ?').get(String(tgUser.context).split(':')[1]);
+        }
+        if (!identity) {
+          const all = tc.db.prepare('SELECT * FROM identities').all();
+          for (const iden of all || []) {
+            try {
+              const accs = JSON.parse(iden.linkedAccounts || '[]');
+              if (Array.isArray(accs) && accs.some(a => String(a).toLowerCase() === `telegram:id:${tgId}`)) {
+                identity = iden;
+                break;
+              }
+            } catch {}
+          }
+        }
+      } catch (err: any) {
+        console.warn('[TG_QUICK_TOOLS] /me lookup failed:', err?.message || err);
+      }
+      if (!identity) {
+        return {
+          text: `🪪 No stored identity for this Telegram account (@${from.username || from.id}).\n\nYou can link a Web identity using the OTP code via /pair <code>.`
+        };
+      }
+      return {
+        text: `🪪 Stored Identity\n\n👤 Name: ${identity.perceivedName || identity.realName || '—'}\n🤝 Trust: ${identity.trust ?? 50} | ❤️ Affection: ${identity.affection ?? 50} | ⭐ Reputation: ${identity.reputation ?? 50}\n🗓️ Last interaction: ${fmtTimestamp(identity.lastInteraction)}\n📝 Yuihime perspective: ${identity.yuiPerspective || 'None yet'}`
+      };
+    }
+  },
+  {
+    name: 'status',
+    description: 'Bot & system status',
+    handler: async (tc) => {
+      const s = tc.settings || {};
+      const geminiKey = s.providers?.gemini?.apiKey || s.gemini?.apiKey || process.env.GEMINI_API_KEY;
+      const anthropicKey = s.providers?.anthropic?.apiKey || s.anthropic?.apiKey || process.env.ANTHROPIC_API_KEY;
+      const openrouterKey = s.providers?.openrouter?.apiKey || s.openrouter?.apiKey || process.env.OPENROUTER_API_KEY;
+      const llmEngine = geminiKey || anthropicKey || openrouterKey ? 'CONFIGURED' : 'NOT CONFIGURED';
+      const botActive = !!tc.bot;
+      const dbActive = !!tc.db;
+      const uptimeSec = (typeof process !== 'undefined' && process.uptime ? process.uptime() : 0);
+      const pending = Array.isArray((globalThis as any).pendingConfirmations)
+        ? (globalThis as any).pendingConfirmations.filter((i: any) => i?.status === 'pending').length
+        : 0;
+      return {
+        text: `⚙️ System Status\n\n🤖 Telegram Bot: ${botActive ? '🟢 ACTIVE' : '🔴 INACTIVE'}\n🧠 LLM Engine: ${llmEngine}\n🗄️ Database: ${dbActive ? '🟢 CONNECTED' : '🔴 DISCONNECTED'}\n⏱️ Daemon uptime: ${fmtUptime(uptimeSec * 1000)}\n⏳ Pending confirmations: ${pending}`
+      };
+    }
+  },
+  {
+    name: 'about',
+    description: 'About Yuihime',
+    handler: async () => {
+      return {
+        text: `💖 Yuihime\n\nA neural AI assistant connected across platforms.\n\nThis command is processed directly by the daemon without involving the LLM.\n\nType /menu to open the quick menu.`
+      };
+    }
+  },
+  {
+    name: 'daemon',
+    aliases: ['server', 'process'],
+    description: 'Manage the YuiHime daemon (start/stop/restart/status/logs)',
+    adminOnly: true,
+    usage: '/daemon <help|status|start|stop|restart|logs [N]|rebuild>',
+    handler: async (tc, args) => {
+      const parts = args.trim().split(/\s+/);
+      const sub = (parts[0] || 'help').toLowerCase();
+      const rest = parts.slice(1).join(' ');
+      return daemonSub(sub, tc, rest);
+    }
+  },
+  {
+    name: 'rebuild',
+    description: 'Rebuild the project (npm run build). See /daemon help',
+    adminOnly: true,
+    usage: '/rebuild [help]',
+    handler: async (tc, args) => {
+      const a = args.trim().toLowerCase();
+      if (a === 'help' || a === '-h' || a === '--help') {
+        return { text: REBUILD_HELP };
+      }
+      return startRebuildReply(tc, projectDir());
+    }
+  },
+  {
+    name: 'broadcast',
+    aliases: ['siarkan'],
+    description: 'Send a message to all Telegram users (admin)',
+    adminOnly: true,
+    usage: '/broadcast <message>',
+    handler: async (tc, args) => {
+      if (!args || !args.trim()) {
+        return { text: `⚠️ Usage: /broadcast <message>\nExample: /broadcast Hello everyone, Yuihime is online!` };
+      }
+      if (!tc.db) return { text: 'Database unavailable.' };
+      const botApi = tc.ctx?.telegram;
+      if (!botApi) return { text: 'Telegram bot is not active.' };
+      const users = tc.db.prepare('SELECT tg_id FROM telegram_users').all();
+      let sent = 0;
+      let failed = 0;
+      for (const row of users || []) {
+        try {
+          await botApi.sendMessage(row.tg_id, args.trim());
+          sent++;
+        } catch {
+          failed++;
+        }
+      }
+      return {
+        text: `📢 Broadcast done.\n\n✅ Sent: ${sent}\n❌ Failed/blocked: ${failed}`
+      };
+    }
+  },
+  {
+    name: 'tools',
+    aliases: ['internal', 'tool'],
+    description: 'Access Yui internal tools: bash, image generate, files (admin)',
+    adminOnly: true,
+    usage: '/tools',
+    handler: async () => ({ text: TOOLS_HELP })
+  },
+  {
+    name: 'bash',
+    description: 'Run a shell command (sandbox, admin)',
+    adminOnly: true,
+    usage: '/bash <command>',
+    handler: async (tc, args) => {
+      if (!args || !args.trim()) {
+        return { text: `⚠️ Usage: /bash <command>\nExample: /bash ls -lah` };
+      }
+      const body = await shellViaApi(args.trim());
+      return { text: `💻 $ bash ${args.trim()}\n\n${body.slice(-TOOLS_MAX_REPLY)}` };
+    }
+  },
+  {
+    name: 'img',
+    aliases: ['gambar', 'image', 'draw'],
+    description: 'Generate an image via TensorArt; pick a model via inline keyboard or Yui Mode (admin)',
+    adminOnly: true,
+    usage: '/img [WxH] [model:<name>] <description>',
+    handler: async (tc, args) => {
+      let prompt = String(args || '').trim();
+      let width: number | null = null;
+      let height: number | null = null;
+      let model: string | null = null;
+      const dimMatch = prompt.match(/^(\d{2,4})x(\d{2,4})\s*/);
+      if (dimMatch) {
+        width = parseInt(dimMatch[1], 10);
+        height = parseInt(dimMatch[2], 10);
+        prompt = prompt.slice(dimMatch[0].length);
+      }
+      const modelMatch = prompt.match(/^model:([^\s]+)\s*/i);
+      if (modelMatch) {
+        model = modelMatch[1];
+        prompt = prompt.slice(modelMatch[0].length);
+      }
+      if (!prompt) {
+        return {
+          text: `⚠️ Usage: /img [WxH] [model:<name>] <description>\n\nExamples:\n  /img anime girl, sunset\n  /img 512x768 anime girl, sunset\n  /img model:anime_lab_wai_illustrious anime girl\n\nWithout a model, Yui shows a model picker below.`
+        };
+      }
+      const cfg = tc.settings?.['generate_image'] || tc.settings?.tensorart || {};
+      const finalWidth = width || cfg.defaultWidth || IMG_DEFAULT_WIDTH;
+      const finalHeight = height || cfg.defaultHeight || IMG_DEFAULT_HEIGHT;
+      if (model) {
+        return runImgGenerate(prompt, model, finalWidth, finalHeight, tc);
+      }
+      const key = imgChatKey(tc);
+      if (key) pendingImgJobs.set(key, { prompt, width: finalWidth, height: finalHeight });
+      const models = await fetchTensorArtModels(tc);
+      const list = models.length ? models : [cfg.defaultToolName || IMG_FALLBACK_MODEL];
+      return {
+        text: `🎨 Prompt ready:\n\n"${prompt}"\n\n📐 ${finalWidth}x${finalHeight}\n\nPick a model below to generate (result auto-sent to chat):`,
+        keyboard: imgModelKeyboard(list)
+      };
+    }
+  },
+  {
+    name: 'ls',
+    description: 'List directory contents (admin)',
+    adminOnly: true,
+    usage: '/ls [path]',
+    handler: async (_tc, args) => {
+      const target = resolveAllowedPath(args.trim() || projectDir());
+      if (!target) return { text: `⚠️ Path outside the allowed area.\n\nAllowed: ~/.yuihime and the project (${projectDir()}).` };
+      const body = dirEntries(target, 40);
+      return { text: `📂 ${target}\n\n${body}` };
+    }
+  },
+  {
+    name: 'cat',
+    description: 'View a file (admin)',
+    adminOnly: true,
+    usage: '/cat <file> [head|tail] [N]',
+    handler: async (_tc, args) => {
+      const parts = String(args || '').trim().split(/\s+/);
+      if (parts.length === 0 || !parts[0]) {
+        return { text: `⚠️ Usage: /cat <file> [head|tail] [N]\nExample: /cat ~/.yuihime/debug/current.meta\n  /cat config.toml head 30\n  /cat current.log tail 50` };
+      }
+      const fileArg = parts[0];
+      const modeArg = parts[1]?.toLowerCase() === 'head' || parts[1]?.toLowerCase() === 'tail' ? parts[1].toLowerCase() : 'all';
+      const nArg = parts[1] && (parts[1].toLowerCase() === 'head' || parts[1].toLowerCase() === 'tail') ? parts[2] : parts[1];
+      const n = /^\d+$/.test(nArg || '') ? parseInt(nArg!, 10) : (modeArg === 'tail' ? 40 : 100);
+      const abs = resolveAllowedPath(fileArg);
+      if (!abs) return { text: `⚠️ Path outside the allowed area.\n\nAllowed: ~/.yuihime and the project (${projectDir()}).` };
+      if (!fs.existsSync(abs) || !fs.statSync(abs).isFile()) return { text: `⚠️ File not found: ${fileArg}` };
+      const body = readFileSnippet(abs, modeArg, n, TOOLS_MAX_REPLY);
+      return { text: `📄 ${abs}\n\n${body}` };
+    }
+  },
+  {
+    name: 'get',
+    aliases: ['ambil', 'download'],
+    description: 'Send a file to this Telegram chat (admin)',
+    adminOnly: true,
+    usage: '/get <file>',
+    handler: async (tc, args) => {
+      const fileArg = String(args || '').trim();
+      if (!fileArg) return { text: `⚠️ Usage: /get <file>\nExample: /get ~/.yuihime/debug/current.log` };
+      const abs = resolveAllowedPath(fileArg);
+      if (!abs) return { text: `⚠️ Path outside the allowed area.\n\nAllowed: ~/.yuihime and the project (${projectDir()}).` };
+      if (!fs.existsSync(abs) || !fs.statSync(abs).isFile()) return { text: `⚠️ File not found: ${fileArg}` };
+      const msg = await sendDocumentToChat(tc, abs);
+      return { text: msg };
+    }
+  }
+];
+
+const tgQuickCommandMap = new Map<string, TgCommandDef>();
+for (const def of tgQuickCommands) {
+  tgQuickCommandMap.set(def.name, def);
+  for (const alias of def.aliases || []) tgQuickCommandMap.set(alias, def);
+}
+
+function unknownCommandReply(showHint: boolean): TgReply {
+  if (!showHint) return { text: '❓ Unknown command. Type /menu to see the list of commands.' };
+  return {
+    text: `❓ Unknown command. Here are the available commands:\n\n${commandListText()}`,
+    keyboard: menuKeyboard()
+  };
+}
+
+export interface TgQuickCommandResult {
+  handled: boolean;
+  reply?: TgReply;
+}
+
+export async function handleTgQuickCommand(rawText: string, tc: TgToolContext): Promise<TgQuickCommandResult> {
+  const trimmed = String(rawText || '').trim();
+  if (!trimmed.startsWith('/')) return { handled: false };
+  const parts = trimmed.split(/\s+/);
+  const cmdName = String(parts[0]).replace(/^\/+/, '').toLowerCase().split('@')[0];
+  const args = parts.slice(1).join(' ');
+  const def = tgQuickCommandMap.get(cmdName);
+  if (!def) {
+    return { handled: true, reply: unknownCommandReply(tc.settings?.['telegram_quick_tools']?.showMenuHint !== false) };
+  }
+  if (def.adminOnly && !isAdmin(tc)) {
+    return { handled: true, reply: { text: '⛔ This command is for the bot admin only.' } };
+  }
+  try {
+    const reply = await def.handler(tc, args);
+    return { handled: true, reply };
+  } catch (err: any) {
+    console.warn('[TG_QUICK_TOOLS] Command failed:', cmdName, err?.message || err);
+    return { handled: true, reply: { text: `⚠️ Failed to process command /${cmdName}: ${err?.message || err}` } };
+  }
+}
+
+export interface TgCallbackResult {
+  action: 'edit' | 'close';
+  text?: string;
+  keyboard?: any;
+}
+
+export async function handleTgCallback(data: string, tc: TgToolContext): Promise<TgCallbackResult | null> {
+  if (!String(data).startsWith('qt:')) return null;
+  const cmd = String(data).slice(3).toLowerCase();
+  if (cmd === 'close') return { action: 'close' };
+  if (cmd === 'menu') return { action: 'edit', text: menuText(), keyboard: menuKeyboard(tc) };
+
+  if (cmd === 'daemon') {
+    if (!isAdmin(tc)) return { action: 'edit', text: '⛔ This command is for the bot admin only.', keyboard: backToMenuKeyboard() };
+    return { action: 'edit', text: '🛠️ Daemon Menu\n\nPick an action:', keyboard: daemonMenuKeyboard() };
+  }
+  if (cmd.startsWith('daemon:')) {
+    if (!isAdmin(tc)) return { action: 'edit', text: '⛔ This command is for the bot admin only.', keyboard: backToMenuKeyboard() };
+    const sub = cmd.slice(7);
+    if (sub === 'tools') {
+      return { action: 'edit', text: TOOLS_HELP, keyboard: daemonMenuKeyboard() };
+    }
+    const reply = await daemonSub(sub, tc);
+    return { action: 'edit', text: reply.text, keyboard: daemonMenuKeyboard() };
+  }
+
+  if (cmd === 'tools') {
+    if (!isAdmin(tc)) return { action: 'edit', text: '⛔ This command is for the bot admin only.', keyboard: backToMenuKeyboard() };
+    return { action: 'edit', text: TOOLS_HELP, keyboard: toolsMenuKeyboard() };
+  }
+  if (cmd.startsWith('tools:')) {
+    if (!isAdmin(tc)) return { action: 'edit', text: '⛔ This command is for the bot admin only.', keyboard: backToMenuKeyboard() };
+    const sub = cmd.slice(6);
+    if (sub === 'bash') return { action: 'edit', text: TOOLS_BASH_HELP, keyboard: toolsMenuKeyboard() };
+    if (sub === 'img') return { action: 'edit', text: TOOLS_IMG_HELP, keyboard: toolsMenuKeyboard() };
+    if (sub === 'files') return { action: 'edit', text: TOOLS_FILES_HELP, keyboard: toolsMenuKeyboard() };
+    return { action: 'edit', text: TOOLS_HELP, keyboard: toolsMenuKeyboard() };
+  }
+
+  if (cmd === 'img:yui' || cmd === 'img:default' || cmd === 'img:cancel' || cmd.startsWith('img:model:')) {
+    if (!isAdmin(tc)) return { action: 'edit', text: '⛔ This command is for the bot admin only.', keyboard: backToMenuKeyboard() };
+    const key = imgChatKey(tc);
+    if (cmd === 'img:cancel') {
+      if (key) pendingImgJobs.delete(key);
+      return { action: 'edit', text: '✖️ Generation cancelled.', keyboard: backToMenuKeyboard() };
+    }
+    const job = key ? pendingImgJobs.get(key) : undefined;
+    if (!job) {
+      return { action: 'edit', text: '⚠️ Prompt expired. Send a new one: /img <description>', keyboard: backToMenuKeyboard() };
+    }
+    pendingImgJobs.delete(key);
+    const cfg = tc.settings?.['generate_image'] || tc.settings?.tensorart || {};
+    let reply: TgReply;
+    if (cmd === 'img:yui') {
+      const available = await fetchTensorArtModels(tc);
+      reply = await runImgYuiMode(job.prompt, job.width, job.height, tc, available);
+    } else if (cmd === 'img:default') {
+      reply = await runImgGenerate(job.prompt, cfg.defaultToolName || IMG_FALLBACK_MODEL, job.width, job.height, tc);
+    } else {
+      const model = decodeURIComponent(cmd.slice('img:model:'.length));
+      reply = await runImgGenerate(job.prompt, model, job.width, job.height, tc);
+    }
+    return { action: 'edit', text: reply.text, keyboard: backToMenuKeyboard() };
+  }
+
+  const def = tgQuickCommandMap.get(cmd);
+  if (!def) return null;
+  if (def.adminOnly && !isAdmin(tc)) {
+    return { action: 'edit', text: '⛔ This command is for the bot admin only.', keyboard: backToMenuKeyboard() };
+  }
+  try {
+    const reply = await def.handler(tc, '');
+    return { action: 'edit', text: reply.text, keyboard: backToMenuKeyboard() };
+  } catch (err: any) {
+    console.warn('[TG_QUICK_TOOLS] Callback failed:', cmd, err?.message || err);
+    return { action: 'edit', text: `⚠️ Failed to process request: ${err?.message || err}`, keyboard: backToMenuKeyboard() };
+  }
+}
+
+export const TelegramQuickToolkit = {
+  metadata: manifest as any,
+  type: ModuleType.GATEWAY,
+  run: async () => ({ status: 'daemon-managed' })
+};

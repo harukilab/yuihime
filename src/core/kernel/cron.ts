@@ -1,3 +1,5 @@
+import { getTzOffsetHours, toLocalClock } from '../utils/dualClock.js';
+
 export interface CronTask {
   id: string;
   name: string;
@@ -185,7 +187,9 @@ export class CronModule {
 
     // Fallback basic cron scheduler: check every 20 seconds to prevent drift/misses
     const interval = setInterval(async () => {
-      const now = new Date();
+      // Evaluasi jadwal memakai WAKTU LOKAL user (circadian-rhythm.timezoneOffsetHours),
+      // sehingga cron chan (mis. "0 8 * * *") ikut waktu user, bukan server UTC.
+      const now = toLocalClock(getTzOffsetHours());
       const currentMinuteStamp = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}-${now.getHours()}-${now.getMinutes()}`;
       
       if (task.lastRunMinuteStamp === currentMinuteStamp) {

@@ -1,5 +1,6 @@
 import { ToolModule } from '@shared/include/types';
 import manifest from './manifest.json';
+import { getTzOffsetHours, formatLocalFull, tzLabel } from '../../../core/utils/dualClock.js';
 
 export const GetCurrentTimeTool: ToolModule = {
   metadata: manifest as any,
@@ -8,22 +9,32 @@ export const GetCurrentTimeTool: ToolModule = {
       const tz = args && args.timezone ? String(args.timezone) : undefined;
       const now = new Date();
       let display: string;
-      try {
-        display = tz
-          ? new Intl.DateTimeFormat('en-US', {
-              timeZone: tz,
-              dateStyle: 'full',
-              timeStyle: 'long'
-            }).format(now)
-          : now.toString();
-      } catch {
-        display = now.toString();
+      let timezoneLabel: string;
+      if (tz) {
+        try {
+          display = new Intl.DateTimeFormat('en-US', {
+            timeZone: tz,
+            dateStyle: 'full',
+            timeStyle: 'long'
+          }).format(now);
+          timezoneLabel = tz;
+        } catch {
+          display = now.toString();
+          timezoneLabel = 'server';
+        }
+      } else {
+        // Default: waktu lokal user yang dikonfigurasi (circadian-rhythm.timezoneOffsetHours)
+        const offset = getTzOffsetHours();
+        display = formatLocalFull(offset);
+        timezoneLabel = tzLabel(offset);
       }
       return {
         success: true,
         iso: now.toISOString(),
+        utc: now.toISOString(),
+        local: display,
         unix: Math.floor(now.getTime() / 1000),
-        timezone: tz || Intl.DateTimeFormat().resolvedOptions().timeZone,
+        timezone: timezoneLabel,
         display
       };
     } catch (err: any) {

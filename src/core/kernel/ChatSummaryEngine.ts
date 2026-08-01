@@ -2,6 +2,7 @@ import path from "path";
 import { appendFileSync, mkdirSync, existsSync, readdirSync, unlinkSync, readFileSync } from "fs";
 import { Cortex } from "../cortex.js";
 import { dbPath } from "../database.js";
+import { getTzOffsetHours, toLocalClock } from "../utils/dualClock.js";
 
 interface BufferedMessage {
   speaker: string;
@@ -31,8 +32,16 @@ function toTimeKey(d: Date): string {
   return `${h}:${m}:${s}`;
 }
 
+/**
+ * Date "lokal" user (circadian-rhythm.timezoneOffsetHours) untuk kunci tanggal harian.
+ * Pastikan log harian & daily summary memakai hari lokal, bukan server UTC.
+ */
+function localDateFor(epochMs?: number): Date {
+  return toLocalClock(getTzOffsetHours(), epochMs != null ? new Date(epochMs) : undefined);
+}
+
 function yesterdayKey(): string {
-  return toDateKey(new Date(Date.now() - 86400000));
+  return toDateKey(localDateFor(Date.now() - 86400000));
 }
 
 /**
@@ -59,6 +68,7 @@ export class ChatSummaryEngine {
    private pendingDailyDates: string[] = [];
    private logDir = "";
     private stmtGetDailySummary: any = null;
+    private stmtGetDailySummaryContent: any = null;
     private stmtInsertIdleSummary: any = null;
     private stmtUpsertDailySummary: any = null;
     private stmtDeleteOldDailySummaries: any = null;
@@ -85,6 +95,7 @@ export class ChatSummaryEngine {
      }
 
      this.stmtGetDailySummary = this.db.prepare("SELECT id FROM memories WHERE id = ?");
+     this.stmtGetDailySummaryContent = this.db.prepare("SELECT content, timestamp FROM memories WHERE id = ?");
      this.stmtInsertIdleSummary = this.db.prepare(`
        INSERT INTO memories (id, type, content, importance, speaker, context, timestamp, tags, sentiment)
        VALUES (?, 'event_group', ?, 0.7, 'subconscious', 'live_stream', ?, '["summary", "viewer_vibe"]', 0.5)
@@ -98,14 +109,14 @@ export class ChatSummaryEngine {
       this.stmtGetLatestDailySummaryTimestamp = this.db.prepare("SELECT timestamp FROM memories WHERE type = 'daily_summary' AND timestamp >= ? ORDER BY timestamp DESC LIMIT 1");
 
       try {
-        const row = this.stmtGetLatestDailySummaryTimestamp.get(new Date(`${toDateKey(new Date())}T00:00:00`).getTime());
+        const row = this.stmtGetLatestDailySummaryTimestamp.get(new Date(`${toDateKey(localDateFor())}T00:00:00`).getTime());
        if (row && row.timestamp) {
-         this.lastDailyDate = toDateKey(new Date(row.timestamp));
+         this.lastDailyDate = toDateKey(localDateFor(row.timestamp));
        }
      } catch {}
 
      if (!this.lastDailyDate) {
-       this.lastDailyDate = toDateKey(new Date());
+       this.lastDailyDate = toDateKey(localDateFor());
      }
 
      this.scanPendingDailySummaries();
@@ -121,7 +132,7 @@ export class ChatSummaryEngine {
   public noteIncomingMessage(msg: BufferedMessage) {
     if (!msg || !msg.text) return;
     this.buffer.push(msg);
-    this.appendToLogFile(toDateKey(new Date(msg.timestamp)), msg);
+    this.appendToLogFile(toDateKey(localDateFor(msg.timestamp)), msg);
     this.resetIdleTimer();
   }
 
@@ -211,7 +222,7 @@ Hasil rangkuman singkat subkesadaran:`.trim();
             this.buffer.unshift(...chunk);
           } else {
             this.persistIdleSummary(chunk, cleanSummary);
-            this.appendToSummaryFile(toDateKey(new Date()), `[IDLE SUMMARY] ${cleanSummary}`);
+            this.appendToSummaryFile(toDateKey(localDateFor()), `[IDLE SUMMARY] ${cleanSummary}`);
             console.log(`[CHAT_SUMMARY_IDLE] Ringkasan jeda hening ${chunk.length} pesan disimpan (DB + file). Tidak diucapkan.`);
           }
         } catch (e: any) {
@@ -262,7 +273,7 @@ Hasil rangkuman singkat subkesadaran:`.trim();
 private scanPendingDailySummaries() {
     if (!this.db || !this.logDir || !existsSync(this.logDir)) return;
     this.pendingDailyDates = [];
-    const today = toDateKey(new Date());
+    const today = toDateKey(localDateFor());
     const cutoffMs = Date.now() - RETENTION_DAYS * 86400000;
     try {
       const files = readdirSync(this.logDir);
@@ -314,7 +325,7 @@ private hasDailySummary(dateStr: string): boolean {
     if (!this.db || !this.stmtInsertIdleSummary) return;
     try {
       const memoryId = "bg_digest_" + Math.random().toString(36).substr(2, 9);
-      this.stmtInsertIdleSummary.run(memoryId, `[RINGKASAN OBROLAN ${toDateKey(new Date(chunk[0]?.timestamp || Date.now()))}]: ${summary}`, chunk[chunk.length - 1]?.timestamp || Date.now());
+      this.stmtInsertIdleSummary.run(memoryId, `[RINGKASAN OBROLAN ${toDateKey(localDateFor(chunk[0]?.timestamp || Date.now()))}]: ${summary}`, chunk[chunk.length - 1]?.timestamp || Date.now());
     } catch (dbErr) {
       console.error("[CHAT_SUMMARY_IDLE_DB_ERR] Gagal menyimpan ringkasan jeda hening ke DB:", dbErr);
     }
@@ -394,9 +405,9 @@ private persistDailySummary(targetDate: string, summary: string) {
    */
 public getDailySummary(dateStr?: string): { date: string; summary: string; timestamp: number } | null {
     const targetDate = dateStr && /^\d{4}-\d{2}-\d{2}$/.test(dateStr) ? dateStr : yesterdayKey();
-    if (!this.db || !this.stmtGetDailySummary) return null;
+    if (!this.db || !this.stmtGetDailySummaryContent) return null;
     try {
-      const row = this.stmtGetDailySummary.get(`daily_summary_${targetDate}`);
+      const row = this.stmtGetDailySummaryContent.get(`daily_summary_${targetDate}`);
       if (!row) return null;
       let summary = String(row.content || "");
       summary = summary.replace(/^\[RINGKASAN HARIAN [^\]]+\]:\s*/, "").trim();
@@ -409,7 +420,7 @@ public getDailySummary(dateStr?: string): { date: string; summary: string; times
   private appendToLogFile(dateStr: string, msg: BufferedMessage) {
     try {
       const file = path.join(this.logDir, `${dateStr}.log`);
-      const line = `[${toTimeKey(new Date(msg.timestamp))}] [${msg.chatType || "chat"}] ${msg.speaker}: ${String(msg.text).replace(/\n/g, " ")}\n`;
+      const line = `[${toTimeKey(localDateFor(msg.timestamp))}] [${msg.chatType || "chat"}] ${msg.speaker}: ${String(msg.text).replace(/\n/g, " ")}\n`;
       appendFileSync(file, line, "utf-8");
     } catch (e) {
       console.warn("[CHAT_SUMMARY_LOG_ERR] Gagal menulis log harian:", e?.message || e);
@@ -419,7 +430,7 @@ public getDailySummary(dateStr?: string): { date: string; summary: string; times
   private appendToSummaryFile(dateStr: string, line: string) {
     try {
       const file = path.join(this.logDir, `${dateStr}.summary.log`);
-      appendFileSync(file, `[${toTimeKey(new Date())}] ${line}\n`, "utf-8");
+      appendFileSync(file, `[${toTimeKey(localDateFor())}] ${line}\n`, "utf-8");
     } catch (e) {
       console.warn("[CHAT_SUMMARY_SUMMARY_FILE_ERR] Gagal menulis file ringkasan:", e?.message || e);
     }
@@ -431,7 +442,7 @@ public getDailySummary(dateStr?: string): { date: string; summary: string; times
   private startDailyScheduler() {
     setInterval(() => {
       try {
-        const today = toDateKey(new Date());
+        const today = toDateKey(localDateFor());
         if (this.lastDailyDate && today !== this.lastDailyDate) {
           const prevDate = this.lastDailyDate;
           this.lastDailyDate = today;

@@ -107,6 +107,7 @@ import { FileManagerTool } from '../drivers/tools/file_manager/index.js';
 import { FileWriteTool } from '../drivers/tools/write_file/index.js';
 import { DailySummaryTool } from '../drivers/tools/daily_summary/index.js';
 import { ChatLogTool } from '../drivers/tools/chat_log/index.js';
+import { TelegramQuickToolkit } from '../drivers/tools/telegram_quick_tools/index.js';
 
 let initPromise: Promise<void> | null = null;
 
@@ -467,6 +468,7 @@ export function initializeCortexModules(): Promise<void> {
         OCRTool, ManagePairingTool, FileManagerTool, FileWriteTool,
         DailySummaryTool,
         ChatLogTool,
+        TelegramQuickToolkit,
         SendFinalReplyTool, SendStatusUpdateTool
       ];
 

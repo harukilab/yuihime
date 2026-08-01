@@ -46,6 +46,7 @@ export async function searchMemories(
       FROM memories_fts fts
       JOIN memories m ON m.rowid = fts.rowid
       WHERE memories_fts MATCH ?
+      ORDER BY fts.rank
     `;
     const params: any[] = [cleanQuery];
 

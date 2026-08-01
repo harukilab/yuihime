@@ -12,6 +12,7 @@ import { GlobalOutputDeduplicator } from "../kernel/GlobalOutputDeduplicator.js"
 import { extractChannelFileAttachments } from "./channelFileAttachment.js";
 import { describeImageFromBuffer } from "../../modules/YuiVisionModule.js";
 import { eventBus } from "@shared/core/kernel/event-bus";
+import { handleTgQuickCommand, handleTgCallback } from "../../drivers/tools/telegram_quick_tools/index.js";
 
 async function withDeliveryTimeout<T>(fn: () => Promise<T>, timeoutMs: number, label: string): Promise<T> {
   return Promise.race([
@@ -452,6 +453,30 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
     const tgUserId = ctx.from.id;
     const senderName = ctx.from.first_name || 'Anonymous';
 
+    // ── Telegram Quick Toolkit: perintah "/" yang diproses langsung tanpa LLM ──
+    if (rawInput.trim().startsWith('/')) {
+      const quickSettings = Kernel.getInstance().getSettings().getAll();
+      if (quickSettings['telegram_quick_tools']?.enabled !== false) {
+        const quickResult = await handleTgQuickCommand(rawInput, {
+          ctx,
+          db,
+          settings: quickSettings,
+          bot: activeTelegramBot,
+          startedAt: Date.now()
+        });
+        if (quickResult.handled) {
+          if (quickResult.reply?.text) {
+            try {
+              await ctx.reply(quickResult.reply.text, { reply_markup: quickResult.reply.keyboard });
+            } catch (sendErr: any) {
+              console.warn("[TELEGRAM_QUICK_TOOLS] Failed to send quick command reply:", sendErr?.message || sendErr);
+            }
+          }
+          return;
+        }
+      }
+    }
+
     // Handle incoming attachments (photos / documents / voice / audio / video)
     let attachmentProcessed = false;
     let attachmentInfo = "";
@@ -696,6 +721,35 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
        } catch (e) {
          console.error("Critical: Failed to send even the error report.", e);
        }
+    }
+  });
+
+  bot.on('callback_query', async (ctx) => {
+    try {
+      const data = (ctx.callbackQuery as any)?.data || '';
+      if (!data || !data.startsWith('qt:')) return;
+      await ctx.answerCbQuery().catch(() => {});
+      const currentSettings = Kernel.getInstance().getSettings().getAll();
+      if (currentSettings['telegram_quick_tools']?.enabled === false) return;
+      const result = await handleTgCallback(data, {
+        ctx,
+        db,
+        settings: currentSettings,
+        bot: activeTelegramBot
+      });
+      if (!result) return;
+      if (result.action === 'close') {
+        try { await ctx.deleteMessage(); } catch (_) {}
+        return;
+      }
+      try {
+        await ctx.editMessageText(result.text, { reply_markup: result.keyboard });
+      } catch (editErr: any) {
+        console.warn("[TELEGRAM_QUICK_TOOLS] Callback edit failed, replying instead:", editErr?.message || editErr);
+        try { await ctx.reply(result.text, { reply_markup: result.keyboard }); } catch (_) {}
+      }
+    } catch (err: any) {
+      console.error("[TELEGRAM_CALLBACK] Error handling callback:", err?.message || err);
     }
   });
 

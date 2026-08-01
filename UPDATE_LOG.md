@@ -1,6 +1,94 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.171] - 2026-08-01
+### Feature: Toolkit Telegram English + daftar model TensorArt live
+- Semua teks user-facing di Telegram Quick Toolkit kini Bahasa Inggris (menu, tombol, help /tools /bash /img, pesan error, deskripsi command); versi manifest 1.3.0.
+- /img Yui Mode kini memakai daftar model asli dari API TensorArt (tool/list): fetchTensorArtModels mem-parse data.tools, filter tool text-to-image (TENSOR_ART_V1 + prompt STRING + width INTEGER), batas 20 model, fallback walker generik.
+- Callback qt:img:yui memuat model yang tersedia sebelum meminta LLM memilih; prompt LLM menyertakan daftar model asli.
+- Smoke test tg_img_toolkit (23 kasus) dan dual_clock (26 kasus) hijau.
+
+
+## [4.170] - 2026-08-01
+### Feature: DualClock: dua referensi waktu Yui (Local ter-set + UTC)
+- Utility baru src/core/utils/dualClock.ts: offset timezone lokal dari setting circadian-rhythm.timezoneOffsetHours (default GMT+7), helper toLocalClock/localDateParts/formatLocalFull/formatUtcIso/localDaypart/dualClockPromptBlock.
+- Prompt LLM (PromptManager) kini memuat Current Time (UTC) + Current Time (Local) lengkap dengan label GMT+X; SomaticSensor & autonomousThought daypart pakai jam lokal.
+- Cron chan (CronModule matcher) dievaluasi memakai waktu lokal user, bukan server UTC — jadwal seperti '0 8 * * *' ikut zona user.
+- ChatSummaryEngine: kunci tanggal harian, log harian, dan daily summary memakai hari lokal.
+- get_current_time tool & /time Telegram menampilkan lokal (GMT+X) + UTC.
+- Test yui_tests/dual_clock.test.ts (26 kasus) hijau.
+
+
+## [4.169] - 2026-08-01
+### Feature: Perintah /time menampilkan waktu lokal + UTC
+- Perintah /time kini menampilkan dua zona: Lokal (timezone server) dan UTC, lengkap dengan tanggal keduanya.
+
+
+## [4.168] - 2026-08-01
+### Feature: Toolkit Telegram: /img model picker + Mode Yui + menu Tools
+- /img kini default 1024x1024 dan tanpa model menampilkan inline keyboard pilihan model dari TensorArt (list_tools), tombol Default, dan Batal.
+- Mode Yui (LLM) untuk /img: via ProviderGateway memilih model, dimensi, dan memoles prompt otomatis; fallback ke default bila gagal.
+- Menu baru Tools di menu utama & daemon (callback qt:tools) dengan sub-help Bash/Image/File.
+- Callback baru qt:img:model:* / qt:img:yui / qt:img:default / qt:img:cancel dengan pendingImgJobs per chat.
+- Smoke test yui_tests/tg_img_toolkit.test.ts (23 kasus) hijau.
+
+
+## [4.167] - 2026-08-01
+### Feature: Akses tools internal Yui via Telegram (admin)
+- Perintah admin baru di Telegram Quick Toolkit (/tools): /bash — eksekusi shell lewat POST /api/tools/shell (sandbox + blacklist/yolo); /img [WxH] [model:x] prompt — image generate via tool generate_image (SystemRegistry) dengan auto-kirim ke chat (contextId tg_); /ls [path], /cat <file> [head|tail] [N], /get <file> — daftar/lihat/kirim file.
+- Path guard untuk file: hanya ~/.yuihime dan direktori proyek; path lain ditolak. /get mengirim file sebagai dokumen ke chat via sendDocument.
+- Menu Daemon menambah tombol 🧰 Tools (qt:daemon:tools) yang menampilkan panduan /tools; toolkit versi 1.2.0.
+- Perbaikan race pada tools/yui-daemon.sh restart: cmd_stop kini menghentikan watchdog juga (WATCHDOG_SCRIPT stop) sebelum debug.sh stop, sehingga restart tidak lagi gagal karena watchdog lama masih aktif.
+
+
+## [4.166] - 2026-08-01
+### Feature: Log live (-live) untuk daemon
+- tools/yui-daemon.sh logs -live: stream log real-time — non-PM2 via tail -f (yui-debug.sh logs), PM2 via pm2 logs --raw. Alias: live, -f.
+- tools/yui-pm2.sh logs -live: stream log PM2 (pm2 logs --raw) dengan info Ctrl+C untuk keluar.
+- Bot /daemon logs live: memberi tahu live hanya untuk terminal dan menyarankan tools/yui-daemon.sh logs -live / tools/yui-pm2.sh logs -live.
+
+
+## [4.165] - 2026-08-01
+### Feature: PM2 jadi opsi tambahan — default tetap tanpa PM2
+- tools/yui-daemon.sh: DEFAULT kini tanpa PM2 (1 proses daemon + watchdog + yui-debug.sh). PM2 hanya dipakai bila diaktifkan eksplisit (--pm2 / YUIHIME_PM2=1) dan mendelegasikan ke tools/yui-pm2.sh.
+- tools/yui-pm2.sh (BARU): script khusus jalur PM2 — start [dev|prod], stop, restart, status, logs, save. Saat daemon lokal sehat, menolak start via PM2 (cegah konflik port).
+- Bot /daemon: setting usePm2 default false. Bila diaktifkan, start/stop/restart memakai tools/yui-pm2.sh (daemon di PM2 daemon, watchdog lokal dilewati); status menampilkan Mode PM2 AKTIF/NONAKTIF.
+
+
+## [4.164] - 2026-08-01
+### Feature: Dukungan jalan tanpa PM2 (--no-pm2 / YUIHIME_NO_PM2=1)
+- tools/yui-daemon.sh: tambah flag --no-pm2 dan env YUIHIME_NO_PM2=1 untuk memaksa jalur watchdog + yui-debug.sh meski PM2 terpasang; status menampilkan 'PM2: dinonaktifkan'.
+- Telegram Quick Toolkit: setting baru usePm2 (boolean, default true) di configSchema — bila dimatikan, /daemon start memakai watchdog + yui-debug.sh tanpa PM2.
+
+
+## [4.163] - 2026-08-01
+### Feature: tools/yui-daemon.sh: daemon start dari terminal (gabungan watchdog + yui-debug + PM2)
+- Tambah tools/yui-daemon.sh — twin terminal dari perintah bot /daemon: start [dev|prod] (PM2 bila terpasang + watchdog + debug.sh, cegah double-start via health check), stop, restart, status (gabung debug.sh + watchdog.pid + PM2), logs [N], rebuild (npm run build), help.
+- Mode default otomatis: prod bila dist/server.cjs ada, selain itu dev. PM2 dipakai sebagai supervisor utama bila daemon belum berjalan; bila sudah sehat, watchdog dijamin aktif (ensure_watchdog).
+
+
+## [4.162] - 2026-08-01
+### Feature: Telegram Quick Toolkit v1.1: manajemen daemon (watchdog + yui-debug + PM2) + tool rebuild ber-help
+- Tambah /daemon (admin) sub-command: status (gabung yui-debug.sh status + watchdog.pid + PM2 jlist), start (aktifkan via PM2 bila terpasang + watchdog + debug.sh), stop, restart, logs [N] — stop/restart dijadwalkan setelah balasan terkirim dan berjalan sebagai proses detached (amankan sinyal grup SIGINT/SIGKILL).
+- Tambah /rebuild (admin): jalankan npm run build di background (spawn detached), hasil dikirim otomatis ke chat setelah selesai; /rebuild help dan /daemon help menampilkan bantuan lengkap.
+- Menu inline: tombol 🛠️ Daemon hanya tampil untuk admin (qt:daemon + sub-menu status/start/stop/restart/rebuild/logs/help); semua aksi daemon divalidasi isAdmin.
+- Implementasi runShell memakai child_process.spawn detached (bukan execSync) agar tidak memblokir event loop daemon dan tidak ikut terbunuh oleh signal_group pada saat stop/restart.
+
+
+## [4.161] - 2026-08-01
+### Feature: Telegram Quick Toolkit: perintah "/" bypass LLM + menu inline keyboard
+- Tambah src/drivers/tools/telegram_quick_tools/ (manifest + index): toolkit perintah Telegram diawali '/' yang diproses langsung di daemon tanpa LLM. Perintah: /menu (alias /help), /ping, /time, /id, /me, /status, /about, /broadcast (admin).
+- Menu bot TIDAK berupa teks — memakai inline keyboard (qt:*) dengan tombol Waktu, ID Saya, Identitas, Status, Ping, Tentang, Tutup Menu, plus tombol kembali ke menu di tiap halaman.
+- telegram.ts: intercept pesan berawalan '/' sebelum pipeline LLM + handler bot.on('callback_query') untuk inline keyboard; tombol berfungsi walau LLM nonaktif.
+- RegistryInitializer: daftarkan TelegramQuickToolkit (tipe gateway) dengan configSchema (enabled, showMenuHint).
+
+
+## [4.160] - 2026-08-01
+### Fix: Fix regresi daily summary + perbaikan urutan hasil FTS search
+- ChatSummaryEngine.ts: getDailySummary memakai statement khusus SELECT content, timestamp (sebelumnya reuse SELECT id sehingga content/timestamp selalu undefined — summary kosong).
+- memorySearch.ts: tambah ORDER BY fts.rank sebelum LIMIT 80 agar kandidat yang di-join adalah match paling relevan (bukan rowid tertua). Verifikasi: 357ms.
+
+
 ## [4.159] - 2026-08-01
 ### Fix: freeze total proot — migrasi FTS5 external-content (hapus trigger per-row)
 - ROOT CAUSE TERKONFIRMASI: churn write per-row ke FTS5 (trigger trg_memories_ai/au/ad pada INSERT/UPDATE/DELETE memories) memicu freeze native di pager (pcache1FetchStage2 / __libc_pread). Repro mandiri: 400 iterasi churn -> beku; FTS trigger OFF -> selesai tanpa hang; mmap hanya menunda.

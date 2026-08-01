@@ -1,0 +1,34 @@
+{
+  "id": "telegram_quick_tools",
+  "name": "Telegram Quick Toolkit",
+  "description": "Direct Telegram commands (starting with '/') handled without the LLM: inline keyboard menu, quick info, daemon management (yui-watchdog.sh + yui-debug.sh + PM2), tool rebuild, and Yui internal tool access for admins (/bash, /img, /ls, /cat, /get).",
+  "version": "1.3.0",
+  "type": "gateway",
+  "order": 202,
+  "configSchema": {
+    "fields": {
+      "enabled": {
+        "type": "boolean",
+        "label": "Enable Toolkit",
+        "description": "Enable quick Telegram commands handled directly without the LLM.",
+        "default": true
+      },
+      "showMenuHint": {
+        "type": "boolean",
+        "label": "Show /menu hint",
+        "description": "When an unknown '/' command is received, show the command list and inline keyboard menu.",
+        "default": true
+      },
+      "usePm2": {
+        "type": "boolean",
+        "label": "Use PM2 (optional)",
+        "description": "DEFAULT is no PM2 (watchdog + yui-debug.sh, single-process daemon). When enabled, YuiHime runs as a PM2 daemon via tools/yui-pm2.sh — the local watchdog is skipped.",
+        "default": false
+      }
+    }
+  },
+  "parameters": {
+    "type": "object",
+    "properties": {}
+  }
+}

@@ -3,6 +3,7 @@ import { PromptRegistry } from '../core/PromptRegistry';
 import { SystemRegistry } from '@shared/core/registry';
 import { StorageService } from '@shared/drivers/storage';
 import { getDb } from '../core/database.js';
+import { formatUtcIso, formatLocalFullEn, getTzOffsetHours, tzLabel } from '../core/utils/dualClock.js';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -703,7 +704,8 @@ ${context.viewerIdentity?.importantFacts && context.viewerIdentity.importantFact
 # SOP PRIORITY DIRECTIVE
 Before responding or calling any tools, you MUST check the folder \`user_data/sops/\` using \`list_files\` or \`read_file\`. If there is an SOP file whose name is relevant to the user's request (for example, an image request matches \`user_data/sops/foto.md\`), you MUST read that SOP and treat it as the highest-priority instruction to guide your answer or tool execution.
 <environment_details>
-- **Current Time**: ${new Date().toISOString()}
+- **Current Time (UTC)**: ${formatUtcIso()}
+- **Current Time (Local)**: ${formatLocalFullEn(getTzOffsetHours(context?.config))} (${tzLabel(getTzOffsetHours(context?.config))})
 - **Working Directory**: ${process.cwd()}
 - **Workspace Root**: ${resolveHomePath(process.env.YUIHIME_SYSTEM_ROOT || process.env.YUIHIME_ROOT || '~/.yuihime')}
 - **User Data Sandbox**: ${path.join(resolveHomePath(process.env.YUIHIME_SYSTEM_ROOT || process.env.YUIHIME_ROOT || '~/.yuihime'), 'user_data')}

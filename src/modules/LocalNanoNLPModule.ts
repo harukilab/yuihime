@@ -2,6 +2,7 @@ import { getDb } from '../core/database.js';
 import { CortexModule, ModuleType, AgentState } from '@shared/include/types';
 import { StorageService } from '@shared/drivers/storage';
 import { NanoBrain, DecisionRouter, EpisodicMemory, CognitiveFatigue, predictWithTemperature } from '../core/neural/Brain';
+import { getTzOffsetHours, localDateParts } from '../core/utils/dualClock.js';
 
 interface MarkovModel {
   startWords: string[];
@@ -489,8 +490,8 @@ async function generateLocalMarkovResponse(input: string, state: AgentState, tem
   const isSweetheart = trust > 75 && affection > 45;
   const isStranger = trust < 35;
 
-  // Exact Time-of-Day Aware Chat & Correction Logic
-  const currentHour = new Date().getHours();
+  // Exact Time-of-Day Aware Chat & Correction Logic (waktu lokal user)
+  const currentHour = localDateParts(getTzOffsetHours(context?.config)).hour;
   let actualTimeOfDay: "pagi" | "siang" | "sore" | "malam" = "malam";
   if (currentHour >= 5 && currentHour < 11) {
     actualTimeOfDay = "pagi";

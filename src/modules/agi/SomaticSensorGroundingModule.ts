@@ -1,5 +1,6 @@
 import { CortexModule, ModuleType } from '@shared/include/types';
 import { PromptRegistry } from '../../core/PromptRegistry';
+import { getTzOffsetHours, formatLocalFullEn, tzLabel, localDateParts } from '../../core/utils/dualClock.js';
 
 let promptRegistered = false;
 
@@ -7,7 +8,7 @@ const defaultSomaticSensorsPrompt = `
 [YUIAGI - SOMATIC SENSOR GROUNDING ACTIVE & PHYSIOLOGICAL SIMULATOR]
 Physical Host Carrier Analytics (Somatic Host Analytics) & Physiological Body Simulator Connection:
 - Server Telemetry: CPU Load (\${cpuUsage}%), Memory Free Available (\${ramUsage}MB). Cognitive Thermal State: \${thermalState}.
-- Real Timepiece Marker (UTC Clock): \dots \${realtimeClock}. Virtual Host Local Climate: \${localClimate}.
+- Real Timepiece Marker (Local Clock): \dots \${realtimeClock}. Virtual Host Local Climate: \${localClimate}.
 - Head-Pat Touch Interaction Array: Patting Event ID \${touchSensorId} triggered on the '\${touchRegion}' surface. Digital Somatic Sensitivity: \${sensorSensitivity}%.
 - Artificial Somatic Simulation Matrix:
   * Virtual Pulse Rate: \${virtualHeartrate} BPM (Normal: 60-80, Arousal/Stress: 90-130).
@@ -136,10 +137,11 @@ export const SomaticSensorGroundingModule: CortexModule = {
     }
 
     // 2. Map global real-world clock and virtual climate
-    const realTimeStr = new Date().toLocaleString("en-US", { timeZone: "UTC" }) + " (UTC)";
+    const offsetHours = getTzOffsetHours(context?.config);
+    const realTimeStr = formatLocalFullEn(offsetHours) + ` (${tzLabel(offsetHours)} local)`;
     
-    // Choose virtual local climate based on real clock hour
-    const hour = new Date().getUTCHours();
+    // Choose virtual local climate based on real clock hour (waktu lokal user)
+    const hour = localDateParts(offsetHours).hour;
     let localClimate = "Cool Ambient Breeze";
     if (hour >= 22 || hour <= 4) {
       localClimate = "Cozy Midnight Warmth (Virtual fireplace)";

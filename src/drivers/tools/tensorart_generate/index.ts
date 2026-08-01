@@ -337,13 +337,13 @@ export const TensorArtGenerateTool: ToolModule = {
           type: "number",
           label: "Default Width (px)",
           description: "Default image width when not overridden by the LLM.",
-          default: 512,
+          default: 1024,
         },
         defaultHeight: {
           type: "number",
           label: "Default Height (px)",
           description: "Default image height when not overridden by the LLM.",
-          default: 512,
+          default: 1024,
         },
         requestTimeoutMs: {
           type: "number",
@@ -411,8 +411,8 @@ export const TensorArtGenerateTool: ToolModule = {
       return buildEnvelope("error", null, { code: "MISSING_PROMPT", message: "prompt is required for generate action.", retryable: false }, Date.now() - startTime, toolId, 0);
     }
 
-    const width = args.width || cfg.defaultWidth || 512;
-    const height = args.height || cfg.defaultHeight || 512;
+    const width = args.width || cfg.defaultWidth || 1024;
+    const height = args.height || cfg.defaultHeight || 1024;
     const count = 1;
     const timeoutMs = args.timeoutMs || 120000;
     const pollIntervalMs = Math.max(1000, args.pollIntervalMs || cfg.pollIntervalMs || 3000);
