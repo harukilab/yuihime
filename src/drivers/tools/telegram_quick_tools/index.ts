@@ -916,8 +916,31 @@ export const tgQuickCommands: TgCommandDef[] = [
       const pending = Array.isArray((globalThis as any).pendingConfirmations)
         ? (globalThis as any).pendingConfirmations.filter((i: any) => i?.status === 'pending').length
         : 0;
+
+      // ── Life simulation vitals from persisted agent_state ──
+      let lifeSection = '';
+      try {
+        const row = tc.db ? tc.db.prepare('SELECT status, systemHealth FROM agent_state LIMIT 1').get() : null;
+        const systemHealth = row && row.systemHealth ? JSON.parse(row.systemHealth) : {};
+        const lv = systemHealth.lifeVitals || {};
+        const inv = systemHealth.lifeInventory;
+        if (lv && (lv.hunger !== undefined || lv.thirst !== undefined || lv.sleepiness !== undefined)) {
+          const bar = (v: number) => {
+            const n = Math.max(0, Math.min(10, Math.round((v ?? 0) / 10)));
+            return '█'.repeat(n) + '░'.repeat(10 - n);
+          };
+          const sleepDot = lv.sleepState === 'asleep' ? '😴' : '🙂';
+          const foodQty = Array.isArray(inv?.foods) ? inv.foods.reduce((a: number, i: any) => a + (i.qty || 0), 0) : 0;
+          const drinkQty = Array.isArray(inv?.drinks) ? inv.drinks.reduce((a: number, i: any) => a + (i.qty || 0), 0) : 0;
+          const energyText = row?.status === 'sleeping' ? 'Tidur 💤' : (lv.energy !== undefined ? `${lv.energy}%` : 'Aktif');
+          lifeSection = `\n\n🧬 Life Simulation\n🍽️ Lapar: ${lv.hunger ?? '—'}% ${bar(lv.hunger)}\n💧 Haus: ${lv.thirst ?? '—'}% ${bar(lv.thirst)}\n🚿 Mandi: ${lv.cleanliness ?? '—'}% ${bar(lv.cleanliness)}\n🚽 Kebelet: ${lv.bladder ?? '—'}% ${bar(lv.bladder)}\n😴 Kantuk: ${lv.sleepiness ?? '—'}% ${bar(lv.sleepiness)}\n🛏️ Tidur: ${sleepDot} ${lv.sleepState === 'asleep' ? 'Tidur' : 'Bangun'} | Jadwal ${lv.effectiveBedtime || '—'}-${lv.effectiveWake || '—'}\n🐟 Craving ikan: ${lv.fishCraving ?? '—'}% | Urat main: ${lv.playUrge ?? '—'}%\n🎒 Inventory: ${foodQty} makanan | ${drinkQty} minuman\n🔋 Status: ${energyText}`;
+        }
+      } catch (e: any) {
+        lifeSection = `\n\n🧬 Life Simulation: (belum aktif — ${e?.message || 'error'})`;
+      }
+
       return {
-        text: `⚙️ System Status\n\n🤖 Telegram Bot: ${botActive ? '🟢 ACTIVE' : '🔴 INACTIVE'}\n🧠 LLM Engine: ${llmEngine}\n🗄️ Database: ${dbActive ? '🟢 CONNECTED' : '🔴 DISCONNECTED'}\n⏱️ Daemon uptime: ${fmtUptime(uptimeSec * 1000)}\n⏳ Pending confirmations: ${pending}`
+        text: `⚙️ System Status\n\n🤖 Telegram Bot: ${botActive ? '🟢 ACTIVE' : '🔴 INACTIVE'}\n🧠 LLM Engine: ${llmEngine}\n🗄️ Database: ${dbActive ? '🟢 CONNECTED' : '🔴 DISCONNECTED'}\n⏱️ Daemon uptime: ${fmtUptime(uptimeSec * 1000)}\n⏳ Pending confirmations: ${pending}${lifeSection}`
       };
     }
   },

@@ -1,6 +1,25 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.199] - 2026-08-02
+### Feature: Telegram /status menampilkan stat Life Simulation
+- Command /status kini menyertakan seksi 🧬 Life Simulation (lapar, haus, mandi, kebelet, kantuk, status tidur + jadwal, craving ikan, urat main, jumlah inventory) yang dibaca dari state.systemHealth.lifeVitals/lifeInventory di agent_state.
+
+
+## [4.198] - 2026-08-02
+### Fix: LifeSimulation: status & sleep memengaruhi sistem tapi tidak dinarasikan di chat
+- Prompt life simulation diubah: nilai vitals (lapar/haus/ngantuk/mandi/kebelet/ekor/telinga/purring) menjadi state internal murni — tidak boleh disebutkan ke user di chat.
+- Pengaruh ke state.status ('sleeping') dan state.energy tetap jalan, hanya nuansa nada balasan yang berubah (lesu, hangat, lambat, segar) tanpa mengumumkan penyebabnya.
+
+
+## [4.197] - 2026-08-02
+### Feature: LifeSimulationModule: simulasi biologi Nekomata (lapar, haus, mandi, kebelet, tidur adaptif, inventory) + pengaruh status & sleep
+- Modul baru src/modules/agi/LifeSimulationModule.ts: hunger, thirst, cleanliness (mandi), bladder (kamar mandi), adaptive sleep berbasis pola bergadang (sleep debt), purring, ekor/telinga, play urge & craving ikan.
+- Trigger interaksi trilingual ID/EN/JP (makan/minum/tidur/mandi/toilet/elus/main/ikan) + inventory starter (sashimi 🐟 favorit Nekomata) yang terkonsumsi otomatis.
+- Memengaruhi state.status ('sleeping' saat jendela tidur tanpa aktivitas) dan state.energy (terkuras saat lapar/haus/ngantuk, pulih saat tidur); bisa dimatikan via affectStatusAndSleep.
+- Narasi tetap persona-first via soulDirective dengan label trilingual (ID/EN/JP) untuk tiap vital.
+
+
 ## [4.196] - 2026-08-01
 ### Fix: Pindahkan seed cron ke onboarding.ts + jadwal 6 jam
 - seedDefaultCronTask(db) di src/core/server/onboarding.ts (dipanggil server.ts setelah setupSchema)

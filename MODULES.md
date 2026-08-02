@@ -104,3 +104,4 @@ Peta struktur direktori pasca-pemisahan Web UI ↔ Daemon (lihat UPDATE_LOG `[4.
 - `otome`
 - `otome`
 - `core`
+- `src/modules/agi/LifeSimulationModule.ts — yui-life: Nekomata Biological Life Simulation (hunger, thirst, hygiene, bladder, adaptive sleep, inventory, purring/play/fish craving; trilingual triggers; affects status & sleep).`
