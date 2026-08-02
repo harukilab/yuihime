@@ -10,6 +10,7 @@ import { deduplicateAndMergeIdentities, getDb, retryDbOperation } from "../datab
 
 import { broadcastToWS } from "../server/apiRouter";
 import { BackgroundToolDispatcher } from "./BackgroundToolDispatcher.js";
+import { rankMemoriesByForgetting, markMemoriesRecalled } from "../spacedRepetition.js";
 
 
 export interface NeuralReplyResult {
@@ -314,6 +315,21 @@ export class NeuralInterface {
         LIMIT 100
       `).all(...dbQueryParams);
       historyRows = recentRows.reverse();
+
+      // Forgetting-curve spaced repetition: pertahankan kontinuitas percakapan
+      // terbaru, re-rank memori lama berdasar probabilitas lupa (Ebbinghaus)
+      // + kepentingan, lalu tandai yang di-recall agar stabilitasnya menguat.
+      try {
+        const now = Date.now();
+        const recentCount = 20;
+        const continuity = historyRows.slice(-recentCount);
+        const older = historyRows.slice(0, historyRows.length - recentCount);
+        const { rows: recalledOlder } = rankMemoriesByForgetting(older, 30, now);
+        historyRows = [...recalledOlder, ...continuity];
+        markMemoriesRecalled(recalledOlder.map((r: any) => r.id));
+      } catch (err: any) {
+        console.warn('[NEURAL] Forgetting-curve re-rank gagal, pakai urutan kronologis:', err?.message || err);
+      }
     }
 
     memories = historyRows.map((r: any) => ({

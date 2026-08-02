@@ -164,4 +164,4 @@ export const AUTO_CLEANUP_LIMITS = {
   cleanup_interval_ms: 6 * 60 * 60 * 1000,
 };
 
-export const APP_VERSION = '4.207';
+export const APP_VERSION = '4.208';

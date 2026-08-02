@@ -1,6 +1,15 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.208] - 2026-08-02
+### feat: Stage D AGI: Forgetting-Curve Spaced Repetition (3 bahasa EN/ID/JP)
+- Helper baru core/spacedRepetition.ts: kurva lupa Ebbinghaus - stabilitas menguat tiap retrieval, recall probability P=exp(-dt/S), skor retrieval gabungan (forgetting boost + importance + recency), markMemoriesRecalled & getAtRiskMemories.
+- Migrasi DB: kolom retrievalCount & lastRetrievedAt di tabel memories (ALTER TABLE untuk DB lama).
+- Retrieval NeuralInterface: kontinuitas 20 memori terbaru dipertahankan, 80 memori lama di-re-rank berdasar forgetting curve + kepentingan (top 30), yang diambil ditandai agar makin stabil.
+- MemoryRetentionModule (SOUL order 21): proactive recollection - menggugah memori berisiko lupa (P<threshold) per user, menyuntikkan ingatan spontan trilingual ke soulDirective, memperkuat memori di DB.
+- Verifikasi: tsc bersih + smoke test temp-DB (kurva lupa, stabilisasi retrieval, re-rank, recollection directive, reinforcement) ALL PASS.
+
+
 ## [4.207] - 2026-08-02
 ### feat: Stage C AGI: Persistent User Model per-Persona (3 bahasa EN/ID/JP)
 - UserModelModule (SOUL order 22): profil persisten per user (contextId) - topTopics frekuensi, bahasa pilihan (deteksi ID/EN/JP), jumlah interaksi, lastSeen/firstSeen; diperbarui tiap siklus cortex dan diekspos via context.userModel.

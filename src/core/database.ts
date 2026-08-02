@@ -134,7 +134,9 @@ export async function setupSchema(db: any) {
         timestamp INTEGER,
         speaker TEXT,
         chat_type TEXT,
-        meta TEXT
+        meta TEXT,
+        retrievalCount INTEGER DEFAULT 0,
+        lastRetrievedAt INTEGER DEFAULT 0
       );
     `,
     dreams: `
@@ -371,6 +373,17 @@ export async function setupSchema(db: any) {
       console.error(`ERROR: Failed to create table "${tableName}":`, e.message);
     }
   }
+
+  // Migrasi kolom spaced-repetition untuk DB lama yang sudah punya tabel memories
+  try {
+    const memCols = db.prepare("PRAGMA table_info(memories)").all() as any[];
+    const colNames = new Set(memCols.map((c: any) => c.name));
+    if (!colNames.has('retrievalCount')) db.exec('ALTER TABLE memories ADD COLUMN retrievalCount INTEGER DEFAULT 0');
+    if (!colNames.has('lastRetrievedAt')) db.exec('ALTER TABLE memories ADD COLUMN lastRetrievedAt INTEGER DEFAULT 0');
+  } catch (e: any) {
+    console.warn('[SCHEMA] Migrasi spaced-repetition memories dilewati:', e?.message || e);
+  }
+
 
   // Optimized Secondary Indexes for instant database retrieval and query acceleration
   const indexes = {
