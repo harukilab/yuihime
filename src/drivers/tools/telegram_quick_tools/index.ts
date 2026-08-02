@@ -816,8 +816,74 @@ function commandListText(): string {
     .join('\n');
 }
 
-export function menuText(): string {
-  return `🎛️ Quick Command Menu\n\nCommands below are processed directly without the LLM:\n\n${commandListText()}\n\nUse the buttons below for quick access.`;
+function yuiStatusText(tc?: TgToolContext): string {
+  const s = tc?.settings || {};
+  const db = tc?.db;
+  const botActive = !!tc?.bot;
+  const uptimeSec = (typeof process !== 'undefined' && process.uptime ? process.uptime() : 0);
+
+  let state = { status: 'idle' } as any;
+  let relation = {} as any;
+  let life = {} as any;
+  let goals = 0;
+
+  try {
+    if (db) {
+      const row = db.prepare('SELECT status, relation, mood, systemHealth FROM agent_state LIMIT 1').get() as any;
+      if (row) {
+        state = { ...state, ...row };
+        if (row.relation) { try { relation = JSON.parse(row.relation); } catch {} }
+        if (row.systemHealth) {
+          try { life = JSON.parse(row.systemHealth).lifeVitals || {}; } catch {}
+        }
+      }
+      goals = Number((db.prepare("SELECT COUNT(*) AS n FROM goals WHERE status IN ('active','in_progress')").get() as any)?.n || 0);
+    }
+  } catch (err: any) {
+    console.warn('[TG_QUICK_TOOLS] status text fallback:', err?.message || err);
+  }
+
+  const bar = (v: number) => {
+    const n = Math.max(0, Math.min(10, Math.round((v ?? 0) / 10)));
+    return '█'.repeat(n) + '░'.repeat(10 - n);
+  };
+
+  const statusIcon =
+    state.status === 'sleeping' ? '😴'
+    : state.status === 'talking' ? '💬'
+    : state.status === 'thinking' ? '🧠'
+    : '🟢';
+
+  const lines: string[] = [
+    `🎛️ Yui Status`,
+    ``,
+    `${statusIcon} State: ${String(state.status || 'idle').toUpperCase()} | 🤖 Bot: ${botActive ? 'ACTIVE' : 'INACTIVE'}`,
+    `⏱️ Uptime: ${fmtUptime(uptimeSec * 1000)}`
+  ];
+
+  if (life && (life.hunger !== undefined || life.energy !== undefined || life.thirst !== undefined)) {
+    lines.push(
+      ``,
+      `🧬 ${life.sleepState === 'asleep' ? '😴' : '🙂'} Energy: ${life.energy ?? '—'}% ${bar(life.energy)}`,
+      `🍽️ Hunger: ${life.hunger ?? '—'}% ${bar(life.hunger)} | 💧 Thirst: ${life.thirst ?? '—'}% ${bar(life.thirst)}`,
+      `🚿 Cleanliness: ${life.cleanliness ?? '—'}% | 😴 Sleepiness: ${life.sleepiness ?? '—'}%`
+    );
+  }
+
+  const affection = relation.affection !== undefined ? relation.affection : '—';
+  const trust = relation.trust !== undefined ? relation.trust : '—';
+  lines.push(``, `❤️ Affection: ${affection} | 🤝 Trust: ${trust}`);
+
+  if (goals > 0) {
+    lines.push(`🎯 Active goals: ${goals}`);
+  }
+
+  lines.push(``, `Gunakan tombol di bawah untuk aksi cepat.`);
+  return lines.join('\n');
+}
+
+export function menuText(tc?: TgToolContext): string {
+  return yuiStatusText(tc);
 }
 
 // ───────────────────────── Command registry ─────────────────────────
@@ -826,7 +892,7 @@ export const tgQuickCommands: TgCommandDef[] = [
     name: 'menu',
     aliases: ['help', 'bantuan', 'perintah'],
     description: 'Open the inline keyboard menu',
-    handler: async (tc) => ({ text: menuText(), keyboard: menuKeyboard(tc) })
+    handler: async (tc) => ({ text: menuText(tc), keyboard: menuKeyboard(tc) })
   },
   {
     name: 'ping',
@@ -1187,7 +1253,7 @@ export async function handleTgCallback(data: string, tc: TgToolContext): Promise
   if (!String(data).startsWith('qt:')) return null;
   const cmd = String(data).slice(3).toLowerCase();
   if (cmd === 'close') return { action: 'close' };
-  if (cmd === 'menu') return { action: 'edit', text: menuText(), keyboard: menuKeyboard(tc) };
+  if (cmd === 'menu') return { action: 'edit', text: menuText(tc), keyboard: menuKeyboard(tc) };
 
   if (cmd === 'daemon') {
     if (!isAdmin(tc)) return { action: 'edit', text: '⛔ This command is for the bot admin only.', keyboard: backToMenuKeyboard() };

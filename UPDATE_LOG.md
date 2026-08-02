@@ -1,6 +1,13 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.212] - 2026-08-02
+### fix: TG Quick Toolkit: /menu tampilkan status Yui (bukan daftar perintah /)
+- menuText() kini menyusun teks status Yui (state, uptime, energy + life vitals hunger/thirst/cleanliness/sleep, affection & trust, jumlah goal aktif) dari agent_state & goals; daftar perintah '/' dihapus dari teks menu.
+- Keyboard inline tetap sama; call-site /menu (command + callback edit) meneruskan konteks tc.
+- Verifikasi: tsc bersih + smoke test output menuText (tanpa list slash, ada State & tombol) PASS.
+
+
 ## [4.211] - 2026-08-02
 ### feat: Stage G AGI: Full-Auto Loop — Goal Self-Proposal + Monitoring + Autonomous Execution
 - GoalProposalModule (SOUL order 25): self-proposal otomatis saat tak ada goal aktif / baru selesai & cooldown terlewati (default 6 jam) - generate + dekomposisi goal sendiri via context.think (jsonMode, regex-sanitize), fallback heuristik dari topik user model bila LLM gagal/offline, tabel goal_proposals untuk throttle.
