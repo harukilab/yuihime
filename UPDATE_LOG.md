@@ -5,6 +5,7 @@
 ### fix: TG Quick Toolkit: /menu tampilkan status Yui (bukan daftar perintah /)
 - menuText() kini menyusun teks status Yui (state, uptime, energy + life vitals hunger/thirst/cleanliness/sleep, affection & trust, jumlah goal aktif) dari agent_state & goals; daftar perintah '/' dihapus dari teks menu.
 - Keyboard inline tetap sama; call-site /menu (command + callback edit) meneruskan konteks tc.
+- Label teks menu menggunakan Bahasa Inggris (State, Uptime, Energy, Hunger, Thirst, Cleanliness, Sleepiness, Affection, Trust, Active goals, "Use the buttons below...").
 - Verifikasi: tsc bersih + smoke test output menuText (tanpa list slash, ada State & tombol) PASS.
 
 

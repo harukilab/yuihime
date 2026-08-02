@@ -878,7 +878,7 @@ function yuiStatusText(tc?: TgToolContext): string {
     lines.push(`🎯 Active goals: ${goals}`);
   }
 
-  lines.push(``, `Gunakan tombol di bawah untuk aksi cepat.`);
+  lines.push(``, `Use the buttons below for quick actions.`);
   return lines.join('\n');
 }
 
