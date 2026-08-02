@@ -1,6 +1,15 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.204] - 2026-08-02
+### fix: Refactor: hilangkan duplikasi Longing Index (satu sumber kebenaran)
+- SpontaneousProactiveModule tidak lagi menghitung & menimpa longingIndex; kini mengkonsumsi context.longingIndex hasil ProactiveVolitionModule (SOUL order 13 -> 14, urutan dijamin runCortexPhase sort by order).
+- Setting longingGrowthRate dihapus dari configSchema spontaneous-proactive; hanya dimiliki proactive-volition.
+- Hapus alias dead-code 'export const SpontaneousProactiveModule = ProactiveVolitionModule' di ProactiveVolitionModule.ts (tak pernah dipakai; RegistryInitializer mengimpor file standalone).
+- MultiChannelQueue.evaluateProactiveImpulse: sumber longingGrowthRate diarahkan ke config proactive-volition (fallback kunci lama spontaneous-proactive).
+- Verifikasi: tsc --noEmit bersih + smoke-test dua modul (longing sinkron di context & state.mood.loneliness).
+
+
 ## [4.203] - 2026-08-02
 ### Fix: standarisasi path data operasional ke OS home (~/.yuihime), bukan process.cwd()
 - workflow.json dipusatkan ke ~/.yuihime/data/workflow.json (server.ts, systemRouter.ts, storageServer.ts) via helper baru src/core/systemPaths.ts.

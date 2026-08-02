@@ -726,6 +726,7 @@ export class MultiChannelQueue {
     try {
        const settings = Kernel.getInstance().getSettings()?.getAll() || {};
       const spConfig = settings['spontaneous-proactive'] || settings.agent || {};
+      const volitionConfig = settings['proactive-volition'] || {};
       
       if (spConfig.enableSpontaneousSpam !== undefined) {
         enableSpontaneousSpam = !!spConfig.enableSpontaneousSpam;
@@ -746,8 +747,11 @@ export class MultiChannelQueue {
         cooldownInterval = Number(spConfig.cooldownInterval);
       }
 
-      if (spConfig.longingGrowthRate !== undefined) {
-        longingGrowthRate = Number(spConfig.longingGrowthRate);
+      // Satu sumber kebenaran untuk laju kerinduan: proactive-volition
+      // (fallback ke kunci lama spontaneous-proactive demi kompatibilitas).
+      const rateSource = volitionConfig.longingGrowthRate !== undefined ? volitionConfig : spConfig;
+      if (rateSource.longingGrowthRate !== undefined) {
+        longingGrowthRate = Number(rateSource.longingGrowthRate);
       }
     } catch (settingsError) {}
 

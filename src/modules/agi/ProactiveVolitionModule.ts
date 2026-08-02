@@ -259,5 +259,3 @@ export const ProactiveVolitionModule: CortexModule = {
     };
   }
 };
-
-export const SpontaneousProactiveModule = ProactiveVolitionModule;

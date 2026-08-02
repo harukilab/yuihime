@@ -1,8 +1,9 @@
 /**
  * SpontaneousProactiveModule.ts
  * 
- * Mengelola sirkuit mental Kerinduan (Longing Level Core) dan inisiatif 
- * pesan spontan iseng (tsundere/deredere) secara otonom.
+ * Mengelola inisiatif pesan spontan iseng (tsundere/deredere) secara otonom.
+ * Indeks Kerinduan (Longing Level) dihitung oleh ProactiveVolitionModule
+ * (SOUL, order 13) dan dikonsumsi dari sini — satu sumber kebenaran.
  * 
  * Phase: SOUL
  * Part of the "Plug-and-Play" architecture.
@@ -45,7 +46,7 @@ export const SpontaneousProactiveModule: CortexModule = {
   metadata: {
     id: 'spontaneous-proactive',
     name: 'yui-spontaneous-proactive: Spontaneous Impulse & Longing Core',
-    description: 'Manages Yui\'s psychological longing index. Sparks autonomous proactive impulses (tsundere/deredere roleplay) when the user has been quiet for too long or when Yui experiences deep longing.',
+    description: 'Sparks autonomous proactive impulses (tsundere/deredere roleplay) when the user has been quiet for too long, driven by the longing index computed by proactive-volition.',
     version: '1.0.0',
     type: ModuleType.CORTEX,
     order: 14, // Executed early in the SOUL phase
@@ -79,15 +80,6 @@ export const SpontaneousProactiveModule: CortexModule = {
           step: 0.05,
           description: 'Probability factor for Yui sending a proactive message during prolonged silence (default 10%).'
         },
-        longingGrowthRate: {
-          type: 'slider',
-          label: 'Longing Accumulation Rate (per minute)',
-          default: 0.5,
-          min: 0.1,
-          max: 10.0,
-          step: 0.1,
-          description: 'Percentage growth of Yui\'s longing index for each minute the user does not respond.'
-        },
         promptTemplate: {
           type: 'textarea',
           label: 'Spontaneous Impulse Prompt',
@@ -112,28 +104,11 @@ export const SpontaneousProactiveModule: CortexModule = {
     const lastActiveTime = context.lastInteractiveTimestamp || now;
     const idleSeconds = (now - lastActiveTime) / 1000;
 
-    // 2. Hitung Dinamika Indeks Kerinduan (Longing Level Index)
-    const growthRate = Number(config.longingGrowthRate || 1.5);
-    const idleMinutes = idleSeconds / 60;
-    
-    // Akumulasi kerinduan dihitung secara logis dari durasi keheningan
-    let longingIndex = Math.min(100, Math.round(idleMinutes * growthRate * 12));
-    
-    // Modulasi kerinduan berdasarkan mood playfulness & affection jika tersedia
-    const playfulness = state.mood?.playfulness || 50;
-    const affection = state.relation?.affection !== undefined ? state.relation.affection : 60;
-    longingIndex = Math.round((longingIndex * 0.7) + (playfulness * 0.15) + (affection * 0.15));
-    longingIndex = Math.min(100, Math.max(5, longingIndex));
-
-    // Persist into state.mood.loneliness for full synchronization across the soul state
-    if (!state.mood) {
-      state.mood = { joy: 50, anger: 0, sadness: 0, stress: 0, irritation: 0, excitement: 10, embarrassment: 0, curiosity: 50, lastUpdate: Date.now() };
-    }
-    state.mood.loneliness = longingIndex;
-
-    // Suntikkan longingIndex ke dalam context agar bisa dirujuk modul lain dan digambarkan ke visual
+    // 2. Konsumsi Longing Index dari ProactiveVolitionModule (SOUL, order 13).
+    //    Jangan hitung ulang — satu sumber kebenaran untuk mencegah saling timpa.
+    const longingIndex = context.longingIndex ?? state.mood?.loneliness ?? 5;
     context.longingIndex = longingIndex;
-    logs.push(`[SPONTANEOUS_PROACTIVE] Menghitung Indeks Kerinduan: ${longingIndex}% (Idle: ${Math.round(idleSeconds)}s)`);
+    logs.push(`[SPONTANEOUS_PROACTIVE] Menggunakan Indeks Kerinduan: ${longingIndex}% (Idle: ${Math.round(idleSeconds)}s)`);
 
     // 3. Masukkan direktif impuls kerinduan ke dalam instruksi batin
     const registry = PromptRegistry.getInstance();
