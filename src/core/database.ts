@@ -289,6 +289,20 @@ export async function setupSchema(db: any) {
         resolvedAt INTEGER
       );
     `,
+    goals: `
+      CREATE TABLE IF NOT EXISTS goals (
+        id TEXT PRIMARY KEY,
+        parent_id TEXT,
+        title TEXT,
+        description TEXT,
+        status TEXT DEFAULT 'active',
+        progress REAL DEFAULT 0,
+        category TEXT DEFAULT 'general',
+        note TEXT DEFAULT '',
+        created_at INTEGER,
+        updated_at INTEGER
+      );
+    `,
     telegram_users: `
       CREATE TABLE IF NOT EXISTS telegram_users (
         tg_id INTEGER PRIMARY KEY,

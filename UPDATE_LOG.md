@@ -1,6 +1,15 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.210] - 2026-08-02
+### feat: Stage F AGI: Recursive Goal Decomposition & Closed-Loop Monitoring (3 bahasa EN/ID/JP)
+- Helper baru core/goalDecomposition.ts + tabel goals (parent_id, status, progress, category): createGoal, decomposeGoal (rekursif), advanceGoal, completeGoal, abandonGoal, getFocusGoal.
+- Closed-loop monitoring: progress subgoal dirata-ratakan ke parent secara rekursif; saat semua subgoal selesai, parent auto-complete naik sampai akar.
+- GoalDecompositionModule (SOUL order 26): membaca goal fokus paling relevan tiap siklus & menyuntikkan direktif trilingual (judul, %, progress sub-goal tree) ke soulDirective agar Yui mendorong kemajuan goal secara natural.
+- API baru: GET/POST /api/goals, POST /api/goals/:id/advance | complete | abandon | decompose.
+- Verifikasi: tsc bersih + smoke test temp-DB (dekomposisi 2 level, propagasi progress rekursif, auto-complete akar saat semua sub selesai, focus goal) ALL PASS.
+
+
 ## [4.209] - 2026-08-02
 ### feat: Stage E AGI: After-Action Review Loop (3 bahasa EN/ID/JP)
 - Helper baru core/afterActionReview.ts + tabel action_reviews: createActionReview (tiap pesan keluar), resolveReviewByMessage (feedback nyata -> successRating + lesson trilingual), createToolFailureReview (self-review tool gagal), getResolvedLessons, listRecentReviews.

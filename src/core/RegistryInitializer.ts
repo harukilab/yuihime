@@ -67,6 +67,7 @@ import { ConfidenceEstimatorModule } from '../modules/agi/ConfidenceEstimatorMod
 import { UserModelModule } from '../modules/agi/UserModelModule.js';
 import { MemoryRetentionModule } from '../modules/agi/MemoryRetentionModule.js';
 import { AfterActionReviewModule } from '../modules/agi/AfterActionReviewModule.js';
+import { GoalDecompositionModule } from '../modules/agi/GoalDecompositionModule.js';
 
 import { LocalProvider } from '../drivers/ai-providers/LocalProvider.js';
 import { GeminiProvider } from '../drivers/ai-providers/GeminiProvider.js';
@@ -465,7 +466,7 @@ export function initializeCortexModules(): Promise<void> {
         MemoryConsolidationModule, HighOrderMetacognitionModule, DreamModule, ContinuousLearningMemoryModule,
         CognitiveReflexModule, CognitiveIntegrityGuardianModule, CognitiveHeuristicsModule, CircadianRhythmModule,
         AdaptiveLearningModule, AbstractReasoningModule, MetacognitionReflectModule, SelfAwarenessReflectModule,
-        DiaryModule, LifeSimulationModule, FeedbackLoopModule, ConfidenceEstimatorModule, UserModelModule, MemoryRetentionModule, AfterActionReviewModule,
+        DiaryModule, LifeSimulationModule, FeedbackLoopModule, ConfidenceEstimatorModule, UserModelModule, MemoryRetentionModule, AfterActionReviewModule, GoalDecompositionModule,
         LocalProvider, GeminiProvider, CustomProvider, AnthropicProvider, OpenAIProvider,
         OfficialChatProvider, OpenRouter, OfficialSpeechTTS, ElevenLabsTTS, WebSpeechTTS,
         OpenRouterTTS, OfficialStreamingSpeechTTS, CustomAPITTS, GeminiTTS,

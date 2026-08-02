@@ -94,6 +94,10 @@ import { registerTelegramRoutes } from "./routes/telegramRouter.js";
 import { recordFeedback } from "../feedback.js";
 import { listUserModels, getUserModel } from "../userModel.js";
 import { listRecentReviews, getPendingReviewCount } from "../afterActionReview.js";
+import {
+  createGoal, listGoals, getGoal, advanceGoal, completeGoal,
+  abandonGoal, decomposeGoal, getFocusGoal
+} from "../goalDecomposition.js";
 import { registerSynthesizerRoutes } from "./routes/synthesizerRouter.js";
 import { registerToolsRoutes } from "./routes/toolsRouter.js";
 import { registerIdentitiesRoutes } from "./routes/identitiesRouter.js";
@@ -770,6 +774,78 @@ export function registerAPIRoutes(app: express.Express, db: any) {
       res.json({ reviews: listRecentReviews(30), pending: getPendingReviewCount() });
     } catch (err: any) {
       console.error("[SERVER] GET /api/action-reviews Error:", err?.message || err);
+      res.status(500).json({ error: err?.message || 'unknown' });
+    }
+  });
+
+  // ── Recursive Goal Decomposition API (Stage F) ──
+  app.get("/api/goals", async (_req, res) => {
+    try {
+      res.json({ goals: listGoals(200), focus: getFocusGoal() });
+    } catch (err: any) {
+      console.error("[SERVER] GET /api/goals Error:", err?.message || err);
+      res.status(500).json({ error: err?.message || 'unknown' });
+    }
+  });
+
+  app.post("/api/goals", async (req, res) => {
+    try {
+      const body = req.body || {};
+      if (!body.title) return res.status(400).json({ error: 'title required' });
+      const goal = createGoal({
+        title: String(body.title),
+        description: body.description ? String(body.description) : undefined,
+        category: body.category ? String(body.category) : undefined,
+        parentId: body.parentId ? String(body.parentId) : null
+      });
+      res.json({ goal });
+    } catch (err: any) {
+      console.error("[SERVER] POST /api/goals Error:", err?.message || err);
+      res.status(500).json({ error: err?.message || 'unknown' });
+    }
+  });
+
+  app.post("/api/goals/:id/advance", async (req, res) => {
+    try {
+      const delta = Math.max(-1, Math.min(1, Number(req.body?.delta || 0.1)));
+      const goal = advanceGoal(req.params.id, delta);
+      if (!goal) return res.status(404).json({ error: 'not found' });
+      res.json({ goal });
+    } catch (err: any) {
+      console.error("[SERVER] POST /api/goals/:id/advance Error:", err?.message || err);
+      res.status(500).json({ error: err?.message || 'unknown' });
+    }
+  });
+
+  app.post("/api/goals/:id/complete", async (req, res) => {
+    try {
+      const goal = completeGoal(req.params.id);
+      if (!goal) return res.status(404).json({ error: 'not found' });
+      res.json({ goal });
+    } catch (err: any) {
+      console.error("[SERVER] POST /api/goals/:id/complete Error:", err?.message || err);
+      res.status(500).json({ error: err?.message || 'unknown' });
+    }
+  });
+
+  app.post("/api/goals/:id/abandon", async (req, res) => {
+    try {
+      const goal = abandonGoal(req.params.id);
+      if (!goal) return res.status(404).json({ error: 'not found' });
+      res.json({ goal });
+    } catch (err: any) {
+      console.error("[SERVER] POST /api/goals/:id/abandon Error:", err?.message || err);
+      res.status(500).json({ error: err?.message || 'unknown' });
+    }
+  });
+
+  app.post("/api/goals/:id/decompose", async (req, res) => {
+    try {
+      const subgoals = Array.isArray(req.body?.subgoals) ? req.body.subgoals : [];
+      const children = decomposeGoal(req.params.id, subgoals);
+      res.json({ children, parent: getGoal(req.params.id) });
+    } catch (err: any) {
+      console.error("[SERVER] POST /api/goals/:id/decompose Error:", err?.message || err);
       res.status(500).json({ error: err?.message || 'unknown' });
     }
   });
