@@ -771,7 +771,7 @@ function menuKeyboard(tc?: TgToolContext) {
     [{ text: '🪪 Identity', callback_data: 'qt:me' }, { text: '⚙️ Status', callback_data: 'qt:status' }],
     [{ text: '🏓 Ping', callback_data: 'qt:ping' }, { text: '💖 About', callback_data: 'qt:about' }]
   ];
-  rows.push([{ text: '🧹 New Chat', callback_data: 'qt:new' }]);
+  rows.push([{ text: '🎯 Goals', callback_data: 'qt:goals' }, { text: '🧹 New Chat', callback_data: 'qt:new' }]);
   if (tc && isAdmin(tc)) {
     rows.push([{ text: '🛠️ Daemon', callback_data: 'qt:daemon' }]);
     rows.push([{ text: '🧰 Tools', callback_data: 'qt:tools' }]);
@@ -847,6 +847,7 @@ function yuiStatusText(tc?: TgToolContext): string {
     const n = Math.max(0, Math.min(10, Math.round((v ?? 0) / 10)));
     return '█'.repeat(n) + '░'.repeat(10 - n);
   };
+  const val = (v: any) => (v === undefined || v === null ? '—' : String(v));
 
   const statusIcon =
     state.status === 'sleeping' ? '😴'
@@ -855,27 +856,41 @@ function yuiStatusText(tc?: TgToolContext): string {
     : '🟢';
 
   const lines: string[] = [
-    `🎛️ Yui Status`,
-    ``,
-    `${statusIcon} State: ${String(state.status || 'idle').toUpperCase()} | 🤖 Bot: ${botActive ? 'ACTIVE' : 'INACTIVE'}`,
-    `⏱️ Uptime: ${fmtUptime(uptimeSec * 1000)}`
+    `✦ YUI STATUS ✦`,
+    ``
   ];
 
+  // ── Core state ──
+  lines.push(
+    `State    ${statusIcon} ${String(state.status || 'idle').toUpperCase()}`,
+    `Bot      ${botActive ? '🟢 ACTIVE' : '🔴 INACTIVE'}`,
+    `Uptime   ⏱️ ${fmtUptime(uptimeSec * 1000)}`
+  );
+
+  // ── Life simulation ──
   if (life && (life.hunger !== undefined || life.energy !== undefined || life.thirst !== undefined)) {
     lines.push(
       ``,
-      `🧬 ${life.sleepState === 'asleep' ? '😴' : '🙂'} Energy: ${life.energy ?? '—'}% ${bar(life.energy)}`,
-      `🍽️ Hunger: ${life.hunger ?? '—'}% ${bar(life.hunger)} | 💧 Thirst: ${life.thirst ?? '—'}% ${bar(life.thirst)}`,
-      `🚿 Cleanliness: ${life.cleanliness ?? '—'}% | 😴 Sleepiness: ${life.sleepiness ?? '—'}%`
+      `🧬 LIFE SIMULATION`,
+      `🍽️  Hunger       ${val(life.hunger)}%  ${bar(life.hunger)}`,
+      `💧  Thirst       ${val(life.thirst)}%  ${bar(life.thirst)}`,
+      `🚿  Cleanliness  ${val(life.cleanliness)}%  ${bar(life.cleanliness)}`,
+      `😴  Sleepiness   ${val(life.sleepiness)}%  ${bar(life.sleepiness)}`,
+      `🔋  Energy       ${val(life.energy)}%  ${bar(life.energy)}`,
+      `🛏️  Sleep        ${life.sleepState === 'asleep' ? '😴 Asleep' : '🙂 Awake'} (${val(life.effectiveBedtime)}–${val(life.effectiveWake)})`
     );
   }
 
-  const affection = relation.affection !== undefined ? relation.affection : '—';
-  const trust = relation.trust !== undefined ? relation.trust : '—';
-  lines.push(``, `❤️ Affection: ${affection} | 🤝 Trust: ${trust}`);
+  // ── Relation ──
+  lines.push(
+    ``,
+    `💗 RELATION`,
+    `❤️  Affection   ${val(relation.affection)}`,
+    `🤝  Trust       ${val(relation.trust)}`
+  );
 
   if (goals > 0) {
-    lines.push(`🎯 Active goals: ${goals}`);
+    lines.push(``, `🎯 Active goals: ${goals}`);
   }
 
   lines.push(``, `Use the buttons below for quick actions.`);
@@ -1025,6 +1040,47 @@ export const tgQuickCommands: TgCommandDef[] = [
     description: 'Start a fresh clean chat — summarize & archive the old conversation as Yui\u2019s memory',
     usage: '/new',
     handler: async (tc) => runNewChat(tc)
+  },
+  {
+    name: 'goals',
+    aliases: ['goal', 'target'],
+    description: 'Show Yuihime\u2019s active goals & progress',
+    usage: '/goals',
+    handler: async (tc) => {
+      if (!tc.db) return { text: 'Database unavailable.' };
+      const rows = tc.db
+        .prepare(`SELECT * FROM goals WHERE status IN ('active','in_progress') ORDER BY created_at DESC LIMIT 30`)
+        .all() as any[];
+      if (!rows.length) return { text: '🎯 No active goals yet.\n\nUse /goals to refresh later.' };
+      const childrenOf = new Map<string, any[]>();
+      for (const g of rows) {
+        if (g.parent_id) {
+          const arr = childrenOf.get(g.parent_id) || [];
+          arr.push(g);
+          childrenOf.set(g.parent_id, arr);
+        }
+      }
+      const bar = (p: number) => {
+        const n = Math.max(0, Math.min(10, Math.round((p || 0) * 10)));
+        return '█'.repeat(n) + '░'.repeat(10 - n);
+      };
+      const lines: string[] = ['🎯 ACTIVE GOALS'];
+      for (const g of rows) {
+        if (g.parent_id) continue;
+        lines.push(
+          ``,
+          `${g.status === 'in_progress' ? '🔄' : '📌'} ${g.title}`,
+          `   ${Math.round((g.progress || 0) * 100)}% ${bar(g.progress)}${g.category && g.category !== 'general' ? `  ·  ${g.category}` : ''}`
+        );
+        const subs = childrenOf.get(g.id) || [];
+        for (const s of subs) {
+          lines.push(
+            `   ${s.status === 'completed' ? '✅' : '▪️'} ${s.title} — ${Math.round((s.progress || 0) * 100)}%`
+          );
+        }
+      }
+      return { text: lines.join('\n').slice(0, 3000) };
+    }
   },
   {
     name: 'daemon',

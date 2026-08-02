@@ -1,6 +1,12 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.213] - 2026-08-02
+### feat: TG /goals — lihat goal aktif + tombol menu
+- Command baru /goals (+ alias /goal, /target) menampilkan goal aktif Yuihime: root dengan status 🔄 (in_progress) / 📌 (active), progress bar █/░ + persentase, kategori, dan sub-goal (✅/▪️) — query langsung dari tabel `goals` via `tc.db`, tanpa melibatkan LLM.
+- Tombol baru 🎯 Goals di inline menu, callback `qt:goals` route ke command handler yang sama (backToMenuKeyboard).
+- menuText() State line dirapikan: emoji status tidak dobel (🟢 IDLE / 🟢 ACTIVE tanpa emoji duplikat di depan label).
+- Verifikasi: tsc --noEmit bersih, smoke test menuText output (State/Bot/Uptime + RELATION) PASS, build server OK, daemon restart health 200.
 ## [4.212] - 2026-08-02
 ### fix: TG Quick Toolkit: /menu tampilkan status Yui (bukan daftar perintah /)
 - menuText() kini menyusun teks status Yui (state, uptime, energy + life vitals hunger/thirst/cleanliness/sleep, affection & trust, jumlah goal aktif) dari agent_state & goals; daftar perintah '/' dihapus dari teks menu.
