@@ -1,6 +1,16 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.201] - 2026-08-02
+### Fix: Verifikasi & populate life vitals di DB agar /status TG tampil
+- Terverifikasi modul menulis semua field terhitung (hunger/thirst/sleepiness/cleanliness/bladder/energy/status) ke state.systemHealth.lifeVitals; DB di-populate sehingga /status TG kini menampilkan seksi 🧬 Life Simulation.
+
+
+## [4.200] - 2026-08-02
+### Fix: Persist hasil kalkulasi life vitals agar /status TG bisa membacanya
+- lifeVitals kini menyimpan hunger/thirst/cleanliness/bladder/sleepiness, jadwal tidur, purr/tail/ear, play urge, fish craving, energy & status — tidak hanya raw timestamps. Sebelumnya /status hanya menampilkan raw lastMeal/lastDrink sehingga seksi 🧬 Life Simulation kosong.
+
+
 ## [4.199] - 2026-08-02
 ### Feature: Telegram /status menampilkan stat Life Simulation
 - Command /status kini menyertakan seksi 🧬 Life Simulation (lapar, haus, mandi, kebelet, kantuk, status tidur + jadwal, craving ikan, urat main, jumlah inventory) yang dibaca dari state.systemHealth.lifeVitals/lifeInventory di agent_state.

@@ -602,6 +602,20 @@ export const LifeSimulationModule: CortexModule = {
     }
 
     // --- Persist + export ---
+    v.hunger = Math.round(hunger);
+    v.thirst = Math.round(thirst);
+    v.cleanliness = Math.round(cleanliness);
+    v.bladder = Math.round(bladder);
+    v.sleepiness = Math.round(sleepiness);
+    v.effectiveBedtime = effectiveBedtimeText;
+    v.effectiveWake = effectiveWakeText;
+    v.purr = Math.round(purrLevel);
+    v.tailState = tailState;
+    v.earState = earState;
+    v.playUrge = Math.round(playUrge);
+    v.fishCraving = Math.round(fishCraving);
+    v.energy = state.energy;
+    v.status = state.status;
     state.systemHealth.lifeVitals = v;
     if (enableInventory) {
       state.systemHealth.lifeInventory = inventory;
