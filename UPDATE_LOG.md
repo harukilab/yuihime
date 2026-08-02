@@ -1,6 +1,26 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.203] - 2026-08-02
+### Fix: standarisasi path data operasional ke OS home (~/.yuihime), bukan process.cwd()
+- workflow.json dipusatkan ke ~/.yuihime/data/workflow.json (server.ts, systemRouter.ts, storageServer.ts) via helper baru src/core/systemPaths.ts.
+- custom_tools_registry.json pindah ke ~/.yuihime/data (CustomToolsLoader + toolsRouter); dir dijamin dibuat.
+- Edit persona via UI (POST /api/system/markdown) kini menulis ke ~/.yuihime/agent terlebih dahulu, sinkron ke salinan project bila ada; UPDATE_LOG/MODULES tetap di root project.
+- Backup/restore pakai os.tmpdir() bukan cwd (systemRouter).
+- TensorArt access key dibaca dari ~/.yuihime/tensor_access_key lalu ~/.tensor_access_key (pakai os.homedir, bukan process.env.HOME).
+- resolveSystemRoot() baru selalu absolut via os.homedir() & dipakai konsisten di database, settings, systemRouter, apiRouter, SOPModule, terminal, onboarding, server, tensorart_generate.
+- PluginManager urutan addons: YUIHIME_ADDONS_PATH/systemRoot/addons dulu, cwd/addons hanya fallback dev.
+- Verifikasi: tsc --noEmit bersih, dual_clock.test hijau, build web (vite) & bundle server (esbuild) sukses. Catatan: RUNTIME_DEFAULTS.sandbox_paths di shared/constants.ts sengaja dibiarkan relatif karena dipakai UI web (default absolut di-override onboarding ke config.toml).
+
+
+## [4.202] - 2026-08-02
+### Fix: perbaiki isi tools/tester: path relatif yui_tests -> tools/tester
+- Semua import relatif TS di tools/tester ('../src' & '../shared') diperbaiki ke '../../src'/'../../shared' agar resolvable dari lokasi baru (sebelumnya mengarah ke tools/src yang tak ada).
+- Path runtime 'yui_tests/*' (log diagnostic, dummy image) dan referensi run pada stress_db.cjs & fastTrackWorker.test.mjs disesuaikan ke tools/tester.
+- npm run lint (tsc --noEmit) kini bersih; dual_clock, tg_img_toolkit, fastTrackWorker test hijau.
+- Hapus script npm 'terminal' & 'sandbox' (redundan; src/bin/terminal.ts tetap dipakai server via flag --terminal/--sandbox).
+
+
 ## [4.201] - 2026-08-02
 ### Fix: Verifikasi & populate life vitals di DB agar /status TG tampil
 - Terverifikasi modul menulis semua field terhitung (hunger/thirst/sleepiness/cleanliness/bladder/energy/status) ke state.systemHealth.lifeVitals; DB di-populate sehingga /status TG kini menampilkan seksi 🧬 Life Simulation.

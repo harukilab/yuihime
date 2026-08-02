@@ -6,6 +6,7 @@ import os from "os";
 import { execSync } from "child_process";
 import { getDb, withDbRetry, retryDbOperation } from "../database.js";
 import { appendLog } from "../fileLogger.js";
+import { resolveSystemRoot } from "../systemPaths.js";
 
 let __filename = "";
 let __dirname = "";
@@ -187,9 +188,7 @@ export async function seedDefaultCronTask(db: any): Promise<void> {
 
 // --- Onboarding Flow: Extract default and establish folders outside binary if missing ---
 export function runOnboarding() {
-  const rootEnv = process.env.YUIHIME_SYSTEM_ROOT || process.env.YUIHIME_ROOT || "~/.yuihime";
-  const expandedRoot = resolveHomePath(rootEnv);
-  const yuihimeSystemRootCheck = path.isAbsolute(expandedRoot) ? expandedRoot : path.join(process.cwd(), expandedRoot);
+  const yuihimeSystemRootCheck = resolveSystemRoot();
   const rawDataDirCheck = process.env.YUIHIME_DATA_DIR;
   const resolvedDataDirCheck = rawDataDirCheck ? resolveHomePath(rawDataDirCheck) : path.join(yuihimeSystemRootCheck, "data");
   const rawConfigPathCheck = process.env.YUIHIME_CONFIG;

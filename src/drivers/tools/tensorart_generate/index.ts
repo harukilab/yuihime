@@ -5,6 +5,7 @@ import path from "path";
 import os from "os";
 import fsp from "fs/promises";
 import { appendLog, readLogLines } from "@/core/fileLogger";
+import { resolveSystemRoot } from "@/core/systemPaths";
 
 interface GenerateArgs {
   action?: "generate" | "list_tools" | "upload_file" | "list_history";
@@ -43,8 +44,19 @@ async function getAccessKey(settings: any): Promise<string> {
   let fromFile = "";
   if (typeof window === "undefined") {
     try {
-      const { readFileSync, path } = await loadNodeFs();
-      fromFile = readFileSync(path.join(process.env.HOME || "", ".tensor_access_key"), "utf-8").trim();
+      const { readFileSync } = await loadNodeFs();
+      const candidates = [
+        path.join(getSystemRoot(), "tensor_access_key"),
+        path.join(os.homedir(), ".tensor_access_key")
+      ];
+      for (const candidate of candidates) {
+        try {
+          fromFile = readFileSync(candidate, "utf-8").trim();
+          if (fromFile) break;
+        } catch {
+          // try next candidate
+        }
+      }
     } catch {
       fromFile = "";
     }
@@ -60,18 +72,7 @@ function getBaseUrl(accessKey: string): string {
 }
 
 function getSystemRoot(): string {
-  let rootEnv = process.env.YUIHIME_SYSTEM_ROOT || process.env.YUIHIME_ROOT || "~/.yuihime";
-  if (rootEnv.startsWith("~")) {
-    rootEnv = path.join(os.homedir(), rootEnv.substring(1));
-  } else if (rootEnv.includes("$HOME")) {
-    rootEnv = rootEnv.replace(/\$HOME/g, os.homedir());
-  } else if (rootEnv.includes("$home")) {
-    rootEnv = rootEnv.replace(/\$home/g, os.homedir());
-  } else if (rootEnv.includes("%USERPROFILE%")) {
-    rootEnv = rootEnv.replace(/%USERPROFILE%/g, os.homedir());
-  }
-  rootEnv = rootEnv.replace(/^['"]|['"]$/g, "");
-  return path.isAbsolute(rootEnv) ? rootEnv : path.join(process.cwd(), rootEnv);
+  return resolveSystemRoot();
 }
 
 function getUserDataDir(settings: any): string {

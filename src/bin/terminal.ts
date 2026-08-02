@@ -3,6 +3,7 @@ import { spawnSync, execSync } from "child_process";
 import fs from "fs";
 import path from "path";
 import os from "os";
+import { resolveSystemRoot } from "../core/systemPaths.js";
 
 // --- ANSI Terminal Color Palette ---
 const RESET = "\x1b[0m";
@@ -16,7 +17,6 @@ const BLUE = "\x1b[34m";
 const BG_DARK_GRAY = "\x1b[100m";
 
 // --- Path Configurations ---
-const rootEnv = process.env.YUIHIME_SYSTEM_ROOT || process.env.YUIHIME_ROOT || "~/.yuihime";
 function resolveHomePath(inputPath: string): string {
   if (!inputPath) return "";
   if (inputPath === "~") return os.homedir();
@@ -25,8 +25,7 @@ function resolveHomePath(inputPath: string): string {
   }
   return inputPath;
 }
-const expandedRoot = resolveHomePath(rootEnv);
-const yuihimeSystemRoot = path.isAbsolute(expandedRoot) ? expandedRoot : path.join(process.cwd(), expandedRoot);
+const yuihimeSystemRoot = resolveSystemRoot();
 
 const rawUserDataDir = process.env.YUIHIME_USER_DATA_PATH;
 const SANDBOX_ROOT = rawUserDataDir ? resolveHomePath(rawUserDataDir) : path.join(yuihimeSystemRoot, "user_data");

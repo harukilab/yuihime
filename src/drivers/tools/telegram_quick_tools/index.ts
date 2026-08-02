@@ -932,11 +932,11 @@ export const tgQuickCommands: TgCommandDef[] = [
           const sleepDot = lv.sleepState === 'asleep' ? '😴' : '🙂';
           const foodQty = Array.isArray(inv?.foods) ? inv.foods.reduce((a: number, i: any) => a + (i.qty || 0), 0) : 0;
           const drinkQty = Array.isArray(inv?.drinks) ? inv.drinks.reduce((a: number, i: any) => a + (i.qty || 0), 0) : 0;
-          const energyText = row?.status === 'sleeping' ? 'Tidur 💤' : (lv.energy !== undefined ? `${lv.energy}%` : 'Aktif');
-          lifeSection = `\n\n🧬 Life Simulation\n🍽️ Lapar: ${lv.hunger ?? '—'}% ${bar(lv.hunger)}\n💧 Haus: ${lv.thirst ?? '—'}% ${bar(lv.thirst)}\n🚿 Mandi: ${lv.cleanliness ?? '—'}% ${bar(lv.cleanliness)}\n🚽 Kebelet: ${lv.bladder ?? '—'}% ${bar(lv.bladder)}\n😴 Kantuk: ${lv.sleepiness ?? '—'}% ${bar(lv.sleepiness)}\n🛏️ Tidur: ${sleepDot} ${lv.sleepState === 'asleep' ? 'Tidur' : 'Bangun'} | Jadwal ${lv.effectiveBedtime || '—'}-${lv.effectiveWake || '—'}\n🐟 Craving ikan: ${lv.fishCraving ?? '—'}% | Urat main: ${lv.playUrge ?? '—'}%\n🎒 Inventory: ${foodQty} makanan | ${drinkQty} minuman\n🔋 Status: ${energyText}`;
+          const energyText = row?.status === 'sleeping' ? 'Sleeping 💤' : (lv.energy !== undefined ? `${lv.energy}%` : 'Active');
+          lifeSection = `\n\n🧬 Life Simulation\n🍽️ Hunger: ${lv.hunger ?? '—'}% ${bar(lv.hunger)}\n💧 Thirst: ${lv.thirst ?? '—'}% ${bar(lv.thirst)}\n🚿 Cleanliness: ${lv.cleanliness ?? '—'}% ${bar(lv.cleanliness)}\n🚽 Bladder: ${lv.bladder ?? '—'}% ${bar(lv.bladder)}\n😴 Sleepiness: ${lv.sleepiness ?? '—'}% ${bar(lv.sleepiness)}\n🛏️ Sleep: ${sleepDot} ${lv.sleepState === 'asleep' ? 'Asleep' : 'Awake'} | Schedule ${lv.effectiveBedtime || '—'}-${lv.effectiveWake || '—'}\n🐟 Fish craving: ${lv.fishCraving ?? '—'}% | Play urge: ${lv.playUrge ?? '—'}%\n🎒 Inventory: ${foodQty} food | ${drinkQty} drinks\n🔋 Status: ${energyText}`;
         }
       } catch (e: any) {
-        lifeSection = `\n\n🧬 Life Simulation: (belum aktif — ${e?.message || 'error'})`;
+        lifeSection = `\n\n🧬 Life Simulation: (not active yet — ${e?.message || 'error'})`;
       }
 
       return {

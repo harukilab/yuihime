@@ -18,6 +18,7 @@ import { initializeBot } from '../telegram.js';
 import AdmZip from "adm-zip";
 import { clearCortexSettingsCache } from '../../cortex/cortexSettings.js';
 import { PluginManager } from '../../kernel/PluginManager.js';
+import { resolveDataPath, resolveSystemRoot } from '../../systemPaths.js';
 import { initializeDiscord } from '../discord.js';
 import { initializeTwitter } from '../twitter.js';
 import { initializeMCP } from '../mcp.js';
@@ -25,7 +26,7 @@ import { initializeMCP } from '../mcp.js';
 const execPromise = promisify(exec);
 
 // --- Settings & Workflow Configs ---
-const workflowPath = path.join(process.cwd(), "workflow.json");
+const workflowPath = resolveDataPath("workflow.json");
 
 async function loadWorkflow() {
   try {
@@ -41,18 +42,7 @@ async function saveWorkflow(workflow: any) {
 }
 
 // --- Addon System ---
-let apiRootEnvStr = process.env.YUIHIME_SYSTEM_ROOT || process.env.YUIHIME_ROOT || "~/.yuihime";
-if (apiRootEnvStr.startsWith("~")) {
-  apiRootEnvStr = path.join(os.homedir(), apiRootEnvStr.substring(1));
-} else if (apiRootEnvStr.includes("$HOME")) {
-  apiRootEnvStr = apiRootEnvStr.replace(/\$HOME/g, os.homedir());
-} else if (apiRootEnvStr.includes("$home")) {
-  apiRootEnvStr = apiRootEnvStr.replace(/\$home/g, os.homedir());
-} else if (apiRootEnvStr.includes("%USERPROFILE%")) {
-  apiRootEnvStr = apiRootEnvStr.replace(/%USERPROFILE%/g, os.homedir());
-}
-apiRootEnvStr = apiRootEnvStr.replace(/^['"]|['"]$/g, "");
-const apiCustomSystemRoot = path.isAbsolute(apiRootEnvStr) ? apiRootEnvStr : path.join(process.cwd(), apiRootEnvStr);
+const apiCustomSystemRoot = resolveSystemRoot();
 const addonsDir = process.env.YUIHIME_ADDONS_PATH || path.join(apiCustomSystemRoot, "addons");
 async function discoverAddons() {
   try {
@@ -308,7 +298,7 @@ export function registerSystemRoutes(app: express.Express, db: any) {
       console.log("[BACKUP] Initiating full system backup of .yuihime...");
       const zip = new AdmZip();
       
-      const tempDbPath = path.join(process.cwd(), `yuihime.db.backup.${Date.now()}`);
+      const tempDbPath = path.join(os.tmpdir(), `yuihime.db.backup.${Date.now()}`);
       
       // Save database snapshot cleanly to a temp file
       if (db) {
@@ -381,7 +371,7 @@ export function registerSystemRoutes(app: express.Express, db: any) {
       const buffer = Buffer.from(backupData, "base64");
       const zip = new AdmZip(buffer);
       
-      const tempExtractDir = path.join(process.cwd(), `.yuihime_restore_${Date.now()}`);
+      const tempExtractDir = path.join(os.tmpdir(), `.yuihime_restore_${Date.now()}`);
       if (!existsSync(tempExtractDir)) {
         mkdirSync(tempExtractDir, { recursive: true });
       }

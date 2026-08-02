@@ -1,7 +1,7 @@
 {
   "name": "yuihime",
   "private": true,
-  "version": "4.201",
+  "version": "4.203",
   "description": "YuiHime AI Engine - autonomous trans-dimensional virtual companion (AGI) with multi-provider LLM gateway, cognitive cortex, and multi-channel bridges.",
   "type": "module",
   "bin": "dist/server.cjs",
@@ -16,8 +16,6 @@
     "build:bundle": "node src/bin/compile-binary.cjs",
     "build:bin:server": "node src/bin/compile-binary.cjs --server-only",
     "build:bin:web": "node src/bin/compile-binary.cjs --web-only",
-    "terminal": "tsx src/bin/terminal.ts",
-    "sandbox": "tsx src/bin/terminal.ts",
     "otome": "tsx otome/cli.ts",
     "otome:tg": "tsx otome/tg_bot.ts",
     "debug": "bash tools/yui-debug.sh",

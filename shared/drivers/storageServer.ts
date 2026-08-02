@@ -1,10 +1,11 @@
 import { getDb, retryDbOperation } from "@/core/database.js";
 import { SettingsManager } from "@/core/kernel/settings.js";
+import { resolveDataPath } from "@/core/systemPaths.js";
 import fs from "fs";
 import path from "path";
 
 const db = getDb();
-const workflowPath = path.join(process.cwd(), "workflow.json");
+const workflowPath = resolveDataPath("workflow.json");
 
 export class StorageServer {
   // --- Knowledge ---

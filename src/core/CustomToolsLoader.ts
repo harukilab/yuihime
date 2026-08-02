@@ -1,10 +1,12 @@
 import { SystemRegistry } from '@shared/core/registry';
 import { SettingsManager } from '@/core/kernel/settings';
+import { resolveDataPath } from '@/core/systemPaths';
 import fs from 'fs';
+import path from 'path';
 import { exec } from 'child_process';
 
 export class CustomToolsLoader {
-  private static registryPath = './src/core/custom_tools_registry.json';
+  private static registryPath = resolveDataPath('custom_tools_registry.json');
 
   public static getRegistryPath() {
     return this.registryPath;
@@ -13,6 +15,10 @@ export class CustomToolsLoader {
   public static async loadAndRegisterAll() {
     try {
       const registryPath = this.getRegistryPath();
+      const registryDir = path.dirname(registryPath);
+      if (!fs.existsSync(registryDir)) {
+        fs.mkdirSync(registryDir, { recursive: true });
+      }
       if (!fs.existsSync(registryPath)) {
         fs.writeFileSync(registryPath, JSON.stringify([], null, 2), 'utf8');
       }

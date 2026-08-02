@@ -14,7 +14,7 @@
 - `npm run build` — builds web (`dist/web`) then server (`dist/server.cjs`)
 - `npm run build:bin` — single binary via `pkg`
 - `npm run lint` — `tsc --noEmit`
-- Tests in `yui_tests/` are standalone and run with `tsx` (no test framework configured).
+- Tests in `tools/tester/` are standalone and run with `tsx` (no test framework configured).
 - `python3 tools/update_log.py` — prepend `UPDATE_LOG.md` entry
 - `python3 tools/push_gh.py` — update logs + git add/commit/push
 

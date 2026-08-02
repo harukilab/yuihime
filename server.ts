@@ -34,6 +34,7 @@ while (true) {
 }
 process.title = 'yuihime';
 import { SettingsManager } from "./src/core/kernel/settings.js";
+import { resolveDataPath, resolveSystemRoot } from "./src/core/systemPaths.js";
 import os from "os";
 
 // --- Global EPIPE Protection for cron/background tasks ---
@@ -176,7 +177,7 @@ import { closeDatabase } from "./src/core/database.js";
 
 // --- Settings System ---
 const settingsPath = process.env.YUIHIME_CONFIG || path.join(os.homedir(), ".yuihime", "data", "config.toml");
-const workflowPath = path.join(process.cwd(), "workflow.json");
+const workflowPath = resolveDataPath("workflow.json");
 
 // Bridge to Kernel's SettingsManager
 async function loadSettings(): Promise<any> {
@@ -691,28 +692,22 @@ async function startServer() {
         return res.status(403).json({ error: "Unauthorized markdown write access." });
       }
 
-      let filePath = path.join(process.cwd(), name);
       const agentDir = process.env.YUIHIME_AGENT_PATH || path.join(os.homedir(), ".yuihime", "agent");
-      const agentFilePath = path.join(agentDir, name);
-      const docsFilePath = path.join(process.cwd(), 'docs', name);
-      
-      let targetPath = filePath;
-      if (existsSync(agentFilePath)) {
-        targetPath = agentFilePath;
-      } else if (existsSync(docsFilePath)) {
-        targetPath = docsFilePath;
-      } else if (['character.md', 'system_prompt.md', 'lore.md'].includes(name)) {
-        targetPath = path.join(process.cwd(), 'src', 'share', 'prompts', name);
-      }
+      const pathsToWrite: string[] = [];
 
-      const pathsToWrite = [targetPath];
-      if (name === 'character.md' || name === 'system_prompt.md' || name === 'lore.md') {
-        const agentDir = process.env.YUIHIME_AGENT_PATH || path.join(os.homedir(), ".yuihime", "agent");
-        const sharePath = path.join(agentDir, name);
-        if (existsSync(sharePath) && !pathsToWrite.includes(sharePath)) pathsToWrite.push(sharePath);
-      } else if (['IDENTITY.md', 'SOUL.md', 'MEMORY.md', 'USER.md', 'TOOLS.md', 'HEARTBEAT.md'].includes(name)) {
-        const rootPath = path.join(process.cwd(), name);
-        if (existsSync(rootPath) && !pathsToWrite.includes(rootPath)) pathsToWrite.push(rootPath);
+      if (name === 'UPDATE_LOG.md' || name === 'MODULES.md') {
+        pathsToWrite.push(path.join(process.cwd(), name));
+      } else {
+        pathsToWrite.push(path.join(agentDir, name));
+        // Keep pre-existing project copies in sync (dev convenience)
+        const projectCandidates = [
+          path.join(process.cwd(), name),
+          path.join(process.cwd(), 'docs', name),
+          path.join(process.cwd(), 'src', 'share', 'prompts', name),
+        ];
+        for (const p of projectCandidates) {
+          if (existsSync(p) && !pathsToWrite.includes(p)) pathsToWrite.push(p);
+        }
       }
 
       for (const p of pathsToWrite) {
@@ -732,11 +727,7 @@ async function startServer() {
 registerAPIRoutes(app, db);
 
 // Serve models folder from .yuihime/models securely in both dev and production
-let systemRoot = process.env.YUIHIME_SYSTEM_ROOT || process.env.YUIHIME_ROOT || "~/.yuihime";
-if (systemRoot.startsWith("~")) {
-  systemRoot = path.join(os.homedir(), systemRoot.substring(1));
-}
-const customSystemRoot = path.isAbsolute(systemRoot) ? systemRoot : path.join(process.cwd(), systemRoot);
+const customSystemRoot = resolveSystemRoot();
 const modelsDir = process.env.YUIHIME_MODELS_DIR || path.join(customSystemRoot, "models");
 if (!existsSync(modelsDir)) {
   mkdirSync(modelsDir, { recursive: true });

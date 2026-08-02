@@ -1,22 +1,12 @@
 import Database from "better-sqlite3";
 import path from "path";
 import { appendFileSync, existsSync, renameSync, mkdirSync, unlinkSync } from "fs";
-import os from "os";
 import { AUTO_CLEANUP_LIMITS } from "../../shared/constants.js";
+import { expandHomePath, resolveDataDir, resolveSystemRoot } from "./systemPaths.js";
 
-function resolveHomePath(inputPath: string): string {
-  if (!inputPath) return "";
-  if (inputPath === "~") return os.homedir();
-  if (inputPath.startsWith("~/") || inputPath.startsWith("~\\")) {
-    return path.join(os.homedir(), inputPath.slice(2));
-  }
-  return inputPath;
-}
-
-const rootEnvVal = resolveHomePath(process.env.YUIHIME_SYSTEM_ROOT || process.env.YUIHIME_ROOT || "~/.yuihime");
-const defaultSystemRoot = path.isAbsolute(rootEnvVal) ? rootEnvVal : path.join(process.cwd(), rootEnvVal);
-const defaultDataDir = process.env.YUIHIME_DATA_DIR ? resolveHomePath(process.env.YUIHIME_DATA_DIR) : path.join(defaultSystemRoot, "data");
-export let dbPath = process.env.YUIHIME_DB_PATH ? resolveHomePath(process.env.YUIHIME_DB_PATH) : path.join(defaultDataDir, "yuihime.db");
+const defaultSystemRoot = resolveSystemRoot();
+const defaultDataDir = resolveDataDir();
+export let dbPath = process.env.YUIHIME_DB_PATH ? expandHomePath(process.env.YUIHIME_DB_PATH) : path.join(defaultDataDir, "yuihime.db");
 
 const dbLogPath = path.join(defaultDataDir, "db-retry.log");
 

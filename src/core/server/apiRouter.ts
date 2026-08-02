@@ -10,6 +10,7 @@ import * as toml from "smol-toml";
 
 import { AIService } from "../kernel/ai.js";
 import { SettingsManager } from "@/core/kernel/settings";
+import { resolveSystemRoot } from "../systemPaths.js";
 import { CronModule, resolveCronJobPrompt } from "../kernel/cron.js";
 import { NeuralInterface } from "../kernel/NeuralInterface.js";
 import { MultiChannelQueue } from "../kernel/MultiChannelQueue.js";
@@ -302,25 +303,7 @@ export const getCronAction = (id: string, name: string, repeating: boolean, db: 
 };
 
 // --- Configuration & Sandbox Settings ---
-const getSystemRoot = () => {
-  let apiRootEnvStr = process.env.YUIHIME_SYSTEM_ROOT || process.env.YUIHIME_ROOT || "~/.yuihime";
-  
-  // Resolve standard env vars and shortcuts if shell passed them raw or they were manually configured
-  if (apiRootEnvStr.startsWith('~')) {
-    apiRootEnvStr = path.join(os.homedir(), apiRootEnvStr.substring(1));
-  } else if (apiRootEnvStr.includes('$HOME')) {
-    apiRootEnvStr = apiRootEnvStr.replace(/\$HOME/g, os.homedir());
-  } else if (apiRootEnvStr.includes('$home')) {
-    apiRootEnvStr = apiRootEnvStr.replace(/\$home/g, os.homedir());
-  } else if (apiRootEnvStr.includes('%USERPROFILE%')) {
-    apiRootEnvStr = apiRootEnvStr.replace(/%USERPROFILE%/g, os.homedir());
-  }
-  
-  // Remove possible literal double or single quotes surrounding the path from shell aliases
-  apiRootEnvStr = apiRootEnvStr.replace(/^['"]|['"]$/g, '');
-
-  return path.isAbsolute(apiRootEnvStr) ? apiRootEnvStr : path.join(process.cwd(), apiRootEnvStr);
-};
+const getSystemRoot = () => resolveSystemRoot();
 export const apiCustomSystemRoot = getSystemRoot();
 
 export let systemConfig: any = {

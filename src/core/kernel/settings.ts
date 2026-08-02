@@ -2,9 +2,9 @@ import * as toml from 'smol-toml';
 import fs from 'fs';
 import fsPromises from 'fs/promises';
 import path from 'path';
-import os from 'os';
 import { Logger, LogLevel } from '@shared/core/kernel/logger';
 import { toKeyArray, toSingleString } from './configNormalizer.js';
+import { resolveSystemRoot } from '../systemPaths.js';
 
 // --- Global log level filtering ---
 // Levels (ascending): debug(0) < info(1) < warn(2) < error(3) < silent(4)
@@ -111,18 +111,7 @@ export class SettingsManager {
 public static async applyBootLogLevel(): Promise<void> {
      if (typeof window !== 'undefined') return;
      try {
-        let rootEnv = process.env.YUIHIME_SYSTEM_ROOT || process.env.YUIHIME_ROOT || '~/.yuihime';
-        if (rootEnv.startsWith('~')) {
-          rootEnv = path.join(os.homedir(), rootEnv.substring(1));
-        } else if (rootEnv.includes('$HOME')) {
-          rootEnv = rootEnv.replace(/\$HOME/g, os.homedir());
-        } else if (rootEnv.includes('$home')) {
-          rootEnv = rootEnv.replace(/\$home/g, os.homedir());
-        } else if (rootEnv.includes('%USERPROFILE%')) {
-          rootEnv = rootEnv.replace(/%USERPROFILE%/g, os.homedir());
-        }
-        rootEnv = rootEnv.replace(/^['"]|['"]$/g, "");
-        const fallbackRoot = path.isAbsolute(rootEnv) ? rootEnv : path.join(process.cwd(), rootEnv);
+        const fallbackRoot = resolveSystemRoot();
       const p = process.env.YUIHIME_CONFIG || path.join(fallbackRoot, 'data', 'config.toml');
       if (!fs.existsSync(p)) return;
       const parsed = toml.parse(fs.readFileSync(p, 'utf-8')) as AppSettings;
@@ -152,24 +141,7 @@ private async ensureNodeModules() {
       return this.settingsPath;
     }
     await this.ensureNodeModules();
-    const rootEnvStr = process.env.YUIHIME_SYSTEM_ROOT || process.env.YUIHIME_ROOT || '~/.yuihime';
-    const expandedRoot = this.pathModule ? (() => {
-      let trimmed = rootEnvStr.trim();
-      if (trimmed.startsWith('~')) {
-        return this.pathModule.join(os.homedir(), trimmed.slice(1));
-      }
-      if (trimmed.includes('$HOME')) {
-        trimmed = trimmed.replace(/\$HOME/g, os.homedir());
-      }
-      if (trimmed.includes('$home')) {
-        trimmed = trimmed.replace(/\$home/g, os.homedir());
-      }
-      if (trimmed.includes('%USERPROFILE%')) {
-        trimmed = trimmed.replace(/%USERPROFILE%/g, os.homedir());
-      }
-      return trimmed;
-    })() : rootEnvStr;
-    const fallbackRoot = this.pathModule ? (this.pathModule.isAbsolute(expandedRoot) ? expandedRoot : this.pathModule.join(process.cwd(), expandedRoot)) : expandedRoot;
+    const fallbackRoot = this.pathModule ? resolveSystemRoot() : '~/.yuihime';
     const fallbackDataDir = this.pathModule ? this.pathModule.join(fallbackRoot, 'data') : 'data';
     const fallbackConfigPath = this.pathModule ? this.pathModule.join(fallbackDataDir, 'config.toml') : 'config.toml';
     this.settingsPath = process.env.YUIHIME_CONFIG || fallbackConfigPath;

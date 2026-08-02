@@ -4,7 +4,7 @@ import { SettingsManager } from './settings';
 import { logger } from './logger';
 import * as fs from 'fs';
 import * as path from 'path';
-import os from 'os';
+import { resolveAddonsDir } from '../systemPaths.js';
 
 const localRequire = createRequire(path.join(process.cwd(), 'package.json'));
 
@@ -33,8 +33,8 @@ export class PluginManager {
     logger.log('INFO', 'PLUGIN_MANAGER', 'Scanning addons directory for plugins...');
 
     const addonsDirs = [
-      path.join(process.cwd(), 'addons'),
-      path.join(os.homedir(), ".yuihime", "addons")
+      resolveAddonsDir(),
+      path.join(process.cwd(), 'addons')
     ];
 
     const settings = SettingsManager.getInstance();

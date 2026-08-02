@@ -3,6 +3,7 @@ import path from "path";
 import os from "os";
 import { readFileSync, readdirSync, existsSync } from "fs";
 import { fileURLToPath } from "url";
+import { resolveSystemRoot } from "../core/systemPaths.js";
 
 function resolveHomePath(inputPath: string): string {
   if (!inputPath) return "";
@@ -14,21 +15,7 @@ function resolveHomePath(inputPath: string): string {
 }
 
 function getSopsDir(): string {
-  let rootEnvStr =
-    process.env.YUIHIME_SYSTEM_ROOT || process.env.YUIHIME_ROOT || "~/.yuihime";
-  if (rootEnvStr.startsWith("~")) {
-    rootEnvStr = path.join(os.homedir(), rootEnvStr.substring(1));
-  } else if (rootEnvStr.includes("$HOME")) {
-    rootEnvStr = rootEnvStr.replace(/\$HOME/g, os.homedir());
-  } else if (rootEnvStr.includes("$home")) {
-    rootEnvStr = rootEnvStr.replace(/\$home/g, os.homedir());
-  } else if (rootEnvStr.includes("%USERPROFILE%")) {
-    rootEnvStr = rootEnvStr.replace(/%USERPROFILE%/g, os.homedir());
-  }
-  rootEnvStr = rootEnvStr.replace(/^['"]|['"]$/g, "");
-  const customSystemRoot = path.isAbsolute(rootEnvStr)
-    ? rootEnvStr
-    : path.join(process.cwd(), rootEnvStr);
+  const customSystemRoot = resolveSystemRoot();
   const resolvedRoot = resolveHomePath(customSystemRoot);
   return path.join(resolvedRoot, "user_data", "sops");
 }
