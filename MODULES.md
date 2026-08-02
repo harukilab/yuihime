@@ -105,6 +105,13 @@ Peta struktur direktori pasca-pemisahan Web UI ↔ Daemon (lihat UPDATE_LOG `[4.
 - `otome`
 - `core`
 - `src/modules/agi/LifeSimulationModule.ts — yui-life: Nekomata Biological Life Simulation (hunger, thirst, hygiene, bladder, adaptive sleep, inventory, purring/play/fish craving; trilingual triggers; affects status & sleep).`
+- `src/core/feedback.ts — Closed-loop feedback: outbound_messages & feedback_events (reaksi TG / tombol Web); core/userModel.ts — persistent per-user profile (topik, bahasa ID/EN/JP, interaksi); core/spacedRepetition.ts — forgetting-curve Ebbinghaus retrieval; core/afterActionReview.ts — action reviews resolved by feedback; core/goalDecomposition.ts — recursive goal tree + closed-loop monitoring.`
+- `src/modules/agi/FeedbackLoopModule.ts — feedback-loop (SOUL order 30): konsolidasi feedback nyata -> learned_strategies + relasi + injeksi catatan trilingual.`
+- `src/modules/agi/ConfidenceEstimatorModule.ts — confidence-abstain (SOUL order 24): estimasi keyakinan, abstain jujur bila faktual tak ter-grounding (trilingual).`
+- `src/modules/agi/UserModelModule.ts — user-model (SOUL order 22): profil persisten per user diekspos via context.userModel + blok USER PROFILE trilingual.`
+- `src/modules/agi/MemoryRetentionModule.ts — memory-retention (SOUL order 21): proactive recollection memori berisiko lupa (spaced repetition).`
+- `src/modules/agi/AfterActionReviewModule.ts — after-action-review (SOUL order 29): lesson jangka panjang dari evaluasi tindakan & feedback.`
+- `src/modules/agi/GoalDecompositionModule.ts — goal-decomposition (SOUL order 26): fokus goal aktif + direktif trilingual; closed-loop auto-complete parent saat semua sub selesai.`
 - `agi`
 - `agi`
 - `agi`
