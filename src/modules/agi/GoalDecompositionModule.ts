@@ -10,7 +10,7 @@
  */
 
 import { CortexModule, ModuleType, AgentState } from '@shared/include/types';
-import { getFocusGoal, buildGoalDirective, listActiveGoals } from '../../core/goalDecomposition';
+import { getFocusGoal, buildGoalDirective, listActiveGoals, advanceGoal, goalKeywordOverlap } from '../../core/goalDecomposition';
 
 export const GoalDecompositionModule: CortexModule = {
   metadata: {
@@ -34,6 +34,20 @@ export const GoalDecompositionModule: CortexModule = {
           label: 'Show Sub-Goal Progress',
           default: true,
           description: 'Includes the recursive sub-goal tree progress in the injected directive.'
+        },
+        autoAdvanceOnTopic: {
+          type: 'boolean',
+          label: 'Auto-Advance On Topic Match',
+          default: true,
+          description: 'Advances the focus goal progress a little when the conversation touches its topics (closed-loop monitoring).'
+        },
+        advanceStep: {
+          type: 'number',
+          label: 'Auto-Advance Step',
+          default: 0.05,
+          min: 0,
+          max: 0.5,
+          description: 'Progress delta per topic match (0 disables advancement).'
         },
         maxFocusLogs: {
           type: 'number',
@@ -63,13 +77,30 @@ export const GoalDecompositionModule: CortexModule = {
 
     let nextContext: any = { ...context, currentGoal: focus, logs };
 
-    const directive = buildGoalDirective(focus);
+    // Closed-loop monitoring: obrolan menyentuh topik goal -> dorong maju sedikit
+    const autoAdvance = config.autoAdvanceOnTopic !== undefined ? !!config.autoAdvanceOnTopic : true;
+    const advanceStep = Number(config.advanceStep !== undefined ? config.advanceStep : 0.05);
+    if (autoAdvance && advanceStep > 0 && input) {
+      const matches = goalKeywordOverlap(focus, input);
+      if (matches.length > 0) {
+        const advanced = advanceGoal(focus.id, advanceStep);
+        if (advanced) {
+          logs.push(`[GOAL_MONITOR] Topik cocok (${matches.slice(0, 3).join(', ')}) -> goal "${advanced.title}" +${advanceStep}`);
+          nextContext = { ...nextContext, currentGoal: advanced };
+          if (advanced.status === 'completed') {
+            nextContext = { ...nextContext, goalJustCompleted: advanced };
+          }
+        }
+      }
+    }
+
+    const directive = buildGoalDirective(nextContext.currentGoal);
     nextContext = {
       ...nextContext,
       soulDirective: `${context.soulDirective || ''}\n${directive}`.trim()
     };
 
-    logs.push(`[GOAL_FOCUS] ${focus.title} (${Math.round((focus.progress || 0) * 100)}%) — ${listActiveGoals(10).length} goal aktif.`);
+    logs.push(`[GOAL_FOCUS] ${nextContext.currentGoal.title} (${Math.round((nextContext.currentGoal.progress || 0) * 100)}%) — ${listActiveGoals(10).length} goal aktif.`);
     return nextContext;
   }
 };

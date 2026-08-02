@@ -1,6 +1,14 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.211] - 2026-08-02
+### feat: Stage G AGI: Full-Auto Loop — Goal Self-Proposal + Monitoring + Autonomous Execution
+- GoalProposalModule (SOUL order 25): self-proposal otomatis saat tak ada goal aktif / baru selesai & cooldown terlewati (default 6 jam) - generate + dekomposisi goal sendiri via context.think (jsonMode, regex-sanitize), fallback heuristik dari topik user model bila LLM gagal/offline, tabel goal_proposals untuk throttle.
+- GoalDecompositionModule (order 26) kini closed-loop monitoring: obrolan yang menyentuh topik goal fokus (keyword overlap) menaikkan progress otomatis (+0.05/siklus, bisa disable); goal yang selesai memicu goalJustCompleted untuk proposal berikutnya. Fix bug sort getFocusGoal (dulu goal lama diutamakan, sekarang in_progress & terbaru).
+- MultiChannelQueue.evaluateProactiveImpulse: saat idle & ada goal fokus aktif, pesan spontan diarahkan untuk mendorong goal (AUTONOMOUS_GOAL_PUSH) - bukan lagi impulse random; tetap lewat NeuralInterface isProactive=true + anti-flood lock.
+- Verifikasi: tsc bersih + smoke test temp-DB (proposal heuristik, throttle, proposal LLM + subgoal, auto-advance monitoring) ALL PASS.
+
+
 ## [4.210] - 2026-08-02
 ### feat: Stage F AGI: Recursive Goal Decomposition & Closed-Loop Monitoring (3 bahasa EN/ID/JP)
 - Helper baru core/goalDecomposition.ts + tabel goals (parent_id, status, progress, category): createGoal, decomposeGoal (rekursif), advanceGoal, completeGoal, abandonGoal, getFocusGoal.

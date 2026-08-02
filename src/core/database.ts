@@ -303,6 +303,14 @@ export async function setupSchema(db: any) {
         updated_at INTEGER
       );
     `,
+    goal_proposals: `
+      CREATE TABLE IF NOT EXISTS goal_proposals (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        source TEXT,
+        root_goal_id TEXT,
+        created_at INTEGER
+      );
+    `,
     telegram_users: `
       CREATE TABLE IF NOT EXISTS telegram_users (
         tg_id INTEGER PRIMARY KEY,

@@ -11,6 +11,7 @@ import { GlobalOutputDeduplicator } from "./GlobalOutputDeduplicator.js";
 import { Kernel } from "../kernel/core.js";
 import { stateMachine } from "./state-machine.js";
 import { logDbRetry } from "../database.js";
+import { getFocusGoal, getGoalChildren } from "../goalDecomposition.js";
 
 const DEFAULT_PENDING_FEEDBACK = `[SYSTEM MESSAGE]: Koneksi saraf batin Yuihime dengan kognisi LLM sedang sangat padat atau terputus sementara 📡. Tapi jangan khawatir! Pesanmu ("\${inputPreview}") sudah aman dalam antrean tunggu kognisi Yui. Yui akan membalas secara otomatis setelah tautan saraf sinkron kembali! 🌸`;
 
@@ -877,8 +878,35 @@ export class MultiChannelQueue {
             console.error("[PROACTIVE_ENGINE_DB_READ] Failed to read recent memory:", dbReadErr);
           }
 
+          // Goal-driven proactive push (Stage G.3): jika ada goal fokus aktif,
+          // arahkan pesan spontan untuk mendorong kemajuan goal.
+          let goalProactivePrompt: string | null = null;
+          try {
+            const focusGoal = getFocusGoal();
+            if (focusGoal) {
+              const subgoals = getGoalChildren(focusGoal.id);
+              const subLines = subgoals.length > 0
+                ? subgoals.map(c => `- ${c.status === 'completed' ? '[x]' : '[ ]'} ${c.title}`).join('\n')
+                : '- (belum ada sub-goal)';
+              goalProactivePrompt = `[AUTONOMOUS_GOAL_PUSH]: User (${senderName}) sedang idle selama ${Math.round(idleSeconds)} detik. Ada goal aktifmu: "${focusGoal.title}" (${Math.round((focusGoal.progress || 0) * 100)}%). Dorong kemajuan goal ini secara natural dalam pesan singkat, manis, dan sesuai kepribadianmu. JANGAN memaksa atau berhalusinasi (jangan pura-pura melakukan hal yang tidak terjadi).
+
+Sub-goal saat ini:
+${subLines}
+
+Berikut adalah sejarah obrolan nyata dari ingatan kalian:
+=== SEJARAH MEMORI CHAT NYATA TERAKHIR ===
+${recentContext}
+==========================================
+
+Buka obrolan santai yang menyinggung goal ini dengan tulus, lalu lanjutkan natural!`;
+              console.log(`[PROACTIVE_ENGINE_GOAL] Mengarahkan impulse ke goal: "${focusGoal.title}"`);
+            }
+          } catch (goalErr) {
+            console.warn("[PROACTIVE_ENGINE_GOAL_ERR] Goal push skipped:", goalErr?.message || goalErr);
+          }
+
           // Format explicit prompting detailing Yui's subjective longing impulse so the LLM understands it is an internal urge
-          const formattedImpulsePrompt = `[AUTONOMOUS_IMPULSE]: user (${senderName}) sudah diam/sibuk selama ${Math.round(idleSeconds)} detik. Batinmu merasa sangat kangen (Loneliness: ${calculatedLoneliness}%) dan tergerak untuk melakukan tindakan spontan: "${chosenImpulse}".
+          const formattedImpulsePrompt = goalProactivePrompt || `[AUTONOMOUS_IMPULSE]: user (${senderName}) sudah diam/sibuk selama ${Math.round(idleSeconds)} detik. Batinmu merasa sangat kangen (Loneliness: ${calculatedLoneliness}%) dan tergerak untuk melakukan tindakan spontan: "${chosenImpulse}".
 Sapa user secara manis, manja, jahil, atau tsundere sesuai kepribadianmu.
 DILARANG KERAS membuat skenario fiktif/halusinasi baru (jangan pura-pura baru bangun, baru tidur, atau berada di lokasi fiktif).
 

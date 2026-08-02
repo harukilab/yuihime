@@ -41,7 +41,13 @@ function stmts(db: any): any {
     ),
     all: db.prepare('SELECT * FROM goals ORDER BY created_at DESC LIMIT ?'),
     updateStatus: db.prepare('UPDATE goals SET status = ?, progress = ?, updated_at = ? WHERE id = ?'),
-    updateProgress: db.prepare('UPDATE goals SET progress = ?, status = ?, updated_at = ? WHERE id = ?')
+    updateProgress: db.prepare('UPDATE goals SET progress = ?, status = ?, updated_at = ? WHERE id = ?'),
+    lastProposal: db.prepare(
+      `SELECT MAX(created_at) AS last FROM goal_proposals WHERE source = ?`
+    ),
+    insertProposal: db.prepare(
+      `INSERT INTO goal_proposals (source, root_goal_id, created_at) VALUES (?, ?, ?)`
+    )
   };
   return cache;
 }
@@ -221,8 +227,8 @@ export function getFocusGoal(now: number = Date.now()): Goal | null {
   const fresh = active.filter((g) => (now - g.updated_at) < 24 * 60 * 60 * 1000);
   const pool = fresh.length > 0 ? fresh : active;
   const prioritized = [...pool].sort((a, b) => {
-    const aScore = (a.status === 'in_progress' ? 1 : 0) + (now - a.updated_at) / 1000 / 1e6;
-    const bScore = (b.status === 'in_progress' ? 1 : 0) + (now - b.updated_at) / 1000 / 1e6;
+    const aScore = (a.status === 'in_progress' ? 1 : 0) + (a.updated_at - now) / 1000 / 1e6;
+    const bScore = (b.status === 'in_progress' ? 1 : 0) + (b.updated_at - now) / 1000 / 1e6;
     return bScore - aScore;
   });
   return prioritized[0] || null;
@@ -245,4 +251,51 @@ export function buildGoalDirective(goal: Goal): string {
     '',
     '[EN] Keep this goal in mind; if today\'s conversation touches it, nudge it forward naturally. [ID] Ingat goal ini; bila obrolan hari ini menyentuhnya, dorong maju dengan natural. [JP] この目標を心に留め、今日の会話が関係するなら自然に前へ進めてください。'
   ].filter(Boolean).join('\n');
+}
+
+/**
+ * Throttle self-proposal: benar jika sudah melewati cooldown sejak proposal
+ * otomatis terakhir (atau belum pernah ada).
+ */
+export function isProposalThrottled(source = 'auto', cooldownMs: number): boolean {
+  try {
+    const row = stmts(getDb()).lastProposal.get(source) as any;
+    if (!row || !row.last) return false;
+    return (Date.now() - Number(row.last)) < cooldownMs;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Catat proposal agar throttle bekerja.
+ */
+export function recordProposal(source: string, rootGoalId: string): void {
+  try {
+    stmts(getDb()).insertProposal.run(source, rootGoalId, Date.now());
+  } catch (err: any) {
+    console.warn('[GOAL] Gagal catat proposal:', err?.message || err);
+  }
+}
+
+/**
+ * Kemiripan kata kunci antara teks percakapan dan goal (judul/deskripsi/sub).
+ * Mengembalikan daftar kata yang cocok; untuk deteksi sentuhan konteks.
+ */
+export function goalKeywordOverlap(goal: Goal, text: string): string[] {
+  const textTokens = new Set(
+    (String(text || '').toLowerCase().match(/[a-z0-9]+/g) || [])
+      .filter((w: string) => w.length >= 3)
+  );
+  const goalTokens = new Set(
+    `${goal.title} ${goal.description} ${getGoalChildren(goal.id).map((c) => c.title).join(' ')}`
+      .toLowerCase()
+      .match(/[a-z0-9]+/g) || []
+  );
+  const matches: string[] = [];
+  for (const tok of goalTokens) {
+    if (tok.length < 3) continue;
+    if (textTokens.has(tok)) matches.push(tok);
+  }
+  return matches;
 }
