@@ -292,55 +292,59 @@ export const SystemTab: React.FC<SystemTabProps> = ({
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    try {
+      if (!file) return;
 
-    if (!file.name.endsWith('.zip')) {
-      setRestoreStatus('error');
-      setRestoreMessage('Berkas tidak valid. Harap unggah arsip backup .zip resmi Yuihime.');
-      return;
-    }
-
-    setRestoreStatus('reading');
-    setRestoreMessage('Membaca data kompresi arsip lokal...');
-
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      try {
-        const result = event.target?.result as string;
-        if (!result) {
-          throw new Error('Gagal membaca data biner berkas.');
-        }
-        const base64Data = result.split(',')[1] || result;
-
-        setRestoreStatus('restoring');
-        setRestoreMessage('Menginstal konfigurasi kognitif dan mereposisi basis data batin...');
-
-        const res = await fetch('/api/backup/restore', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ backupData: base64Data })
-        });
-
-        const data = await res.json();
-        if (res.ok && data.success) {
-          setRestoreStatus('success');
-          setRestoreMessage(data.message || 'Sistem batin Yuihime berhasil dipulihkan secara penuh!');
-          setTimeout(() => {
-            window.location.reload();
-          }, 2500);
-        } else {
-          throw new Error(data.error || 'Server menolak pemuatan cadangan.');
-        }
-      } catch (err: any) {
+      if (!file.name.toLowerCase().endsWith('.zip')) {
         setRestoreStatus('error');
-        setRestoreMessage(err.message || 'Kesalahan fatal saat pemulihan sistem.');
+        setRestoreMessage('Berkas tidak valid. Harap unggah arsip backup .zip resmi Yuihime.');
+        return;
       }
-    };
-    reader.onerror = () => {
-      setRestoreStatus('error');
-      setRestoreMessage('Gagal membaca data dari medium fisik lokal.');
-    };
-    reader.readAsDataURL(file);
+
+      setRestoreStatus('reading');
+      setRestoreMessage('Membaca data kompresi arsip lokal...');
+
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        try {
+          const result = event.target?.result as string;
+          if (!result) {
+            throw new Error('Gagal membaca data biner berkas.');
+          }
+          const base64Data = result.split(',')[1] || result;
+
+          setRestoreStatus('restoring');
+          setRestoreMessage('Menginstal konfigurasi kognitif dan mereposisi basis data batin...');
+
+          const res = await fetch('/api/backup/restore', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ backupData: base64Data })
+          });
+
+          const data = await res.json();
+          if (res.ok && data.success) {
+            setRestoreStatus('success');
+            setRestoreMessage(data.message || 'Sistem batin Yuihime berhasil dipulihkan secara penuh!');
+            setTimeout(() => {
+              window.location.reload();
+            }, 2500);
+          } else {
+            throw new Error(data.error || 'Server menolak pemuatan cadangan.');
+          }
+        } catch (err: any) {
+          setRestoreStatus('error');
+          setRestoreMessage(err.message || 'Kesalahan fatal saat pemulihan sistem.');
+        }
+      };
+      reader.onerror = () => {
+        setRestoreStatus('error');
+        setRestoreMessage('Gagal membaca data dari medium fisik lokal.');
+      };
+      reader.readAsDataURL(file);
+    } finally {
+      e.target.value = '';
+    }
   };
 
   const handleDownloadBackup = () => {
@@ -2029,7 +2033,7 @@ export const SystemTab: React.FC<SystemTabProps> = ({
                   <span className="text-[10px] text-zinc-500 mt-1 font-mono">Upload size limit: 50MB</span>
                   <input 
                     type="file" 
-                    accept=".zip"
+                    accept=".zip,application/zip,application/x-zip-compressed,application/x-zip"
                     onChange={handleFileChange}
                     className="hidden" 
                   />

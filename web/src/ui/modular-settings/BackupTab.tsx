@@ -1,13 +1,39 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Database, Download, Upload, RefreshCw, AlertTriangle, 
-  Check, Archive, ShieldAlert, Settings, Info
+  Check, Archive, ShieldAlert, Settings, Info, ClipboardList, X
 } from 'lucide-react';
 
 interface BackupTabProps {
   settings: any;
   setSettings: React.Dispatch<React.SetStateAction<any>>;
 }
+
+const stripUtf8Bom = (text: string): string => text.replace(/^\uFEFF/, '');
+
+const parseConfigText = (text: string): any => {
+  const clean = stripUtf8Bom(text);
+  const trimmed = clean.trim();
+  if (!trimmed) {
+    throw new Error('Berkas kosong. Tidak ada data konfigurasi untuk dipulihkan.');
+  }
+
+  // Handle markdown code fences gracefully (```json ... ```) for .txt exports.
+  const fenceMatch = trimmed.match(/\{[\s\S]*\}/);
+  const jsonCandidate = fenceMatch ? fenceMatch[0] : trimmed;
+
+  let parsed: any;
+  try {
+    parsed = JSON.parse(jsonCandidate);
+  } catch (err: any) {
+    throw new Error(`JSON tidak valid: ${err.message || 'kesalahan parsing.'}`);
+  }
+
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new Error('Format JSON tidak valid. Data harus berupa objek konfigurasi.');
+  }
+  return parsed;
+};
 
 export const BackupTab: React.FC<BackupTabProps> = ({ settings, setSettings }) => {
   // Full System states
@@ -19,6 +45,12 @@ export const BackupTab: React.FC<BackupTabProps> = ({ settings, setSettings }) =
   const [configBackupLoading, setConfigBackupLoading] = useState<boolean>(false);
   const [configRestoreStatus, setConfigRestoreStatus] = useState<'idle' | 'reading' | 'restoring' | 'success' | 'error'>('idle');
   const [configRestoreMessage, setConfigRestoreMessage] = useState<string>('');
+
+  // Paste / Input JSON Config modal states
+  const [showPasteModal, setShowPasteModal] = useState<boolean>(false);
+  const [pasteConfigText, setPasteConfigText] = useState<string>('');
+  const [pasteConfigError, setPasteConfigError] = useState<string | null>(null);
+  const [pasteConfigSubmitting, setPasteConfigSubmitting] = useState<boolean>(false);
 
   // Toast state
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -38,61 +70,65 @@ export const BackupTab: React.FC<BackupTabProps> = ({ settings, setSettings }) =
     window.location.href = '/api/backup';
     setTimeout(() => {
       setFullBackupLoading(false);
-      setToast({ message: "Full system backup download initiated! 📥", type: 'success' });
+      setToast({ message: "Unduhan cadangan sistem penuh dimulai! 📥", type: 'success' });
     }, 2000);
   };
 
   const handleFullFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    try {
+      if (!file) return;
 
-    if (!file.name.endsWith('.zip')) {
-      setFullRestoreStatus('error');
-      setFullRestoreMessage('Invalid format. Please upload a valid Yuihime .zip archive.');
-      return;
-    }
-
-    setFullRestoreStatus('reading');
-    setFullRestoreMessage('Reading compressed backup archive...');
-
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      try {
-        const result = event.target?.result as string;
-        if (!result) {
-          throw new Error('Failed to read file binary stream.');
-        }
-        const base64Data = result.split(',')[1] || result;
-
-        setFullRestoreStatus('restoring');
-        setFullRestoreMessage('Restoring cognitive database and static assets...');
-
-        const res = await fetch('/api/backup/restore', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ backupData: base64Data })
-        });
-
-        const data = await res.json();
-        if (res.ok && data.success) {
-          setFullRestoreStatus('success');
-          setFullRestoreMessage(data.message || 'Full system state successfully restored!');
-          setTimeout(() => {
-            window.location.reload();
-          }, 2500);
-        } else {
-          throw new Error(data.error || 'Server rejected the backup snapshot.');
-        }
-      } catch (err: any) {
+      if (!file.name.toLowerCase().endsWith('.zip')) {
         setFullRestoreStatus('error');
-        setFullRestoreMessage(err.message || 'Fatal error during restoration.');
+        setFullRestoreMessage('Format tidak valid. Harap unggah arsip snapshot .zip Yuihime yang sah.');
+        return;
       }
-    };
-    reader.onerror = () => {
-      setFullRestoreStatus('error');
-      setFullRestoreMessage('Failed to read backup from local media.');
-    };
-    reader.readAsDataURL(file);
+
+      setFullRestoreStatus('reading');
+      setFullRestoreMessage('Membaca arsip cadangan terkompresi...');
+
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        try {
+          const result = event.target?.result as string;
+          if (!result) {
+            throw new Error('Gagal membaca aliran biner berkas.');
+          }
+          const base64Data = result.split(',')[1] || result;
+
+          setFullRestoreStatus('restoring');
+          setFullRestoreMessage('Memulihkan basis data kognitif dan aset statis...');
+
+          const res = await fetch('/api/backup/restore', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ backupData: base64Data })
+          });
+
+          const data = await res.json();
+          if (res.ok && data.success) {
+            setFullRestoreStatus('success');
+            setFullRestoreMessage(data.message || 'Keadaan penuh sistem berhasil dipulihkan!');
+            setTimeout(() => {
+              window.location.reload();
+            }, 2500);
+          } else {
+            throw new Error(data.error || 'Server menolak snapshot cadangan.');
+          }
+        } catch (err: any) {
+          setFullRestoreStatus('error');
+          setFullRestoreMessage(err.message || 'Kesalahan fatal selama pemulihan.');
+        }
+      };
+      reader.onerror = () => {
+        setFullRestoreStatus('error');
+        setFullRestoreMessage('Gagal membaca cadangan dari media lokal.');
+      };
+      reader.readAsDataURL(file);
+    } finally {
+      e.target.value = '';
+    }
   };
 
   // --- Config-Only Backup / Restore Handlers ---
@@ -108,70 +144,99 @@ export const BackupTab: React.FC<BackupTabProps> = ({ settings, setSettings }) =
       downloadAnchor.remove();
       setTimeout(() => {
         setConfigBackupLoading(false);
-        setToast({ message: "Parameters config (.json) exported successfully!", type: 'success' });
+        setToast({ message: "Konfigurasi parameter (.json) berhasil diekspor!", type: 'success' });
       }, 1000);
     } catch (err: any) {
-      setToast({ message: `Export failed: ${err.message}`, type: 'error' });
+      setToast({ message: `Ekspor gagal: ${err.message}`, type: 'error' });
       setConfigBackupLoading(false);
+    }
+  };
+
+  const restoreConfigObject = async (parsed: any) => {
+    setConfigRestoreStatus('restoring');
+    setConfigRestoreMessage('Memperbarui pengaturan di server Yuihime...');
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(parsed)
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setSettings(parsed);
+        setConfigRestoreStatus('success');
+        setConfigRestoreMessage('Konfigurasi berhasil dipulihkan! Memuat ulang...');
+        setTimeout(() => {
+          window.location.reload();
+        }, 2000);
+      } else {
+        throw new Error(data.error || 'Server gagal menyimpan pengaturan.');
+      }
+    } catch (err: any) {
+      setConfigRestoreStatus('error');
+      setConfigRestoreMessage(err.message || 'Terjadi kesalahan saat impor konfigurasi.');
     }
   };
 
   const handleConfigFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    try {
+      if (!file) return;
 
-    if (!file.name.endsWith('.json')) {
-      setConfigRestoreStatus('error');
-      setConfigRestoreMessage('Invalid format. Please select a valid .json config file.');
-      return;
-    }
-
-    setConfigRestoreStatus('reading');
-    setConfigRestoreMessage('Reading local JSON file...');
-
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      try {
-        const result = event.target?.result as string;
-        if (!result) {
-          throw new Error('Failed to read config data.');
-        }
-        const parsed = JSON.parse(result);
-        
-        if (typeof parsed !== 'object' || parsed === null) {
-          throw new Error('Invalid JSON format.');
-        }
-
-        setConfigRestoreStatus('restoring');
-        setConfigRestoreMessage('Updating settings on Yuihime server...');
-
-        const res = await fetch('/api/settings', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(parsed)
-        });
-
-        const data = await res.json();
-        if (res.ok && data.success) {
-          setSettings(parsed);
-          setConfigRestoreStatus('success');
-          setConfigRestoreMessage('Settings successfully restored! Reloading...');
-          setTimeout(() => {
-            window.location.reload();
-          }, 2000);
-        } else {
-          throw new Error(data.error || 'Failed to persist settings on server.');
-        }
-      } catch (err: any) {
+      const lowerName = file.name.toLowerCase();
+      if (!lowerName.endsWith('.json') && !lowerName.endsWith('.txt')) {
         setConfigRestoreStatus('error');
-        setConfigRestoreMessage(err.message || 'Error occurred during configuration import.');
+        setConfigRestoreMessage('Format tidak valid. Pilih berkas konfigurasi .json atau .txt.');
+        return;
       }
-    };
-    reader.onerror = () => {
-      setConfigRestoreStatus('error');
-      setConfigRestoreMessage('Failed to read local file.');
-    };
-    reader.readAsText(file);
+
+      setConfigRestoreStatus('reading');
+      setConfigRestoreMessage('Membaca berkas konfigurasi lokal...');
+
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        try {
+          const result = event.target?.result as string;
+          if (!result) {
+            throw new Error('Gagal membaca data konfigurasi.');
+          }
+          const parsed = parseConfigText(result);
+          await restoreConfigObject(parsed);
+        } catch (err: any) {
+          setConfigRestoreStatus('error');
+          setConfigRestoreMessage(err.message || 'Terjadi kesalahan saat membaca berkas konfigurasi.');
+        }
+      };
+      reader.onerror = () => {
+        setConfigRestoreStatus('error');
+        setConfigRestoreMessage('Gagal membaca berkas lokal.');
+      };
+      reader.readAsText(file);
+    } finally {
+      e.target.value = '';
+    }
+  };
+
+  const handleOpenPasteModal = () => {
+    setPasteConfigText('');
+    setPasteConfigError(null);
+    setShowPasteModal(true);
+  };
+
+  const handleApplyPastedConfig = async () => {
+    setPasteConfigError(null);
+    setPasteConfigSubmitting(true);
+    try {
+      const parsed = parseConfigText(pasteConfigText);
+      setShowPasteModal(false);
+      setPasteConfigText('');
+      await restoreConfigObject(parsed);
+    } catch (err: any) {
+      setPasteConfigError(err.message || 'Teks konfigurasi tidak valid.');
+    } finally {
+      setPasteConfigSubmitting(false);
+    }
   };
 
   return (
@@ -191,6 +256,64 @@ export const BackupTab: React.FC<BackupTabProps> = ({ settings, setSettings }) =
         </div>
       )}
       
+      {/* Paste / Input JSON Config Modal */}
+      {showPasteModal && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowPasteModal(false)} />
+          <div className="relative w-full max-w-lg bg-[#101017] border border-white/10 rounded-2xl shadow-2xl p-6 space-y-4 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-white/5 pb-3">
+              <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                <ClipboardList size={15} className="text-amber-500" /> Paste / Input JSON Config
+              </h4>
+              <button
+                type="button"
+                onClick={() => setShowPasteModal(false)}
+                className="p-1.5 text-zinc-500 hover:text-white hover:bg-white/10 rounded-lg transition-all cursor-pointer"
+              >
+                <X size={15} />
+              </button>
+            </div>
+            <p className="text-[11px] text-zinc-400 leading-relaxed">
+              Tempel teks konfigurasi JSON (dari backup <code className="text-amber-400 font-mono">.json</code> atau <code className="text-amber-400 font-mono">.txt</code>) di bawah ini untuk memulihkannya tanpa mengunggah berkas.
+            </p>
+            <textarea
+              value={pasteConfigText}
+              onChange={(e) => {
+                setPasteConfigText(e.target.value);
+                setPasteConfigError(null);
+              }}
+              placeholder={'{\n  "gemini": { ... },\n  "telegram_bridge": { ... }\n}'}
+              rows={12}
+              className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-amber-500/50 resize-y scrollbar-thin placeholder:text-zinc-600"
+            />
+            {pasteConfigError && (
+              <div className="flex items-start gap-2 bg-rose-950/60 border border-rose-500/30 p-2.5 rounded-lg">
+                <AlertTriangle size={13} className="text-rose-400 shrink-0 mt-0.5" />
+                <p className="text-[10px] text-rose-300 font-mono select-text break-all">{pasteConfigError}</p>
+              </div>
+            )}
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setShowPasteModal(false)}
+                className="px-3.5 py-2 bg-white/5 hover:bg-white/10 text-zinc-300 text-[10px] font-bold rounded-lg border border-white/5 transition-all cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleApplyPastedConfig}
+                disabled={pasteConfigSubmitting}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 text-[10px] font-bold rounded-lg border border-amber-500/25 transition-all cursor-pointer disabled:opacity-50"
+              >
+                {pasteConfigSubmitting && <RefreshCw size={12} className="animate-spin" />}
+                Validasi & Pulihkan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* EXPLANATORY HEADER */}
       <div className="bg-[#0e0e14]/40 border border-white/5 p-5 rounded-2xl flex items-start gap-4">
         <div className="p-3 bg-amber-500/10 rounded-xl border border-amber-500/20 text-amber-500 shrink-0">
@@ -199,7 +322,7 @@ export const BackupTab: React.FC<BackupTabProps> = ({ settings, setSettings }) =
         <div className="space-y-1">
           <h4 className="text-xs font-bold text-white uppercase font-mono tracking-wider">Backup & Restore</h4>
           <p className="text-[11px] text-zinc-400 leading-relaxed">
-            Manage the safety of Yuihime cognitive circuits. You can backing up all database/memory states or simply export parameters configurations.
+            Kelola keamanan sirkuit kognitif Yuihime. Anda dapat mencadangkan semua status database/memori atau sekadar mengekspor konfigurasi parameter.
           </p>
         </div>
       </div>
@@ -215,7 +338,7 @@ export const BackupTab: React.FC<BackupTabProps> = ({ settings, setSettings }) =
         </div>
 
         <p className="text-[11px] text-zinc-400 leading-relaxed">
-          Export or import configuration parameters (<code className="text-amber-400 font-mono">config.toml</code>) in JSON format. This contains API keys, prompts, models, and UI preferences.
+          Ekspor atau impor parameter konfigurasi (<code className="text-amber-400 font-mono">config.toml</code>) dalam format JSON. Berisi API keys, prompt, model, dan preferensi UI.
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
@@ -223,7 +346,7 @@ export const BackupTab: React.FC<BackupTabProps> = ({ settings, setSettings }) =
           <div className="bg-[#07070a]/45 border border-white/5 p-4 rounded-xl flex flex-col justify-between space-y-3">
             <div>
               <h5 className="text-xs font-bold text-white">Export config</h5>
-              <p className="text-[10px] text-zinc-500 mt-1">Download a JSON representation of active parameter settings.</p>
+              <p className="text-[10px] text-zinc-500 mt-1">Unduh representasi JSON dari parameter pengaturan yang aktif.</p>
             </div>
             <button
               type="button"
@@ -244,20 +367,30 @@ export const BackupTab: React.FC<BackupTabProps> = ({ settings, setSettings }) =
           <div className="bg-[#07070a]/45 border border-white/5 p-4 rounded-xl flex flex-col justify-between space-y-3">
             <div>
               <h5 className="text-xs font-bold text-white">Restore config</h5>
-              <p className="text-[10px] text-zinc-500 mt-1">Upload a JSON backup file to overwrite active system parameters.</p>
+              <p className="text-[10px] text-zinc-500 mt-1">Unggah berkas cadangan JSON (.json / .txt) atau tempel langsung untuk menimpa parameter sistem yang aktif.</p>
             </div>
             
             {configRestoreStatus === 'idle' && (
-              <label className="inline-flex items-center justify-center gap-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 font-bold text-xs px-4 py-2.5 rounded-xl border border-amber-500/20 cursor-pointer transition-all text-center active:scale-95">
-                <Upload size={13} />
-                <span>Upload & Apply</span>
-                <input 
-                  type="file" 
-                  accept=".json"
-                  onChange={handleConfigFileChange}
-                  className="hidden" 
-                />
-              </label>
+              <div className="flex flex-wrap gap-2">
+                <label className="inline-flex items-center justify-center gap-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 font-bold text-xs px-4 py-2.5 rounded-xl border border-amber-500/20 cursor-pointer transition-all text-center active:scale-95">
+                  <Upload size={13} />
+                  <span>Upload & Apply</span>
+                  <input 
+                    type="file" 
+                    accept=".json,.txt,application/json,text/plain"
+                    onChange={handleConfigFileChange}
+                    className="hidden" 
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={handleOpenPasteModal}
+                  className="inline-flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-white/80 font-bold text-xs px-4 py-2.5 rounded-xl border border-white/5 cursor-pointer transition-all active:scale-95"
+                >
+                  <ClipboardList size={13} />
+                  <span>Paste JSON</span>
+                </button>
+              </div>
             )}
 
             {configRestoreStatus !== 'idle' && (
@@ -270,13 +403,13 @@ export const BackupTab: React.FC<BackupTabProps> = ({ settings, setSettings }) =
                 ) : configRestoreStatus === 'success' ? (
                   <>
                     <Check size={14} className="text-emerald-400 shrink-0" />
-                    <p className="text-[10px] text-emerald-400 font-sans truncate">Restored! Reloading...</p>
+                    <p className="text-[10px] text-emerald-400 font-sans truncate">Dipulihkan! Memuat ulang...</p>
                   </>
                 ) : (
                   <div className="flex flex-col gap-1.5 w-full">
                     <div className="flex items-center gap-2">
                       <AlertTriangle size={14} className="text-rose-400 shrink-0" />
-                      <p className="text-[10px] text-rose-400 font-sans truncate">Import Error</p>
+                      <p className="text-[10px] text-rose-400 font-sans truncate">Kesalahan Impor</p>
                     </div>
                     <p className="text-[9px] text-zinc-500 line-clamp-1">{configRestoreMessage}</p>
                     <button 
@@ -284,7 +417,7 @@ export const BackupTab: React.FC<BackupTabProps> = ({ settings, setSettings }) =
                       onClick={() => setConfigRestoreStatus('idle')}
                       className="text-[9px] text-amber-500 hover:underline text-left font-mono font-bold mt-0.5"
                     >
-                      Retry
+                      Coba Lagi
                     </button>
                   </div>
                 )}
@@ -305,7 +438,7 @@ export const BackupTab: React.FC<BackupTabProps> = ({ settings, setSettings }) =
         </div>
 
         <p className="text-[11px] text-zinc-400 leading-relaxed">
-          Back up the entire Yuihime cognitive state. This packages the SQLite database (<code className="text-zinc-300 font-mono">yuihime.db</code>), parameter parameters, plugins, agent files, and workspace user data.
+          Cadangkan seluruh keadaan kognitif Yuihime. Ini mengemas database SQLite (<code className="text-zinc-300 font-mono">yuihime.db</code>), parameter, plugin, berkas agen, dan data pengguna workspace.
         </p>
 
         {/* Action: Download backup */}
@@ -316,7 +449,7 @@ export const BackupTab: React.FC<BackupTabProps> = ({ settings, setSettings }) =
             </div>
             <div>
               <h5 className="text-xs font-bold text-white">Full Snapshot</h5>
-              <p className="text-[10px] text-zinc-500">Safely archive all internal files and databases in the background.</p>
+              <p className="text-[10px] text-zinc-500">Arsipkan semua berkas internal dan database dengan aman di latar belakang.</p>
             </div>
           </div>
           <button
@@ -330,7 +463,7 @@ export const BackupTab: React.FC<BackupTabProps> = ({ settings, setSettings }) =
             ) : (
               <Download size={13} />
             )}
-            <span>Export full system (.zip)</span>
+            <span>Ekspor sistem penuh (.zip)</span>
           </button>
         </div>
 
@@ -345,18 +478,18 @@ export const BackupTab: React.FC<BackupTabProps> = ({ settings, setSettings }) =
           <div className="bg-rose-500/[0.02] border border-rose-500/10 p-3.5 rounded-xl flex items-start gap-3 select-none">
             <AlertTriangle size={15} className="text-rose-400 shrink-0 mt-0.5" />
             <p className="text-[10px] text-zinc-500 leading-normal">
-              <strong className="text-rose-400 font-bold">Warning:</strong> This completely replaces current databases, memories, configurations, and plugins. Download a backup first to avoid permanent data loss.
+              <strong className="text-rose-400 font-bold">Peringatan:</strong> Ini sepenuhnya menggantikan database, memori, konfigurasi, dan plugin saat ini. Unduh cadangan terlebih dahulu untuk menghindari kehilangan data permanen.
             </p>
           </div>
 
           {fullRestoreStatus === 'idle' && (
             <label className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-white/10 hover:border-amber-500/35 bg-[#07070a]/35 hover:bg-[#0c0c12]/55 rounded-xl transition-all cursor-pointer text-center group">
               <Upload size={20} className="text-zinc-500 group-hover:text-amber-500 transition-all mb-2" />
-              <span className="text-xs font-bold text-zinc-300">Select backup zip file</span>
-              <span className="text-[10px] text-zinc-500 mt-1 font-mono">Max size: 50MB</span>
+              <span className="text-xs font-bold text-zinc-300">Pilih berkas zip cadangan</span>
+              <span className="text-[10px] text-zinc-500 mt-1 font-mono">Ukuran maks: 50MB</span>
               <input 
                 type="file" 
-                accept=".zip"
+                accept=".zip,application/zip,application/x-zip-compressed,application/x-zip"
                 onChange={handleFullFileChange}
                 className="hidden" 
               />
@@ -369,7 +502,7 @@ export const BackupTab: React.FC<BackupTabProps> = ({ settings, setSettings }) =
                 <>
                   <RefreshCw size={20} className="animate-spin text-amber-500" />
                   <div className="space-y-1">
-                    <h5 className="text-xs font-bold text-white">{fullRestoreStatus === 'reading' ? 'Reading Zip Archive...' : 'Restoring Database & Config...'}</h5>
+                    <h5 className="text-xs font-bold text-white">{fullRestoreStatus === 'reading' ? 'Membaca Arsip Zip...' : 'Memulihkan Database & Konfigurasi...'}</h5>
                     <p className="text-[10px] text-zinc-400 font-mono">{fullRestoreMessage}</p>
                   </div>
                 </>
@@ -379,9 +512,9 @@ export const BackupTab: React.FC<BackupTabProps> = ({ settings, setSettings }) =
                     <Check size={16} />
                   </div>
                   <div className="space-y-1">
-                    <h5 className="text-xs font-bold text-emerald-400">System Restored successfully!</h5>
+                    <h5 className="text-xs font-bold text-emerald-400">Sistem Berhasil Dipulihkan!</h5>
                     <p className="text-[10px] text-zinc-400 mt-1 leading-relaxed">{fullRestoreMessage}</p>
-                    <p className="text-[9px] text-amber-500 font-mono mt-2 animate-pulse font-bold">Restarting Yuihime cognitive loop in 2 seconds...</p>
+                    <p className="text-[9px] text-amber-500 font-mono mt-2 animate-pulse font-bold">Memulai ulang loop kognitif Yuihime dalam 2 detik...</p>
                   </div>
                 </>
               ) : (
@@ -390,7 +523,7 @@ export const BackupTab: React.FC<BackupTabProps> = ({ settings, setSettings }) =
                     <AlertTriangle size={16} />
                   </div>
                   <div className="space-y-1.5 w-full text-center">
-                    <h5 className="text-xs font-bold text-rose-400">Restoration Failed</h5>
+                    <h5 className="text-xs font-bold text-rose-400">Pemulihan Gagal</h5>
                     <p className="text-[10px] text-zinc-400 font-mono select-text bg-[#07070a] border border-white/5 p-2 rounded-lg max-h-24 overflow-y-auto leading-relaxed text-left inline-block max-w-full">{fullRestoreMessage}</p>
                     <div className="pt-2">
                       <button
@@ -401,7 +534,7 @@ export const BackupTab: React.FC<BackupTabProps> = ({ settings, setSettings }) =
                         }}
                         className="px-3.5 py-1.5 bg-white/5 hover:bg-white/10 text-white/70 text-[10px] font-bold rounded-lg border border-white/5 cursor-pointer"
                       >
-                        Try Again
+                        Coba Lagi
                       </button>
                     </div>
                   </div>

@@ -288,7 +288,7 @@ export default defineConfig(({mode}) => {
       },
       proxy: {
         '/api': { target: `http://127.0.0.1:${process.env.VITE_BACKEND_PORT || '3000'}`, changeOrigin: true },
-        '/ws': { target: `ws://127.0.0.1:${process.env.VITE_WS_PORT || '3001'}`, ws: true, changeOrigin: true },
+        '/ws': { target: `ws://127.0.0.1:${process.env.VITE_WS_PORT || process.env.VITE_BACKEND_PORT || '3000'}`, ws: true, changeOrigin: true },
         '/lib': { target: `http://127.0.0.1:${process.env.VITE_BACKEND_PORT || '3000'}`, changeOrigin: true },
         '/models': { target: `http://127.0.0.1:${process.env.VITE_BACKEND_PORT || '3000'}`, changeOrigin: true }
       }

@@ -11,6 +11,184 @@ import { motion, AnimatePresence } from 'motion/react';
 import { VoiceCalibration } from './voiceCalibration';
 import { SearchableSelect } from '../../components/SearchableSelect';
 
+// Frontend fallback module schemas for gateway bridges.
+// On Vite builds, SystemRegistry.getModules() may not auto-register the daemon
+// driver files, so the Telegram/Discord/Twitter sub-menus would render empty.
+// These mirrors guarantee the config forms always render with full fields.
+const fallbackTelegramModule = {
+  metadata: {
+    id: 'telegram_bridge',
+    name: 'Telegram Neural Link',
+    description: 'Connects the Yuihime Core to Telegram. Enables private messaging and group interaction with identity persistence.',
+    version: '2.0.0',
+    type: ModuleType.GATEWAY,
+    configSchema: {
+      fields: {
+        botToken: {
+          type: 'password',
+          label: 'Telegram Bot Token',
+          description: 'Bearer token dari @BotFather',
+          default: ''
+        },
+        enabled: {
+          type: 'boolean',
+          label: 'Channel Activation',
+          default: true
+        },
+        autoAcknowledge: {
+          type: 'boolean',
+          label: 'Auto Acknowledge',
+          description: 'Tampilkan status mengetik atau reaksi agar pengguna tahu Yui sedang membaca.',
+          default: true
+        },
+        reactionEmojis: {
+          type: 'string',
+          label: 'Reaction Emojis',
+          description: 'Emoji dipisahkan koma untuk variasi reaksi.',
+          default: '❤️,🔥,🥰,👍,😁'
+        },
+        respondInGroups: {
+          type: 'boolean',
+          label: 'Respond in Groups',
+          default: true,
+          description: 'Apakah mendengarkan dan merespons pesan di chat grup.'
+        },
+        adminId: {
+          type: 'string',
+          label: 'Primary Admin ID',
+          description: 'Telegram User ID untuk izin tingkat lanjut.',
+          default: ''
+        },
+        apiRoot: {
+          type: 'string',
+          label: 'Custom API Root URL',
+          description: 'URL gateway Telegram khusus untuk mengatasi pemblokiran ISP (contoh https://api.telegram.org).',
+          default: 'https://api.telegram.org'
+        },
+        connectTimeout: {
+          type: 'number',
+          label: 'Connect Timeout (ms)',
+          description: 'Timeout untuk membuat koneksi ke API Telegram.',
+          default: 15000
+        },
+        readTimeout: {
+          type: 'number',
+          label: 'Read Timeout (ms)',
+          description: 'Timeout untuk membaca respons dari API Telegram.',
+          default: 30000
+        },
+        maxRetries: {
+          type: 'number',
+          label: 'Max Launch Retries',
+          description: 'Jumlah percobaan ulang saat bot gagal diluncurkan karena kesalahan jaringan.',
+          default: 5
+        },
+        proxyUrl: {
+          type: 'string',
+          label: 'Proxy URL',
+          description: 'Proxy HTTP/HTTPS opsional untuk permintaan API Telegram (contoh http://proxy:8080).',
+          default: ''
+        }
+      }
+    }
+  },
+  run: async () => ({ status: 'daemon-managed' })
+};
+
+const fallbackDiscordModule = {
+  metadata: {
+    id: 'discord_bridge',
+    name: 'Discord Neural Link',
+    description: 'Connects the Yuihime Core to Discord. Enables server integration and identity cross-mapping.',
+    version: '1.0.0',
+    type: ModuleType.GATEWAY,
+    configSchema: {
+      fields: {
+        botToken: {
+          type: 'password',
+          label: 'Discord Bot Token',
+          description: 'Token dari Discord Developer Portal',
+          default: ''
+        },
+        enabled: {
+          type: 'boolean',
+          label: 'Channel Activation',
+          default: true
+        },
+        autoAcknowledge: {
+          type: 'boolean',
+          label: 'Auto Acknowledge',
+          description: 'Tampilkan status mengetik atau reaksi agar pengguna tahu Yui sedang membaca.',
+          default: true
+        },
+        reactionEmojis: {
+          type: 'string',
+          label: 'Reaction Emojis',
+          description: 'Emoji dipisahkan koma untuk variasi reaksi.',
+          default: '❤️,✨,💫,🌸'
+        },
+        guildId: {
+          type: 'string',
+          label: 'Primary Guild ID',
+          description: 'Server utama untuk perintah administratif.',
+          default: ''
+        },
+        voiceChannelId: {
+          type: 'string',
+          label: 'Automated Stream Voice Lounge (Channel ID)',
+          description: 'Channel suara otomatis untuk sesi streaming.',
+          default: ''
+        }
+      }
+    }
+  },
+  run: async () => ({ status: 'daemon-managed' })
+};
+
+const fallbackTwitterModule = {
+  metadata: {
+    id: 'twitter_bridge',
+    name: 'X / Twitter Autonomous Conduits',
+    description: 'Automated tweets posting, feed scraping & conduits.',
+    version: '1.0.0',
+    type: ModuleType.GATEWAY,
+    configSchema: {
+      fields: {
+        enabled: {
+          type: 'boolean',
+          label: 'Channel Activation',
+          default: true
+        },
+        apiKey: {
+          type: 'string',
+          label: 'Consumer Key API (X Account)',
+          description: 'Consumer Key dari Twitter/X.',
+          default: ''
+        },
+        apiSecret: {
+          type: 'password',
+          label: 'Consumer Secret API',
+          description: 'Consumer Secret dari Twitter/X.',
+          default: ''
+        },
+        accessToken: {
+          type: 'string',
+          label: 'Access Token',
+          description: 'Access Token akun X.',
+          default: ''
+        },
+        accessTokenSecret: {
+          type: 'password',
+          label: 'Access Token Secret',
+          description: 'Access Token Secret akun X.',
+          default: ''
+        }
+      }
+    }
+  },
+  run: async () => ({ status: 'daemon-managed' })
+};
+
 interface ModulesTabProps {
   settings: any;
   setSettings: React.Dispatch<React.SetStateAction<any>>;
@@ -1225,12 +1403,12 @@ export const ModulesTab: React.FC<ModulesTabProps> = ({
       }
 
       case 'telegram': {
-        const telegramModule = allRegModules.find(m => m.metadata.id === 'telegram_bridge');
+        const telegramModule = allRegModules.find(m => m.metadata.id === 'telegram_bridge') || fallbackTelegramModule;
         return (
           <div className="space-y-5">
             <div className="bg-[#0e0e14]/55 border border-white/5 p-5 rounded-2xl space-y-3">
               <h4 className="text-xs font-bold text-sky-400">Telegram Neural Link</h4>
-              {telegramModule && renderFields(telegramModule)}
+              {renderFields(telegramModule)}
             </div>
 
             <div className="bg-[#0e0e14]/55 border border-white/5 p-5 rounded-2xl space-y-3">
@@ -1257,21 +1435,21 @@ export const ModulesTab: React.FC<ModulesTabProps> = ({
       }
 
       case 'discord': {
-        const discordModule = allRegModules.find(m => m.metadata.id === 'discord_bridge');
+        const discordModule = allRegModules.find(m => m.metadata.id === 'discord_bridge') || fallbackDiscordModule;
         return (
           <div className="bg-[#0e0e14]/55 border border-white/5 p-5 rounded-2xl space-y-3">
             <h4 className="text-xs font-bold text-blue-400">Discord Sync Conduit</h4>
-            {discordModule && renderFields(discordModule)}
+            {renderFields(discordModule)}
           </div>
         );
       }
 
       case 'twitter': {
-        const twitterModule = allRegModules.find(m => m.metadata.id === 'twitter_bridge');
+        const twitterModule = allRegModules.find(m => m.metadata.id === 'twitter_bridge') || fallbackTwitterModule;
         return (
           <div className="bg-[#0e0e14]/55 border border-white/5 p-5 rounded-2xl space-y-3">
             <h4 className="text-xs font-bold text-sky-400">X / Twitter Autonomous Conduits</h4>
-            {twitterModule && renderFields(twitterModule)}
+            {renderFields(twitterModule)}
           </div>
         );
       }

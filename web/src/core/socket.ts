@@ -84,10 +84,10 @@ export class SocketService {
     const injectedWsPort = (window as any).__YUIHIME_WS_PORT__;
     let wsPort = injectedWsPort;
     if (wsPort === undefined || wsPort === null) {
-      const parsed = parseInt(loc.port || (loc.protocol === 'https:' ? '443' : '80'), 10);
-      wsPort = isNaN(parsed) ? null : parsed + 1;
+      // Single-port mode: WebSocket shares the HTTP port by default.
+      wsPort = null;
     }
-    const host = wsPort ? `${loc.hostname}:${wsPort}` : loc.hostname;
+    const host = wsPort ? `${loc.hostname}:${wsPort}` : loc.host;
     this.serverUrl = customUrl || `${proto}//${host}/ws`;
 
     this.updateStatus('connecting');

@@ -1,6 +1,14 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.219] - 2026-08-02
+### Fix: Fix JSON config and ZIP snapshot upload/restore and Telegram Module fields
+- BackupTab: restore config mendukung .json/.txt, pembersihan UTF-8 BOM (0xFEFF), validasi JSON ketat, modal Paste/Input JSON Config dengan textarea+validator, dan reset state file input di blok finally.
+- BackupTab & SystemTab: restore snapshot zip pakai pengecekan ekstensi case-insensitive (.toLowerCase().endsWith('.zip')), atribut accept diperluas (application/zip, application/x-zip-compressed, application/x-zip), dan pesan status/error dilokalkan ke Bahasa Indonesia.
+- ModulesTab: tambah fallbackTelegramModule, fallbackDiscordModule, fallbackTwitterModule lengkap (botToken, enabled, autoAcknowledge, reactionEmojis, respondInGroups, adminId, apiRoot, connectTimeout, readTimeout, maxRetries, proxyUrl) sehingga renderFields selalu merender form di build Vite.
+- Single-port WebSocket: WebSocketServer kini terikat pada HTTP server (PORT/ws) alih-alih PORT+1; sinkronisasi VITE_WS_PORT, injeksi __YUIHIME_WS_PORT__, proxy dev /ws, dan fallback SocketService ke port yang sama.
+
+
 ## [4.218] - 2026-08-02
 ### feat: Command TG: /config editor, /dbstat, /cron manager
 - /config list|get|set: lihat & ubah config.toml live dari TG via SettingsManager; secret apiKey/token selalu dimask; parse value boolean/number/array/string; persist langsung ke config.toml.

@@ -752,11 +752,9 @@ app.use("/models", express.static(modelsDir));
     } catch {}
     process.title = "YuiHime";
 
-    const wsPort = PORT + 1;
-
     const bootRows: [string, string][] = [
       ["Port", String(PORT)],
-      ["WS Port", String(wsPort)],
+      ["WS Port", `${String(PORT)}/ws (single-port)`],
       ["Environment", process.env.NODE_ENV || "development"],
       ["Neural Key", masked],
       ["Bot Status", settings.get("telegram_bridge")?.botToken ? "ACTIVE" : "DISABLED"],
@@ -783,9 +781,8 @@ app.use("/models", express.static(modelsDir));
 
   __globalServer = server;
 
-  // --- WebSocket Gateway Initialization ---
-  const wsPort = PORT + 1;
-  const wss = new WebSocketServer({ port: wsPort, path: "/ws" });
+  // --- WebSocket Gateway Initialization (single-port: attached to HTTP server) ---
+  const wss = new WebSocketServer({ server, path: "/ws" });
 
   __globalWss = wss;
 
@@ -947,9 +944,9 @@ app.use("/models", express.static(modelsDir));
 // Serve the Web UI (Vite dev middleware or static built assets).
 // Vite is lazily imported so the headless daemon bundle stays lean.
 async function serveWebUI(app: any, backendPort: number) {
-  const wsPort = backendPort + 1;
   process.env.VITE_BACKEND_PORT = String(backendPort);
-  process.env.VITE_WS_PORT = String(wsPort);
+  // Single-port mode: WebSocket shares the same HTTP port.
+  process.env.VITE_WS_PORT = String(backendPort);
 
   // Serve public assets (e.g. /lib/live2d) directly from express BEFORE the
   // UI handler, so they are not caught by Vite's proxy rules (/lib -> :3000)
@@ -970,9 +967,9 @@ async function serveWebUI(app: any, backendPort: number) {
     }
   }
 
-  // Inject runtime WS port so the UI knows which port to connect to.
+  // Inject runtime WS port so the UI knows which port to connect to (same as HTTP).
   const injectWsPort = (html: string) =>
-    html.replace("</head>", `<script>window.__YUIHIME_WS_PORT__=${wsPort};</script></head>`);
+    html.replace("</head>", `<script>window.__YUIHIME_WS_PORT__=${backendPort};</script></head>`);
 
   // Vite dev (source) mode: web/src exists → live-reload dev middleware.
   if (webRoot && existsSync(path.join(webRoot, "src"))) {
