@@ -62,6 +62,7 @@ import { AbstractReasoningModule } from '../modules/agi/AbstractReasoningModule.
 import { MetacognitionReflectModule, SelfAwarenessReflectModule } from '../modules/agi/AGIReflectModules.js';
 import { DiaryModule } from '../modules/agi/DiaryModule.js';
 import { LifeSimulationModule } from '../modules/agi/LifeSimulationModule.js';
+import { FeedbackLoopModule } from '../modules/agi/FeedbackLoopModule.js';
 
 import { LocalProvider } from '../drivers/ai-providers/LocalProvider.js';
 import { GeminiProvider } from '../drivers/ai-providers/GeminiProvider.js';
@@ -460,7 +461,7 @@ export function initializeCortexModules(): Promise<void> {
         MemoryConsolidationModule, HighOrderMetacognitionModule, DreamModule, ContinuousLearningMemoryModule,
         CognitiveReflexModule, CognitiveIntegrityGuardianModule, CognitiveHeuristicsModule, CircadianRhythmModule,
         AdaptiveLearningModule, AbstractReasoningModule, MetacognitionReflectModule, SelfAwarenessReflectModule,
-        DiaryModule, LifeSimulationModule,
+        DiaryModule, LifeSimulationModule, FeedbackLoopModule,
         LocalProvider, GeminiProvider, CustomProvider, AnthropicProvider, OpenAIProvider,
         OfficialChatProvider, OpenRouter, OfficialSpeechTTS, ElevenLabsTTS, WebSpeechTTS,
         OpenRouterTTS, OfficialStreamingSpeechTTS, CustomAPITTS, GeminiTTS,

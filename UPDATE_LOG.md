@@ -1,6 +1,17 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.205] - 2026-08-02
+### fix: Stage A AGI: Closed-loop Feedback Learning (3 bahasa EN/ID/JP)
+- FeedbackLoopModule (SOUL order 30): konsumsi feedback nyata (reaksi Telegram + tombol web /api/feedback) -> learned_strategies (feedback:topic) + penyesuaian relation.affection/trust + injeksi catatan feedback ke soulDirective.
+- Tabel baru feedback_events & outbound_messages (database.ts). Helper src/core/feedback.ts: recordOutboundMessage, recordFeedback (dedupe per message+source+reward), emojiToReward, extractTopics, consolidateFeedbackEvent.
+- telegram.ts: handler bot.on('message_reaction') menangkap reaksi user pada pesan Yui; pesan keluar direkam (main reply, retry, photo/document) agar reaksi bisa dipetakan.
+- PromptManager kini meng-inject isi learned strategies (bukan sekadar hitung jumlah) di blok Learned Feedback Preferences.
+- Web UI: tombol thumbs up/down di balon pesan Yui (LiveChatFeed) -> POST /api/feedback.
+- Semua teks baru feedback trilingual (EN/ID/JP): instruksi belajar, catatan feedback, header PromptManager, tooltip tombol.
+- Verifikasi: tsc bersih + smoke test temp-DB (dedupe, konsolidasi strategy, delta relasi, mark consumed) ALL PASS.
+
+
 ## [4.204] - 2026-08-02
 ### fix: Refactor: hilangkan duplikasi Longing Index (satu sumber kebenaran)
 - SpontaneousProactiveModule tidak lagi menghitung & menimpa longingIndex; kini mengkonsumsi context.longingIndex hasil ProactiveVolitionModule (SOUL order 13 -> 14, urutan dijamin runCortexPhase sort by order).

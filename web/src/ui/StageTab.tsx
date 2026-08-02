@@ -1772,6 +1772,7 @@ export const StageTab: React.FC<StageTabProps> = ({
         activeSubtitle={activeSubtitle}
         typedSubtitle={typedSubtitle}
         activeAlert={activeAlert}
+        feedbackContextId={activeSessionId}
       />
 
       <ControlPanelDrawer

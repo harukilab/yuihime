@@ -91,6 +91,7 @@ import { initializeCortexModules } from "../RegistryInitializer.js";
 import { datasetSynthesizer } from "./datasetSynthesizer.js";
 import { registerStorageRoutes } from "./routes/storageRouter.js";
 import { registerTelegramRoutes } from "./routes/telegramRouter.js";
+import { recordFeedback } from "../feedback.js";
 import { registerSynthesizerRoutes } from "./routes/synthesizerRouter.js";
 import { registerToolsRoutes } from "./routes/toolsRouter.js";
 import { registerIdentitiesRoutes } from "./routes/identitiesRouter.js";
@@ -719,6 +720,27 @@ export function registerAPIRoutes(app: express.Express, db: any) {
   console.log("[SERVER_ROUTE_INIT] Registering storage routes...");
   registerStorageRoutes(app, db);
   console.log("[SERVER_ROUTE_INIT] Registering sandbox routes...");
+
+  // ── Closed-loop Feedback API (dipakai Web UI / tool eksternal) ──
+  app.post("/api/feedback", async (req, res) => {
+    try {
+      const body = req.body || {};
+      const reward = Math.max(-1, Math.min(1, Number(body.reward) || 0));
+      const recorded = recordFeedback({
+        source: String(body.source || 'web'),
+        messageId: body.messageId || null,
+        contextId: body.contextId || null,
+        channel: body.channel || null,
+        content: body.content || null,
+        reward
+      });
+      res.json({ success: recorded });
+    } catch (err: any) {
+      console.error("[SERVER] POST /api/feedback Error:", err?.message || err);
+      res.status(500).json({ error: err?.message || 'unknown' });
+    }
+  });
+
   console.log("[SERVER_ROUTE_INIT] Registering telegram routes...");
   registerTelegramRoutes(app, db);
   console.log("[SERVER_ROUTE_INIT] Registering synthesizer routes...");

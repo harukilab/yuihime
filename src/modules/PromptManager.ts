@@ -324,6 +324,18 @@ export const PromptManagerModule: CortexModule = {
 
     const enabledCaps = capabilities.filter((c: any) => c.enabled).length;
 
+    // Learned feedback strategies: hanya yang punya instruction & confidence terbaik
+    const learnedStrategies = (strategies || [])
+      .filter((s: any) => s && s.instruction && s.id && s.id.startsWith('feedback:'))
+      .sort((a: any, b: any) => (b.confidence || 0) - (a.confidence || 0))
+      .slice(0, 5);
+    const learnedStrategiesBlock = learnedStrategies.length > 0
+      ? learnedStrategies.map((s: any) => {
+          const pct = Math.round((s.confidence || 0.5) * 100);
+          return `- [${pct}%] ${s.instruction}`;
+        }).join('\n')
+      : '- [EN] No learned patterns from user feedback yet. [ID] Belum ada pola belajar dari umpan balik user. [JP] ユーザーのフィードバックから学んだパターンはまだありません。';
+
     // Format available tools dynamically from compiled file or active fallback
     let tools: any[] = [];
     if (typeof window === 'undefined') {
@@ -745,6 +757,8 @@ ${identitiesListString}
 - **Average Social Bond Stances**: Trust level: **${trustAvg}%**, Affection level: **${affectionAvg}%** (fluctuates dynamically based on everyday conversational sincerity).
 - **Subconscious Consolidation (Dreams)**: Completed **${dreams.length} dream simulations** to consolidate and solidify your long-term memories in this physical world.
 - **Learned Heuristic Habits**: Mastered **${strategies.length} custom communication habits** fitting your proud, playful tsundere baseline.
+- **Learned Feedback Preferences (Closed-Loop)**: [EN] Based on real user feedback, adjust your conversational style as follows. [ID] Berdasarkan umpan balik nyata user, sesuaikan gaya bercakap berikut. [JP] ユーザーからの実際のフィードバックに基づいて、以下の会話スタイルを調整してください。
+${learnedStrategiesBlock}
 - **Active Talents & Capabilities**: Possesses **${enabledCaps} active capabilities** out of a total of ${capabilities.length} talents honed over time.
 - **Connected Multi-Channel Portal Bridges**: **${activeIntegrations.join(', ')}**.
 

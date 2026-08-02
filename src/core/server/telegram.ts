@@ -13,6 +13,7 @@ import { extractChannelFileAttachments } from "./channelFileAttachment.js";
 import { describeImageFromBuffer } from "../../modules/YuiVisionModule.js";
 import { eventBus } from "@shared/core/kernel/event-bus";
 import { handleTgQuickCommand, handleTgCallback } from "../../drivers/tools/telegram_quick_tools/index.js";
+import { recordOutboundMessage, recordFeedback, lookupOutboundMessage, emojiToReward } from "../feedback.js";
 
 async function withDeliveryTimeout<T>(fn: () => Promise<T>, timeoutMs: number, label: string): Promise<T> {
   return Promise.race([
@@ -645,15 +646,21 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
               } else {
                 dedup.markSent(response, contextId);
                 try {
-                  const sentAsFile = await withDeliveryTimeout(() => trySendFileAttachment(ctx, response), 10000, 'file-attachment');
+                  const sentAsFile = await withDeliveryTimeout(() => trySendFileAttachment(ctx, response, { contextId, channel: chatType }), 10000, 'file-attachment');
                   if (!sentAsFile) {
-                    await withDeliveryTimeout(() => ctx.reply(response), 15000, 'telegram-reply');
+                    const sentMsg = await withDeliveryTimeout(() => ctx.reply(response), 15000, 'telegram-reply');
+                    if (sentMsg?.message_id) {
+                      recordOutboundMessage(sentMsg.message_id, contextId, chatType, String(response));
+                    }
                   }
                   console.log(`[TELEGRAM_DELIVERY] Reply sent to ${senderName} (${contextId}), len=${String(response).length}`);
                 } catch (sendErr: any) {
                   console.error(`[TELEGRAM_DELIVERY_ERR] Failed to send reply to ${senderName}:`, sendErr?.message || sendErr);
                   try {
-                    await withDeliveryTimeout(() => ctx.reply(String(response).slice(0, 3500)), 10000, 'telegram-reply-retry');
+                    const sentMsg2 = await withDeliveryTimeout(() => ctx.reply(String(response).slice(0, 3500)), 10000, 'telegram-reply-retry');
+                    if (sentMsg2?.message_id) {
+                      recordOutboundMessage(sentMsg2.message_id, contextId, chatType, String(response));
+                    }
                   } catch (retryErr: any) {
                     console.error(`[TELEGRAM_DELIVERY_ERR] Retry also failed:`, retryErr?.message || retryErr);
                   }
@@ -724,6 +731,41 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
     }
   });
 
+  // ── Closed-loop Feedback: tangkap reaksi user pada pesan Yui (Telegram) ──
+  bot.on('message_reaction', (ctx) => {
+    try {
+      const mr: any = ctx.update?.message_reaction || {};
+      const messageId = mr.message_id;
+      const userId = mr.user?.id || mr.actor_chat?.id;
+      if (!messageId || !userId) return;
+
+      const outbound = lookupOutboundMessage(messageId);
+      if (!outbound) return; // bukan pesan keluar Yui yang terekam
+
+      const oldEmojis = new Set((mr.old_reaction || []).map((r: any) => r.emoji).filter(Boolean));
+      const newEmojis = (mr.new_reaction || []).map((r: any) => r.emoji).filter(Boolean);
+      const added = newEmojis.filter(e => !oldEmojis.has(e));
+
+      for (const emoji of added) {
+        const reward = emojiToReward(emoji);
+        if (reward === 0) continue;
+        const recorded = recordFeedback({
+          source: 'telegram',
+          messageId,
+          contextId: outbound.context_id,
+          channel: outbound.channel,
+          content: outbound.content,
+          reward
+        });
+        if (recorded) {
+          console.log(`[FEEDBACK_CAPTURE] ${userId} reacted ${emoji} (reward ${reward}) on msg ${messageId}`);
+        }
+      }
+    } catch (err: any) {
+      console.warn('[FEEDBACK_CAPTURE] Failed to process reaction:', err?.message || err);
+    }
+  });
+
   bot.on('callback_query', async (ctx) => {
     try {
       const data = (ctx.callbackQuery as any)?.data || '';
@@ -760,7 +802,7 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
     }
   });
 
-async function trySendFileAttachment(ctx: any, responseText: string): Promise<boolean> {
+async function trySendFileAttachment(ctx: any, responseText: string, outboundCtx?: { contextId?: string; channel?: string }): Promise<boolean> {
      try {
        const sandboxDir = getDynamicSandboxRoot();
        const { attachments, remainingText } = await extractChannelFileAttachments(responseText, sandboxDir);
@@ -772,13 +814,16 @@ async function trySendFileAttachment(ctx: any, responseText: string): Promise<bo
          const att = attachments[i];
          const isFirstImage = i === 0 && att.isImage;
          if (att.isImage) {
-           if (isFirstImage && remainingText) {
-             await withDeliveryTimeout(() => ctx.replyWithPhoto({ source: att.safePath }, { caption: remainingText }), 10000, 'telegram-photo');
-           } else {
-             await withDeliveryTimeout(() => ctx.replyWithPhoto({ source: att.safePath }), 10000, 'telegram-photo');
-           }
-         } else {
-           await withDeliveryTimeout(() => ctx.replyWithDocument({ source: att.safePath }), 10000, 'telegram-document');
+            if (isFirstImage && remainingText) {
+              const sent = await withDeliveryTimeout(() => ctx.replyWithPhoto({ source: att.safePath }, { caption: remainingText }), 10000, 'telegram-photo') as any;
+              if (sent?.message_id) recordOutboundMessage(sent.message_id, outboundCtx?.contextId || '', outboundCtx?.channel || 'telegram', remainingText);
+            } else {
+              const sent = await withDeliveryTimeout(() => ctx.replyWithPhoto({ source: att.safePath }), 10000, 'telegram-photo') as any;
+              if (sent?.message_id) recordOutboundMessage(sent.message_id, outboundCtx?.contextId || '', outboundCtx?.channel || 'telegram', '');
+            }
+          } else {
+            const sent = await withDeliveryTimeout(() => ctx.replyWithDocument({ source: att.safePath }), 10000, 'telegram-document') as any;
+            if (sent?.message_id) recordOutboundMessage(sent.message_id, outboundCtx?.contextId || '', outboundCtx?.channel || 'telegram', '');
          }
          sentAny = true;
        }

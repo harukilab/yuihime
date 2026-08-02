@@ -237,6 +237,28 @@ export async function setupSchema(db: any) {
         context TEXT
       );
     `,
+    feedback_events: `
+      CREATE TABLE IF NOT EXISTS feedback_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        source TEXT,
+        message_id TEXT,
+        context_id TEXT,
+        channel TEXT,
+        content TEXT,
+        reward INTEGER DEFAULT 0,
+        consumed INTEGER DEFAULT 0,
+        created_at INTEGER
+      );
+    `,
+    outbound_messages: `
+      CREATE TABLE IF NOT EXISTS outbound_messages (
+        message_id TEXT PRIMARY KEY,
+        context_id TEXT,
+        channel TEXT,
+        content TEXT,
+        sent_at INTEGER
+      );
+    `,
     telegram_users: `
       CREATE TABLE IF NOT EXISTS telegram_users (
         tg_id INTEGER PRIMARY KEY,

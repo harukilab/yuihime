@@ -1,6 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Eye, EyeOff, Sparkle, Brain, Cpu, ChevronDown, ChevronUp, Paperclip, X, Image, FileText, Music, Film, Copy, Check, Volume2 } from 'lucide-react';
+import { Eye, EyeOff, Sparkle, Brain, Cpu, ChevronDown, ChevronUp, Paperclip, X, Image, FileText, Music, Film, Copy, Check, Volume2, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { SpeechService } from '@web/core/speech';
 
 interface LiveChatFeedProps {
@@ -18,6 +18,7 @@ interface LiveChatFeedProps {
   activeSubtitle: string | null;
   typedSubtitle: string;
   activeAlert: any; // Renders floating alerts
+  feedbackContextId?: string;
 }
 
 const cleanDisplayContent = (text: any) => {
@@ -54,16 +55,37 @@ export const LiveChatFeed: React.FC<LiveChatFeedProps> = ({
   showSubtitles,
   activeSubtitle,
   typedSubtitle,
-  activeAlert
+  activeAlert,
+  feedbackContextId
 }) => {
   const [expandedLogId, setExpandedLogId] = React.useState<string | null>(null);
   const [copiedId, setCopiedId] = React.useState<string | null>(null);
+  const [feedbackSent, setFeedbackSent] = React.useState<Record<string, number>>({});
   const [isDragging, setIsDragging] = React.useState(false);
   const chatFeedContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastLogsCountRef = useRef(uniqueLogs.length);
   const isNearBottomRef = useRef(true);
   const lastShowChatFeedRef = useRef(showChatFeed);
+
+  const sendFeedback = async (id: string, cleanText: string, reward: number) => {
+    if (feedbackSent[id] !== undefined) return;
+    setFeedbackSent(prev => ({ ...prev, [id]: reward }));
+    try {
+      await fetch('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          source: 'web',
+          contextId: feedbackContextId || 'web_default',
+          content: cleanText,
+          reward
+        })
+      });
+    } catch (err: any) {
+      console.warn('[FEEDBACK_UI] Failed to send feedback:', err?.message || err);
+    }
+  };
 
   const handleScroll = () => {
     const el = chatFeedContainerRef.current;
@@ -240,6 +262,38 @@ export const LiveChatFeed: React.FC<LiveChatFeedProps> = ({
                           </div>
                         );
                       })}
+                    </div>
+                  )}
+
+                  {/* Feedback Buttons (only for Yui/AI messages) */}
+                  {!isUser && (
+                    <div className="absolute top-2 left-2 flex items-center gap-0.5 opacity-15 md:opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          sendFeedback(id, cleanText, 1);
+                        }}
+                        className={`p-1 rounded-md bg-black/40 hover:bg-black/60 border border-white/5 cursor-pointer flex items-center justify-center ${
+                          feedbackSent[id] === 1 ? 'text-emerald-400' : 'text-pink-400 hover:text-pink-300'
+                        }`}
+                        title="Balasan ini bagus / suka — Good reply — 良い返信"
+                      >
+                        <ThumbsUp size={10} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          sendFeedback(id, cleanText, -1);
+                        }}
+                        className={`p-1 rounded-md bg-black/40 hover:bg-black/60 border border-white/5 cursor-pointer flex items-center justify-center ${
+                          feedbackSent[id] === -1 ? 'text-rose-500' : 'text-pink-400 hover:text-pink-300'
+                        }`}
+                        title="Balasan ini kurang pas / tidak suka — Bad reply — 良くない返信"
+                      >
+                        <ThumbsDown size={10} />
+                      </button>
                     </div>
                   )}
 
