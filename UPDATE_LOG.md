@@ -1,6 +1,12 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.214] - 2026-08-02
+### feat: Autonomous self-care + tombol /care di TG
+- `LifeSimulationModule`: pass `autonomousSelfCare` baru (default ON, config toggle `enableAutonomousSelfCare`). Tiap turn aktif, Yui otomatis makan saat hunger ≥ 75, minum saat thirst ≥ 70, mandi saat cleanliness ≤ 40, ke toilet saat bladder ≥ 85; neko: main saat play urge ≥ 90 dan craving ikan ≥ 90. Makan/minum tetap konsumsi inventory; bath/toilet/play/fish gratis. Nilai vitals di-recompute setelah self-care agar status & energy akurat.
+- Config baru di configSchema: `selfCareHungerThreshold`, `selfCareThirstThreshold`, `selfCareCleanlinessThreshold`, `selfCareBladderThreshold`, `selfCarePlayThreshold`, `selfCareFishThreshold` (slider).
+- TG Quick Toolkit: command `/care [eat|drink|bath|toilet|sleep|play|fish]` + submenu inline 🧬 Care (tombol Feed/Drink/Bath/Toilet/Sleep/Play/Fish/Status) di menu utama. Aksi menulis langsung ke `agent_state.systemHealth` (lifeVitals + lifeInventory) via db yang sama, aman. Replies Bahasa Inggris, konsisten dgn menu.
+- Verifikasi: tsc --noEmit bersih, build server OK, daemon restart health 200, /api/goals tetap utuh.
 ## [4.213] - 2026-08-02
 ### feat: TG /goals — lihat goal aktif + tombol menu
 - Command baru /goals (+ alias /goal, /target) menampilkan goal aktif Yuihime: root dengan status 🔄 (in_progress) / 📌 (active), progress bar █/░ + persentase, kategori, dan sub-goal (✅/▪️) — query langsung dari tabel `goals` via `tc.db`, tanpa melibatkan LLM.

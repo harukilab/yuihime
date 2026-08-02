@@ -771,6 +771,7 @@ function menuKeyboard(tc?: TgToolContext) {
     [{ text: '🪪 Identity', callback_data: 'qt:me' }, { text: '⚙️ Status', callback_data: 'qt:status' }],
     [{ text: '🏓 Ping', callback_data: 'qt:ping' }, { text: '💖 About', callback_data: 'qt:about' }]
   ];
+  rows.push([{ text: '🧬 Care', callback_data: 'qt:care' }]);
   rows.push([{ text: '🎯 Goals', callback_data: 'qt:goals' }, { text: '🧹 New Chat', callback_data: 'qt:new' }]);
   if (tc && isAdmin(tc)) {
     rows.push([{ text: '🛠️ Daemon', callback_data: 'qt:daemon' }]);
@@ -899,6 +900,84 @@ function yuiStatusText(tc?: TgToolContext): string {
 
 export function menuText(tc?: TgToolContext): string {
   return yuiStatusText(tc);
+}
+
+function careMenuKeyboard() {
+  return {
+    inline_keyboard: [
+      [{ text: '🍽️ Feed', callback_data: 'qt:care:eat' }, { text: '💧 Drink', callback_data: 'qt:care:drink' }, { text: '🚿 Bath', callback_data: 'qt:care:bath' }],
+      [{ text: '🚽 Toilet', callback_data: 'qt:care:toilet' }, { text: '😴 Sleep', callback_data: 'qt:care:sleep' }, { text: '🎾 Play', callback_data: 'qt:care:play' }],
+      [{ text: '🐟 Fish', callback_data: 'qt:care:fish' }, { text: '📊 Status', callback_data: 'qt:care:status' }],
+      [{ text: '« Menu', callback_data: 'qt:menu' }]
+    ]
+  };
+}
+
+function runCareAction(action: string, tc: TgToolContext): TgReply {
+  const db = tc?.db;
+  if (!db) return { text: 'Database unavailable.' };
+  const row = db.prepare('SELECT systemHealth FROM agent_state LIMIT 1').get() as any;
+  const sh = (row && row.systemHealth) ? JSON.parse(row.systemHealth) : {};
+  const v: any = sh.lifeVitals || {};
+  const inv: any = sh.lifeInventory || { foods: [], drinks: [], items: [] };
+  const a = String(action || '').toLowerCase();
+  const now = Date.now();
+  let text = '';
+  switch (a) {
+    case 'eat':
+    case 'feed': {
+      const food = (inv.foods || []).find((f: any) => f.qty > 0);
+      if (food) {
+        food.qty -= 1;
+        v.lastMeal = now;
+        text = `🍽️ Yui eats "${food.name}" — full now! (${food.qty} left)`;
+      } else {
+        text = '🍽️ Food inventory is empty — nothing to feed Yui.';
+      }
+      break;
+    }
+    case 'drink': {
+      const drink = (inv.drinks || []).find((d: any) => d.qty > 0);
+      if (drink) {
+        drink.qty -= 1;
+        v.lastDrink = now;
+        text = `💧 Yui drinks "${drink.name}" — refreshed! (${drink.qty} left)`;
+      } else {
+        text = '💧 Drink inventory is empty — nothing for Yui to drink.';
+      }
+      break;
+    }
+    case 'bath':
+      v.lastBath = now;
+      text = '🚿 Yui takes a bath — clean & fresh again! Nyaaa~';
+      break;
+    case 'toilet':
+      v.lastToilet = now;
+      text = '🚽 Yui uses the bathroom — relieved.';
+      break;
+    case 'sleep':
+      v.sleepState = 'asleep';
+      v.asleepSince = now;
+      text = '😴 Yui goes to sleep now. Good night~';
+      break;
+    case 'play':
+      v.lastPlay = now;
+      text = '🎾 Yui plays chase — hunting instinct satisfied!';
+      break;
+    case 'fish':
+      v.lastFish = now;
+      text = '🐟 Yui is given fish — craving for さかな satisfied!';
+      break;
+    case 'status':
+    case '':
+      return { text: yuiStatusText(tc) };
+    default:
+      return { text: `⚠️ Unknown action: "${action}".\n\nUsage: /care <eat|drink|bath|toilet|sleep|play|fish>` };
+  }
+  sh.lifeVitals = v;
+  sh.lifeInventory = inv;
+  db.prepare('UPDATE agent_state SET systemHealth = ? WHERE id = 1').run(JSON.stringify(sh));
+  return { text: `${text}\n\nUse the 🧬 Care buttons below for more actions.` };
 }
 
 // ───────────────────────── Command registry ─────────────────────────
@@ -1040,6 +1119,19 @@ export const tgQuickCommands: TgCommandDef[] = [
     description: 'Start a fresh clean chat — summarize & archive the old conversation as Yui\u2019s memory',
     usage: '/new',
     handler: async (tc) => runNewChat(tc)
+  },
+  {
+    name: 'care',
+    aliases: ['rawat', 'pelihara'],
+    description: 'Take care of Yuihime (feed/drink/bath/sleep/play) — or open the care menu',
+    usage: '/care [eat|drink|bath|toilet|sleep|play|fish]',
+    handler: async (tc, args) => {
+      const a = args.trim();
+      if (!a) {
+        return { text: `${yuiStatusText(tc)}\n\n🧬 CARE MENU\nPick an action:`, keyboard: careMenuKeyboard() };
+      }
+      return runCareAction(a, tc);
+    }
   },
   {
     name: 'goals',
@@ -1310,6 +1402,15 @@ export async function handleTgCallback(data: string, tc: TgToolContext): Promise
   const cmd = String(data).slice(3).toLowerCase();
   if (cmd === 'close') return { action: 'close' };
   if (cmd === 'menu') return { action: 'edit', text: menuText(tc), keyboard: menuKeyboard(tc) };
+
+  if (cmd === 'care') {
+    return { action: 'edit', text: `${yuiStatusText(tc)}\n\n🧬 CARE MENU\nPick an action:`, keyboard: careMenuKeyboard() };
+  }
+  if (cmd.startsWith('care:')) {
+    const sub = cmd.slice(5);
+    const reply = runCareAction(sub, tc);
+    return { action: 'edit', text: reply.text, keyboard: careMenuKeyboard() };
+  }
 
   if (cmd === 'daemon') {
     if (!isAdmin(tc)) return { action: 'edit', text: '⛔ This command is for the bot admin only.', keyboard: backToMenuKeyboard() };

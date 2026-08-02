@@ -279,6 +279,66 @@ export const LifeSimulationModule: CortexModule = {
           default: true,
           description: 'Gives Yui a small inventory of food/drinks that gets consumed when she eats or drinks.'
         },
+        enableAutonomousSelfCare: {
+          type: 'boolean',
+          label: 'Autonomous Self-Care',
+          default: true,
+          description: 'Lets Yui take care of herself automatically: she eats, drinks, bathes, uses the toilet, plays and satisfies fish cravings on her own whenever a vital crosses its threshold. Eating/drinking still consumes inventory.'
+        },
+        selfCareHungerThreshold: {
+          type: 'slider',
+          label: 'Self-Care: Hunger Threshold',
+          default: 75,
+          min: 40,
+          max: 95,
+          step: 1,
+          description: 'Hunger % at which Yui eats automatically (consumes 1 food item).'
+        },
+        selfCareThirstThreshold: {
+          type: 'slider',
+          label: 'Self-Care: Thirst Threshold',
+          default: 70,
+          min: 40,
+          max: 95,
+          step: 1,
+          description: 'Thirst % at which Yui drinks automatically (consumes 1 drink item).'
+        },
+        selfCareCleanlinessThreshold: {
+          type: 'slider',
+          label: 'Self-Care: Cleanliness Threshold',
+          default: 40,
+          min: 15,
+          max: 60,
+          step: 1,
+          description: 'Cleanliness % below which Yui bathes automatically.'
+        },
+        selfCareBladderThreshold: {
+          type: 'slider',
+          label: 'Self-Care: Bladder Threshold',
+          default: 85,
+          min: 60,
+          max: 95,
+          step: 1,
+          description: 'Bladder % at which Yui uses the toilet automatically.'
+        },
+        selfCarePlayThreshold: {
+          type: 'slider',
+          label: 'Self-Care: Play Urge Threshold',
+          default: 90,
+          min: 60,
+          max: 98,
+          step: 1,
+          description: 'Play urge % at which Yui plays by herself (Nekomata).'
+        },
+        selfCareFishThreshold: {
+          type: 'slider',
+          label: 'Self-Care: Fish Craving Threshold',
+          default: 90,
+          min: 60,
+          max: 98,
+          step: 1,
+          description: 'Fish craving % at which Yui satisfies it by herself (Nekomata).'
+        },
         timezoneOffsetHours: {
           type: 'number',
           label: 'Timezone Offset (GMT+X)',
@@ -494,10 +554,10 @@ export const LifeSimulationModule: CortexModule = {
 
     // --- Vital computation ---
     const metabolismFactor = v.sleepState === 'asleep' ? 0.35 : 1;
-    const hunger = clamp(((now - v.lastMeal) / HOUR_MS) * hungerRate * metabolismFactor, 0, 100);
-    const thirst = clamp(((now - v.lastDrink) / HOUR_MS) * thirstRate * metabolismFactor, 0, 100);
-    const cleanliness = clamp(100 - ((now - v.lastBath) / HOUR_MS) * cleanlinessRate * metabolismFactor, 0, 100);
-    const bladder = clamp(((now - v.lastToilet) / HOUR_MS) * bladderRate, 0, 100);
+    let hunger = clamp(((now - v.lastMeal) / HOUR_MS) * hungerRate * metabolismFactor, 0, 100);
+    let thirst = clamp(((now - v.lastDrink) / HOUR_MS) * thirstRate * metabolismFactor, 0, 100);
+    let cleanliness = clamp(100 - ((now - v.lastBath) / HOUR_MS) * cleanlinessRate * metabolismFactor, 0, 100);
+    let bladder = clamp(((now - v.lastToilet) / HOUR_MS) * bladderRate, 0, 100);
 
     let sleepiness: number;
     if (v.sleepState === 'asleep') {
@@ -506,6 +566,53 @@ export const LifeSimulationModule: CortexModule = {
     } else {
       const hoursAwake = (now - (v.lastSleepEnd || now)) / HOUR_MS;
       sleepiness = clamp(baseSleepiness(hour) + hoursAwake * 6 + (v.sleepDebtMin / 60) * 2.5, 5, 100);
+    }
+
+    // --- Autonomous self-care (she maintains her own vitals when thresholds are hit) ---
+    const selfCare = config.enableAutonomousSelfCare !== undefined ? !!config.enableAutonomousSelfCare : true;
+    const selfCareHunger = Number(config.selfCareHungerThreshold !== undefined ? config.selfCareHungerThreshold : 75);
+    const selfCareThirst = Number(config.selfCareThirstThreshold !== undefined ? config.selfCareThirstThreshold : 70);
+    const selfCareCleanliness = Number(config.selfCareCleanlinessThreshold !== undefined ? config.selfCareCleanlinessThreshold : 40);
+    const selfCareBladder = Number(config.selfCareBladderThreshold !== undefined ? config.selfCareBladderThreshold : 85);
+    if (selfCare) {
+      let cared = false;
+      if (hunger >= selfCareHunger) {
+        const eaten = consumeFromInventory(inventory, 'foods');
+        if (eaten) {
+          v.lastMeal = now;
+          if (eaten.id.includes('sashimi') || eaten.id.includes('fish')) v.lastFish = now;
+          logs.push(`[LIFE_SIM] Self-care: makan "${eaten.name}" otomatis (lapar ${Math.round(hunger)}%).`);
+          cared = true;
+        } else {
+          logs.push('[LIFE_SIM] Self-care: ingin makan tapi inventory makanan kosong.');
+        }
+      }
+      if (thirst >= selfCareThirst) {
+        const drunk = consumeFromInventory(inventory, 'drinks');
+        if (drunk) {
+          v.lastDrink = now;
+          logs.push(`[LIFE_SIM] Self-care: minum "${drunk.name}" otomatis (haus ${Math.round(thirst)}%).`);
+          cared = true;
+        } else {
+          logs.push('[LIFE_SIM] Self-care: ingin minum tapi inventory minuman kosong.');
+        }
+      }
+      if (cleanliness <= selfCareCleanliness) {
+        v.lastBath = now;
+        logs.push(`[LIFE_SIM] Self-care: mandi otomatis (kebersihan ${Math.round(cleanliness)}%).`);
+        cared = true;
+      }
+      if (bladder >= selfCareBladder) {
+        v.lastToilet = now;
+        logs.push('[LIFE_SIM] Self-care: ke kamar mandi otomatis.');
+        cared = true;
+      }
+      if (cared) {
+        hunger = clamp(((now - v.lastMeal) / HOUR_MS) * hungerRate * metabolismFactor, 0, 100);
+        thirst = clamp(((now - v.lastDrink) / HOUR_MS) * thirstRate * metabolismFactor, 0, 100);
+        cleanliness = clamp(100 - ((now - v.lastBath) / HOUR_MS) * cleanlinessRate * metabolismFactor, 0, 100);
+        bladder = clamp(((now - v.lastToilet) / HOUR_MS) * bladderRate, 0, 100);
+      }
     }
 
     // --- Energy modulation (only when affectStatusAndSleep is enabled) ---
@@ -533,8 +640,24 @@ export const LifeSimulationModule: CortexModule = {
       purrLevel = clamp((joy * 0.4) + (valence * 0.25) + (playfulness * 0.35), 0, 100);
     }
 
-    const playUrge = enableNeko ? clamp(((now - v.lastPlay) / HOUR_MS) * playUrgeRate, 0, 100) : 0;
-    const fishCraving = enableNeko ? clamp(((now - v.lastFish) / HOUR_MS) * fishCravingRate, 0, 100) : 0;
+    let playUrge = enableNeko ? clamp(((now - v.lastPlay) / HOUR_MS) * playUrgeRate, 0, 100) : 0;
+    let fishCraving = enableNeko ? clamp(((now - v.lastFish) / HOUR_MS) * fishCravingRate, 0, 100) : 0;
+
+    if (selfCare && enableNeko) {
+      const selfCarePlay = Number(config.selfCarePlayThreshold !== undefined ? config.selfCarePlayThreshold : 90);
+      const selfCareFish = Number(config.selfCareFishThreshold !== undefined ? config.selfCareFishThreshold : 90);
+      if (playUrge >= selfCarePlay) {
+        const urgeBefore = Math.round(playUrge);
+        v.lastPlay = now;
+        playUrge = 0;
+        logs.push(`[LIFE_SIM] Self-care: main kejar-kejaran sendiri (play urge ${urgeBefore}%).`);
+      }
+      if (fishCraving >= selfCareFish) {
+        v.lastFish = now;
+        fishCraving = 0;
+        logs.push('[LIFE_SIM] Self-care: craving ikan terpuaskan sendiri.');
+      }
+    }
 
     let tailState = 'Relaxed';
     if (anger > 50) tailState = 'Swishing (menyibak kesal)';
