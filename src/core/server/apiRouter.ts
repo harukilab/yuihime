@@ -92,6 +92,7 @@ import { datasetSynthesizer } from "./datasetSynthesizer.js";
 import { registerStorageRoutes } from "./routes/storageRouter.js";
 import { registerTelegramRoutes } from "./routes/telegramRouter.js";
 import { recordFeedback } from "../feedback.js";
+import { listUserModels, getUserModel } from "../userModel.js";
 import { registerSynthesizerRoutes } from "./routes/synthesizerRouter.js";
 import { registerToolsRoutes } from "./routes/toolsRouter.js";
 import { registerIdentitiesRoutes } from "./routes/identitiesRouter.js";
@@ -741,9 +742,29 @@ export function registerAPIRoutes(app: express.Express, db: any) {
     }
   });
 
+  // ── Persistent User Models API (per-persona profile, Stage C) ──
+  app.get("/api/user-models", async (_req, res) => {
+    try {
+      res.json({ models: listUserModels() });
+    } catch (err: any) {
+      console.error("[SERVER] GET /api/user-models Error:", err?.message || err);
+      res.status(500).json({ error: err?.message || 'unknown' });
+    }
+  });
+
+  app.get("/api/user-models/:contextId", async (req, res) => {
+    try {
+      const model = getUserModel(req.params.contextId);
+      if (!model) return res.status(404).json({ error: 'not found' });
+      res.json({ model });
+    } catch (err: any) {
+      console.error("[SERVER] GET /api/user-models/:id Error:", err?.message || err);
+      res.status(500).json({ error: err?.message || 'unknown' });
+    }
+  });
+
   console.log("[SERVER_ROUTE_INIT] Registering telegram routes...");
-  registerTelegramRoutes(app, db);
-  console.log("[SERVER_ROUTE_INIT] Registering synthesizer routes...");
+  registerTelegramRoutes(app, db);  console.log("[SERVER_ROUTE_INIT] Registering synthesizer routes...");
   registerSynthesizerRoutes(app, db);
   console.log("[SERVER_ROUTE_INIT] Registering tools routes...");
   registerToolsRoutes(app, db);

@@ -1,6 +1,32 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.207] - 2026-08-02
+### feat: Stage C AGI: Persistent User Model per-Persona (3 bahasa EN/ID/JP)
+- UserModelModule (SOUL order 22): profil persisten per user (contextId) - topTopics frekuensi, bahasa pilihan (deteksi ID/EN/JP), jumlah interaksi, lastSeen/firstSeen; diperbarui tiap siklus cortex dan diekspos via context.userModel.
+- Tabel baru user_models + helper core/userModel.ts (getUserModel, saveUserModel, updateUserModelInteraction, detectLanguage, mergeFreqList) reusable oleh modul lain & UI.
+- PromptManager: blok USER PROFILE trilingual (EN/ID/JP) berisi topik favorit, preferensi bahasa, tren sentimen agar balasan Yui menyesuaikan per user.
+- API baru GET /api/user-models & GET /api/user-models/:contextId.
+- Verifikasi: tsc bersih + smoke test temp-DB (deteksi bahasa id->en->jp, persistensi antar-siklus, pemisahan profil per-user) ALL PASS.
+
+
+## [4.207] - 2026-08-02
+### feat: Stage C AGI: Persistent User Model per-Persona (3 bahasa EN/ID/JP)
+- UserModelModule (SOUL order 22): profil persisten per user (contextId) - topTopics frekuensi, bahasa pilihan (deteksi ID/EN/JP), jumlah interaksi, lastSeen/firstSeen; diperbarui tiap siklus cortex dan diekspos via context.userModel.
+- Tabel baru user_models + helper core/userModel.ts (getUserModel, saveUserModel, updateUserModelInteraction, detectLanguage, mergeFreqList) reusable oleh modul lain & UI.
+- PromptManager: blok USER PROFILE trilingual (EN/ID/JP) berisi topik favorit, preferensi bahasa, tren sentimen agar balasan Yui menyesuaikan per user.
+- API baru GET /api/user-models & GET /api/user-models/:contextId.
+- Verifikasi: tsc bersih + smoke test temp-DB (deteksi bahasa id->en->jp, persistensi antar-siklus, pemisahan profil per-user) ALL PASS.
+
+
+## [4.206] - 2026-08-02
+### fix: Stage B AGI: Confidence & Abstain (3 bahasa EN/ID/JP)
+- ConfidenceEstimatorModule (SOUL order 24): estimasi keyakinan sebelum balasan - grounding dari knowledge base & memori, deteksi pertanyaan faktual (regex EN/ID), cek ketersediaan tool web_search, penalti saat ada error tool.
+- Saat pertanyaan faktual & confidence < threshold (default 40): injeksi direktif abstain trilingual (EN/ID/JP) ke soulDirective agar Yui akui ketidaktahuan jujur, bagikan hanya yang yakin, tawarkan pencarian, dan JANGAN berhalusinasi fakta/angka/nama/tanggal.
+- context.confidence & context.lowConfidence diekspos untuk konsumen lain/UI.
+- Verifikasi: tsc bersih + smoke test 4 skenario (faktual tanpa grounding=low, faktual dengan grounding=high, chitchat=high, faktual+tool error=makin rendah) ALL PASS.
+
+
 ## [4.205] - 2026-08-02
 ### fix: Stage A AGI: Closed-loop Feedback Learning (3 bahasa EN/ID/JP)
 - FeedbackLoopModule (SOUL order 30): konsumsi feedback nyata (reaksi Telegram + tombol web /api/feedback) -> learned_strategies (feedback:topic) + penyesuaian relation.affection/trust + injeksi catatan feedback ke soulDirective.

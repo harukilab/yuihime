@@ -259,6 +259,21 @@ export async function setupSchema(db: any) {
         sent_at INTEGER
       );
     `,
+    user_models: `
+      CREATE TABLE IF NOT EXISTS user_models (
+        context_id TEXT PRIMARY KEY,
+        userName TEXT,
+        language TEXT DEFAULT 'id',
+        interactionCount INTEGER DEFAULT 0,
+        topTopics TEXT DEFAULT '[]',
+        likedTopics TEXT DEFAULT '[]',
+        dislikedTopics TEXT DEFAULT '[]',
+        avgSentiment REAL DEFAULT 0,
+        lastSeen INTEGER,
+        firstSeen INTEGER,
+        notes TEXT DEFAULT '[]'
+      );
+    `,
     telegram_users: `
       CREATE TABLE IF NOT EXISTS telegram_users (
         tg_id INTEGER PRIMARY KEY,

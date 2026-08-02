@@ -1,5 +1,7 @@
 # Agent Instructions — YuiHime
 
+# Gunakan 3 bahasa en,id,jp dalam prompt modul, jntul log dan intruksi pakai en, 
+
 ## Structure
 - `server.ts` = daemon entrypoint (Express + WS). UI is served alongside unless `--no-ui`.
 - `web/` is a separate Vite React app (builds to `dist/web`). `src/App.tsx` is an empty shell; real UI lives in `web/src/app/` (state, handlers, effects, controller, layout).

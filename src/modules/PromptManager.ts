@@ -336,6 +336,23 @@ export const PromptManagerModule: CortexModule = {
         }).join('\n')
       : '- [EN] No learned patterns from user feedback yet. [ID] Belum ada pola belajar dari umpan balik user. [JP] ユーザーのフィードバックから学んだパターンはまだありません。';
 
+    // Persistent per-user model (Stage C): preferensi topik, bahasa, statistik interaksi
+    const userModel = context.userModel;
+    const userModelBlock = userModel
+      ? [
+          '',
+          '## USER PROFILE (PERSISTENT PER-PERSONA MODEL)',
+          `- ${userModel.userName || 'Anonymous'} · ${userModel.interactionCount || 0} interactions · preferred language: ${(userModel.language || 'id').toUpperCase()}`,
+          userModel.topTopics?.length ? `- Favorite topics: ${userModel.topTopics.join(', ')}` : '- No tracked topics yet.',
+          userModel.likedTopics?.length ? `- Liked: ${userModel.likedTopics.slice(0, 5).join(', ')}` : '',
+          userModel.dislikedTopics?.length ? `- Disliked: ${userModel.dislikedTopics.slice(0, 5).join(', ')}` : '',
+          userModel.avgSentiment ? `- Sentiment tendency: ${userModel.avgSentiment >= 0 ? 'positive' : 'negative'} (${userModel.avgSentiment})` : '',
+          '',
+          '[EN] Remember this user profile and tailor your conversation (topics, tone, language) to it. [ID] Ingat profil user ini dan sesuaikan percakapan (topik, nada, bahasa) dengannya. [JP] このユーザープロフィールを覚えて、それに合わせて会話を調整してください。'
+        ].filter(Boolean).join('\n')
+      : '';
+
+
     // Format available tools dynamically from compiled file or active fallback
     let tools: any[] = [];
     if (typeof window === 'undefined') {
@@ -759,6 +776,7 @@ ${identitiesListString}
 - **Learned Heuristic Habits**: Mastered **${strategies.length} custom communication habits** fitting your proud, playful tsundere baseline.
 - **Learned Feedback Preferences (Closed-Loop)**: [EN] Based on real user feedback, adjust your conversational style as follows. [ID] Berdasarkan umpan balik nyata user, sesuaikan gaya bercakap berikut. [JP] ユーザーからの実際のフィードバックに基づいて、以下の会話スタイルを調整してください。
 ${learnedStrategiesBlock}
+${userModelBlock}
 - **Active Talents & Capabilities**: Possesses **${enabledCaps} active capabilities** out of a total of ${capabilities.length} talents honed over time.
 - **Connected Multi-Channel Portal Bridges**: **${activeIntegrations.join(', ')}**.
 
