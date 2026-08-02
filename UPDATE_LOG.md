@@ -1,6 +1,15 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.209] - 2026-08-02
+### feat: Stage E AGI: After-Action Review Loop (3 bahasa EN/ID/JP)
+- Helper baru core/afterActionReview.ts + tabel action_reviews: createActionReview (tiap pesan keluar), resolveReviewByMessage (feedback nyata -> successRating + lesson trilingual), createToolFailureReview (self-review tool gagal), getResolvedLessons, listRecentReviews.
+- recordOutboundMessage kini juga membuka review untuk tiap balasan; consolidateFeedbackEvent meresolve review pesan terkait dengan hasil feedback (positif/negatif/netral).
+- AfterActionReviewModule (SOUL order 29): mencatat lesson kejujuran saat tool gagal & menyuntikkan pelajaran ter-resolve (max 3) ke soulDirective trilingual.
+- API baru GET /api/action-reviews (list + jumlah pending).
+- Verifikasi: tsc bersih + smoke test temp-DB (review dibuat saat balasan, resolve +1 saat feedback, tool-failure lesson, inject directive) ALL PASS.
+
+
 ## [4.208] - 2026-08-02
 ### feat: Stage D AGI: Forgetting-Curve Spaced Repetition (3 bahasa EN/ID/JP)
 - Helper baru core/spacedRepetition.ts: kurva lupa Ebbinghaus - stabilitas menguat tiap retrieval, recall probability P=exp(-dt/S), skor retrieval gabungan (forgetting boost + importance + recency), markMemoriesRecalled & getAtRiskMemories.

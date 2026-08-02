@@ -276,6 +276,19 @@ export async function setupSchema(db: any) {
         notes TEXT DEFAULT '[]'
       );
     `,
+    action_reviews: `
+      CREATE TABLE IF NOT EXISTS action_reviews (
+        id TEXT PRIMARY KEY,
+        actionType TEXT,
+        context_id TEXT,
+        summary TEXT,
+        outcome TEXT DEFAULT 'awaiting-feedback',
+        lesson TEXT,
+        successRating INTEGER,
+        createdAt INTEGER,
+        resolvedAt INTEGER
+      );
+    `,
     telegram_users: `
       CREATE TABLE IF NOT EXISTS telegram_users (
         tg_id INTEGER PRIMARY KEY,

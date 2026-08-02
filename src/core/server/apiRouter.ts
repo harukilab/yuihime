@@ -93,6 +93,7 @@ import { registerStorageRoutes } from "./routes/storageRouter.js";
 import { registerTelegramRoutes } from "./routes/telegramRouter.js";
 import { recordFeedback } from "../feedback.js";
 import { listUserModels, getUserModel } from "../userModel.js";
+import { listRecentReviews, getPendingReviewCount } from "../afterActionReview.js";
 import { registerSynthesizerRoutes } from "./routes/synthesizerRouter.js";
 import { registerToolsRoutes } from "./routes/toolsRouter.js";
 import { registerIdentitiesRoutes } from "./routes/identitiesRouter.js";
@@ -759,6 +760,16 @@ export function registerAPIRoutes(app: express.Express, db: any) {
       res.json({ model });
     } catch (err: any) {
       console.error("[SERVER] GET /api/user-models/:id Error:", err?.message || err);
+      res.status(500).json({ error: err?.message || 'unknown' });
+    }
+  });
+
+  // ── After-Action Reviews API (Stage E) ──
+  app.get("/api/action-reviews", async (_req, res) => {
+    try {
+      res.json({ reviews: listRecentReviews(30), pending: getPendingReviewCount() });
+    } catch (err: any) {
+      console.error("[SERVER] GET /api/action-reviews Error:", err?.message || err);
       res.status(500).json({ error: err?.message || 'unknown' });
     }
   });

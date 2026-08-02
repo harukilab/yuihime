@@ -8,6 +8,7 @@
  */
 
 import { getDb } from './database.js';
+import { createActionReview, resolveReviewByMessage } from './afterActionReview.js';
 
 let preparedCache: { [k: string]: any } | null = null;
 
@@ -58,6 +59,8 @@ export function recordOutboundMessage(messageId: string | number, contextId: str
   try {
     const db = getDb();
     stmts(db).insertOutbound.run(String(messageId), contextId || 'web_default', channel || 'unknown', String(content || ''), Date.now());
+    const topics = extractTopics(content, 3);
+    createActionReview(messageId, 'reply', contextId || 'web_default', `Reply about: ${topics.join(', ') || '(no topic)'}`);
   } catch (err: any) {
     console.warn('[FEEDBACK_DB] Failed to record outbound message:', err?.message || err);
   }
@@ -206,6 +209,11 @@ export function consolidateFeedbackEvent(event: any, affectionBoost = 1, affecti
     stmts(db).upsertStrategy.run(
       id, topic, instruction, confidence, successCount, failureCount, Date.now()
     );
+  }
+
+  // After-action review: resolve review pesan terkait dengan hasil feedback nyata
+  if (event.message_id) {
+    resolveReviewByMessage(event.message_id, reward, topics);
   }
 
   const deltaAffection = reward > 0 ? affectionBoost : reward < 0 ? -affectionPenalty : 0;
