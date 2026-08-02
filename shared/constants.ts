@@ -160,8 +160,12 @@ export const AUTO_CLEANUP_LIMITS = {
   telegram_update_ids_retain_days: 7,
   /** Delete pending_messages with terminal status after this many minutes. */
   pending_messages_ttl_minutes: 60,
+  /** Purge completed/abandoned goals (and their sub-goals) not updated within this many days. */
+  goals_retain_days: 30,
+  /** Soft cap on total goals rows; oldest completed/abandoned are trimmed beyond this. */
+  goals_max_rows: 200,
   /** Interval in ms between periodic auto-cleanup runs (default: 6 hours). */
   cleanup_interval_ms: 6 * 60 * 60 * 1000,
 };
 
-export const APP_VERSION = '4.214';
+export const APP_VERSION = '4.218';

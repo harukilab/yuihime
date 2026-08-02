@@ -10,7 +10,35 @@
  */
 
 import { CortexModule, ModuleType, AgentState } from '@shared/include/types';
-import { getFocusGoal, buildGoalDirective, listActiveGoals, advanceGoal, goalKeywordOverlap } from '../../core/goalDecomposition';
+import { getFocusGoal, buildGoalDirective, listActiveGoals, advanceGoal, goalKeywordOverlap, createGoal } from '../../core/goalDecomposition';
+
+/**
+ * Deteksi permintaan "tambah goal" dari input user (ID/EN/JP).
+ * Return judul goal, atau null bila input bukan permintaan.
+ */
+const GOAL_KEYWORD_RE = /(?:goal|target|目標|ゴール)/i;
+const GOAL_COLON_RE = /[:：]\s*(.+)/;
+const GOAL_ADD_PREFIX_RE = /^(?:tolong\s+)?(?:tambah|buat|bikin|add|create|set|new)\s+(?:(?:sebuah|suatu|satu|a|the|new|baru)\s+)?(?:goal|target|目標|ゴール)\b[\s:：]*(.*)$/i;
+
+function extractGoalTitle(input: string): string | null {
+  if (!input) return null;
+  const text = String(input).trim();
+  if (!text) return null;
+  if (!GOAL_KEYWORD_RE.test(text)) return null;
+  let title = '';
+  const colon = text.match(GOAL_COLON_RE);
+  if (colon && colon[1].trim()) {
+    title = colon[1].trim();
+  } else {
+    const prefix = text.match(GOAL_ADD_PREFIX_RE);
+    if (prefix && prefix[1].trim()) title = prefix[1].trim();
+  }
+  if (!title) return null;
+  return title
+    .replace(/^(untuk|agar|supaya|biar|to)\s+/i, '')
+    .replace(/[.。!！?\s]+$/g, '')
+    .slice(0, 120);
+}
 
 export const GoalDecompositionModule: CortexModule = {
   metadata: {
@@ -70,7 +98,19 @@ export const GoalDecompositionModule: CortexModule = {
       return { ...context };
     }
 
-    const focus = getFocusGoal();
+    // Permintaan user untuk menambah goal -> buat langsung sebagai fokus baru.
+    let focus = getFocusGoal();
+    const requestedTitle = extractGoalTitle(input);
+    if (requestedTitle) {
+      const created = createGoal({ title: requestedTitle, category: 'user-request' });
+      if (created) {
+        logs.push(`[GOAL_CREATE] Permintaan user -> goal baru: "${created.title}" (${created.id})`);
+        focus = created;
+      } else {
+        logs.push(`[GOAL_CREATE] Gagal membuat goal dari permintaan: "${requestedTitle}"`);
+      }
+    }
+
     if (!focus) {
       return { ...context };
     }

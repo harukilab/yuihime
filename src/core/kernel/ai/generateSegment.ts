@@ -3,6 +3,7 @@ import { AIConfig } from './aiTypes.js';
 import { toKeyArray, toSingleString } from '../configNormalizer.js';
 import { SystemRegistry } from '@shared/core/registry';
 import { LlmIoAuditor } from '../../server/llmAuditor.js';
+import { loadKeyPoolState, saveKeyPoolState, pruneExpiryMap } from '../keyPoolStateStore.js';
 
 const keyPool = {
   configure: (_providerId: string, _config: any, _settings: any) => {},
@@ -15,6 +16,46 @@ const RATE_LIMITED_KEY_TTL_MS = 15 * 60 * 1000;
 
 const persistentOverloadedKeys = new Map<string, number>();
 const persistentRateLimitedKeys = new Map<string, number>();
+
+// Restore persisted busy-key state across restarts so known-bad keys (429/503/403)
+// are skipped immediately instead of being retried first on every boot.
+(function hydrateKeyPoolState(): void {
+  try {
+    const state = loadKeyPoolState();
+    if (state.overloaded) {
+      for (const [k, expiry] of Object.entries(pruneExpiryMap(state.overloaded))) {
+        persistentOverloadedKeys.set(k, expiry);
+      }
+    }
+    if (state.rateLimited) {
+      for (const [k, expiry] of Object.entries(pruneExpiryMap(state.rateLimited))) {
+        persistentRateLimitedKeys.set(k, expiry);
+      }
+    }
+    if (persistentOverloadedKeys.size > 0 || persistentRateLimitedKeys.size > 0) {
+      console.log(`[SERVER_AI] Restored ${persistentOverloadedKeys.size} overloaded + ${persistentRateLimitedKeys.size} rate-limited key(s) from disk.`);
+    }
+  } catch (err: any) {
+    console.warn('[SERVER_AI] Failed to hydrate busy-key state:', err?.message || err);
+  }
+})();
+
+function persistBusyKeyState(): void {
+  try {
+    const now = Date.now();
+    const overloaded: Record<string, number> = {};
+    for (const [k, expiry] of persistentOverloadedKeys) {
+      if (expiry > now) overloaded[k] = expiry;
+    }
+    const rateLimited: Record<string, number> = {};
+    for (const [k, expiry] of persistentRateLimitedKeys) {
+      if (expiry > now) rateLimited[k] = expiry;
+    }
+    saveKeyPoolState({ overloaded, rateLimited });
+  } catch (err: any) {
+    console.warn('[SERVER_AI] Failed to persist busy-key state:', err?.message || err);
+  }
+}
 
 function summarizeAiError(error: any): string {
   const raw = error?.message || String(error);
@@ -573,12 +614,14 @@ export async function generateContent(
           // If out of quota, register API key in blocklist temporarily for this cycle
           if (isQuotaOrRateLimit) {
             persistentRateLimitedKeys.set(attempt.apiKey, now + RATE_LIMITED_KEY_TTL_MS);
+            persistBusyKeyState();
           }
 
           // If API is overloaded (503/unavailable), register key so pool can skip it after exhausting retries
           if (isRetriable && !isQuotaOrRateLimit && retryCount === maxRetriesPerAttempt - 1) {
             console.warn(`[SERVER_AI] API Key ${attempt.apiKey.substring(0, 6)}... terus menerima overload (503). Menambah ke daftar kunci sibuk untuk dilewati oleh pool.`);
             persistentOverloadedKeys.set(attempt.apiKey, now + OVERLOADED_KEY_TTL_MS);
+            persistBusyKeyState();
           }
 
           // Force fail fast for quota/rate limits to jump immediately to the next fallback candidate/model instead of sleeping for 60 seconds

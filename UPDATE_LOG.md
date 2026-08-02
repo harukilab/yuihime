@@ -1,6 +1,35 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.218] - 2026-08-02
+### feat: Command TG: /config editor, /dbstat, /cron manager
+- /config list|get|set: lihat & ubah config.toml live dari TG via SettingsManager; secret apiKey/token selalu dimask; parse value boolean/number/array/string; persist langsung ke config.toml.
+- /dbstat: statistik DB — ukuran file, page count, row count per tabel, free disk, ukuran config.toml, uptime daemon.
+- /cron list|add|toggle|run|del: manajemen cron task dari TG via loopback /api/cron; add dukung interval (30m) atau cron 5-field; resolve by id atau nama; hasil laporan ke chat TG.
+
+
+## [4.217] - 2026-08-02
+### feat: Tombol refresh model TensorArt di TG
+- imgModelKeyboard: tambah tombol '🔄 Refresh' di model picker (qt:img:refresh).
+- Callback handler img:refresh: refetch list model via fetchTensorArtModels dan render ulang picker tanpa menghapus pending job (prompt/dimensi tetap).
+- Verifikasi: tsc --noEmit bersih, build server OK, daemon restart health 200.
+
+
+## [4.216] - 2026-08-02
+### feat: Persistensi key-pool state lintas restart
+- keyPoolStateStore.ts (baru): simpan/muat state 'key buruk' ke `data/key_pool_state.json` — overloaded keys (503), rate-limited keys (429), dan cooldown per `key::model` kini bertahan setelah daemon restart.
+- generateSegment.ts: hydrate busy-key maps dari disk saat boot + persist setiap kali key ditandai rate-limited/overloaded (TTL 5m/15m). Key buruk langsung dilewati setelah restart, tanpa harus menunggu 503/429 terulang.
+- keyPool.ts: cooldowns di-persist ke disk pada reportFailure dan saat reset rule keyResetScheduler menembak; hydrate dilakukan per-provider saat configure() agar pool kosong di boot tidak melewatkan pemulihan.
+- Perbaikan key Gemini: reorder config.toml — key sehat (AIzaSyCdDDd1, AIzaSyCZ0qF5) di depan; key quota-429/leaked-403/AQ-invalid di belakang; model gemini-3.5-flash & 3.1-flash-lite naik prioritas (2.0-flash 429 di semua key). Daemon: 0 error 503, sirkuit sukses percobaan #1.
+- Verifikasi: tsc --noEmit bersih, build server OK, smoke test store (write→read→prune TTL) PASS, daemon restart health 200.
+
+
+## [4.215] - 2026-08-02
+### feat: Batas goal aktif + auto-cleanup goals
+- `goalDecomposition.ts`: cap maksimum goal ROOT aktif (`maxActiveGoals`, default 20). `createGoal` untuk root menolak (return null + log) saat cap tercapai — membendung self-proposal, `/goals add`, dan request chat dari membengkakkan tabel `goals`. Tambah `getActiveGoalCount()` & `setMaxActiveGoals()`.
+- `GoalProposalModule`: config baru `maxActiveGoals` (slider 5–50, default 20) — dipanggil `setMaxActiveGoals` tiap run agar sesuai config.toml.
+- Auto-cleanup `runAutoCleanup` (database.ts): step baru `goals` — purge goal status `completed/abandoned` yang `updated_at` lebih tua dari `goals_retain_days` (default 30 hari) beserta seluruh descendant-nya, dan soft-cap total baris `goals_max_rows` (default 200) dengan trim goal selesai/terbengkalai tertua. Konstanta di `shared/constants.ts`.
+- Verifikasi: tsc --noEmit bersih, smoke test (cap: 5 request → 3 goal, 2 ditolak; cleanup: 3 stale rows dipurge termasuk 1 child) PASS, build server OK, daemon restart health 200.
 ## [4.214] - 2026-08-02
 ### feat: Autonomous self-care + tombol /care di TG
 - `LifeSimulationModule`: pass `autonomousSelfCare` baru (default ON, config toggle `enableAutonomousSelfCare`). Tiap turn aktif, Yui otomatis makan saat hunger ≥ 75, minum saat thirst ≥ 70, mandi saat cleanliness ≤ 40, ke toilet saat bladder ≥ 85; neko: main saat play urge ≥ 90 dan craving ikan ≥ 90. Makan/minum tetap konsumsi inventory; bath/toilet/play/fish gratis. Nilai vitals di-recompute setelah self-care agar status & energy akurat.

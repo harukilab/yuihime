@@ -20,6 +20,7 @@
  */
 
 import { keyResetScheduler } from './keyResetScheduler.js';
+import { loadKeyPoolState, saveKeyPoolState, PersistedCooldown } from './keyPoolStateStore.js';
 
 interface CooldownEntry {
   until: number; // epoch ms when this key::model pair becomes usable again
@@ -40,6 +41,7 @@ const pairKey = (key: string, model: string) => `${key}::${model || '*'}`;
 export class ApiKeyPool {
   private static instance: ApiKeyPool;
   private pools: Map<string, ProviderKeyState> = new Map();
+  private hydratedProviders: Set<string> = new Set();
 
   // Default cooldown windows (ms). Auth errors cool down longer than rate limits.
   private static RATE_LIMIT_COOLDOWN = 60_000; // 1 min for 429
@@ -51,6 +53,53 @@ export class ApiKeyPool {
       ApiKeyPool.instance = new ApiKeyPool();
     }
     return ApiKeyPool.instance;
+  }
+
+  /** Restore cooldowns persisted from a previous run for a given provider. */
+  private hydrateFromDisk(providerId: string): void {
+    if (this.hydratedProviders.has(providerId)) return;
+    this.hydratedProviders.add(providerId);
+    try {
+      const state = loadKeyPoolState();
+      const pairs = (state.cooldowns || {})[providerId] || {};
+      const pool = this.pools.get(providerId);
+      if (!pool) return;
+      const now = Date.now();
+      let restored = 0;
+      for (const [compositeKey, entry] of Object.entries(pairs)) {
+        if (entry && typeof entry.until === 'number' && entry.until > now) {
+          const ownerKey = compositeKey.split('::')[0];
+          if (ownerKey && pool.keys.length > 0 && !pool.keys.includes(ownerKey)) continue;
+          pool.cooldowns.set(compositeKey, { until: entry.until, reason: entry.reason || 'persisted' });
+          restored++;
+        }
+      }
+      if (restored > 0) {
+        console.log(`[KEYPOOL] Provider ${providerId}: restored ${restored} persisted cooldown(s) from disk.`);
+      }
+    } catch (err: any) {
+      console.warn(`[KEYPOOL] Failed to hydrate cooldowns for ${providerId}:`, err?.message || err);
+    }
+  }
+
+  /** Persist the full cooldown table so restarts remember which keys are cooling down. */
+  private persistToDisk(): void {
+    try {
+      const now = Date.now();
+      const cooldowns: Record<string, Record<string, PersistedCooldown>> = {};
+      for (const [providerId, pool] of this.pools.entries()) {
+        const pairs: Record<string, PersistedCooldown> = {};
+        for (const [compositeKey, entry] of pool.cooldowns.entries()) {
+          if (entry.until > now) {
+            pairs[compositeKey] = { until: entry.until, reason: entry.reason };
+          }
+        }
+        if (Object.keys(pairs).length > 0) cooldowns[providerId] = pairs;
+      }
+      saveKeyPoolState({ cooldowns });
+    } catch (err: any) {
+      console.warn('[KEYPOOL] Failed to persist cooldowns to disk:', err?.message || err);
+    }
   }
 
   /**
@@ -92,6 +141,8 @@ export class ApiKeyPool {
         if (!keys.includes(ownerKey)) existing.cooldowns.delete(ck);
       }
     }
+
+    this.hydrateFromDisk(providerId);
   }
 
   /**
@@ -109,6 +160,7 @@ export class ApiKeyPool {
       if (pool.cooldowns.size > 0) {
         console.log(`[KEYPOOL] Provider ${providerId}: reset rule fired — clearing ${pool.cooldowns.size} cooled pair(s).`);
         pool.cooldowns.clear();
+        this.persistToDisk();
       }
     }
 
@@ -168,6 +220,7 @@ export class ApiKeyPool {
     }
 
     console.warn(`[KEYPOOL] Provider ${providerId}: ${kind} on key::${modelId || '*'} — cooling for ${Math.round(cooldownMs / 1000)}s`);
+    this.persistToDisk();
   }
 
   /**

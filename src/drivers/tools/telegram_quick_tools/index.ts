@@ -6,6 +6,8 @@ import fs from 'fs';
 import os from 'os';
 import manifest from './manifest.json';
 import { getTzOffsetHours, formatLocalFullEn, formatLocalDateKey, tzLabel } from '../../../core/utils/dualClock.js';
+import { createGoal } from '../../../core/goalDecomposition.js';
+import { SettingsManager } from '../../../core/kernel/settings.js';
 
 export interface TgReply {
   text: string;
@@ -355,7 +357,10 @@ function imgModelKeyboard(models: string[]): any {
     { text: '🧠 Yui Mode', callback_data: 'qt:img:yui' },
     { text: '🎲 Default', callback_data: 'qt:img:default' }
   ]);
-  rows.push([{ text: '✖️ Cancel', callback_data: 'qt:img:cancel' }]);
+  rows.push([
+    { text: '🔄 Refresh', callback_data: 'qt:img:refresh' },
+    { text: '✖️ Cancel', callback_data: 'qt:img:cancel' }
+  ]);
   return { inline_keyboard: rows };
 }
 
@@ -980,6 +985,361 @@ function runCareAction(action: string, tc: TgToolContext): TgReply {
   return { text: `${text}\n\nUse the 🧬 Care buttons below for more actions.` };
 }
 
+function splitArgsQuoted(input: string): string[] {
+  const tokens: string[] = [];
+  const re = /"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'|(\S+)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(input))) tokens.push(m[1] ?? m[2] ?? m[3]);
+  return tokens;
+}
+
+// ───────────────────────── Config editor (/config) ─────────────────────────
+const CONFIG_SECRET_KEYS = new Set([
+  'apikey', 'api_key', 'apikeys', 'api_keys', 'token', 'bot_token', 'oauth',
+  'password', 'secret', 'passphrase', 'client_secret', 'access_token', 'webhook_secret'
+]);
+
+function isSecretConfigKey(key: string): boolean {
+  return CONFIG_SECRET_KEYS.has(String(key || '').toLowerCase());
+}
+
+function fmtConfigValueInline(key: string, value: any, maxLen = 120): string {
+  let text: string;
+  if (Array.isArray(value)) {
+    text = value.map(v => JSON.stringify(v)).join(', ');
+  } else if (value !== null && typeof value === 'object') {
+    text = JSON.stringify(value);
+  } else {
+    text = String(value);
+  }
+  if (isSecretConfigKey(key)) text = '••••••••';
+  return text.length > maxLen ? text.slice(0, maxLen) + '…' : text;
+}
+
+function getDeepSetting(obj: any, parts: string[]): { found: boolean; value?: any } {
+  let cur = obj;
+  for (let i = 0; i < parts.length; i++) {
+    if (cur === null || typeof cur !== 'object') return { found: false };
+    cur = cur[parts[i]];
+    if (cur === undefined) return { found: false };
+  }
+  return { found: true, value: cur };
+}
+
+function setDeepSetting(obj: any, parts: string[], value: any): void {
+  let cur = obj;
+  for (let i = 0; i < parts.length - 1; i++) {
+    if (cur[parts[i]] === null || typeof cur[parts[i]] !== 'object') cur[parts[i]] = {};
+    cur = cur[parts[i]];
+  }
+  cur[parts[parts.length - 1]] = value;
+}
+
+function parseConfigScalar(raw: string): any {
+  const t = String(raw || '').trim();
+  if (t === 'true') return true;
+  if (t === 'false') return false;
+  if (/^[+-]?\d+$/.test(t)) return parseInt(t, 10);
+  if (/^[+-]?\d*\.\d+$/.test(t)) return parseFloat(t);
+  if (t === 'null' || t === 'nil') return null;
+  if ((t.startsWith('[') && t.endsWith(']')) || (t.startsWith('{') && t.endsWith('}'))) {
+    try { return JSON.parse(t); } catch {}
+  }
+  return t;
+}
+
+function flattenConfigSection(obj: any, prefix: string, out: string[], depth: number): void {
+  if (depth > 4 || obj === null || typeof obj !== 'object') return;
+  for (const [k, v] of Object.entries(obj)) {
+    const dotted = prefix ? `${prefix}.${k}` : k;
+    if (v !== null && typeof v === 'object' && !Array.isArray(v)) {
+      out.push(`📁 ${dotted}`);
+      flattenConfigSection(v, dotted, out, depth + 1);
+    } else {
+      out.push(`  ${dotted} = ${fmtConfigValueInline(k, v)}`);
+    }
+  }
+}
+
+function configFilePath(): string {
+  return process.env.YUIHIME_CONFIG || path.join(SYSTEM_ROOT, 'data', 'config.toml');
+}
+
+const CONFIG_HELP =
+  '⚙️ CONFIG EDITOR (admin) — edit config.toml live from Telegram\n\n' +
+  'Usage:\n' +
+  '  /config                    — list config sections\n' +
+  '  /config list [section]     — list keys (e.g. /config list gemini)\n' +
+  '  /config get <key>          — view a value (e.g. /config get gemini.model)\n' +
+  '  /config set <key> <value>  — set & save a value\n\n' +
+  'Examples:\n' +
+  '  /config set gemini.enabled false\n' +
+  '  /config set gemini.model ["gemini-2.5-flash","gemini-3.5-flash"]\n' +
+  '  /config set characterName "Yui Airi"\n' +
+  '  /config set provider anthropic\n\n' +
+  'Notes:\n' +
+  '  • Secrets (apiKey/token/oauth) are always masked.\n' +
+  '  • Changes persist to config.toml immediately.\n' +
+  '  • Some keys need a daemon restart (/daemon restart) to fully apply.';
+
+async function ensureSettingsLoaded(): Promise<SettingsManager> {
+  const sm = SettingsManager.getInstance();
+  if (!sm.getAll() || Object.keys(sm.getAll()).length === 0) {
+    try { await sm.load(); } catch {}
+  }
+  return sm;
+}
+
+async function runConfigCommand(args: string, tc: TgToolContext): Promise<TgReply> {
+  const toks = splitArgsQuoted(String(args || '').trim());
+  const sub = (toks[0] || '').toLowerCase();
+  const keyParts = (toks[1] || '').split('.').map(s => s.trim()).filter(Boolean);
+
+  if (!sub || sub === 'help' || sub === '-h' || sub === '--help') {
+    return { text: CONFIG_HELP };
+  }
+
+  if (sub === 'list') {
+    const sm = await ensureSettingsLoaded();
+    const section = (toks[1] || '').trim();
+    const root = section ? getDeepSetting(sm.getAll(), section.split('.')) : { found: true, value: sm.getAll() };
+    if (!root.found || root.value === null || typeof root.value !== 'object') {
+      return { text: `⚠️ Section not found: ${section || '(root)'}` };
+    }
+    const lines: string[] = [];
+    if (section) lines.push(`⚙️ CONFIG · ${section}`, '');
+    else lines.push('⚙️ CONFIG TREE', '');
+    flattenConfigSection(root.value, '', lines, 0);
+    const capped = lines.length > 45 ? lines.slice(0, 45).concat([`… ${lines.length - 45} more (use /config get <key> to view)`]) : lines;
+    return { text: `Config file: ${configFilePath()}\n\n${capped.join('\n')}`.slice(0, 3500) };
+  }
+
+  if (sub === 'get') {
+    if (!keyParts.length) return { text: '⚠️ Usage: /config get <dotted.key>\nExample: /config get gemini.model' };
+    const sm = await ensureSettingsLoaded();
+    const res = getDeepSetting(sm.getAll(), keyParts);
+    if (!res.found) return { text: `⚠️ Key not found: ${keyParts.join('.')}` };
+    const lastKey = keyParts[keyParts.length - 1];
+    if (res.value !== null && typeof res.value === 'object' && !Array.isArray(res.value)) {
+      const lines = [`⚙️ ${keyParts.join('.')}`, ''];
+      flattenConfigSection(res.value, '', lines, 0);
+      return { text: lines.join('\n').slice(0, 3000) };
+    }
+    return { text: `⚙️ ${keyParts.join('.')}\n\n${isSecretConfigKey(lastKey) ? '••••••••' : JSON.stringify(res.value, null, 2)}` };
+  }
+
+  if (sub === 'set') {
+    if (keyParts.length < 1 || !toks[2]) {
+      return { text: '⚠️ Usage: /config set <dotted.key> <value>\n\nExamples:\n  /config set gemini.enabled false\n  /config set characterName "Yui Airi"\n  /config set gemini.model ["gemini-2.5-flash","gemini-3.5-flash"]\n  /config set gemini.apiKey "KEY1,KEY2"' };
+    }
+    const sm = await ensureSettingsLoaded();
+    const value = parseConfigScalar(toks.slice(2).join(' '));
+    setDeepSetting(sm.getAll(), keyParts, value);
+    try {
+      await sm.save(sm.getAll());
+    } catch (e: any) {
+      return { text: `⚠️ Failed to save config.toml: ${e?.message || e}` };
+    }
+    const lastKey = keyParts[keyParts.length - 1];
+    return { text: `✅ Config updated\n\n  ${keyParts.join('.')} = ${isSecretConfigKey(lastKey) ? '••••••••' : fmtConfigValueInline(lastKey, value)}` };
+  }
+
+  return { text: `⚠️ Unknown subcommand: ${sub}\n\n${CONFIG_HELP}` };
+}
+
+// ───────────────────────── DB stats (/dbstat) ─────────────────────────
+function dbFileInfo(): { path: string; size: number; exists: boolean } {
+  const env = process.env.YUIHIME_DB_PATH;
+  const p = env ? expandHome(env) : path.join(SYSTEM_ROOT, 'data', 'yuihime.db');
+  try {
+    if (fs.existsSync(p)) return { path: p, size: fs.statSync(p).size, exists: true };
+  } catch {}
+  return { path: p, size: 0, exists: false };
+}
+
+function runDbStat(tc: TgToolContext): TgReply {
+  if (!tc.db) return { text: 'Database unavailable.' };
+  const info = dbFileInfo();
+  const counters: [string, string][] = [
+    ['🎯 Goals', 'goals'],
+    ['🧠 Memories', 'memories'],
+    ['💬 Chat history', 'history'],
+    ['📮 Outbound msgs', 'outbound_messages'],
+    ['📥 Pending msgs', 'pending_messages'],
+    ['🪪 Identities', 'identities'],
+    ['👥 TG users', 'telegram_users'],
+    ['🗓️ Cron tasks', 'cron_tasks'],
+    ['📔 Diary entries', 'diary'],
+    ['💭 Dreams', 'dreams'],
+    ['📚 Knowledge', 'knowledge'],
+    ['🎭 Personas', 'custom_personas'],
+    ['✅ Feedback events', 'feedback_events'],
+  ];
+  let totalRows = 0;
+  const lines: string[] = [];
+  for (const [label, table] of counters) {
+    try {
+      const n = Number((tc.db.prepare(`SELECT COUNT(*) AS c FROM ${table}`).get() as any)?.c ?? 0);
+      totalRows += n;
+      lines.push(`  ${label}: ${n.toLocaleString()}`);
+    } catch {
+      lines.push(`  ${label}: —`);
+    }
+  }
+  let pageNote = '';
+  try {
+    const pages = Number(tc.db.pragma('page_count', { simple: true }));
+    if (pages > 0) pageNote = ` 📄 ${pages.toLocaleString()} pages`;
+  } catch {}
+  let diskNote = '';
+  try {
+    const st = fs.statfsSync(path.dirname(info.path));
+    const free = (st.bavail || 0) * (st.bsize || 0);
+    if (free > 0) diskNote = `\n💾 Free disk: ${fmtSize(free)}`;
+  } catch {}
+  const cfgPath = configFilePath();
+  let cfgSize = '—';
+  try { if (fs.existsSync(cfgPath)) cfgSize = fmtSize(fs.statSync(cfgPath).size); } catch {}
+  const uptimeSec = (typeof process !== 'undefined' && process.uptime ? process.uptime() : 0);
+  return {
+    text: `🗄️ DATABASE STATS\n\n📦 File: ${info.exists ? fmtSize(info.size) : 'NOT FOUND'}\n🗂️ ${info.path}${pageNote}\n\n📊 Row counts:\n${lines.join('\n')}\n\nΣ Total: ${totalRows.toLocaleString()} rows${diskNote}\n\n⚙️ config.toml: ${cfgSize}\n⏱️ Daemon uptime: ${fmtUptime(uptimeSec * 1000)}`
+  };
+}
+
+// ───────────────────────── Cron manager (/cron) ─────────────────────────
+const CRON_HELP =
+  '🗓️ CRON MANAGER (admin) — schedule autonomous tasks\n\n' +
+  'Usage:\n' +
+  '  /cron                        — list all tasks\n' +
+  '  /cron add <name> <sched> <prompt…>\n' +
+  '  /cron toggle <id|name>       — enable / disable\n' +
+  '  /cron run <id|name>          — trigger now\n' +
+  '  /cron del <id|name>          — delete a task\n\n' +
+  'Schedules:\n' +
+  '  30m, 5s, 2h, 1d              — interval\n' +
+  '  0 8 * * *                    — cron (min hour dom mon dow)\n\n' +
+  'Examples:\n' +
+  '  /cron add "Morning Check" 30m "Check the system and report"\n' +
+  '  /cron add Daily 0 8 * * * "Good morning check-in"\n' +
+  '  /cron toggle Morning\n';
+
+async function cronApiFetch(pathSuffix: string, options?: RequestInit): Promise<{ ok: boolean; status: number; data: any }> {
+  const base = `http://127.0.0.1:${process.env.PORT || '3000'}`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 6000);
+  try {
+    const res = await fetch(`${base}${pathSuffix}`, { ...options, signal: controller.signal });
+    clearTimeout(timer);
+    const data = await res.json().catch(() => ({}));
+    return { ok: res.ok, status: res.status, data };
+  } catch (err: any) {
+    clearTimeout(timer);
+    return { ok: false, status: 0, data: { error: err?.message || String(err) } };
+  }
+}
+
+function resolveCronTask(db: any, query: string): any | null {
+  const q = String(query || '').trim();
+  if (!q || !db) return null;
+  const rows = db.prepare('SELECT * FROM cron_tasks').all() as any[];
+  return rows.find(t => t.id === q)
+    || rows.find(t => String(t.name).toLowerCase() === q.toLowerCase())
+    || rows.find(t => String(t.name).toLowerCase().includes(q.toLowerCase()))
+    || null;
+}
+
+async function runCronCommand(args: string, tc: TgToolContext): Promise<TgReply> {
+  const toks = splitArgsQuoted(String(args || '').trim());
+  const sub = (toks[0] || 'list').toLowerCase();
+
+  if (sub === 'help' || sub === '-h' || sub === '--help') return { text: CRON_HELP };
+
+  if (sub === 'list' || sub === 'ls') {
+    if (!tc.db) return { text: 'Database unavailable.' };
+    const rows = tc.db.prepare('SELECT * FROM cron_tasks ORDER BY enabled DESC, name ASC').all() as any[];
+    if (!rows.length) return { text: '🗓️ No cron tasks yet.\n\nAdd one: /cron add <name> <schedule> <prompt…>' };
+    const lines = ['🗓️ CRON TASKS', ''];
+    for (const t of rows) {
+      const last = t.lastRun ? fmtTimestamp(t.lastRun) : 'never';
+      const prompt = String(t.prompt || '').replace(/\s*\n+/g, ' ').slice(0, 70);
+      lines.push(
+        `${t.enabled === 1 ? '🟢' : '⚪'} ${t.name}`,
+        `   🆔 ${t.id}`,
+        `   ⏱ ${t.schedule}${t.repeating === 1 ? ' (repeat)' : ' (once)'} · Last run: ${last}`,
+        `   📝 ${prompt || '(no prompt)'}`
+      );
+    }
+    return { text: lines.join('\n').slice(0, 3000) };
+  }
+
+  if (sub === 'add') {
+    const name = toks[1];
+    let schedule = toks[2];
+    if (!name || !schedule) {
+      return { text: '⚠️ Usage: /cron add <name> <schedule> <prompt…>\nExample: /cron add "Morning Check" 30m "Check system and report"' };
+    }
+    let promptStart = 3;
+    const rest = toks.slice(3);
+    if (!/^\d+[smhd]$/i.test(schedule) && rest.length >= 4 && /^[0-9*/,\-]+$/.test(rest[0]) && /^[0-9*/,\-]+$/.test(rest[1]) && /^[0-9*/,\-]+$/.test(rest[2]) && /^[0-9*/,\-]+$/.test(rest[3])) {
+      schedule = [schedule, rest[0], rest[1], rest[2], rest[3]].join(' ');
+      promptStart = 7;
+    }
+    const prompt = toks.slice(promptStart).join(' ');
+    const schedOk = /^\d+[smhd]$/i.test(schedule) || /^[0-9*/,\-]+( [0-9*/,\-]+){4}$/.test(schedule);
+    if (!schedOk) {
+      return { text: `⚠️ Invalid schedule: "${schedule}".\nUse interval (30m, 5s, 2h, 1d) or cron format (0 8 * * *).` };
+    }
+    if (!tc.db) return { text: 'Database unavailable.' };
+    const chatId = tc.ctx?.chat?.id;
+    const res = await cronApiFetch('/api/cron', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name,
+        schedule,
+        enabled: true,
+        repeating: true,
+        prompt,
+        context_id: chatId != null ? `tg_${chatId}` : 'live_stream',
+        chat_type: 'Telegram (Private)',
+        sender_name: tc.ctx?.from?.first_name || 'System'
+      })
+    });
+    if (!res.ok) return { text: `⚠️ Failed to add cron: ${res.data?.error || res.status}` };
+    return { text: `✅ Cron added: ${name}\n   ⏱ ${schedule}\n   📝 ${prompt || '(name used as prompt)'}\n\nUse /cron list to view.` };
+  }
+
+  const target = toks[1];
+  if (!target) return { text: `⚠️ Usage: /cron ${sub} <id or name>` };
+  if (!tc.db) return { text: 'Database unavailable.' };
+  const task = resolveCronTask(tc.db, target);
+  if (!task) return { text: `⚠️ Task not found: ${target}` };
+
+  if (sub === 'toggle') {
+    const res = await cronApiFetch('/api/cron', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...task, enabled: task.enabled === 1 ? false : true })
+    });
+    if (!res.ok) return { text: `⚠️ Toggle failed: ${res.data?.error || res.status}` };
+    return { text: `${task.enabled === 1 ? '⏹️ Disabled' : '✅ Enabled'} cron: ${task.name}\n   ${task.schedule}` };
+  }
+
+  if (sub === 'run' || sub === 'trigger' || sub === 'fire') {
+    const res = await cronApiFetch(`/api/cron/${encodeURIComponent(task.id)}/trigger`, { method: 'POST' });
+    if (!res.ok) return { text: `⚠️ Trigger failed: ${res.data?.error || res.status}\n\nMake sure the task is enabled (/cron toggle ${task.id}).` };
+    return { text: `⏩ Triggered: ${task.name}\n\nYui will process the task now and report to this chat.` };
+  }
+
+  if (sub === 'del' || sub === 'delete' || sub === 'rm' || sub === 'remove') {
+    const res = await cronApiFetch(`/api/cron/${encodeURIComponent(task.id)}`, { method: 'DELETE' });
+    if (!res.ok) return { text: `⚠️ Delete failed: ${res.data?.error || res.status}` };
+    return { text: `🗑️ Deleted cron: ${task.name}` };
+  }
+
+  return { text: `⚠️ Unknown subcommand: ${sub}\n\n${CRON_HELP}` };
+}
+
 // ───────────────────────── Command registry ─────────────────────────
 export const tgQuickCommands: TgCommandDef[] = [
   {
@@ -1136,14 +1496,24 @@ export const tgQuickCommands: TgCommandDef[] = [
   {
     name: 'goals',
     aliases: ['goal', 'target'],
-    description: 'Show Yuihime\u2019s active goals & progress',
-    usage: '/goals',
-    handler: async (tc) => {
+    description: 'Show Yuihime\u2019s active goals & progress, or add a new one',
+    usage: '/goals [add <title>]',
+    handler: async (tc, args) => {
+      const raw = args.trim();
+      if (/^add\s+/i.test(raw)) {
+        const title = raw.replace(/^add\s+/i, '').trim();
+        if (!title) return { text: '⚠️ Usage: /goals add <title>\n\nExample: /goals add Belajar AI' };
+        const created = createGoal({ title, category: 'user-request' });
+        if (!created) return { text: '⚠️ Failed to create goal.' };
+        return {
+          text: `🎯 Goal created!\n\n${created.status === 'in_progress' ? '🔄' : '📌'} ${created.title}\n   ${Math.round((created.progress || 0) * 100)}%\n\nUse /goals to see it in the list.`
+        };
+      }
       if (!tc.db) return { text: 'Database unavailable.' };
       const rows = tc.db
         .prepare(`SELECT * FROM goals WHERE status IN ('active','in_progress') ORDER BY created_at DESC LIMIT 30`)
         .all() as any[];
-      if (!rows.length) return { text: '🎯 No active goals yet.\n\nUse /goals to refresh later.' };
+      if (!rows.length) return { text: '🎯 No active goals yet.\n\nAdd one: /goals add <title>' };
       const childrenOf = new Map<string, any[]>();
       for (const g of rows) {
         if (g.parent_id) {
@@ -1347,6 +1717,30 @@ export const tgQuickCommands: TgCommandDef[] = [
       const msg = await sendDocumentToChat(tc, abs);
       return { text: msg };
     }
+  },
+  {
+    name: 'config',
+    aliases: ['setting', 'pengaturan'],
+    description: 'Edit config.toml live from Telegram (admin): list/get/set',
+    adminOnly: true,
+    usage: '/config [list|get <key>|set <key> <value>]',
+    handler: async (tc, args) => runConfigCommand(args, tc)
+  },
+  {
+    name: 'dbstat',
+    aliases: ['db', 'database', 'stat'],
+    description: 'Database & disk statistics (admin)',
+    adminOnly: true,
+    usage: '/dbstat',
+    handler: async (tc) => runDbStat(tc)
+  },
+  {
+    name: 'cron',
+    aliases: ['jadwal', 'schedule', 'task'],
+    description: 'Schedule autonomous tasks: list/add/toggle/run/delete (admin)',
+    adminOnly: true,
+    usage: '/cron [list|add <name> <sched> <prompt>|toggle <id>|run <id>|del <id>]',
+    handler: async (tc, args) => runCronCommand(args, tc)
   }
 ];
 
@@ -1439,7 +1833,7 @@ export async function handleTgCallback(data: string, tc: TgToolContext): Promise
     return { action: 'edit', text: TOOLS_HELP, keyboard: toolsMenuKeyboard() };
   }
 
-  if (cmd === 'img:yui' || cmd === 'img:default' || cmd === 'img:cancel' || cmd.startsWith('img:model:')) {
+  if (cmd === 'img:yui' || cmd === 'img:default' || cmd === 'img:cancel' || cmd === 'img:refresh' || cmd.startsWith('img:model:')) {
     if (!isAdmin(tc)) return { action: 'edit', text: '⛔ This command is for the bot admin only.', keyboard: backToMenuKeyboard() };
     const key = imgChatKey(tc);
     if (cmd === 'img:cancel') {
@@ -1449,6 +1843,16 @@ export async function handleTgCallback(data: string, tc: TgToolContext): Promise
     const job = key ? pendingImgJobs.get(key) : undefined;
     if (!job) {
       return { action: 'edit', text: '⚠️ Prompt expired. Send a new one: /img <description>', keyboard: backToMenuKeyboard() };
+    }
+    if (cmd === 'img:refresh') {
+      const cfg = tc.settings?.['generate_image'] || tc.settings?.tensorart || {};
+      const models = await fetchTensorArtModels(tc);
+      const list = models.length ? models : [cfg.defaultToolName || IMG_FALLBACK_MODEL];
+      return {
+        action: 'edit',
+        text: `🔄 Model list refreshed (${list.length} models).\n\n🎨 Prompt ready:\n\n"${job.prompt}"\n\n📐 ${job.width}x${job.height}${job.count > 1 ? `\n\n🖼️ Jumlah: ${job.count} foto` : ''}\n\nPick a model below to generate (result auto-sent to chat):`,
+        keyboard: imgModelKeyboard(list)
+      };
     }
     pendingImgJobs.delete(key);
     const cfg = tc.settings?.['generate_image'] || tc.settings?.tensorart || {};

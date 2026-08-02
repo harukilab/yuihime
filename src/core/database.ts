@@ -1134,6 +1134,7 @@ export interface CleanupResult {
   telegram_update_ids: number;
   pending_messages: number;
   pairing_codes: number;
+  goals: number;
 }
 
 /**
@@ -1148,6 +1149,7 @@ export function runAutoCleanup(db: any): CleanupResult {
     telegram_update_ids: 0,
     pending_messages: 0,
     pairing_codes: 0,
+    goals: 0,
   };
 
   // 1. performance_metrics — keep the N most recent rows.
@@ -1212,6 +1214,50 @@ export function runAutoCleanup(db: any): CleanupResult {
     result.pairing_codes = r.changes;
   } catch (e: any) {
     console.warn('[AUTO_CLEANUP] pairing_codes:', e.message);
+  }
+
+  // 6. goals — purge stale completed/abandoned goals (+ descendants) and cap total rows.
+  try {
+    const retainMs = AUTO_CLEANUP_LIMITS.goals_retain_days * 24 * 60 * 60 * 1000;
+    const cutoff = Date.now() - retainMs;
+    const stale = new Set<string>();
+    const candidates = db.prepare(
+      `SELECT id, parent_id FROM goals WHERE status IN ('completed','abandoned') AND updated_at < ?`
+    ).all(cutoff) as any[];
+    for (const c of candidates) stale.add(c.id);
+    let grew = true;
+    while (grew && stale.size < 500) {
+      grew = false;
+      const ph = [...stale].map(() => '?').join(',');
+      if (!ph) break;
+      const children = db.prepare(
+        `SELECT id FROM goals WHERE parent_id IN (${ph})`
+      ).all(...stale) as any[];
+      for (const ch of children) {
+        if (!stale.has(ch.id)) { stale.add(ch.id); grew = true; }
+      }
+    }
+    if (stale.size > 0) {
+      const ids = [...stale];
+      const ph = ids.map(() => '?').join(',');
+      const r = db.prepare(`DELETE FROM goals WHERE id IN (${ph})`).run(...ids);
+      result.goals = r.changes;
+    }
+    const { total } = db.prepare(`SELECT COUNT(*) AS total FROM goals`).get() as { total: number };
+    const rowCap = AUTO_CLEANUP_LIMITS.goals_max_rows;
+    if (total > rowCap) {
+      const overflow = db.prepare(
+        `SELECT id FROM goals WHERE status IN ('completed','abandoned') ORDER BY updated_at ASC LIMIT ?`
+      ).all(total - rowCap) as any[];
+      const ids = overflow.map((r: any) => r.id);
+      if (ids.length > 0) {
+        const ph = ids.map(() => '?').join(',');
+        const r = db.prepare(`DELETE FROM goals WHERE id IN (${ph})`).run(...ids);
+        result.goals += r.changes;
+      }
+    }
+  } catch (e: any) {
+    console.warn('[AUTO_CLEANUP] goals:', e.message);
   }
 
   const total = Object.values(result).reduce((s, v) => s + v, 0);

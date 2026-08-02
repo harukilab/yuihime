@@ -27,6 +27,28 @@ export interface Goal {
 
 let cache: any = null;
 
+/**
+ * Batas maksimum goal ROOT aktif (active/in_progress) untuk mencegah
+ * database goals membengkak tak terkendali (self-proposal + user request).
+ * Sub-goal tidak dihitung, tapi jumlahnya terbatasi oleh roots.
+ */
+let maxActiveGoals = 20;
+
+export function setMaxActiveGoals(n: number): void {
+  if (Number.isFinite(n) && n >= 1) maxActiveGoals = Math.round(n);
+}
+
+export function getActiveGoalCount(): number {
+  try {
+    const row = getDb()
+      .prepare(`SELECT COUNT(*) AS n FROM goals WHERE parent_id IS NULL AND status IN ('active','in_progress')`)
+      .get() as any;
+    return Number(row?.n || 0);
+  } catch {
+    return 0;
+  }
+}
+
 function stmts(db: any): any {
   if (cache) return cache;
   cache = {
@@ -82,6 +104,10 @@ export function createGoal(data: { title: string; description?: string; category
     const id = uid('goal');
     const now = Date.now();
     const parentId = data.parentId || null;
+    if (!parentId && getActiveGoalCount() >= maxActiveGoals) {
+      console.warn(`[GOAL] Batas goal root aktif tercapai (${maxActiveGoals}). Goal "${data.title}" ditolak.`);
+      return null;
+    }
     stmts(db).insert.run(
       id, parentId, data.title, data.description || '', 'active', 0,
       data.category || 'general', '', now, now

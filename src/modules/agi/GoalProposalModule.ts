@@ -11,7 +11,7 @@
 
 import { CortexModule, ModuleType, AgentState } from '@shared/include/types';
 import {
-  createGoal, decomposeGoal, listActiveGoals, isProposalThrottled, recordProposal
+  createGoal, decomposeGoal, listActiveGoals, isProposalThrottled, recordProposal, setMaxActiveGoals
 } from '../../core/goalDecomposition';
 import { getUserModel } from '../../core/userModel';
 
@@ -123,6 +123,15 @@ export const GoalProposalModule: CortexModule = {
           min: 1,
           max: 5,
           description: 'Maximum number of root goals proposed per batch.'
+        },
+        maxActiveGoals: {
+          type: 'slider',
+          label: 'Max Active Root Goals',
+          default: 20,
+          min: 5,
+          max: 50,
+          step: 1,
+          description: 'Hard cap on how many active root goals can exist. New root goals (self-proposal, /goals add, chat request) are rejected when this cap is reached — keeps the goals table from growing unbounded.'
         }
       }
     }
@@ -135,6 +144,10 @@ export const GoalProposalModule: CortexModule = {
 
     if (!enabled) {
       return { ...context };
+    }
+
+    if (config.maxActiveGoals !== undefined) {
+      setMaxActiveGoals(Number(config.maxActiveGoals));
     }
 
     const active = listActiveGoals(10);
