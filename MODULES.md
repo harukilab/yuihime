@@ -112,6 +112,8 @@ Peta struktur direktori pasca-pemisahan Web UI ↔ Daemon (lihat UPDATE_LOG `[4.
 - `src/modules/agi/MemoryRetentionModule.ts — memory-retention (SOUL order 21): proactive recollection memori berisiko lupa (spaced repetition).`
 - `src/modules/agi/AfterActionReviewModule.ts — after-action-review (SOUL order 29): lesson jangka panjang dari evaluasi tindakan & feedback.`
 - `src/modules/agi/GoalDecompositionModule.ts — goal-decomposition (SOUL order 26): fokus goal aktif + direktif trilingual; closed-loop auto-complete parent saat semua sub selesai.`
+- `src/modules/agi/GoalProposalModule.ts — goal-proposal (SOUL order 25): self-proposal goal otomatis via context.think (fallback heuristik), throttle 6 jam, tabel goal_proposals.`
+- `src/core/kernel/MultiChannelQueue.ts — evaluateProactiveImpulse: idle + goal fokus aktif -> pesan spontan AUTONOMOUS_GOAL_PUSH mendorong goal.`
 - `agi`
 - `agi`
 - `agi`
