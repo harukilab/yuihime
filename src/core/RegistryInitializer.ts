@@ -10,9 +10,7 @@ import { ContextCompressor } from '../modules/ContextCompressionModule.js';
 import { PluginManager } from './kernel/PluginManager.js';
 import { DynamicLoader } from './DynamicLoader.js';
 import { BackgroundToolDispatcher } from './kernel/BackgroundToolDispatcher.js';
-import os from 'os';
-import path from 'path';
-import fs from 'fs';
+import { writeAvailableToolsFile } from './toolRegistryFile.js';
 
 import { NeuralVerifierModule } from '../modules/NeuralVerifierModule.js';
 import { NeuralLoopModule } from '../modules/NeuralLoopModule.js';
@@ -99,7 +97,6 @@ import { CalendarReminderTool } from '../drivers/tools/calendar_reminder/index.j
 import { EditFileSegmentTool } from '../drivers/tools/edit_file_segment/index.js';
 import { DownloadFileTool } from '../drivers/tools/download_file/index.js';
 import { SendFileTool } from '../drivers/tools/send_file/index.js';
-import { LuaInterpreter } from '../drivers/tools/lua_interpreter/index.js';
 import { EmotionAdjustTool } from '../drivers/tools/emotion_adjust/index.js';
 import { FileListTool } from '../drivers/tools/list_files/index.js';
 import { CalculatorTool } from '../drivers/tools/calculator/index.js';
@@ -472,7 +469,7 @@ export function initializeCortexModules(): Promise<void> {
         OpenRouterTTS, OfficialStreamingSpeechTTS, CustomAPITTS, GeminiTTS,
         TensorArtGenerateTool, SearchChatHistoryTool, ShellTool, FileReadTool, WebSearchTool,
         PluginInstallerTool, ViewLogsTool, WebSnipperTool, CodeInterpreter, CalendarReminderTool,
-        EditFileSegmentTool, DownloadFileTool, SendFileTool, LuaInterpreter,
+        EditFileSegmentTool, DownloadFileTool, SendFileTool,
         EmotionAdjustTool, FileListTool, CalculatorTool, GitHubTool,
         GetCurrentTimeTool, MessagingTool, BgProcTool, ManageIdentitiesTool, CronTool,
         OCRTool, ManagePairingTool, FileManagerTool, FileWriteTool,
@@ -487,14 +484,7 @@ export function initializeCortexModules(): Promise<void> {
 
       if (typeof window === 'undefined') {
         try {
-          const tools = SystemRegistry.getTools();
-          const toolsData = tools.map((t: any) => t.metadata);
-          const outputFilePath = path.join(os.homedir(), '.yuihime', 'data', 'available_tools.json');
-          const parentDir = path.dirname(outputFilePath);
-          if (!fs.existsSync(parentDir)) {
-            fs.mkdirSync(parentDir, { recursive: true });
-          }
-          fs.writeFileSync(outputFilePath, JSON.stringify(toolsData, null, 2), 'utf8');
+          writeAvailableToolsFile();
         } catch (fileErr) {
           console.warn('[REGISTRY] Non-blocking failure while generating available_tools.json:', fileErr);
         }

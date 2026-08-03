@@ -1,4 +1,5 @@
 import { SystemRegistry } from '@shared/core/registry';
+import { extractJsonObject } from './cortex/jsonExtract.js';
 
 /**
  * Convert registered Yuihime tool metadata into the native OpenAI
@@ -24,8 +25,8 @@ export function buildOpenAITools(): any[] {
 function coerceArguments(args: any): any {
   if (typeof args === 'string') {
     try {
-    const _opMatch = args.match(/\{[\s\S]*\}/);
-      const parsed = _opMatch ? JSON.parse(_opMatch[0]) : null;
+    const _opMatch = extractJsonObject(args);
+      const parsed = _opMatch ? JSON.parse(_opMatch) : null;
       return (parsed && typeof parsed === 'object') ? parsed : {};
     } catch {
       return {};

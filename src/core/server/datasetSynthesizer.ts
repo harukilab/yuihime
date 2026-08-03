@@ -3,6 +3,7 @@ import { AIService } from "../kernel/ai.js";
 import { SettingsManager } from "@/core/kernel/settings";
 import { toSingleString } from "@/core/kernel/configNormalizer";
 import { broadcastToWS } from "./apiRouter.js";
+import { extractJsonObject } from "../cortex/jsonExtract.js";
 
 export interface SynthesizerConfig {
   isEnabled: boolean;
@@ -350,8 +351,8 @@ Your response must be STRICTLY valid JSON ONLY. No markdown wraps, no extra prea
 
       // Safe JSON sanitization and parsing check
       const parsedText = this.sanitizeJsonString(rawText);
-      const _dsMatch = parsedText.match(/\{[\s\S]*\}/);
-      const parsed = _dsMatch ? JSON.parse(_dsMatch[0]) : null;
+      const _dsMatch = extractJsonObject(parsedText);
+      const parsed = _dsMatch ? JSON.parse(_dsMatch) : null;
 
       // Validate core required fields
       if (!parsed.thought || !parsed.tool_calls) {

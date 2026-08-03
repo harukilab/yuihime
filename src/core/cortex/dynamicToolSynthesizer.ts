@@ -1,3 +1,4 @@
+import { extractJsonObject } from './jsonExtract.js';
 import { SystemRegistry } from '@shared/core/registry';
 import { ModuleType } from '@shared/include/types';
 import os from "os";
@@ -223,8 +224,8 @@ Kembalikan HANYA objek JSON tersebut. Pastikan JSON valid dan main_cjs bebas dar
 
     const tryParse = (s: string): any | null => {
       try {
-        const match = s.match(/\{[\s\S]*\}/);
-        const target = match ? match[0] : s;
+        const match = extractJsonObject(s);
+        const target = match ? match : s;
         return JSON.parse(target);
       } catch {
         return null;

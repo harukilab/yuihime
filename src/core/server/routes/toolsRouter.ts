@@ -10,6 +10,7 @@ import { SettingsManager } from "@/core/kernel/settings";
 import { apiCustomSystemRoot, verifySandboxPath, getDynamicSandboxRoot, resolveSystemRootPath, getYoloMode, getCommandBlacklist, getCommandWhitelist } from "../apiRouter.js";
 import { CustomToolsLoader } from "../../CustomToolsLoader.js";
 import { getDb } from "../../database.js";
+import { writeAvailableToolsFile } from "@/core/toolRegistryFile";
 import { APIService } from "@shared/services/api";
 import { StorageServer } from "@shared/drivers/storageServer.js";
 import { searchMemories } from "../../memorySearch";
@@ -1120,10 +1121,7 @@ export function registerToolsRoutes(app: express.Express, db: any) {
 
        // Re-trigger available_tools.json generation
        try {
-        const tools = SystemRegistry.getTools();
-        const toolsData = tools.map((t: any) => t.metadata);
-        const outputFilePath = path.join(os.homedir(), ".yuihime", "data", "available_tools.json");
-        await fs.writeFile(outputFilePath, JSON.stringify(toolsData, null, 2), 'utf8');
+        writeAvailableToolsFile();
       } catch (genErr) {
         console.error("[SERVER] Failed to regenerate available_tools.json dynamically:", genErr);
       }

@@ -1,6 +1,10 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.237] - 2026-08-03
+### Cleanup: Remove run_lua tool entirely (stub, source deleted); remove orphan log_viewer driver; consolidate available_tools.json writers into shared util; centralize JSON extraction via jsonExtract
+
+
 ## [4.236] - 2026-08-03
 ### Cleanup: Remove control_overlay tool entirely (source deleted)
 - src/drivers/tools/overlay_control/ dihapus total — tool tersebut hanya stub (execute cuma log + return sukses palsu, tidak menyentuh overlay asli yang digerakkan SSE /api/stream/events).

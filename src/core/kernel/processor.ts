@@ -4,6 +4,7 @@ import { SettingsManager } from './settings.js';
 import { keyPool, ApiKeyPool } from './keyPool.js';
 import { ChatCompletionMessage } from '@shared/include/types';
 import { toSingleString } from '@/core/kernel/configNormalizer';
+import { extractJsonObject } from '../cortex/jsonExtract.js';
 
 export class NeuralProcessor {
   private static instance: NeuralProcessor;
@@ -467,15 +468,15 @@ export class NeuralProcessor {
          let repaired = cleaned;
          let directParseOk = false;
           try {
-            const _cMatch = cleaned.match(/\{[\s\S]*\}/);
-            const parsedObj = _cMatch ? JSON.parse(_cMatch[0]) : null;
+            const _cMatch = extractJsonObject(cleaned);
+            const parsedObj = _cMatch ? JSON.parse(_cMatch) : null;
             directParseOk = true;
          } catch (_) {
            repaired = NeuralProcessor.locallyRepairJson(cleaned);
          }
           try {
-            const _parsedMatch = (directParseOk ? cleaned : repaired).match(/\{[\s\S]*\}/);
-            const parsedObj = _parsedMatch ? JSON.parse(_parsedMatch[0]) : null;
+            const _parsedMatch = extractJsonObject(directParseOk ? cleaned : repaired);
+            const parsedObj = _parsedMatch ? JSON.parse(_parsedMatch) : null;
             if (parsedObj && typeof parsedObj === 'object') {
            if (parsedObj.properties && typeof parsedObj.properties === 'object' && !Array.isArray(parsedObj.properties)) {
              const p = parsedObj.properties;
@@ -512,8 +513,8 @@ export class NeuralProcessor {
          }
          
           if (cleaned.startsWith("{") && cleaned.endsWith("}")) {
-            const _fMatch = cleaned.match(/\{[\s\S]*\}/);
-            const parsedObj = _fMatch ? JSON.parse(_fMatch[0]) : null;
+             const _fMatch = extractJsonObject(cleaned);
+             const parsedObj = _fMatch ? JSON.parse(_fMatch) : null;
             if (parsedObj && typeof parsedObj === 'object' && parsedObj.properties && typeof parsedObj.properties === 'object' && !Array.isArray(parsedObj.properties)) {
              const p = parsedObj.properties;
              if (p.thought || p.tool_calls || p.tools_to_call || p.final_answer || p.speech || p.response) {

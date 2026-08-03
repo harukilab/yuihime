@@ -1,4 +1,5 @@
 import { SystemRegistry } from '@shared/core/registry';
+import { extractJsonObject } from '../cortex/jsonExtract.js';
 import { APIService } from '@shared/services/api';
 import { DynamicToolSynthesizer } from '../cortex/dynamicToolSynthesizer.js';
 import { eventBus } from '@shared/core/kernel/event-bus';
@@ -283,8 +284,8 @@ class BackgroundToolDispatcher {
 
       if (typeof parsedArgs === 'string') {
         try {
-          const sanitized = parsedArgs.match(/\{[\s\S]*\}/);
-          parsedArgs = sanitized ? JSON.parse(sanitized[0]) : {};
+          const sanitized = extractJsonObject(parsedArgs);
+          parsedArgs = sanitized ? JSON.parse(sanitized) : {};
         } catch (_) {}
       }
 

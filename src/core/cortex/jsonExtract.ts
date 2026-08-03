@@ -1,3 +1,8 @@
+export function extractJsonObject(raw: string): string | null {
+  const match = raw.match(/\{[\s\S]*\}/);
+  return match ? match[0] : null;
+}
+
 export function extractBestJsonObject(text: string): string | null {
   const len = text.length;
   let inStr = false;

@@ -2,9 +2,7 @@ import { SystemRegistry } from '@shared/core/registry';
 import { ModuleType, ToolModule } from '@shared/include/types';
 import { eventBus } from '@shared/core/kernel/event-bus';
 import { logger } from '@/core/kernel/logger';
-import fs from 'fs';
-import path from 'path';
-import os from 'os';
+import { writeAvailableToolsFile } from '@/core/toolRegistryFile';
 
 export class DynamicLoader {
   static async syncAddons(attempt = 0, maxAttempts = 15) {
@@ -22,7 +20,12 @@ export class DynamicLoader {
 
       // Regenerate available_tools.json so newly registered addon tools are
       // visible to the prompt builder (PromptManager reads this file first).
-      this.regenerateAvailableTools();
+      try {
+        const { count } = writeAvailableToolsFile();
+        logger.log('INFO', 'DYNAMIC_LOADER', `Regenerated available_tools.json (${count} tools).`);
+      } catch (e: any) {
+        logger.log('WARN', 'DYNAMIC_LOADER', 'Failed to regenerate available_tools.json', e?.message);
+      }
 
       logger.log('INFO', 'DYNAMIC_LOADER', `Sync complete. ${addons.length} addons processed.`);
     } catch (error: any) {
@@ -35,19 +38,6 @@ export class DynamicLoader {
       } else {
         logger.log('ERROR', 'DYNAMIC_LOADER', `Sync failed after ${maxAttempts} attempts`, error.message);
       }
-    }
-  }
-
-  private static regenerateAvailableTools() {
-    try {
-      if (typeof window !== 'undefined') return;
-      const tools = SystemRegistry.getTools();
-      const outputFilePath = path.join(os.homedir(), '.yuihime', 'data', 'available_tools.json');
-      fs.mkdirSync(path.dirname(outputFilePath), { recursive: true });
-      fs.writeFileSync(outputFilePath, JSON.stringify(tools.map((t: any) => t.metadata), null, 2), 'utf8');
-      logger.log('INFO', 'DYNAMIC_LOADER', `Regenerated available_tools.json (${tools.length} tools).`);
-    } catch (e: any) {
-      logger.log('WARN', 'DYNAMIC_LOADER', 'Failed to regenerate available_tools.json', e?.message);
     }
   }
 

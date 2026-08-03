@@ -5,6 +5,7 @@ import path from 'path';
 import fs from 'fs';
 import os from 'os';
 import manifest from './manifest.json';
+import { extractJsonObject } from '../../../core/cortex/jsonExtract.js';
 import { getTzOffsetHours, formatLocalFullEn, formatLocalDateKey, tzLabel } from '../../../core/utils/dualClock.js';
 import { createGoal } from '../../../core/goalDecomposition.js';
 import { SettingsManager } from '../../../core/kernel/settings.js';
@@ -497,9 +498,9 @@ async function runImgYuiMode(
         systemPrompt: 'You are Yui, image director. Output JSON only.'
       });
       const text = String(raw?.text ?? raw?.response ?? raw ?? '');
-      const m = String(text).match(/\{[\s\S]*\}/);
+      const m = extractJsonObject(String(text));
       if (m) {
-        const parsed = JSON.parse(m[0]);
+        const parsed = JSON.parse(m);
         if (typeof parsed.toolName === 'string' && parsed.toolName.trim()) model = parsed.toolName.trim();
         if (typeof parsed.width === 'number' && parsed.width > 0) width = Math.min(Math.round(parsed.width), 2048);
         if (typeof parsed.height === 'number' && parsed.height > 0) height = Math.min(Math.round(parsed.height), 2048);

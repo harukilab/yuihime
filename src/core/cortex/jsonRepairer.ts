@@ -4,7 +4,7 @@
  */
 
 import { PromptRegistry } from '../PromptRegistry';
-import { extractBestJsonObject } from './jsonExtract';
+import { extractBestJsonObject, extractJsonObject } from './jsonExtract';
 
 export async function repairJsonFormatWithLLM(
   thinkSimpleFn: (prompt: string, jsonMode?: boolean) => Promise<string>,
@@ -35,8 +35,8 @@ export async function repairJsonFormatWithLLM(
       }
     }
 
-    const _jMatch = repairedRaw.match(/\{[\s\S]*\}/);
-    const parsed = _jMatch ? JSON.parse(_jMatch[0]) : null;
+    const _jMatch = extractJsonObject(repairedRaw);
+    const parsed = _jMatch ? JSON.parse(_jMatch) : null;
     if (parsed && typeof parsed === 'object') {
       if (parsed.properties && typeof parsed.properties === 'object' && !Array.isArray(parsed.properties)) {
         const p = parsed.properties;

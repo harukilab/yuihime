@@ -31,7 +31,7 @@ import { StreamExtractor } from './streamExtractors';
 import { toSingleString } from '@/core/kernel/configNormalizer';
 import { repairJsonFormatWithLLM } from './jsonRepairer';
 import { FastTrackRunner } from './fastTrackRunner';
-import { extractBestJsonObject } from './jsonExtract';
+import { extractBestJsonObject, extractJsonObject } from './jsonExtract';
 import { makeToolCall } from './cortexThinkEngineUtils';
 import { DEFAULT_NEURAL_CORES } from '@shared/constants';
 import { broadcastToWS } from '../server/apiRouter.js';
@@ -581,14 +581,14 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
           let repaired = cleanJsonStr;
            let directParseOk = false;
             try {
-               const _parseMatch = cleanJsonStr.match(/\{[\s\S]*\}/);
-               parsedPayload = _parseMatch ? JSON.parse(_parseMatch[0]) : null;
+               const _parseMatch = extractJsonObject(cleanJsonStr);
+               parsedPayload = _parseMatch ? JSON.parse(_parseMatch) : null;
                directParseOk = true;
                logs.push("[CORTEX_LOOP] Successfully parsed JSON_OBJECT response layout directly.");
            } catch (_) {
               repaired = StandardizedProcessor.locallyRepairJson(cleanJsonStr);
            }
-           if (!directParseOk) { const _rMatch = repaired.match(/\{[\s\S]*\}/); parsedPayload = _rMatch ? JSON.parse(_rMatch[0]) : null; }
+           if (!directParseOk) { const _rMatch = extractJsonObject(repaired); parsedPayload = _rMatch ? JSON.parse(_rMatch) : null; }
           logs.push("[CORTEX_LOOP] Successfully parsed JSON_OBJECT response layout.");
           if (parsedPayload && parsedPayload.properties && typeof parsedPayload.properties === 'object' && !Array.isArray(parsedPayload.properties)) {
              if (parsedPayload.properties.thought || parsedPayload.properties.tool_calls || parsedPayload.properties.tools_to_call || parsedPayload.properties.final_answer) {
@@ -618,8 +618,8 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
              if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
                    try {
                        const _bStr = cleanJsonStr.substring(firstBrace, lastBrace + 1);
-                       const _bMatch = _bStr.match(/\{[\s\S]*\}/);
-                       parsedPayload = _bMatch ? JSON.parse(_bMatch[0]) : null;
+                       const _bMatch = extractJsonObject(_bStr);
+                       parsedPayload = _bMatch ? JSON.parse(_bMatch) : null;
                        logs.push("[CORTEX_LOOP] Successfully parsed JSON_OBJECT using bracket isolation.");
                    if (parsedPayload && parsedPayload.properties && typeof parsedPayload.properties === 'object' && !Array.isArray(parsedPayload.properties)) {
                       if (parsedPayload.properties.thought || parsedPayload.properties.tool_calls || parsedPayload.properties.tools_to_call || parsedPayload.properties.final_answer) {
@@ -786,8 +786,8 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
                    const extractedFromSpeech = extractBestJsonObject(cleanSpeech);
 if (extractedFromSpeech) {
                        try {
-                          const sanitized = extractedFromSpeech.match(/\{[\s\S]*\}/);
-                          parsedPayload = JSON.parse(sanitized ? sanitized[0] : extractedFromSpeech);
+                          const sanitized = extractJsonObject(extractedFromSpeech);
+                          parsedPayload = JSON.parse(sanitized ? sanitized : extractedFromSpeech);
                           logs.push("[CORTEX_LOOP] [MONOLOGUE_STRIPPER] Extracted balanced JSON object from cleaned speech before engaging LLM repairer.");
                       } catch {}
                    }
@@ -1236,8 +1236,8 @@ if (extractedFromSpeech) {
               let parsedArgs: any = tc.args || {};
 if (typeof parsedArgs === 'string') {
                  try {
-                   const sanitized = parsedArgs.match(/\{[\s\S]*\}/);
-                   parsedArgs = JSON.parse(sanitized ? sanitized[0] : parsedArgs);
+                   const sanitized = extractJsonObject(parsedArgs);
+                   parsedArgs = JSON.parse(sanitized ? sanitized : parsedArgs);
                  } catch (_) {}
                }
               if (typeof parsedArgs !== 'object' || parsedArgs === null) parsedArgs = {};

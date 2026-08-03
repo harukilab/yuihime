@@ -14,6 +14,7 @@ import {
   createGoal, decomposeGoal, listActiveGoals, isProposalThrottled, recordProposal, setMaxActiveGoals
 } from '../../core/goalDecomposition';
 import { getUserModel } from '../../core/userModel';
+import { extractJsonObject } from '../../core/cortex/jsonExtract.js';
 
 interface ProposedGoal {
   title: string;
@@ -27,10 +28,10 @@ function sanitizeJsonObject(raw: string): any | null {
   try {
     return JSON.parse(raw);
   } catch {
-    const match = raw.match(/\{[\s\S]*\}/);
+    const match = extractJsonObject(raw);
     if (!match) return null;
     try {
-      return JSON.parse(match[0]);
+      return JSON.parse(match);
     } catch {
       return null;
     }

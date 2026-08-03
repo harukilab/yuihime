@@ -3,14 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { extractJsonObject } from './jsonExtract';
+
 export function normalizeToolCall(tc: any): any {
   if (!tc) return null;
   let name = tc.tool || tc.name || tc.function?.name || "";
   let args = tc.args || tc.arguments || tc.function?.arguments || {};
   if (typeof args === 'string') {
     try {
-      const _tMatch = args.match(/\{[\s\S]*\}/);
-      args = _tMatch ? JSON.parse(_tMatch[0]) : {};
+      const _tMatch = extractJsonObject(args);
+      args = _tMatch ? JSON.parse(_tMatch) : {};
     } catch (e) {
       console.warn("[normalizer] Failed parsing string args:", args);
     }
