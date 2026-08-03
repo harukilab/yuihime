@@ -1,6 +1,11 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.233] - 2026-08-03
+### Tool: Addon Manager: select addon/skill by list number (or id); stable sorted order
+- tools/addon-manager.sh — uninstall/execute now accept NOMOR urut (e.g. '6') or ID; list is sorted by id so numbering is stable across runs.
+
+
 ## [4.232] - 2026-08-03
 ### Tool: Addon Manager: external interactive shell tool for addon/skill install & uninstall via REST API
 - tools/addon-manager.sh — interactive CLI (no source changes): list, install from git repo (SKILL.md/config.toml auto-detect), install raw addon (id+config+code), uninstall, execute addon/skill.

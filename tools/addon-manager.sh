@@ -46,19 +46,72 @@ print_addons() {
   echo "== Daftar Addon & Skill ($(echo "$data" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))") item) =="
   echo "$data" | python3 -c "
 import sys, json
-for a in json.load(sys.stdin):
+for i, a in enumerate(sorted(json.load(sys.stdin), key=lambda x: x.get('id', '')), 1):
     runtime = a.get('runtime', '-')
     ep = a.get('entryPoint', a.get('entry_point', '-'))
     kind = 'SKILL' if runtime == 'skill' else 'addon'
-    print(f'  [{kind:>5}] {a[\"id\"]:<30} runtime={runtime:<7} entry={ep}')
+    print(f'  [{i:>2}] {kind:>5} {a[\"id\"]:<28} runtime={runtime:<7} entry={ep}')
 "
 }
 
+# Select an addon/skill by list number OR by id.
+# Sets global $SEL_ID and $SEL_RUNTIME.
 pick_addon() {
-  print_addons || return 1
-  echo -n "ID addon/skill: "
-  read -r SEL_ID
-  [ -n "$SEL_ID" ] || return 1
+  local list
+  list="$(api_get)" || { echo "ERROR: tidak bisa hubungi $API (daemon jalan?)"; return 1; }
+  local tmpfile="/tmp/yui_addons_$$.json"
+  echo "$list" > "$tmpfile"
+
+  echo "== Pilih addon/skill (ketik NOMOR urut atau ID) =="
+  python3 - "$tmpfile" <<'PYEOF'
+import sys, json
+data = sorted(json.load(open(sys.argv[1])), key=lambda a: a.get('id', ''))
+for i, a in enumerate(data, 1):
+    runtime = a.get('runtime', '-')
+    kind = 'SKILL' if runtime == 'skill' else 'addon'
+    print(f"  [{i:>2}] {a['id']:<28} {kind} (runtime={runtime})")
+PYEOF
+
+  echo -n "Pilihan [nomor/ID]: "
+  read -r SEL
+  if [ -z "$SEL" ]; then
+    rm -f "$tmpfile"; return 1
+  fi
+
+  if [[ "$SEL" =~ ^[0-9]+$ ]]; then
+    SEL_ID="$(python3 - "$tmpfile" "$SEL" <<'PYEOF'
+import sys, json
+data = sorted(json.load(open(sys.argv[1])), key=lambda a: a.get('id', ''))
+try:
+    print(data[int(sys.argv[2]) - 1]['id'])
+except Exception:
+    pass
+PYEOF
+)"
+    SEL_RUNTIME="$(python3 - "$tmpfile" "$SEL" <<'PYEOF'
+import sys, json
+data = sorted(json.load(open(sys.argv[1])), key=lambda a: a.get('id', ''))
+try:
+    print(data[int(sys.argv[2]) - 1].get('runtime', ''))
+except Exception:
+    pass
+PYEOF
+)"
+    if [ -z "$SEL_ID" ]; then
+      echo "Nomor tidak valid."
+      rm -f "$tmpfile"; return 1
+    fi
+  else
+    SEL_ID="$SEL"
+    SEL_RUNTIME="$(python3 - "$tmpfile" <<PYEOF
+import sys, json
+data = sorted(json.load(open("$tmpfile")), key=lambda a: a.get('id', ''))
+print(next((a.get('runtime','') for a in data if a['id'] == "$SEL"), ''))
+PYEOF
+)"
+  fi
+  rm -f "$tmpfile"
+  echo "Dipilih: $SEL_ID (runtime=$SEL_RUNTIME)"
 }
 
 # ---- Install: from git repo (SKILL.md / config.toml auto-detect) -----------
@@ -177,12 +230,7 @@ execute() {
   echo "--- Jalankan addon/skill ---"
   pick_addon || return
 
-  local kind runtime
-  kind="$(curl -sf "$API" 2>/dev/null | python3 -c "
-import sys, json
-for a in json.load(sys.stdin):
-    if a['id'] == '$SEL_ID': print(a.get('runtime',''))
-")"
+  local kind="$SEL_RUNTIME"
   if [ "$kind" = "skill" ]; then
     echo "Skill — pilih aksi:"
     echo "  [1] instructions  (baca SKILL.md)"
