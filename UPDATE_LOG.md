@@ -1,6 +1,13 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.228] - 2026-08-03
+### Feat: Foto SOP: NSFW accessories + bondage sections; sync source foto.md to runtime version
+- yui_nsfw_prompt.md (user_data): added mandatory NSFW Accessories section (collar+leash, cuffs, body chain, lingerie, chastity, jewelry) and Bondage section (shibari rope, bed restraints, overhead bind, kneeling+bound, gag) with explicit insert positions and a combined nude+accessories+bondage template.
+- user_data/sops/foto.md rule #9: NSFW requests must now include the matching accessories/bondage sections from yui_nsfw_prompt.md explicitly, never summarized.
+- src/share/prompts/sops/foto.md synced to the runtime version so the fallback copy no longer lags behind.
+
+
 ## [4.227] - 2026-08-03
 ### Fix: TensorArt tool: align with official skill — validate resp.code, 120s download timeout, browser UA
 - Adopted from official tensorart-skills (Tensor-Art/tensorart-skills scripts): validate 'code' field on task create & task/query responses (non-'0' now raises a clear error instead of silently missing a task id), raise image download timeout from requestTimeoutMs (20s) to 120s, and send 'User-Agent: Mozilla/5.0' on image downloads.
