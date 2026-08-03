@@ -1,6 +1,12 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.232] - 2026-08-03
+### Tool: Addon Manager: external interactive shell tool for addon/skill install & uninstall via REST API
+- tools/addon-manager.sh — interactive CLI (no source changes): list, install from git repo (SKILL.md/config.toml auto-detect), install raw addon (id+config+code), uninstall, execute addon/skill.
+- Talks only to running daemon REST endpoints (GET/POST/DELETE /api/addons); tested live: list 17 addons, install tensorart-generate, uninstall throwaway addon.
+
+
 ## [4.231] - 2026-08-03
 ### Feat: Addon/Skill system: SKILL.md support, git-repo install, uninstall, resilient discovery, tool advertising
 - discoverAddons(): main.cjs/index.cjs entry points, honors config.toml entry_point/runtime, regex fallback for malformed TOML so addons are never hidden.
