@@ -1,6 +1,12 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.236] - 2026-08-03
+### Cleanup: Remove control_overlay tool entirely (source deleted)
+- src/drivers/tools/overlay_control/ dihapus total — tool tersebut hanya stub (execute cuma log + return sukses palsu, tidak menyentuh overlay asli yang digerakkan SSE /api/stream/events).
+- Verified: dist/server.cjs 0 referensi overlay_control/control_overlay; available_tools.json 38 tools tanpa control_overlay.
+
+
 ## [4.235] - 2026-08-03
 ### Fix: Remove control_overlay tool from registry registration
 - RegistryInitializer: OverlayControlTool (control_overlay) dihapus dari registrasi static module — tool tidak lagi di-advertise ke agent. Source driver tetap ada di src/drivers/tools/overlay_control/.
