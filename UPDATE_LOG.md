@@ -1,6 +1,13 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.226] - 2026-08-03
+### Fix: TensorArt tool: default retryLimit now 2 (aligns with configSchema), resilient to transient upstream 5xx
+- Observed: TensorArt API returned HTTP 500 'failed to get task config ... context deadline exceeded' when their server could not fetch the model config from config-cdn.qiandaoapp.com in time (upstream CDN latency ~5s, transient).
+- Bug: runtime fallback for retryLimit was '?? 0' while configSchema default is 2 — saved settings without the field silently got 0 retries, so transient 5xx on task submit/poll were never retried.
+- Fix: runtime fallback now '?? 2' so task submit and poll retry transient HTTP 500 / network errors with exponential backoff (max 2 retries, 8s).
+
+
 ## [4.225] - 2026-08-03
 ### Feat: Watchdog: subcommand restart (full cycle, infer mode from current.meta)
 - tools/yui-watchdog.sh: new 'restart [dev|prod] [--pm2|--no-pm2]' subcommand that stops the watchdog, stops the daemon (PM2-aware) to pick up the latest build, then starts the watchdog again; mode is inferred from current.meta line 2 when not given.

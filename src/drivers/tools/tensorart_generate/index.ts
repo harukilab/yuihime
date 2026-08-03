@@ -521,7 +521,7 @@ export const TensorArtGenerateTool: ToolModule = {
     const maxAttempts = Math.max(1, Math.floor(timeoutMs / pollIntervalMs));
     const toolName = args.toolName || cfg.defaultToolName || "anime_lab_wai_illustrious";
     const requestTimeoutMs = cfg.requestTimeoutMs || 20000;
-    const retryLimit = args.retryLimit ?? cfg.retryLimit ?? 0;
+    const retryLimit = args.retryLimit ?? cfg.retryLimit ?? 2;
 
     const inputs = args.inputs || buildToolInputs(toolSchemaCache?.tools || [], toolName, prompt, width, height, count) || [
       { type: "STRING", value: prompt },
