@@ -178,7 +178,10 @@ export function registerCortexRoutes(app: express.Express, db: any) {
       const shouldStream = req.body.stream === true || req.query.stream === "true";
 
       const abortController = new AbortController();
-      req.on("close", () => {
+      res.on("close", () => {
+        if (res.writableEnded) {
+          return;
+        }
         abortController.abort();
         console.log(`[API_THINK] Client closed connection. Aborting task ${currentTaskId}.`);
       });
@@ -246,7 +249,11 @@ export function registerCortexRoutes(app: express.Express, db: any) {
           }
         } finally {
           clearInterval(keepAliveInterval);
-          res.end();
+          try {
+            res.end();
+          } catch (endErr) {
+            console.warn("[API_THINK_SSE] Failed ending stream after abort:", endErr);
+          }
         }
         return;
       }
@@ -275,6 +282,9 @@ export function registerCortexRoutes(app: express.Express, db: any) {
         }
         if (thinkErr.message && thinkErr.message.includes("COGNITIVE_LOOP_ABORTED")) {
           console.log(`[API_THINK] Task ${currentTaskId} aborted cleanly due to client disconnect.`);
+          if (!res.writableEnded) {
+            res.json({ success: false, aborted: true, message: "Request aborted." });
+          }
           return;
         }
         throw thinkErr;

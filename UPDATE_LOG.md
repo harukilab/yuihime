@@ -1,6 +1,13 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.224] - 2026-08-03
+### Fix: Fix /api/cortex/think hang: abort fired on body-complete instead of client disconnect
+- Root cause: on Node v24, req.on('close') fires as soon as the request body is fully consumed (not on client disconnect), so the abortController aborted every think task at the first loop iteration (cortexThinkEngine:382) before reaching the gateway, and the router returned without sending a response (curl hang + exit 28).
+- Fix: use res.on('close') guarded by !res.writableEnded in cortexRouter.ts so the task only aborts on a genuine client disconnect; on abort the non-stream path now replies with a JSON body and the SSE path guards res.end().
+- Verified on prod (port 3000): non-stream think replies in ~6s with text+mood; stream mode emits SSE 'chunk' deltas and a final 'done' event in ~12s.
+
+
 ## [4.223] - 2026-08-03
 ### Fix: Force empty outDir on web build to avoid stale assets
 - npm run build:web kini memakai --emptyOutDir karena outDir ../dist/web berada di luar root (web/) sehingga Vite menolak mengosongkannya secara default; mencegah aset lama menumpuk di dist/web. Konfigurasi ditambahkan di package.json, bukan web/vite.config.ts (file dilindungi).
