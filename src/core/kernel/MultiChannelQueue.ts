@@ -72,6 +72,16 @@ export interface QueueItem {
   onReply: (reply: string, meta?: ReplyMeta) => void;
   onError?: (err: any) => void;
   attempts?: number;
+  pendingId?: string;
+  chatId?: string;
+  sourceMessageId?: number;
+  updateId?: number;
+}
+
+export interface QueueSourceRef {
+  chatId?: string;
+  sourceMessageId?: number;
+  updateId?: number;
 }
 
 export class MultiChannelQueue {
@@ -106,6 +116,10 @@ export class MultiChannelQueue {
   private recentOutputHashes: { hash: string; timestamp: number }[] = [];
   private static readonly OUTPUT_DEDUP_WINDOW_MS = 10000;
 
+  // Crash-recovery: row pending yang nyangkut di 'processing' lebih lama dari TTL ini
+  // akan di-claim ulang sebagai 'pending' agar diproses kembali setelah restart.
+  private static readonly PROCESSING_RECLAIM_TTL_MS = 15 * 60 * 1000;
+
   // Hold mechanism: pause incoming/outgoing message processing
   private holdMode = false;
   private holdOutgoing = false;
@@ -121,6 +135,12 @@ export class MultiChannelQueue {
   private stmtUpdateProactiveLock: any = null;
   private stmtInsertPending: any = null;
   private stmtInsertPendingFailed: any = null;
+  private stmtMarkProcessing: any = null;
+  private stmtMarkHeld: any = null;
+  private stmtMarkCompleted: any = null;
+  private stmtResetToPending: any = null;
+  private stmtReclaimStuck: any = null;
+  private stmtResumeHeldOnBoot: any = null;
   private stmtSelectPendingRows: any = null;
   private stmtSelectLastInteraction: any = null;
   private stmtSelectProactiveSent: any = null;
@@ -142,19 +162,28 @@ export class MultiChannelQueue {
     this.db = db;
     this.stmtResetProactiveLock = this.db.prepare("UPDATE agent_state SET proactiveLocked = 0 WHERE id = 1");
     this.stmtUpdatePendingFailed = this.db.prepare("UPDATE pending_messages SET attempts = ?, status = 'failed' WHERE id = ?");
-    this.stmtUpdatePendingRetry = this.db.prepare("UPDATE pending_messages SET attempts = ?, status = 'pending' WHERE id = ?");
+    this.stmtUpdatePendingRetry = this.db.prepare("UPDATE pending_messages SET attempts = ?, status = 'pending', started_at = NULL WHERE id = ?");
     this.stmtSelectProactiveState = this.db.prepare("SELECT proactiveLocked, lastProactiveTimestamp FROM agent_state WHERE id = 1");
     this.stmtSelectAgentState = this.db.prepare("SELECT status, mood, relation FROM agent_state WHERE id = 1");
     this.stmtUpdateAgentMood = this.db.prepare("UPDATE agent_state SET mood = ? WHERE id = 1");
     this.stmtUpdateProactiveLock = this.db.prepare("UPDATE agent_state SET proactiveLocked = 1, lastProactiveTimestamp = ? WHERE id = 1");
     this.stmtInsertPending = this.db.prepare(`
-      INSERT INTO pending_messages (id, input, sender_name, context_id, chat_type, timestamp, attempts, status)
-      VALUES (?, ?, ?, ?, ?, ?, 0, 'pending')
+      INSERT INTO pending_messages (id, input, sender_name, context_id, chat_type, timestamp, attempts, status, chat_id, source_message_id, update_id, started_at)
+      VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)
     `);
     this.stmtInsertPendingFailed = this.db.prepare(`
       INSERT INTO pending_messages (id, input, sender_name, context_id, chat_type, timestamp, attempts, status)
       VALUES (?, ?, ?, ?, ?, ?, ?, 'failed')
     `);
+    this.stmtMarkProcessing = this.db.prepare("UPDATE pending_messages SET status = 'processing', started_at = ? WHERE id = ?");
+    this.stmtMarkHeld = this.db.prepare("UPDATE pending_messages SET status = 'held', started_at = NULL WHERE id = ?");
+    this.stmtMarkCompleted = this.db.prepare("UPDATE pending_messages SET status = 'completed', started_at = NULL WHERE id = ?");
+    this.stmtResetToPending = this.db.prepare("UPDATE pending_messages SET status = 'pending', started_at = NULL WHERE id = ?");
+    this.stmtReclaimStuck = this.db.prepare(`
+      UPDATE pending_messages SET status = 'pending', started_at = NULL
+      WHERE status = 'processing' AND started_at IS NOT NULL AND started_at < ?
+    `);
+    this.stmtResumeHeldOnBoot = this.db.prepare("UPDATE pending_messages SET status = 'pending', started_at = NULL WHERE status = 'held'");
     this.stmtSelectPendingRows = this.db.prepare(`
       SELECT * FROM pending_messages 
       WHERE status = 'pending' AND attempts < 5 
@@ -179,6 +208,23 @@ export class MultiChannelQueue {
       ORDER BY timestamp DESC LIMIT 4
     `);
     ChatSummaryEngine.getInstance().setDatabase(db);
+
+    // Crash-recovery on boot:
+    // 1) Resume pesan yang sebelumnya di-hold (hold mode adalah flag runtime, tak dipertahankan lintas restart)
+    // 2) Reclaim row 'processing' yang nyangkut dari sesi mati mendadak (yang hidup pasti < TTL karena barusan di-start)
+    try {
+      const heldResumed = this.stmtResumeHeldOnBoot.run().changes;
+      if (heldResumed > 0) {
+        console.log(`[QUEUE_RECOVERY] Resumed ${heldResumed} previously held message(s) to pending dispatch.`);
+      }
+      const reclaimed = this.stmtReclaimStuck.run(Date.now() - MultiChannelQueue.PROCESSING_RECLAIM_TTL_MS).changes;
+      if (reclaimed > 0) {
+        console.log(`[QUEUE_RECOVERY] Reclaimed ${reclaimed} stuck 'processing' row(s) from previous session; will re-dispatch.`);
+      }
+    } catch (reclaimErr: any) {
+      console.warn(`[QUEUE_RECOVERY] Boot reclaim failed (non-fatal):`, reclaimErr.message || reclaimErr);
+    }
+
     // Instantly trigger dispatch of pending messages in background on database setup/sync
     console.log("[QUEUE] Database connected. Starting initial parallel dispatch of pending messages...");
     this.dispatchPendingMessages().catch(err => {
@@ -209,6 +255,28 @@ export class MultiChannelQueue {
   }
 
   /**
+   * Graceful shutdown (SIGINT/SIGTERM): tiriskan antrean in-memory ke pending_messages
+   * agar pesan yang belum sempat diproses tidak hilang saat restart terencana.
+   * Pesan yang sedang di-hold tetap 'held' (akan dilanjutkan saat boot berikutnya).
+   */
+  public drainQueueToPending(): void {
+    if (!this.db) return;
+    let drained = 0;
+    for (const item of this.queue) {
+      if (item.pendingId) {
+        try { this.stmtResetToPending.run(item.pendingId); drained++; } catch (e) {}
+      }
+    }
+    for (const item of this.heldMessages) {
+      if (item.pendingId) {
+        try { this.stmtMarkHeld.run(item.pendingId); } catch (e) {}
+      }
+    }
+    this.queue = [];
+    console.log(`[QUEUE_DRAIN] Reset ${drained} queued message(s) to pending for crash-safe restart.`);
+  }
+
+  /**
    * Memproses semua pesan yang ditahan saat mode tahan dinonaktifkan.
    */
   private flushHeldMessages() {
@@ -217,6 +285,11 @@ export class MultiChannelQueue {
     const messages = [...this.heldMessages];
     this.heldMessages = [];
     for (const msg of messages) {
+      if (msg.pendingId && this.db) {
+        try {
+          this.stmtMarkProcessing.run(Date.now(), msg.pendingId);
+        } catch (e) {}
+      }
       this.queue.push({
         input: msg.input,
         senderName: msg.senderName,
@@ -224,7 +297,11 @@ export class MultiChannelQueue {
         chatType: msg.chatType,
         timestamp: msg.timestamp,
         onReply: msg.onReply,
-        onError: msg.onError
+        onError: msg.onError,
+        pendingId: msg.pendingId,
+        chatId: msg.chatId,
+        sourceMessageId: msg.sourceMessageId,
+        updateId: msg.updateId
       });
     }
     this.processNext();
@@ -232,6 +309,8 @@ export class MultiChannelQueue {
 
   /**
    * Menambahkan pesan dari berbagai saluran (Telegram, Webhook, OBS Chat, dll) ke antrean terpadu.
+   * Sebelum diproses, pesan selalu di-persist ke pending_messages (write-ahead inbox) supaya
+   * crash / mati mendadak tidak menghilangkan pesan — row akan di-claim ulang saat daemon kembali aktif.
    */
   public addMessage(
     input: string,
@@ -239,7 +318,8 @@ export class MultiChannelQueue {
     contextId: string,
     chatType: string,
     onReply: (reply: string, meta?: ReplyMeta) => void,
-    onError?: (err: any) => void
+    onError?: (err: any) => void,
+    source?: QueueSourceRef
   ) {
     const timestamp = Date.now();
     this.msgTimestamps.push(timestamp);
@@ -266,10 +346,38 @@ export class MultiChannelQueue {
       this.recentMsgHashes.push({ hash: dedupHash, timestamp: now });
     }
 
+    // Write-ahead: persist ke pending_messages SEBELUM diputuskan jalurnya.
+    // Row live-path langsung ditandai 'processing' (sinkron) agar dispatcher background (30s)
+    // tidak menduplikasi pekerjaannya; jalur sampling/biarkan 'pending'.
+    let pendingId: string | undefined;
+    if (this.db) {
+      try {
+        pendingId = "pending_" + genId(11);
+        this.stmtInsertPending.run(
+          pendingId,
+          input,
+          senderName,
+          contextId,
+          chatType,
+          timestamp,
+          'pending',
+          source?.chatId ?? null,
+          source?.sourceMessageId ?? null,
+          source?.updateId ?? null,
+          null
+        );
+      } catch (dbErr) {
+        console.error("[QUEUE_PERSIST_ERR] Failed to persist incoming message:", dbErr);
+        pendingId = undefined;
+      }
+    }
 
     // Hold mode: store incoming messages without processing
     if (this.holdMode) {
-      this.heldMessages.push({ input, senderName, contextId, chatType, timestamp, onReply, onError });
+      if (pendingId) {
+        try { this.stmtMarkHeld.run(pendingId); } catch (e) {}
+      }
+      this.heldMessages.push({ input, senderName, contextId, chatType, timestamp, onReply, onError, pendingId, ...(source || {}) });
       console.log(`[QUEUE_HOLD] Incoming message from ${senderName} held (hold mode active).`);
       return;
     }
@@ -286,26 +394,16 @@ export class MultiChannelQueue {
       // tapi pesan ini tetap akan dirangkum di latar belakang supaya Yui tahu konteksnya.
       if (this.queue.length > 0) {
         console.log(`[QUEUE_SAMPLING] Chat is busy (${freq.toFixed(1)}/15s). Filtering comment from: "${senderName}: ${input.substring(0, 30)}..." to prevent lag. Comment diverted to subconscious digest.`);
-        
-        let queued = false;
-        if (this.db) {
-          try {
-            const pendingId = "pending_" + genId(11);
-            const stmt = this.stmtInsertPending;
-            stmt.run(pendingId, input, senderName, contextId, chatType, timestamp);
-            queued = true;
-          } catch (dbErr) {
-            console.error("[QUEUE_SAMPLING_DB_ERR] Failed to save sampled message to database:", dbErr);
-          }
-        }
-        
+
+        // Row sudah tersimpan 'pending' — dispatcher background akan memprosesnya nanti.
+        const feedbackText = (pendingId ? '' : '[QUEUE_WARN] Persistence failed; ') +
+          '[SYSTEM MESSAGE]: Aliran obrolan sedang sangat deras! 🌪️ Pesan dari @' + senderName +
+          ' dan penonton lainnya dialihkan sementara ke antrean subkesadaran batin Yui. Yui sedang merekam topik-topik kalian dan akan merespons dalam bentuk RANGKUMAN KOLEKTIF sebentar lagi! 🌸';
+
         // Only output notifier once every 20 seconds to prevent flooding/spamming the timeline
         const nowTime = Date.now();
         if (nowTime - this.lastHighFreqNotifyTime > 20000) {
           this.lastHighFreqNotifyTime = nowTime;
-          const feedbackText = queued
-            ? `[SYSTEM MESSAGE]: Aliran obrolan sedang sangat deras! 🌪️ Pesan dari @${senderName} dan penonton lainnya dialihkan sementara ke antrean subkesadaran batin Yui. Yui sedang merekam topik-topik kalian dan akan merespons dalam bentuk RANGKUMAN KOLEKTIF sebentar lagi! 🌸`
-            : `[SYSTEM MESSAGE]: Aliran obrolan sedang sangat padat! 📡 Pesanmu disalurkan ke subkesadaran batin Yui untuk dicerna bersama. Mohon tunggu sapaan rangkuman kolektif ya~ 🌸`;
           onReply(feedbackText);
         } else {
           onReply(""); // Silent queueing to preserve chat view space cleanly
@@ -316,11 +414,17 @@ export class MultiChannelQueue {
 
     if (isDuplicate) {
       console.log(`[QUEUE_DEDUP] Duplicate message detected from ${senderName} (${contextId}). Skipping.`);
+      if (pendingId) {
+        try { this.stmtMarkCompleted.run(pendingId); } catch (e) {}
+      }
       onReply("");
       return;
     }
 
     // MODE SEPI atau Pesan Terpilih (Sampled): Masukkan ke antrean kognisi aktif untuk dijawab penuh
+    if (pendingId) {
+      try { this.stmtMarkProcessing.run(Date.now(), pendingId); } catch (e) {}
+    }
     this.queue.push({
       input,
       senderName,
@@ -328,7 +432,9 @@ export class MultiChannelQueue {
       chatType,
       timestamp,
       onReply,
-      onError
+      onError,
+      pendingId,
+      ...(source || {})
     });
 
     this.processNext();
@@ -357,6 +463,17 @@ export class MultiChannelQueue {
     if (!this.db) return;
 
     try {
+      // Crash-recovery: reclaim row yang nyangkut di 'processing' lebih lama dari TTL
+      // (daemon mati mendadak di tengah pipeline). Ditandai 'pending' agar diproses ulang.
+      try {
+        const reclaimed = this.stmtReclaimStuck.run(Date.now() - MultiChannelQueue.PROCESSING_RECLAIM_TTL_MS).changes;
+        if (reclaimed > 0) {
+          console.log(`[QUEUE_RECOVERY] Reclaimed ${reclaimed} stuck 'processing' row(s); re-dispatching.`);
+        }
+      } catch (reclaimErr: any) {
+        console.warn("[QUEUE_RECOVERY] Stuck-row reclaim failed (non-fatal):", reclaimErr?.message || reclaimErr);
+      }
+
       // Ambil seluruh pesan pending yang belum mencapai percobaan maksimum
       const maxToFetch = this.maxBgWorkers * 3;
       const pendingRows: any[] = this.stmtSelectPendingRows.all(maxToFetch);
@@ -396,6 +513,28 @@ export class MultiChannelQueue {
     this.activeBgWorkers++;
     this.runningBgMsgIds.add(pending.id);
 
+    // Crash-recovery: tandai 'processing' (dengan started_at) saat mulai diproses
+    try {
+      this.stmtMarkProcessing.run(Date.now(), pending.id);
+    } catch (e) {}
+
+    // Anti-duplikat: kalau update_id Telegram row ini sudah tercatat TERKIRIM (crash terjadi
+    // sesudah send sukses tapi sebelum mark completed), jangan diproses ulang — cukup selesaikan.
+    if (pending.update_id) {
+      try {
+        const alreadyDelivered = this.db.prepare("SELECT 1 FROM telegram_update_ids WHERE update_id = ?").get(pending.update_id);
+        if (alreadyDelivered) {
+          console.log(`[QUEUE_RECOVERY] Row ${pending.id} (update_id ${pending.update_id}) already delivered before crash. Marking completed without re-processing.`);
+          this.stmtMarkCompleted.run(pending.id);
+          this.runningBgMsgIds.delete(pending.id);
+          this.activeBgWorkers = Math.max(0, this.activeBgWorkers - 1);
+          return;
+        }
+      } catch (dedupCheckErr) {
+        console.warn(`[QUEUE_RECOVERY] Update-dedup check failed (non-fatal):`, dedupCheckErr?.message || dedupCheckErr);
+      }
+    }
+
     console.log(`[QUEUE_BG_WORKER_START] Starting parallel cognitive processing (${this.activeBgWorkers}/${this.maxBgWorkers}) for ${pending.sender_name} (${pending.chat_type}) [ID: ${pending.id}]`);
 
     try {
@@ -421,7 +560,7 @@ export class MultiChannelQueue {
             // 3. Distribusikan balasan ke platform masing-masing
             const dedup = GlobalOutputDeduplicator.getInstance();
             if (pending.context_id.startsWith("tg_")) {
-              const chatId = pending.context_id.split("|")[0].replace("tg_", "");
+              const chatId = pending.chat_id || pending.context_id.split("|")[0].replace("tg_", "");
               try {
                 if (dedup.isDuplicate(reply, pending.context_id)) {
                   console.log(`[GLOBAL_DEDUP] Skipping duplicate Telegram reply for ${pending.sender_name} (${pending.context_id}).`);
@@ -430,8 +569,12 @@ export class MultiChannelQueue {
                   const activeTelegramBot = (globalThis as any).activeTelegramBot;
                   if (activeTelegramBot) {
                      const delayedReply = reply;
+                     const sendOpts: any = {};
+                     if (pending.source_message_id) {
+                       sendOpts.reply_to_message_id = pending.source_message_id;
+                     }
                       await Promise.race([
-                        activeTelegramBot.telegram.sendMessage(chatId, delayedReply),
+                        activeTelegramBot.telegram.sendMessage(chatId, delayedReply, Object.keys(sendOpts).length > 0 ? sendOpts : undefined),
                         new Promise((_, reject) => setTimeout(() => reject(new Error('[TELEGRAM_BG_SEND_TIMEOUT] sendMessage timed out')), 15000))
                       ]);
                      console.log(`[QUEUE_BG_WORKER_SEND] [ID: ${pending.id}] Successfully sent reply to Telegram Chat ID: ${chatId}`);
@@ -496,12 +639,15 @@ export class MultiChannelQueue {
                  response: reply,
                  isInternal: true
                });
-               console.log(`[QUEUE_BG_WORKER_SEND] [ID: ${pending.id}] Successfully emitted local response signal via Event Bus.`);
-             }
-           }
-         }
-       } else {
-        throw new Error("Tanggapan dari saraf kognitif kosong atau gagal dirumuskan");
+                console.log(`[QUEUE_BG_WORKER_SEND] [ID: ${pending.id}] Successfully emitted local response signal via Event Bus.`);
+              }
+            }
+
+            // Crash-recovery: row hanya ditandai selesai setelah delivery sukses.
+            try { this.stmtMarkCompleted.run(pending.id); } catch (e) {}
+          }
+        } else {
+         throw new Error("Tanggapan dari saraf kognitif kosong atau gagal dirumuskan");
       }
     } catch (err: any) {
       console.error(`[QUEUE_BG_WORKER_FAIL] Attempt failed for [ID: ${pending.id}]:`, err.message || err);
@@ -650,6 +796,12 @@ export class MultiChannelQueue {
           }
         }
 
+        // Crash-recovery: row baru dianggap selesai SETELAH delivery sukses. Kalau daemon mati
+        // di tengah pipeline (row masih 'processing'), saat restart akan di-claim ulang oleh TTL.
+        if (item.pendingId && this.db) {
+          try { this.stmtMarkCompleted.run(item.pendingId); } catch (e) {}
+        }
+
     } catch (err: any) {
       console.error(`[QUEUE_ERROR] Failed to process message in cognitive queue:`, err);
       const attempts = (item.attempts || 0) + 1;
@@ -668,10 +820,14 @@ export class MultiChannelQueue {
 
           if (this.db) {
             try {
-              await withSqliteRetry(`insert-failed-${Date.now()}`, this.db, () => {
-                const id = "pending_" + genId(9);
-                const stmt = this.stmtInsertPendingFailed;
-                stmt.run(id, item.input, item.senderName, item.contextId, item.chatType, item.timestamp, maxRetries);
+              await withSqliteRetry(`update-failed-${item.pendingId || Date.now()}`, this.db, () => {
+                if (item.pendingId) {
+                  this.stmtUpdatePendingFailed.run(maxRetries, item.pendingId);
+                } else {
+                  const id = "pending_" + genId(9);
+                  const stmt = this.stmtInsertPendingFailed;
+                  stmt.run(id, item.input, item.senderName, item.contextId, item.chatType, item.timestamp, maxRetries);
+                }
                 if (!this.holdOutgoing) {
                   item.onReply("Maaf, pesan Anda gagal diproses setelah beberapa percobaan. Silakan coba lagi nanti.");
                 }

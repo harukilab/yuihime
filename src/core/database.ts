@@ -360,7 +360,11 @@ export async function setupSchema(db: any) {
         chat_type TEXT,
         timestamp INTEGER,
         attempts INTEGER DEFAULT 0,
-        status TEXT DEFAULT 'pending'
+        status TEXT DEFAULT 'pending',
+        chat_id TEXT,
+        source_message_id INTEGER,
+        update_id INTEGER,
+        started_at INTEGER
       );
     `,
     pairing_codes: `
@@ -506,7 +510,7 @@ export async function setupSchema(db: any) {
   }
 
   // Schema Migration
-  const migrationTables = ['agent_state', 'knowledge', 'cron_tasks', 'identities', 'pairing_codes', 'memories'];
+  const migrationTables = ['agent_state', 'knowledge', 'cron_tasks', 'identities', 'pairing_codes', 'memories', 'pending_messages'];
   for (const table of migrationTables) {
     try {
       const columns = db.prepare(`PRAGMA table_info(${table})`).all() as any[];
@@ -628,6 +632,23 @@ export async function setupSchema(db: any) {
               db.prepare(`ALTER TABLE pairing_codes ADD COLUMN ${col.name} ${col.type}`).run();
             } catch (alterError: any) {
               console.warn(`Migration warn: failed to alter pairing_codes and add ${col.name}:`, alterError.message);
+            }
+          }
+        }
+      }
+      if (table === 'pending_messages') {
+        const alterCols = [
+          { name: 'chat_id', type: 'TEXT' },
+          { name: 'source_message_id', type: 'INTEGER' },
+          { name: 'update_id', type: 'INTEGER' },
+          { name: 'started_at', type: 'INTEGER' }
+        ];
+        for (const col of alterCols) {
+          if (!columnNames.includes(col.name)) {
+            try {
+              db.prepare(`ALTER TABLE pending_messages ADD COLUMN ${col.name} ${col.type}`).run();
+            } catch (alterError: any) {
+              console.warn(`Migration warn: failed to alter pending_messages and add ${col.name}:`, alterError.message);
             }
           }
         }

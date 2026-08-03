@@ -1,6 +1,18 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.239] - 2026-08-03
+### Fix: Crash-recovery inbox/outbox (write-ahead pending_messages) + Telegram reply correlation + persistent dedup
+- pending_messages schema + migrasi ALTER: kolom baru `chat_id`, `source_message_id`, `update_id`, `started_at` (berlaku utk DB lama tanpa drop).
+- **Write-ahead inbox** (MultiChannelQueue.addMessage): SEMUA pesan masuk kini di-persist ke pending_messages SEBELUM diproses. State machine: `pending` → `processing` (mark saat enqueue, sinkron agar dispatcher 30s tidak menduplikasi) → `completed` (hanya setelah delivery sukses) / `failed`. Pesan yang crash sebelum/ketika diproses tidak hilang lagi.
+- **Reclaim TTL**: row nyangkut `processing` > 15 menit (daemon mati mendadak di tengah pipeline) otomatis di-claim ulang jadi `pending` saat boot & tiap scan dispatcher → balasan di-regenerasi & diteruskan saat daemon aktif lagi (menutup skenario "jawaban siap tapi belum diteruskan").
+- **Graceful shutdown** (SIGINT/SIGTERM): antrean in-memory di-drain ke pending_messages (`drainQueueToPending`) agar restart terencana tidak menghilangkan pesan.
+- **Boot recovery**: row `held` di-resume jadi `pending` (hold mode = flag runtime); row `processing` basi di-reclaim.
+- **Persistent dedup Telegram** (`telegram_update_ids`): update_id dicatat HANYA setelah delivery sukses; saat Telegram mengirim ulang batch pasca-restart, update yang sudah tuntas di-skip (tidak dibalas 2×). Anti-duplikat tambahan di background worker: row yang update_id-nya sudah terkirim langsung ditandai completed tanpa re-process.
+- **Telegram reply correlation**: balasan kini `reply_to_message_id` merujuk pesan asli user (live path via ctx, replay path via `chat_id`+`source_message_id` yang di-persist) — 2 pesan berurutan tetap dikorelasikan benar berkat FIFO + closure per pesan.
+- Verifikasi: tsc bersih, build sukses, boot sehat (drain + migrasi terkonfirmasi di DB nyata), tes integrasi end-to-end `pending→processing→completed` dengan LLM nyata, unit test `tools/tester/recovery_test.ts` (reclaim/resume/dispatcher/dedup) ALL OK.
+
+
 ## [4.238] - 2026-08-03
 ### Cleanup: Remove fake AGI telemetry defaults; dedupe ProviderGateway registration; fix tool manifest mismatches
 - YuiAGIDaemon default state: totalEpochs 142/lossValue 0.145/accuracy 0.942/lastHallucinationIndex 12/lastCognitiveEntropy 20 diganti nilai netral (0) — telemetri tidak lagi berpura-pura sudah training; satu-satunya sumber adalah StorageService loadState.

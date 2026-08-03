@@ -1072,6 +1072,12 @@ async function gracefulShutdown(sig: string) {
     log('[SYSTEM] Closing WebSocket server...');
     __globalWss.close();
   }
+  try {
+    log('[SYSTEM] Draining in-memory queue to pending_messages for crash-safe restart...');
+    MultiChannelQueue.getInstance().drainQueueToPending();
+  } catch (e: any) {
+    log(`[SYSTEM] Queue drain warning: ${e.message || e}`);
+  }
   if (__globalServer) {
     log('[SYSTEM] Closing HTTP server...');
     __globalServer.close(() => {

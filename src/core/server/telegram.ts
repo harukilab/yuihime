@@ -27,6 +27,30 @@ async function withDeliveryTimeout<T>(fn: () => Promise<T>, timeoutMs: number, l
 
 let db: any = null;
 
+// --- Persistent crash-recovery dedup (lintas restart) ---
+// Telegram mengirim ulang batch update yang belum dikonfirmasi offset ketika daemon
+// restart. update_id yang sudah SELESAI diproses dicatat di tabel telegram_update_ids
+// agar tidak diproses/ dibalas dua kali setelah restart.
+function isTelegramUpdateProcessed(updateId: number | undefined): boolean {
+  if (!updateId || !db) return false;
+  try {
+    const row = db.prepare("SELECT 1 FROM telegram_update_ids WHERE update_id = ?").get(updateId);
+    return !!row;
+  } catch (e) {
+    return false;
+  }
+}
+
+function recordTelegramUpdateProcessed(updateId: number | undefined, chatId: number | string, messageId: number): void {
+  if (!updateId || !db) return;
+  try {
+    db.prepare("INSERT OR IGNORE INTO telegram_update_ids (update_id, processed_at, chat_id, message_id) VALUES (?, ?, ?, ?)")
+      .run(updateId, Date.now(), chatId, messageId);
+  } catch (e: any) {
+    console.warn("[TELEGRAM_DEDUP] Failed to record processed update:", e.message || e);
+  }
+}
+
 // --- Telegram Bot Daemon ---
 export let activeTelegramBot: any = null;
 export let activeTelegramToken: string | null = null;
@@ -630,6 +654,14 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
        // dari jalur speak-langsung (dedup-skip) tetap tahu kemana harus bereaksi.
        rememberPendingReaction(contextId, ctx.chat.id, ctx.message.message_id);
 
+       // Persistent dedup: update yang sudah tuntas diproses sebelum crash tidak
+       // boleh diproses ulang saat Telegram mengirim ulang batch setelah restart.
+       const tgUpdateId = ctx.update?.update_id;
+       if (tgUpdateId && isTelegramUpdateProcessed(tgUpdateId)) {
+         console.log(`[TELEGRAM_DEDUP] Update ${tgUpdateId} already processed (post-restart re-delivery). Skipping.`);
+         return;
+       }
+
        MultiChannelQueue.getInstance().addMessage(
          userMessage,
          senderName,
@@ -646,21 +678,25 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
                 }
               } else {
                 dedup.markSent(response, contextId);
+                const replyOpts: any = { reply_to_message_id: ctx.message.message_id };
                 try {
                   const sentAsFile = await withDeliveryTimeout(() => trySendFileAttachment(ctx, response, { contextId, channel: chatType }), 10000, 'file-attachment');
                   if (!sentAsFile) {
-                    const sentMsg = await withDeliveryTimeout(() => ctx.reply(response), 15000, 'telegram-reply');
+                    const sentMsg = await withDeliveryTimeout(() => ctx.reply(response, replyOpts), 15000, 'telegram-reply');
                     if (sentMsg?.message_id) {
                       recordOutboundMessage(sentMsg.message_id, contextId, chatType, String(response));
                     }
                   }
                   console.log(`[TELEGRAM_DELIVERY] Reply sent to ${senderName} (${contextId}), len=${String(response).length}`);
+                  // Tandai update SELESAI diproses (dedup lintas restart) HANYA setelah delivery sukses.
+                  recordTelegramUpdateProcessed(tgUpdateId, ctx.chat.id, ctx.message.message_id);
                 } catch (sendErr: any) {
                   console.error(`[TELEGRAM_DELIVERY_ERR] Failed to send reply to ${senderName}:`, sendErr?.message || sendErr);
                   try {
-                    const sentMsg2 = await withDeliveryTimeout(() => ctx.reply(String(response).slice(0, 3500)), 10000, 'telegram-reply-retry');
+                    const sentMsg2 = await withDeliveryTimeout(() => ctx.reply(String(response).slice(0, 3500), replyOpts), 10000, 'telegram-reply-retry');
                     if (sentMsg2?.message_id) {
                       recordOutboundMessage(sentMsg2.message_id, contextId, chatType, String(response));
+                      recordTelegramUpdateProcessed(tgUpdateId, ctx.chat.id, ctx.message.message_id);
                     }
                   } catch (retryErr: any) {
                     console.error(`[TELEGRAM_DELIVERY_ERR] Retry also failed:`, retryErr?.message || retryErr);
@@ -712,6 +748,11 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
               }
             }
           } catch (e) {}
+        },
+        {
+          chatId: String(ctx.chat.id),
+          sourceMessageId: ctx.message.message_id,
+          updateId: tgUpdateId
         }
       );
     } catch (error: any) {
