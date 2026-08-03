@@ -1,6 +1,12 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.234] - 2026-08-03
+### Tool: Addon Manager: submenu loop kembali ke dirinya sendiri (B utk balik ke menu utama)
+- tools/addon-manager.sh — list/install/uninstall/execute kini berulang ke submenu yang sama setelah operasi; 'B' di prompt pilihan atau setelah operasi kembali ke menu utama; prompt 'Kembali ke menu?' yang redundan dihapus.
+- pick_addon menangani 'B' sebagai pembatalan (bukan ID literal).
+
+
 ## [4.233] - 2026-08-03
 ### Tool: Addon Manager: select addon/skill by list number (or id); stable sorted order
 - tools/addon-manager.sh — uninstall/execute now accept NOMOR urut (e.g. '6') or ID; list is sorted by id so numbering is stable across runs.

@@ -72,9 +72,9 @@ for i, a in enumerate(data, 1):
     print(f"  [{i:>2}] {a['id']:<28} {kind} (runtime={runtime})")
 PYEOF
 
-  echo -n "Pilihan [nomor/ID]: "
+  echo -n "Pilihan [nomor/ID] (B = kembali ke menu utama): "
   read -r SEL
-  if [ -z "$SEL" ]; then
+  if [ -z "$SEL" ] || [[ "$SEL" =~ ^[bB]$ ]]; then
     rm -f "$tmpfile"; return 1
   fi
 
@@ -116,18 +116,24 @@ PYEOF
 
 # ---- Install: from git repo (SKILL.md / config.toml auto-detect) -----------
 install_from_repo() {
-  echo "--- Install dari repo git (dukung Claude Skills SKILL.md / config.toml) ---"
-  echo -n "URL repo git (mis. https://github.com/Tensor-Art/tensorart-skills): "
-  read -r REPO_URL
-  [ -n "$REPO_URL" ] || { echo "Batal."; return; }
+  while true; do
+    echo
+    echo "--- Install dari repo git (dukung Claude Skills SKILL.md / config.toml) ---"
+    echo "    (URL kosong atau 'B' = kembali ke menu utama)"
+    echo -n "URL repo git (mis. https://github.com/Tensor-Art/tensorart-skills): "
+    read -r REPO_URL
+    [[ "$REPO_URL" =~ ^[bB]$ ]] || [ -n "$REPO_URL" ] || { echo "Batal."; return; }
+    [[ "$REPO_URL" =~ ^[bB]$ ]] && { echo "Batal."; return; }
 
-  echo -n "Nama folder skill dalam repo (opsional, Enter utk auto-detect): "
-  read -r SKILL_FOLDER
-  echo -n "ID target (opsional, Enter utk pakai nama skill): "
-  read -r TARGET_ID
+    echo -n "Nama folder skill dalam repo (opsional, Enter utk auto-detect): "
+    read -r SKILL_FOLDER
+    [[ "$SKILL_FOLDER" =~ ^[bB]$ ]] && { echo "Batal."; return; }
+    echo -n "ID target (opsional, Enter utk pakai nama skill): "
+    read -r TARGET_ID
+    [[ "$TARGET_ID" =~ ^[bB]$ ]] && { echo "Batal."; return; }
 
-  local body
-  body="$(python3 - "$REPO_URL" "$SKILL_FOLDER" "$TARGET_ID" <<'PYEOF'
+    local body
+    body="$(python3 - "$REPO_URL" "$SKILL_FOLDER" "$TARGET_ID" <<'PYEOF'
 import json, sys
 repo = sys.argv[1]; skill = sys.argv[2].strip(); tid = sys.argv[3].strip()
 payload = {"repoUrl": repo}
@@ -136,50 +142,62 @@ if tid:   payload["id"] = tid
 print(json.dumps(payload))
 PYEOF
 )"
-  echo "Menginstall ..."
-  local resp
-  resp="$(api_install "$body")"
-  if [ -n "$resp" ]; then
-    echo "$resp" | python3 -m json.tool --no-ensure-ascii 2>/dev/null || echo "$resp"
-  else
-    echo "ERROR: install gagal (cek URL, koneksi, atau server log)."
-  fi
+    echo "Menginstall ..."
+    local resp
+    resp="$(api_install "$body")"
+    if [ -n "$resp" ]; then
+      echo "$resp" | python3 -m json.tool --no-ensure-ascii 2>/dev/null || echo "$resp"
+    else
+      echo "ERROR: install gagal (cek URL, koneksi, atau server log)."
+    fi
+    echo
+    echo -n "Install repo lagi? (Enter=ya, B=kembali ke menu utama): "
+    read -r AGAIN
+    [[ "$AGAIN" =~ ^[bB]$ ]] && return
+  done
 }
 
 # ---- Install: raw addon (id + runtime + config.toml + entry script) ---------
 install_raw() {
-  echo "--- Install addon manual (id + runtime + config.toml + kode) ---"
-  echo -n "ID addon (huruf/angka/_/-): "
-  read -r ID
-  [[ "$ID" =~ ^[a-zA-Z0-9_-]+$ ]] || { echo "ID tidak valid."; return; }
+  while true; do
+    echo
+    echo "--- Install addon manual (id + runtime + config.toml + kode) ---"
+    echo "    (ID kosong atau 'B' = kembali ke menu utama)"
+    echo -n "ID addon (huruf/angka/_/-): "
+    read -r ID
+    [[ "$ID" =~ ^[bB]$ ]] && { echo "Batal."; return; }
+    [[ "$ID" =~ ^[a-zA-Z0-9_-]+$ ]] || { echo "ID tidak valid."; return; }
 
-  echo "Runtime: [1] node  [2] python  [3] bash"
-  echo -n "Pilih (1/2/3): "
-  read -r RT
-  case "$RT" in
-    1) RUNTIME="node";   EXT="js";;
-    2) RUNTIME="python"; EXT="py";;
-    3) RUNTIME="bash";   EXT="sh";;
-    *) echo "Batal."; return;;
-  esac
+    echo "Runtime: [1] node  [2] python  [3] bash"
+    echo -n "Pilih (1/2/3): "
+    read -r RT
+    case "$RT" in
+      1) RUNTIME="node";   EXT="js";;
+      2) RUNTIME="python"; EXT="py";;
+      3) RUNTIME="bash";   EXT="sh";;
+      *) echo "Batal."; return;;
+    esac
 
-  echo -n "Nama tampilan (opsional, Enter utk '$ID'): "
-  read -r NAME
-  NAME="${NAME:-$ID}"
-  echo -n "Deskripsi singkat: "
-  read -r DESC
-  echo -n "Parameter JSON opsional (utk skema tool, mis. {\"type\":\"object\",\"properties\":{}}): "
-  read -r PARAMS
-  PARAMS="${PARAMS:-{\"type\":\"object\",\"properties\":{}}}"
+    echo -n "Nama tampilan (opsional, Enter utk '$ID'): "
+    read -r NAME
+    [[ "$NAME" =~ ^[bB]$ ]] && { echo "Batal."; return; }
+    NAME="${NAME:-$ID}"
+    echo -n "Deskripsi singkat: "
+    read -r DESC
+    [[ "$DESC" =~ ^[bB]$ ]] && { echo "Batal."; return; }
+    echo -n "Parameter JSON opsional (utk skema tool, mis. {\"type\":\"object\",\"properties\":{}}): "
+    read -r PARAMS
+    [[ "$PARAMS" =~ ^[bB]$ ]] && { echo "Batal."; return; }
+    PARAMS="${PARAMS:-{\"type\":\"object\",\"properties\":{}}}"
 
-  echo "--- Edit kode entry point (Ctrl-D untuk selesai) ---"
-  echo "#!/usr/bin/env $RUNTIME" > /tmp/yui_addon_tmp_$ID.$EXT
-  cat >> /tmp/yui_addon_tmp_$ID.$EXT
-  CODE="$(cat /tmp/yui_addon_tmp_$ID.$EXT)"
-  rm -f /tmp/yui_addon_tmp_$ID.$EXT
+    echo "--- Edit kode entry point (Ctrl-D untuk selesai) ---"
+    echo "#!/usr/bin/env $RUNTIME" > /tmp/yui_addon_tmp_$ID.$EXT
+    cat >> /tmp/yui_addon_tmp_$ID.$EXT
+    CODE="$(cat /tmp/yui_addon_tmp_$ID.$EXT)"
+    rm -f /tmp/yui_addon_tmp_$ID.$EXT
 
-  local body
-  body="$(python3 - "$ID" "$NAME" "$DESC" "$RUNTIME" "$PARAMS" "$CODE" <<'PYEOF'
+    local body
+    body="$(python3 - "$ID" "$NAME" "$DESC" "$RUNTIME" "$PARAMS" "$CODE" <<'PYEOF'
 import json, sys
 _id, name, desc, runtime, params, code = sys.argv[1:7]
 config = f'''id = "{_id}"
@@ -198,59 +216,75 @@ print(json.dumps({"id": _id, "config": config, "code": code, "runtime": runtime}
 PYEOF
 )"
 
-  echo "Menginstall ..."
-  local resp
-  resp="$(api_install "$body")"
-  if [ -n "$resp" ]; then
-    echo "$resp" | python3 -m json.tool --no-ensure-ascii 2>/dev/null || echo "$resp"
-  else
-    echo "ERROR: install gagal (cek server log)."
-  fi
+    echo "Menginstall ..."
+    local resp
+    resp="$(api_install "$body")"
+    if [ -n "$resp" ]; then
+      echo "$resp" | python3 -m json.tool --no-ensure-ascii 2>/dev/null || echo "$resp"
+    else
+      echo "ERROR: install gagal (cek server log)."
+    fi
+    echo
+    echo -n "Install addon lagi? (Enter=ya, B=kembali ke menu utama): "
+    read -r AGAIN
+    [[ "$AGAIN" =~ ^[bB]$ ]] && return
+  done
 }
 
 # ---- Uninstall --------------------------------------------------------------
 uninstall() {
-  echo "--- Uninstall addon/skill ---"
-  pick_addon || return
-  echo -n "Yakin hapus '$SEL_ID'? (y/N): "
-  read -r CONFIRM
-  [[ "$CONFIRM" =~ ^[yY]$ ]] || { echo "Batal."; return; }
-
-  local resp
-  resp="$(api_uninstall "$SEL_ID")"
-  if [ -n "$resp" ]; then
-    echo "$resp" | python3 -m json.tool --no-ensure-ascii 2>/dev/null || echo "$resp"
-  else
-    echo "ERROR: gagal menghapus '$SEL_ID'."
-  fi
+  while true; do
+    echo
+    echo "--- Uninstall addon/skill (B = kembali ke menu utama) ---"
+    pick_addon || { echo "Batal."; return; }
+    echo -n "Yakin hapus '$SEL_ID'? (y/N): "
+    read -r CONFIRM
+    if [[ "$CONFIRM" =~ ^[yY]$ ]]; then
+      local resp
+      resp="$(api_uninstall "$SEL_ID")"
+      if [ -n "$resp" ]; then
+        echo "$resp" | python3 -m json.tool --no-ensure-ascii 2>/dev/null || echo "$resp"
+      else
+        echo "ERROR: gagal menghapus '$SEL_ID'."
+      fi
+    else
+      echo "Batal (tidak dihapus)."
+    fi
+    echo
+    echo -n "Uninstall lagi? (Enter=ya, B=kembali ke menu utama): "
+    read -r AGAIN
+    [[ "$AGAIN" =~ ^[bB]$ ]] && return
+  done
 }
 
 # ---- Execute (bonus: jalankan addon/skill) ---------------------------------
 execute() {
-  echo "--- Jalankan addon/skill ---"
-  pick_addon || return
+  while true; do
+    echo
+    echo "--- Jalankan addon/skill (B = kembali ke menu utama) ---"
+    pick_addon || { echo "Batal."; return; }
 
-  local kind="$SEL_RUNTIME"
-  if [ "$kind" = "skill" ]; then
-    echo "Skill — pilih aksi:"
-    echo "  [1] instructions  (baca SKILL.md)"
-    echo "  [2] run_script    (jalankan scripts/<file>)"
-    echo -n "Pilih (1/2): "
-    read -r ACT
-    case "$ACT" in
-      1) api_execute "$SEL_ID" '{"args":{"action":"instructions"}}' | python3 -c "
+    local kind="$SEL_RUNTIME"
+    if [ "$kind" = "skill" ]; then
+      echo "Skill — pilih aksi:"
+      echo "  [1] instructions  (baca SKILL.md)"
+      echo "  [2] run_script    (jalankan scripts/<file>)"
+      echo -n "Pilih (1/2): "
+      read -r ACT
+      case "$ACT" in
+        1) api_execute "$SEL_ID" '{"args":{"action":"instructions"}}' | python3 -c "
 import sys, json
 try:
     d = json.load(sys.stdin)
     print(d.get('content', json.dumps(d)))
 except Exception: print(sys.stdin.read())";;
-      2)
-        echo -n "Nama script (mis. list_tools.py): "
-        read -r SCRIPT
-        echo -n "Argumen (spasi-pisah, opsional): "
-        read -r SCRIPT_ARGS
-        local body
-        body="$(python3 - "$SEL_ID" "$SCRIPT" "$SCRIPT_ARGS" <<'PYEOF'
+        2)
+          echo -n "Nama script (mis. list_tools.py): "
+          read -r SCRIPT
+          echo -n "Argumen (spasi-pisah, opsional): "
+          read -r SCRIPT_ARGS
+          local body
+          body="$(python3 - "$SEL_ID" "$SCRIPT" "$SCRIPT_ARGS" <<'PYEOF'
 import json, sys
 payload = {"args": {"action": "run_script", "script": sys.argv[2]}}
 if sys.argv[3].strip():
@@ -258,15 +292,33 @@ if sys.argv[3].strip():
 print(json.dumps(payload))
 PYEOF
 )"
-        api_execute "$SEL_ID" "$body" | python3 -m json.tool --no-ensure-ascii 2>/dev/null;;
-      *) echo "Batal.";;
-    esac
-  else
-    echo -n "Argumen JSON (opsional, Enter utk kosong): "
-    read -r RAW_ARGS
-    RAW_ARGS="${RAW_ARGS:-{}}"
-    api_execute "$SEL_ID" "{\"args\":$RAW_ARGS}" | python3 -m json.tool --no-ensure-ascii 2>/dev/null
-  fi
+          api_execute "$SEL_ID" "$body" | python3 -m json.tool --no-ensure-ascii 2>/dev/null;;
+        *) echo "Batal.";;
+      esac
+    else
+      echo -n "Argumen JSON (opsional, Enter utk kosong): "
+      read -r RAW_ARGS
+      [[ "$RAW_ARGS" =~ ^[bB]$ ]] && { echo "Batal."; return; }
+      RAW_ARGS="${RAW_ARGS:-{}}"
+      api_execute "$SEL_ID" "{\"args\":$RAW_ARGS}" | python3 -m json.tool --no-ensure-ascii 2>/dev/null
+    fi
+    echo
+    echo -n "Jalankan lagi? (Enter=ya, B=kembali ke menu utama): "
+    read -r AGAIN
+    [[ "$AGAIN" =~ ^[bB]$ ]] && return
+  done
+}
+
+# ---- List (loop untuk refresh) ----------------------------------------------
+list_addons() {
+  while true; do
+    echo
+    print_addons || return
+    echo
+    echo -n "Refresh list? (Enter=ya, B=kembali ke menu utama): "
+    read -r AGAIN
+    [[ "$AGAIN" =~ ^[bB]$ ]] && return
+  done
 }
 
 # ---- Main menu --------------------------------------------------------------
@@ -284,7 +336,7 @@ main_menu() {
   echo -n "Pilih [1-6]: "
   read -r CHOICE
   case "$CHOICE" in
-    1) print_addons;;
+    1) list_addons;;
     2) install_from_repo;;
     3) install_raw;;
     4) uninstall;;
@@ -295,8 +347,4 @@ main_menu() {
 
 while true; do
   main_menu || break
-  echo
-  echo -n "Kembali ke menu? (Enter=ya, N=keluar): "
-  read -r AGAIN
-  [[ "$AGAIN" =~ ^[nN]$ ]] && break
 done
