@@ -18,6 +18,8 @@ import { initializeBot } from '../telegram.js';
 import AdmZip from "adm-zip";
 import { clearCortexSettingsCache } from '../../cortex/cortexSettings.js';
 import { PluginManager } from '../../kernel/PluginManager.js';
+import { DynamicLoader } from '../../DynamicLoader.js';
+import { SystemRegistry } from '@shared/core/registry';
 import { resolveDataPath, resolveSystemRoot } from '../../systemPaths.js';
 import { initializeDiscord } from '../discord.js';
 import { initializeTwitter } from '../twitter.js';
@@ -1020,6 +1022,19 @@ export function registerSystemRoutes(app: express.Express, db: any) {
     try {
       await fs.rm(addonPath, { recursive: true, force: true });
       res.json({ success: true, message: `Addon ${id} uninstalled.` });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Re-register addon/skill tools without a full daemon restart. Used by
+  // external tools (e.g. tools/addon-manager.sh) after install/uninstall so
+  // the agent sees the latest tool list without a restart.
+  app.post("/api/addons/resync", async (_req, res) => {
+    try {
+      await DynamicLoader.syncAddons();
+      const addonTools = SystemRegistry.getTools().filter((t: any) => String(t.metadata.id).startsWith("addon-"));
+      res.json({ success: true, message: `Resync done. ${addonTools.length} addon/skill tools registered.` });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }

@@ -39,6 +39,18 @@ api_execute() {
   curl -sf -X POST "$API/execute/$id" -H 'Content-Type: application/json' -d "$body" 2>/dev/null
 }
 
+# Re-register addon/skill tools in the running daemon so the agent sees them
+# without a restart. Best-effort: failure is non-fatal.
+api_resync() {
+  local resp
+  resp="$(curl -sf -X POST "$API/resync" -H 'Content-Type: application/json' -d '{}' 2>/dev/null)"
+  if [ -n "$resp" ]; then
+    echo "$resp" | python3 -m json.tool --no-ensure-ascii 2>/dev/null || echo "$resp"
+  else
+    echo "Peringatan: resync tool tidak bisa dipanggil (daemon lama?). Restart daemon utk efek."
+  fi
+}
+
 # ---- Display helpers --------------------------------------------------------
 print_addons() {
   local data
@@ -147,6 +159,8 @@ PYEOF
     resp="$(api_install "$body")"
     if [ -n "$resp" ]; then
       echo "$resp" | python3 -m json.tool --no-ensure-ascii 2>/dev/null || echo "$resp"
+      echo "--- Resync tool (agar agent langsung melihat) ---"
+      api_resync
     else
       echo "ERROR: install gagal (cek URL, koneksi, atau server log)."
     fi
@@ -221,6 +235,8 @@ PYEOF
     resp="$(api_install "$body")"
     if [ -n "$resp" ]; then
       echo "$resp" | python3 -m json.tool --no-ensure-ascii 2>/dev/null || echo "$resp"
+      echo "--- Resync tool (agar agent langsung melihat) ---"
+      api_resync
     else
       echo "ERROR: install gagal (cek server log)."
     fi
@@ -244,6 +260,8 @@ uninstall() {
       resp="$(api_uninstall "$SEL_ID")"
       if [ -n "$resp" ]; then
         echo "$resp" | python3 -m json.tool --no-ensure-ascii 2>/dev/null || echo "$resp"
+        echo "--- Resync tool (agar agent langsung melihat) ---"
+        api_resync
       else
         echo "ERROR: gagal menghapus '$SEL_ID'."
       fi

@@ -99,7 +99,6 @@ import { CalendarReminderTool } from '../drivers/tools/calendar_reminder/index.j
 import { EditFileSegmentTool } from '../drivers/tools/edit_file_segment/index.js';
 import { DownloadFileTool } from '../drivers/tools/download_file/index.js';
 import { SendFileTool } from '../drivers/tools/send_file/index.js';
-import { OverlayControlTool } from '../drivers/tools/overlay_control/index.js';
 import { LuaInterpreter } from '../drivers/tools/lua_interpreter/index.js';
 import { EmotionAdjustTool } from '../drivers/tools/emotion_adjust/index.js';
 import { FileListTool } from '../drivers/tools/list_files/index.js';
@@ -473,7 +472,7 @@ export function initializeCortexModules(): Promise<void> {
         OpenRouterTTS, OfficialStreamingSpeechTTS, CustomAPITTS, GeminiTTS,
         TensorArtGenerateTool, SearchChatHistoryTool, ShellTool, FileReadTool, WebSearchTool,
         PluginInstallerTool, ViewLogsTool, WebSnipperTool, CodeInterpreter, CalendarReminderTool,
-        EditFileSegmentTool, DownloadFileTool, SendFileTool, OverlayControlTool, LuaInterpreter,
+        EditFileSegmentTool, DownloadFileTool, SendFileTool, LuaInterpreter,
         EmotionAdjustTool, FileListTool, CalculatorTool, GitHubTool,
         GetCurrentTimeTool, MessagingTool, BgProcTool, ManageIdentitiesTool, CronTool,
         OCRTool, ManagePairingTool, FileManagerTool, FileWriteTool,

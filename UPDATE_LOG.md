@@ -1,6 +1,12 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.235] - 2026-08-03
+### Fix: Remove control_overlay tool from registry registration
+- RegistryInitializer: OverlayControlTool (control_overlay) dihapus dari registrasi static module — tool tidak lagi di-advertise ke agent. Source driver tetap ada di src/drivers/tools/overlay_control/.
+- Verified: available_tools.json tidak lagi memuat control_overlay (38 tools).
+
+
 ## [4.234] - 2026-08-03
 ### Tool: Addon Manager: submenu loop kembali ke dirinya sendiri (B utk balik ke menu utama)
 - tools/addon-manager.sh — list/install/uninstall/execute kini berulang ke submenu yang sama setelah operasi; 'B' di prompt pilihan atau setelah operasi kembali ke menu utama; prompt 'Kembali ke menu?' yang redundan dihapus.
