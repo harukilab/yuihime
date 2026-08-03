@@ -11,6 +11,9 @@
 #  Usage:
 #    tools/yui-watchdog.sh start [dev|prod] [--pm2|--no-pm2] [daemon extra...]
 #                                     Mulai watchdog (otomatis start daemon bila belum jalan)
+#    tools/yui-watchdog.sh restart [dev|prod] [--pm2|--no-pm2] [daemon extra...]
+#                                     Restart penuh (watchdog + daemon). Mode diinfer dari
+#                                     current.meta bila argumen mode tidak diberikan.
 #    tools/yui-watchdog.sh stop               Hentikan watchdog (daemon dibiarkan tetap jalan)
 #    tools/yui-watchdog.sh status             Status watchdog + daemon
 #    tools/yui-watchdog.sh log                Tail log watchdog
@@ -339,11 +342,10 @@ cmd_start() {
   fi
 }
 
-cmd_stop() {
+stop_watchdog() {
   if [ ! -f "$WATCHDOG_PIDFILE" ] || ! is_alive "$(cat "$WATCHDOG_PIDFILE")"; then
-    echo "Watchdog tidak berjalan."
     rm -f "$WATCHDOG_PIDFILE"
-    exit 0
+    return 0
   fi
   local pid; pid=$(cat "$WATCHDOG_PIDFILE")
   kill -TERM "$pid" 2>/dev/null
@@ -360,6 +362,15 @@ cmd_stop() {
   fi
   pkill -TERM -f "yui-watchdog.sh __run" 2>/dev/null || true
   rm -f "$WATCHDOG_PIDFILE"
+}
+
+cmd_stop() {
+  if [ ! -f "$WATCHDOG_PIDFILE" ] || ! is_alive "$(cat "$WATCHDOG_PIDFILE")"; then
+    echo "Watchdog tidak berjalan."
+    stop_watchdog
+    exit 0
+  fi
+  stop_watchdog
   echo "Watchdog berhenti. Daemon YuiHime tidak disentuh."
 }
 
@@ -382,12 +393,53 @@ cmd_status() {
   fi
 }
 
+cmd_restart() {
+  local mode="${1:-}"; [ $# -gt 0 ] && shift
+  local extra=()
+  local pm2_mode="$PM2_MODE"
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --pm2)   pm2_mode=1; shift;;
+      --no-pm2) pm2_mode=0; shift;;
+      *) extra+=("$1"); shift;;
+    esac
+  done
+
+  # Infer mode bila tidak diberikan: baca baris 2 current.meta bila daemon masih hidup.
+  if [ -z "$mode" ] && [ -f "$CURRENT_META" ]; then
+    local meta_pid meta_mode
+    meta_pid=$(sed -n '1p' "$CURRENT_META" 2>/dev/null)
+    meta_mode=$(sed -n '2p' "$CURRENT_META" 2>/dev/null)
+    if [ -n "$meta_mode" ] && is_alive "$meta_pid"; then
+      mode="$meta_mode"
+    fi
+  fi
+  [ -z "$mode" ] && mode="dev"
+
+  local pmarg="--no-pm2"; [ "$pm2_mode" = "1" ] && pmarg="--pm2"
+
+  # 1) Hentikan watchdog (daemon dibiarkan jalan).
+  stop_watchdog
+  # 2) Stop daemon (PM2-aware) agar restart memuat build terbaru.
+  if [ "$pm2_mode" = "1" ]; then
+    log "RESTART(PM2): pm2 restart '$PM2_APP' ..."
+    pm2 restart "$PM2_APP" >/dev/null 2>&1 || pm2 stop "$PM2_APP" >/dev/null 2>&1 || true
+  else
+    "$DEBUG_SCRIPT" stop >/dev/null 2>&1 || true
+    pkill -9 -f "esbuild --service" 2>/dev/null || true
+  fi
+  # 3) Start watchdog (akan men-start daemon karena meta/daemon sudah mati).
+  echo "Restart watchdog + daemon (mode $mode, $pmarg)."
+  cmd_start "$mode" "$pmarg" "${extra[@]}"
+}
+
 case "${1:-help}" in
   start)      shift; cmd_start "$@";;
+  restart)    shift; cmd_restart "$@";;
   stop)       cmd_stop;;
   status)     cmd_status;;
   log)        tail -f "$WATCHDOG_LOG" 2>/dev/null || echo "Belum ada log.";;
   __run)      shift; run_watchdog "$@";;
-  help|-h)    sed -n '2,18p' "${BASH_SOURCE[0]}";;
-  *) echo "Perintah tidak dikenal: '${1:-}'"; sed -n '2,18p' "${BASH_SOURCE[0]}"; exit 1;;
+  help|-h)    sed -n '2,20p' "${BASH_SOURCE[0]}";;
+  *) echo "Perintah tidak dikenal: '${1:-}'"; sed -n '2,20p' "${BASH_SOURCE[0]}"; exit 1;;
 esac

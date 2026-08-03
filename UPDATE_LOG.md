@@ -1,6 +1,12 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.225] - 2026-08-03
+### Feat: Watchdog: subcommand restart (full cycle, infer mode from current.meta)
+- tools/yui-watchdog.sh: new 'restart [dev|prod] [--pm2|--no-pm2]' subcommand that stops the watchdog, stops the daemon (PM2-aware) to pick up the latest build, then starts the watchdog again; mode is inferred from current.meta line 2 when not given.
+- Refactor: stop logic extracted into stop_watchdog() helper (returns instead of exit) so restart does not abort when no watchdog is running.
+
+
 ## [4.224] - 2026-08-03
 ### Fix: Fix /api/cortex/think hang: abort fired on body-complete instead of client disconnect
 - Root cause: on Node v24, req.on('close') fires as soon as the request body is fully consumed (not on client disconnect), so the abortController aborted every think task at the first loop iteration (cortexThinkEngine:382) before reaching the gateway, and the router returned without sending a response (curl hang + exit 28).
