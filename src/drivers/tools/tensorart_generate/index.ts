@@ -145,6 +145,12 @@ async function apiPost(baseUrl: string, accessKey: string, endpoint: string, bod
   throw lastErr;
 }
 
+function assertApiOk(resp: any, what: string): void {
+  if (resp && resp.code !== undefined && resp.code !== "0") {
+    throw new Error(`TensorArt API ${what} failed (code=${resp.code}): ${resp.message || JSON.stringify(resp).slice(0, 300)}`);
+  }
+}
+
 async function uploadFile(baseUrl: string, accessKey: string, filePath: string, timeoutMs = 20000): Promise<{ displayUrl: string; accessUrl: string }> {
   const { readFileSync, path } = await loadNodeFs();
   const data = readFileSync(filePath);
@@ -184,7 +190,7 @@ async function downloadImage(url: string, opts: { timeoutMs?: number; retryLimit
   let lastErr: any;
   for (let attempt = 0; attempt <= retryLimit; attempt++) {
     try {
-      const res = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
+      const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(timeoutMs) });
       if (!res.ok) {
         if (attempt < retryLimit && res.status >= 500) {
           lastErr = new Error(`Image download HTTP ${res.status}`);
@@ -532,6 +538,7 @@ export const TensorArtGenerateTool: ToolModule = {
 
     try {
       const submitRes = await apiPost(baseUrl, apiKey, "task", { toolName, inputs }, { timeoutMs: requestTimeoutMs, retryLimit });
+      assertApiOk(submitRes, "task create");
       const task = submitRes.data?.task;
       const jobId = task?.id;
       if (!jobId) {
@@ -549,6 +556,7 @@ export const TensorArtGenerateTool: ToolModule = {
         console.log(`[TENSORART_GENERATE] Polling task state (Attempt ${attempts}/${maxAttempts})...`);
 
         const pollData = await apiPost(baseUrl, apiKey, "task/query", { taskIds: [jobId] }, { timeoutMs: requestTimeoutMs, retryLimit });
+        assertApiOk(pollData, "task query");
         const taskInfo = pollData.data?.tasks?.[0] || {};
         const status = taskInfo.status;
 
@@ -591,7 +599,7 @@ export const TensorArtGenerateTool: ToolModule = {
             const maxDownloadRetries = 3;
             for (let dlAttempt = 0; dlAttempt < maxDownloadRetries; dlAttempt++) {
               try {
-                const imageRes = await downloadImage(imageUrl, { timeoutMs: requestTimeoutMs, retryLimit: 1 });
+                const imageRes = await downloadImage(imageUrl, { timeoutMs: 120000, retryLimit: 1 });
                 const buffer = Buffer.from(await imageRes.arrayBuffer());
                 const { path, os, mkdir, writeFile } = await loadNodeFs();
                 const ext = path.extname(new URL(imageUrl).pathname) || ".png";

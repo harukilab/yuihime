@@ -1,6 +1,11 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.227] - 2026-08-03
+### Fix: TensorArt tool: align with official skill — validate resp.code, 120s download timeout, browser UA
+- Adopted from official tensorart-skills (Tensor-Art/tensorart-skills scripts): validate 'code' field on task create & task/query responses (non-'0' now raises a clear error instead of silently missing a task id), raise image download timeout from requestTimeoutMs (20s) to 120s, and send 'User-Agent: Mozilla/5.0' on image downloads.
+
+
 ## [4.226] - 2026-08-03
 ### Fix: TensorArt tool: default retryLimit now 2 (aligns with configSchema), resilient to transient upstream 5xx
 - Observed: TensorArt API returned HTTP 500 'failed to get task config ... context deadline exceeded' when their server could not fetch the model config from config-cdn.qiandaoapp.com in time (upstream CDN latency ~5s, transient).
