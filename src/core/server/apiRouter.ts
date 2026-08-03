@@ -897,6 +897,23 @@ export function registerAPIRoutes(app: express.Express, db: any) {
     }
   });
 
+  // Expose registered module metadata (configSchema) to the web UI so the
+  // Modules tab can render provider/tool/TTS/gateway forms even though the
+  // daemon's Node-only RegistryInitializer cannot run inside the browser.
+  app.get("/api/modules", async (req, res) => {
+    try {
+      await initializeCortexModules();
+      const modules = SystemRegistry.getModules();
+      const payload = modules.map((m: any) => ({
+        metadata: m.metadata,
+        configSchema: m.metadata?.configSchema
+      }));
+      res.json({ success: true, count: payload.length, modules: payload });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.all("/api/*", (req, res) => {
     res.status(404).json({ 
       error: "Neural API Endpoint Not Found", 

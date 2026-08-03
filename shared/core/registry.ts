@@ -154,9 +154,10 @@ export class SystemRegistry {
       const results = await Promise.all(
         modulesAtLevel.map(async (module) => {
           try {
+            const t0 = Date.now();
             console.log(`[REGISTRY_RUN] Running module: ${module.metadata.id} [${module.metadata.phase}]...`);
             const result = await module.run(input, state, currentContext);
-            console.log(`[REGISTRY_RUN] Module completed: ${module.metadata.id}`);
+            console.log(`[REGISTRY_RUN] Module completed: ${module.metadata.id} (${((Date.now() - t0) / 1000).toFixed(1)}s)`);
             return result;
           } catch (err: any) {
             console.error(`[REGISTRY] Module ${module.metadata.id} failed in ${phase}:`, err?.message || err);

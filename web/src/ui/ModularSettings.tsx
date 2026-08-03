@@ -1403,9 +1403,28 @@ export const ModularSettings: React.FC<ModularSettingsProps> = ({
     return localStorage.getItem('yuihime_stage_backdrop_custom') || '';
   });
 
+  // Remote module schemas fetched from the daemon. The browser registry is
+  // intentionally empty (RegistryInitializer is Node-only), so we pull the
+  // real configSchema from the server to render every Modules tab form.
+  const [remoteModuleSchemas, setRemoteModuleSchemas] = useState<any[]>([]);
+
   useEffect(() => {
     loadSettings();
     loadAddons();
+
+    // Fetch daemon module schemas so the Modules tab renders every form even
+    // though the browser registry does not auto-register backend modules.
+    (async () => {
+      try {
+        const res = await fetch('/api/modules');
+        const data = await res.json();
+        if (data.success && Array.isArray(data.modules)) {
+          setRemoteModuleSchemas(data.modules);
+        }
+      } catch (err) {
+        console.warn('[SETTINGS] Module schema sync failed (UI remains functional):', err);
+      }
+    })();
     
     // Auth Listener
     const unsubscribe = StorageService.onAuthStateChanged((u) => setUser(u));
@@ -2209,8 +2228,27 @@ export const ModularSettings: React.FC<ModularSettingsProps> = ({
     }
   };
 
-  // Group system registry modules by ModuleType for dynamic rendering
-  const allRegModules = SystemRegistry.getModules();
+  // Group system registry modules by ModuleType for dynamic rendering.
+  // Merge daemon-provided schemas so every module category is present in the
+  // browser even though RegistryInitializer cannot run client-side. Existing
+  // browser-registered modules (e.g. runtime TTS) always win to avoid
+  // replacing them with schema-only stubs.
+  const allRegModules = (() => {
+    const localModules = SystemRegistry.getModules();
+    const byId = new Map(localModules.map(m => [m.metadata.id, m]));
+    (remoteModuleSchemas || []).forEach((s: any) => {
+      if (s && s.metadata && s.metadata.id && !byId.has(s.metadata.id)) {
+        byId.set(s.metadata.id, {
+          ...s,
+          metadata: {
+            ...s.metadata,
+            type: String(s.metadata.type || '').toLowerCase()
+          }
+        });
+      }
+    });
+    return Array.from(byId.values());
+  })();
   const modules: Record<ModuleType, any[]> = {
     [ModuleType.CORTEX]: allRegModules.filter(m => m.metadata.type === ModuleType.CORTEX),
     [ModuleType.TOOL]: allRegModules.filter(m => m.metadata.type === ModuleType.TOOL),

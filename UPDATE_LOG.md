@@ -1,6 +1,33 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.223] - 2026-08-03
+### Fix: Force empty outDir on web build to avoid stale assets
+- npm run build:web kini memakai --emptyOutDir karena outDir ../dist/web berada di luar root (web/) sehingga Vite menolak mengosongkannya secara default; mencegah aset lama menumpuk di dist/web. Konfigurasi ditambahkan di package.json, bukan web/vite.config.ts (file dilindungi).
+
+
+## [4.222] - 2026-08-03
+### Fix: Eliminate deprecated punycode module from server bundle via node:url shim
+- Shim lokal src/shims/punycode.cjs menggantikan modul deprecated punycode (DEP0040): toASCII()/toUnicode() diimplementasikan ulang memakai built-in node:url domainToASCII/domainToUnicode, tanpa npm package baru.
+- Sumber asli: rantai dependensi transitif telegraf -> node-fetch@2 -> whatwg-url -> tr46 yang memanggil require('punycode'). Di-wire via esbuild --alias:punycode=./src/shims/punycode.cjs pada npm run build:server; bundle kini 0 referensi punycode dan warning DEP0040 tidak lagi muncul saat boot.
+- --empty:punycode (stub kosong) sengaja TIDAK dipakai: tr46 membutuhkan implementasi toASCII/toUnicode yang berfungsi; object kosong menyebabkan TypeError di setiap pemrosesan domain.
+- Filter deprecation selektif di server.ts:40-49: `process.emitWarning` dipatch hanya untuk kode DEP0169 (url.parse dari parseurl/express yang ter-bundle), warning deprecation lain (mis. DEP0040) tetap diteruskan — tanpa menekan semua deprecation via process.noDeprecation/NODE_OPTIONS=--no-deprecation.
+
+
+## [4.221] - 2026-08-03
+### fix: Fix: Bypass relative fetch() in Node.js runtime for AI provider drivers
+- OpenAIProvider, AnthropicProvider, CustomProvider, OpenRouter kini memanggil AIService.getInstance().proxy() langsung in-memory saat berjalan di server (typeof window === 'undefined'), menghindari fetch('/api/ai/proxy') relatif yang hang/failed di Node.js native fetch.
+- OpenRouter model listing memakai AIService.getInstance().listModels('openrouter', apiKey) di sisi server; branch browser tetap memakai /api/ai/models.
+- Pemicu bug: /api/cortex/think hang setelah fase prompt-manager karena provider memakai URL relatif; kini alur daemon tidak lagi menembak HTTP ke dirinya sendiri.
+
+
+## [4.220] - 2026-08-03
+### Fix: Fix Modules settings missing in web UI (empty browser registry)
+- Add GET /api/modules in apiRouter.ts that serializes SystemRegistry.getModules() (cortex modules, tools, providers, TTS, gateways) with their configSchema for the web UI.
+- ModularSettings.tsx fetches /api/modules on mount and merges daemon schemas into allRegModules (existing browser modules win by id; metadata.type normalized to lowercase) so every Modules tab form renders — AGI core, tools, speech engines, providers, gateways, MCP servers.
+- Runtime paths unchanged: registry is only hydrated for display; speech.ts speak() and ProvidersTab dynamic options still read the real browser/daemon registry with /api/ai/models fallback.
+
+
 ## [4.219] - 2026-08-02
 ### Fix: Fix JSON config and ZIP snapshot upload/restore and Telegram Module fields
 - BackupTab: restore config mendukung .json/.txt, pembersihan UTF-8 BOM (0xFEFF), validasi JSON ketat, modal Paste/Input JSON Config dengan textarea+validator, dan reset state file input di blok finally.

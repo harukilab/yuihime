@@ -54,6 +54,7 @@ export const ProviderGatewayModule: CortexModule = {
         rawResult: context.processedResponse
       };
     }
+    console.log("[DEBUG_TRACE] GATEWAY.run entered");
     console.log('[GATEWAY] Evaluating provider suitability...');
 
     // Helper for Real-time Self-Learning Feedback Loop (Dual-Process Human Emulation)

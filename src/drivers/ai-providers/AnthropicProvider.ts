@@ -1,6 +1,7 @@
 import { ProviderModule, ModuleType } from '@shared/include/types';
 import { buildChatMessages, normalizeToolCallsToOpenAI, normalizeToolsForProvider } from '../../core/openaiTools';
 import { toSingleString } from '@/core/kernel/configNormalizer';
+import { AIService } from '../../core/kernel/ai.js';
 
 export const AnthropicProvider: ProviderModule = {
   metadata: {
@@ -90,11 +91,10 @@ export const AnthropicProvider: ProviderModule = {
       requestBody.tools = providerTools;
     }
 
-    const response = await fetch('/api/ai/proxy', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      signal: context.signal,
-      body: JSON.stringify({
+    let data: any;
+    if (typeof window === 'undefined') {
+      const aiService = AIService.getInstance();
+      data = await aiService.proxy({
         url: 'https://api.anthropic.com/v1/messages',
         method: 'POST',
         headers: {
@@ -102,15 +102,31 @@ export const AnthropicProvider: ProviderModule = {
           'anthropic-version': '2023-06-01'
         },
         body: requestBody
-      })
-    });
+      });
+    } else {
+      const response = await fetch('/api/ai/proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: context.signal,
+        body: JSON.stringify({
+          url: 'https://api.anthropic.com/v1/messages',
+          method: 'POST',
+          headers: {
+            'x-api-key': apiKey || 'ENV_ANTHROPIC_KEY',
+            'anthropic-version': '2023-06-01'
+          },
+          body: requestBody
+        })
+      });
 
-    if (!response.ok) {
-       const err = await response.json().catch(() => ({}));
-       throw new Error(err.error?.message || `Anthropic Proxy Error: ${response.status}`);
+      if (!response.ok) {
+         const err = await response.json().catch(() => ({}));
+         throw new Error(err.error?.message || `Anthropic Proxy Error: ${response.status}`);
+      }
+
+      data = await response.json();
     }
 
-    const data = await response.json();
     const content: any[] = Array.isArray(data.content) ? data.content : [];
     const toolUseBlocks = content.filter((b: any) => b && b.type === 'tool_use');
 

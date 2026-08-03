@@ -1,6 +1,7 @@
 import { ProviderModule, ModuleType } from '@shared/include/types';
 import { buildChatMessages, normalizeToolCallsToOpenAI, normalizeToolsForProvider } from '../../core/openaiTools';
 import { toSingleString } from '@/core/kernel/configNormalizer';
+import { AIService } from '../../core/kernel/ai.js';
 
 export const CustomProvider: ProviderModule = {
   metadata: {
@@ -79,25 +80,37 @@ export const CustomProvider: ProviderModule = {
       } catch (e) {}
 
       const listUrl = `${baseUrl}/models`;
-      const response = await fetch('/api/ai/proxy', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
+
+      let data: any;
+      if (typeof window === 'undefined') {
+        const aiService = AIService.getInstance();
+        data = await aiService.proxy({
           url: listUrl,
           method: 'GET',
           headers: computedHeaders
-        })
-      });
+        });
+      } else {
+        const response = await fetch('/api/ai/proxy', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            url: listUrl,
+            method: 'GET',
+            headers: computedHeaders
+          })
+        });
 
-      if (!response.ok) {
-        return [
-          { label: 'custom-model (Agnostic Target)', value: 'custom-model' }
-        ];
+        if (!response.ok) {
+          return [
+            { label: 'custom-model (Agnostic Target)', value: 'custom-model' }
+          ];
+        }
+
+        data = await response.json();
       }
 
-      const data = await response.json();
       const modelsList = data.data || data.models || [];
       if (Array.isArray(modelsList)) {
         return modelsList.map((m: any) => ({
@@ -189,31 +202,43 @@ export const CustomProvider: ProviderModule = {
 
       const endpointUrl = `${baseUrl}/chat/completions`;
 
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 150000);
-      let response: Response;
-      try {
-        response = await fetch('/api/ai/proxy', {
+      let data: any;
+      if (typeof window === 'undefined') {
+        const aiService = AIService.getInstance();
+        data = await aiService.proxy({
+          url: endpointUrl,
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            url: endpointUrl,
-            method: 'POST',
-            headers: computedHeaders,
-            body: payload
-          }),
-          signal: controller.signal
+          headers: computedHeaders,
+          body: payload
         });
-      } finally {
-        clearTimeout(timeout);
+      } else {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 150000);
+        let response: Response;
+        try {
+          response = await fetch('/api/ai/proxy', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              url: endpointUrl,
+              method: 'POST',
+              headers: computedHeaders,
+              body: payload
+            }),
+            signal: controller.signal
+          });
+        } finally {
+          clearTimeout(timeout);
+        }
+
+        if (!response.ok) {
+          const errText = await response.text();
+          throw new Error(`Custom Provider Connection Failed (${response.status}): ${errText}`);
+        }
+
+        data = await response.json();
       }
 
-      if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(`Custom Provider Connection Failed (${response.status}): ${errText}`);
-      }
-
-      const data = await response.json();
       const message = data.choices?.[0]?.message || {};
       if (Array.isArray(message.tool_calls) && message.tool_calls.length > 0) {
         return JSON.stringify({ tool_calls: normalizeToolCallsToOpenAI(message, 'custom') });

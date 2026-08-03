@@ -1,6 +1,7 @@
 import { ProviderModule, ModuleType } from '@shared/include/types';
 import { buildChatMessages, normalizeToolCallsToOpenAI, normalizeToolsForProvider } from '../../core/openaiTools';
 import { toSingleString } from '@/core/kernel/configNormalizer';
+import { AIService } from '../../core/kernel/ai.js';
 
 export const OpenAIProvider: ProviderModule = {
   metadata: {
@@ -80,26 +81,37 @@ export const OpenAIProvider: ProviderModule = {
 
       // Call proxy endpoint on backend or fetch client side
       const listUrl = `${baseUrl}/models`;
-      const response = await fetch('/api/ai/proxy', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
+
+      let data: any;
+      if (typeof window === 'undefined') {
+        const aiService = AIService.getInstance();
+        data = await aiService.proxy({
           url: listUrl,
           method: 'GET',
           headers: computedHeaders
-        })
-      });
+        });
+      } else {
+        const response = await fetch('/api/ai/proxy', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            url: listUrl,
+            method: 'GET',
+            headers: computedHeaders
+          })
+        });
 
-      if (!response.ok) {
-        return [
-          { label: 'gpt-4o-mini (Fallback)', value: 'gpt-4o-mini' },
-          { label: 'gpt-4o', value: 'gpt-4o' }
-        ];
+        if (!response.ok) {
+          return [
+            { label: 'gpt-4o-mini (Fallback)', value: 'gpt-4o-mini' },
+            { label: 'gpt-4o', value: 'gpt-4o' }
+          ];
+        }
+
+        data = await response.json();
       }
-
-      const data = await response.json();
       const modelsList = data.data || data.models || [];
       if (Array.isArray(modelsList)) {
         return modelsList.map((m: any) => ({
@@ -198,24 +210,36 @@ export const OpenAIProvider: ProviderModule = {
 
       const endpointUrl = `${baseUrl}/chat/completions`;
 
-      const response = await fetch('/api/ai/proxy', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        signal: context.signal,
-        body: JSON.stringify({
+      let data: any;
+      if (typeof window === 'undefined') {
+        const aiService = AIService.getInstance();
+        data = await aiService.proxy({
           url: endpointUrl,
           method: 'POST',
           headers: computedHeaders,
           body: payload
-        })
-      });
+        });
+      } else {
+        const response = await fetch('/api/ai/proxy', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: context.signal,
+          body: JSON.stringify({
+            url: endpointUrl,
+            method: 'POST',
+            headers: computedHeaders,
+            body: payload
+          })
+        });
 
-      if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(`OpenAI Provider Proxy Connection Failed (${response.status}): ${errText}`);
+        if (!response.ok) {
+          const errText = await response.text();
+          throw new Error(`OpenAI Provider Proxy Connection Failed (${response.status}): ${errText}`);
+        }
+
+        data = await response.json();
       }
 
-      const data = await response.json();
       const message = data.choices?.[0]?.message || {};
       const answer = message.content || "";
 

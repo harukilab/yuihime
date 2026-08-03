@@ -37,6 +37,17 @@ import { SettingsManager } from "./src/core/kernel/settings.js";
 import { resolveDataPath, resolveSystemRoot } from "./src/core/systemPaths.js";
 import os from "os";
 
+// --- Suppress DEP0169 (url.parse) deprecation from bundled deps (parseurl/express) ---
+{
+  const _emitWarning = process.emitWarning.bind(process) as any;
+  process.emitWarning = function (...args: any[]): void {
+    const warning = args[0];
+    const code = typeof args[2] === "string" ? args[2] : (warning && typeof warning === "object" && (warning as any).code) || "";
+    if (code === "DEP0169") return;
+    return _emitWarning.apply(process, args);
+  } as any;
+}
+
 // --- Global EPIPE Protection for cron/background tasks ---
 const originalConsoleFns = {
   log: console.log,

@@ -300,8 +300,10 @@ export async function executeCortexThink(
     think
   });
 
+  console.log("[DEBUG_TRACE] PHASE 2 COMPLETE, entering gateway phase");
   logs.push("[PHASE 3] Gateway Active: Selecting Optimal Provider...");
   const gateway = SystemRegistry.getModule<CortexModule>('provider-gateway');
+  console.log("[DEBUG_TRACE] gateway module found:", !!gateway);
   
   if (!gateway) {
     logs.push("[PHASE 3] CRITICAL FAILURE: Provider Gateway module not found.");
@@ -525,6 +527,8 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
       logs.push(`[CORTEX] Resuming task: Bypassing Gateway query. Tools to run: ${JSON.stringify(toolsToCall)}`);
       skipGatewayForResume = false; // Reset for subsequent iterations
     } else {
+      console.log("[DEBUG_TRACE] calling gateway.run now");
+      const gwT0 = Date.now();
       loopContext = await gateway.run(activeIterationInput, state, { 
         ...loopContext, 
         config: loopSettings, 
@@ -534,6 +538,7 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
           extractor.feed(chunk);
         }
       });
+      console.log(`[DEBUG_TRACE] gateway.run returned after ${((Date.now() - gwT0) / 1000).toFixed(1)}s, rawResult length=${(loopContext.rawResult || "").length}`);
     }
     logs.push(`[CORTEX_LOOP] Iteration ${iteration} Gateway routed via: ${loopContext.activeProvider || 'unknown'}`);
 

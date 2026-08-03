@@ -1,6 +1,27 @@
 import { ProviderModule, ModuleType } from '@shared/include/types';
 import { buildChatMessages, normalizeToolCallsToOpenAI, normalizeToolsForProvider } from '../../core/openaiTools';
 import { toSingleString } from '@/core/kernel/configNormalizer';
+import { AIService } from '../../core/kernel/ai.js';
+
+async function fetchOpenRouterModels(config: any): Promise<any[]> {
+  const apiKey = config.apiKey || '';
+
+  let data: any;
+  if (typeof window === 'undefined') {
+    const aiService = AIService.getInstance();
+    data = await aiService.listModels('openrouter', apiKey);
+  } else {
+    const url = apiKey ? `/api/ai/models?provider=openrouter&apiKey=${encodeURIComponent(apiKey)}` : '/api/ai/models?provider=openrouter';
+    const resp = await fetch(url);
+    if (!resp.ok) return [];
+    data = await resp.json();
+  }
+
+  return (data.models || []).map((m: any) => ({
+    label: m.displayName || m.name.split('/').pop(),
+    value: m.name.replace('models/', '')
+  }));
+}
 
 export const OpenRouter: ProviderModule = {
   metadata: {
@@ -27,15 +48,7 @@ export const OpenRouter: ProviderModule = {
   getDynamicOptions: async (fieldName: string, config: any) => {
     if (fieldName === 'model') {
       try {
-        const apiKey = config.apiKey || '';
-        const url = apiKey ? `/api/ai/models?provider=openrouter&apiKey=${apiKey}` : '/api/ai/models?provider=openrouter';
-        const resp = await fetch(url);
-        if (!resp.ok) return [];
-        const data = await resp.json();
-        return (data.models || []).map((m: any) => ({ 
-          label: m.displayName || m.name.split('/').pop(), 
-          value: m.name.replace('models/', '') 
-        }));
+        return await fetchOpenRouterModels(config);
       } catch (e) {
         console.error("[OPENROUTER] Model listing failed:", e);
         return [];
@@ -46,15 +59,7 @@ export const OpenRouter: ProviderModule = {
   getModels: async (config: any) => {
     // Keep for backward compatibility with some core loops if needed
     try {
-      const apiKey = config.apiKey || '';
-      const url = apiKey ? `/api/ai/models?provider=openrouter&apiKey=${apiKey}` : '/api/ai/models?provider=openrouter';
-      const resp = await fetch(url);
-      if (!resp.ok) return [];
-      const data = await resp.json();
-      return (data.models || []).map((m: any) => ({ 
-        label: m.displayName || m.name.split('/').pop(), 
-        value: m.name.replace('models/', '') 
-      }));
+      return await fetchOpenRouterModels(config);
     } catch (e) {
       console.error("[OPENROUTER] Model listing failed:", e);
       return [];
@@ -119,11 +124,10 @@ export const OpenRouter: ProviderModule = {
       payloadBody.tool_choice = 'auto';
     }
 
-    const response = await fetch('/api/ai/proxy', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      signal: context.signal,
-      body: JSON.stringify({
+    let data: any;
+    if (typeof window === 'undefined') {
+      const aiService = AIService.getInstance();
+      data = await aiService.proxy({
         url: 'https://openrouter.ai/api/v1/chat/completions',
         method: 'POST',
         headers: {
@@ -132,15 +136,32 @@ export const OpenRouter: ProviderModule = {
           'X-Title': 'Yuihime Agentic'
         },
         body: payloadBody
-      })
-    });
+      });
+    } else {
+      const response = await fetch('/api/ai/proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: context.signal,
+        body: JSON.stringify({
+          url: 'https://openrouter.ai/api/v1/chat/completions',
+          method: 'POST',
+          headers: {
+            'Authorization': apiKey ? `Bearer ${apiKey}` : 'ENV_OPENROUTER_KEY',
+            'HTTP-Referer': 'https://aistudio.build',
+            'X-Title': 'Yuihime Agentic'
+          },
+          body: payloadBody
+        })
+      });
 
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      throw new Error(err.error?.message || `OpenRouter Proxy Error ${response.status}`);
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error?.message || `OpenRouter Proxy Error ${response.status}`);
+      }
+
+      data = await response.json();
     }
 
-    const data = await response.json();
     const message = data.choices?.[0]?.message || {};
     if (Array.isArray(message.tool_calls) && message.tool_calls.length > 0) {
       return JSON.stringify({ tool_calls: normalizeToolCallsToOpenAI(message, 'openrouter') });
