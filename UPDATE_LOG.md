@@ -1,6 +1,33 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.231] - 2026-08-03
+### Feat: Addon/Skill system: SKILL.md support, git-repo install, uninstall, resilient discovery, tool advertising
+- discoverAddons(): main.cjs/index.cjs entry points, honors config.toml entry_point/runtime, regex fallback for malformed TOML so addons are never hidden.
+- Claude Skills support (SKILL.md frontmatter + scripts/) with execute API: instructions card + run_script (python3/node/bash, path-safe, 60s).
+- POST /api/addons/install accepts repoUrl/skill (git clone + auto-detect SKILL.md/config.toml); DELETE /api/addons/:id uninstalls.
+- DynamicLoader.syncAddons() registers addon-* tools and regenerates available_tools.json with startup retry/backoff so the agent sees them.
+- Live verified: 17 addons (16 native + tensorart-generate skill), list_tools.py runs, uninstall works; README Addon System section updated.
+
+
+## [4.230] - 2026-08-03
+### Fix: Addon sync resilience: retry startup sync + TOML fallback + uninstall route (live verified)
+- DynamicLoader.syncAddons(): startup sync now retries with exponential backoff (up to 15 attempts) so addon tools are still registered when the sync fires before the HTTP server listens (was: 'Sync failed fetch failed', addon tools never advertised).
+- discoverAddons(): malformed config.toml (e.g. JSON-style parameters = {...}) no longer hides an addon — falls back to regex extraction of id/name/description/version/runtime/entry_point.
+- Live verified: /api/addons returns 17 addons; available_tools.json lists 17 addon-* tools consumed by PromptManager's prompt-manager:available_tools; DELETE /api/addons/:id uninstalls; tensorart-generate SKILL.md instructions + scripts/list_tools.py run_script work.
+
+
+## [4.229] - 2026-08-03
+### Feat: Addon/Skill system: discover .cjs addons + Claude Skills (SKILL.md), git-repo install, uninstall
+- discoverAddons(): now matches main.cjs/index.cjs, honors entry_point/runtime declared in config.toml, and falls back to regex scanning when a config.toml is malformed so an addon is never hidden.
+- New SKILL.md discovery: parses YAML frontmatter (name/description/version); skill addons are surfaced as runtime=skill with entryPoint=SKILL.md.
+- POST /api/addons/execute/:id for skills: default action returns the SKILL.md instruction card; run_script executes scripts/<name> (python3/node/bash, cwd=safe-guarded, 60s timeout).
+- POST /api/addons/install now accepts repoUrl (+ optional skill folder/id): git-clones and auto-detects SKILL.md or config.toml folders (incl. skills/<skill> sub-paths) — verified live with Tensor-Art/tensorart-skills.
+- New DELETE /api/addons/:id uninstall endpoint removes an addon/skill directory.
+- DynamicLoader.syncAddons() regenerates ~/.yuihime/data/available_tools.json so addon/skill tools are advertised to the agent prompt builder.
+- Verified live: /api/addons returns 17 addons (16 main.cjs/main.py + tensorart-generate skill); run_script list_tools.py executes; uninstall removes dir.
+
+
 ## [4.228] - 2026-08-03
 ### Feat: Foto SOP: NSFW accessories + bondage sections; sync source foto.md to runtime version
 - yui_nsfw_prompt.md (user_data): added mandatory NSFW Accessories section (collar+leash, cuffs, body chain, lingerie, chastity, jewelry) and Bondage section (shibari rope, bed restraints, overhead bind, kneeling+bound, gag) with explicit insert positions and a combined nude+accessories+bondage template.

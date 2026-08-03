@@ -44,6 +44,26 @@ async function saveWorkflow(workflow: any) {
 // --- Addon System ---
 const apiCustomSystemRoot = resolveSystemRoot();
 const addonsDir = process.env.YUIHIME_ADDONS_PATH || path.join(apiCustomSystemRoot, "addons");
+
+// Minimal YAML frontmatter parser for SKILL.md files (Claude Skills format,
+// e.g. https://github.com/Tensor-Art/tensorart-skills). Only simple
+// `key: value` scalar entries are needed for name/description/version.
+function parseSkillFrontmatter(content: string): any {
+  const match = content.match(/^---\s*\n([\s\S]*?)\n---/);
+  if (!match) return {};
+  const meta: any = {};
+  for (const line of match[1].split("\n")) {
+    const m = line.match(/^([a-zA-Z0-9_-]+)\s*:\s*(.*)$/);
+    if (!m) continue;
+    let val = m[2].trim();
+    if (val.length >= 2 && ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'")))) {
+      val = val.slice(1, -1);
+    }
+    meta[m[1]] = val;
+  }
+  return meta;
+}
+
 async function discoverAddons() {
   try {
     if (!existsSync(addonsDir)) {
@@ -61,12 +81,34 @@ async function discoverAddons() {
         const tomlPath = path.join(addonPath, "config.toml");
         const jsonPath = path.join(addonPath, "skill.json");
         const manifestPath = path.join(addonPath, "manifest.json");
+        const skillMdPath = path.join(addonPath, "SKILL.md");
 
         if (existsSync(tomlPath)) {
           try {
             const content = await fs.readFile(tomlPath, "utf-8");
             meta = toml.parse(content);
-          } catch (e) {}
+          } catch (e) {
+            // Malformed TOML must never hide an addon. Fall back to a best-effort
+            // regex scan of the key scalar fields (id/name/description/version/
+            // runtime/entry_point) and proceed with filename heuristics below.
+            try {
+              const content = await fs.readFile(tomlPath, "utf-8");
+              const grab = (k: string) => {
+                const m = content.match(new RegExp(`^\\s*${k}\\s*=\\s*["']([^"']*)["']`, "m"));
+                return m ? m[1] : "";
+              };
+              meta = {
+                id: grab("id") || dir.name,
+                name: grab("name") || dir.name,
+                description: grab("description") || "",
+                version: grab("version") || "1.0.0",
+                runtime: grab("runtime") || "",
+                entry_point: grab("entry_point") || ""
+              };
+            } catch (e2) {
+              meta = { id: dir.name, name: dir.name, description: "", version: "1.0.0" };
+            }
+          }
         } else if (existsSync(jsonPath)) {
           try {
             const content = await fs.readFile(jsonPath, "utf-8");
@@ -89,27 +131,62 @@ async function discoverAddons() {
               inputSchema: rawMeta.schema || {}
             };
           } catch (e) {}
+        } else if (existsSync(skillMdPath)) {
+          try {
+            const content = await fs.readFile(skillMdPath, "utf-8");
+            const fm = parseSkillFrontmatter(content);
+            meta = {
+              name: fm.name || dir.name,
+              description: fm.description || `Skill: ${dir.name}`,
+              version: fm.version || "1.0.0",
+              skill: true
+            };
+          } catch (e) {}
         }
 
         if (meta) {
+          // SKILL.md skills (Claude Skills / TensorArt style) carry no single
+          // entry point; they expose a `scripts/` directory driven by the LLM.
+          if (meta.skill === true) {
+            addons.push({
+              ...meta,
+              id: dir.name,
+              path: addonPath,
+              entryPoint: "SKILL.md",
+              runtime: "skill"
+            });
+            continue;
+          }
+
           const files = await fs.readdir(addonPath);
           const pyEntry = files.find(f => f === "main.py");
-          const jsEntry = files.find(f => f === "main.js" || f === "index.js");
+          const jsEntry = files.find(f => f === "main.js" || f === "index.js" || f === "main.cjs" || f === "index.cjs");
           const shEntry = files.find(f => f === "main.sh" || f === "run.sh");
 
-          if (pyEntry) entryPoint = pyEntry;
-          else if (jsEntry) entryPoint = jsEntry;
-          else if (shEntry) entryPoint = shEntry;
-          else {
-            const fallback = files.find(f => f.endsWith(".py") || f.endsWith(".js") || f.endsWith(".sh"));
-            if (fallback) entryPoint = fallback;
+          // Prefer the entry point explicitly declared in config.toml, then fall
+          // back to conventional file-name detection (main.js/main.cjs/main.py/main.sh).
+          if (typeof meta.entry_point === "string" && meta.entry_point.trim().length > 0) {
+            const declared = meta.entry_point.trim();
+            if (files.includes(declared)) {
+              entryPoint = declared;
+            }
+          }
+          if (!entryPoint) {
+            if (pyEntry) entryPoint = pyEntry;
+            else if (jsEntry) entryPoint = jsEntry;
+            else if (shEntry) entryPoint = shEntry;
+            else {
+              const fallback = files.find(f => f.endsWith(".py") || f.endsWith(".js") || f.endsWith(".cjs") || f.endsWith(".sh"));
+              if (fallback) entryPoint = fallback;
+            }
           }
 
           if (entryPoint) {
             try {
-              const matchedRuntime = entryPoint.endsWith(".py") ? "python" :
-                                     (entryPoint.endsWith(".sh") ? "bash" : 
-                                     (entryPoint.endsWith(".js") || entryPoint.endsWith(".cjs") ? "node" : "bash"));
+              const matchedRuntime = typeof meta.runtime === "string" && meta.runtime.trim().length > 0
+                                     ? meta.runtime.trim()
+                                     : (entryPoint.endsWith(".py") ? "python" :
+                                        (entryPoint.endsWith(".sh") ? "bash" : "node"));
 
               addons.push({ 
                 ...meta, 
@@ -843,7 +920,72 @@ export function registerSystemRoutes(app: express.Express, db: any) {
   });
 
   app.post("/api/addons/install", async (req, res) => {
-    const { id, config, code, runtime } = req.body;
+    const { id, config, code, runtime, repoUrl, skill } = req.body;
+
+    // --- Skill install from a git repo (e.g. `npx skills add <repo> --skill <name>`) ---
+    // Accepts a GitHub (or any git) URL plus an optional `skill` folder name. The
+    // matching folder is cloned into ~/.yuihime/addons/<id> and becomes available
+    // after a DynamicLoader resync. Supports both SKILL.md (scripts/) and classic
+    // config.toml + main.* addon layouts.
+    if (repoUrl) {
+      try {
+        const targetId = id || skill || "skill";
+        if (!/^[a-zA-Z0-9_\-]+$/.test(targetId)) {
+          return res.status(400).json({ error: "Invalid addon id." });
+        }
+        const tmpClone = path.join(apiCustomSystemRoot, "data", ".addon_install_tmp");
+        await fs.rm(tmpClone, { recursive: true, force: true });
+        await fs.mkdir(tmpClone, { recursive: true });
+
+        await execPromise(`git clone --depth 1 "${String(repoUrl)}" "${tmpClone}"`, { timeout: 120000 });
+
+        // Resolve the source folder: `skill` sub-path, `skills/<skill>`, or repo root.
+        let sourceDir: string | null = null;
+        const candidates = [
+          skill ? path.join(tmpClone, "skills", skill) : null,
+          skill ? path.join(tmpClone, skill) : null,
+          tmpClone
+        ].filter(Boolean) as string[];
+
+        for (const cand of candidates) {
+          if (existsSync(cand) && existsSync(path.join(cand, "SKILL.md"))) {
+            sourceDir = cand;
+            break;
+          }
+        }
+        if (!sourceDir) {
+          // Fallback: any folder with SKILL.md / config.toml directly under repo root.
+          const entries = await fs.readdir(tmpClone, { withFileTypes: true });
+          for (const e of entries) {
+            if (e.isDirectory()) {
+              const cand = path.join(tmpClone, e.name);
+              if (existsSync(path.join(cand, "SKILL.md")) || existsSync(path.join(cand, "config.toml"))) {
+                sourceDir = cand;
+                break;
+              }
+            }
+          }
+        }
+        if (!sourceDir) {
+          return res.status(404).json({ error: "No SKILL.md or config.toml found in the repository." });
+        }
+
+        const destPath = path.join(addonsDir, targetId);
+        await fs.rm(destPath, { recursive: true, force: true });
+        await fs.cp(sourceDir, destPath, { recursive: true });
+        await fs.rm(tmpClone, { recursive: true, force: true });
+
+        const installed = (await discoverAddons()).find(a => a.id === targetId);
+        return res.json({
+          success: true,
+          message: `Skill ${targetId} installed from repository.`,
+          addon: installed || { id: targetId }
+        });
+      } catch (error: any) {
+        return res.status(500).json({ error: error.message, stderr: error.stderr });
+      }
+    }
+
     if (!id || !config || !code || !runtime) {
       return res.status(400).json({ error: "Missing required fields: id, config, code, runtime" });
     }
@@ -863,6 +1005,26 @@ export function registerSystemRoutes(app: express.Express, db: any) {
     }
   });
 
+  // Uninstall an addon or skill (removes its directory under the addons root).
+  app.delete("/api/addons/:id", async (req, res) => {
+    const { id } = req.params;
+    if (!/^[a-zA-Z0-9_\-]+$/.test(id)) {
+      return res.status(400).json({ error: "Invalid addon id." });
+    }
+
+    const addonPath = path.join(addonsDir, id);
+    if (!existsSync(addonPath)) {
+      return res.status(404).json({ error: `Addon not found: ${id}` });
+    }
+
+    try {
+      await fs.rm(addonPath, { recursive: true, force: true });
+      res.json({ success: true, message: `Addon ${id} uninstalled.` });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   app.post("/api/addons/execute/:id", async (req, res) => {
     const { id } = req.params;
     const { args } = req.body;
@@ -872,6 +1034,53 @@ export function registerSystemRoutes(app: express.Express, db: any) {
     if (!addon) return res.status(404).json({ error: "Addon not found" });
 
     try {
+      // SKILL.md skills: expose the guide card to the LLM, or run one of the
+      // skill's scripts (Claude Skills / TensorArt format, e.g. scripts/xxx.py).
+      if (addon.runtime === 'skill') {
+        const skillMdPath = path.join(addon.path, "SKILL.md");
+        if (!existsSync(skillMdPath)) {
+          return res.status(500).json({ error: "SKILL.md not found in skill directory." });
+        }
+
+        const action = args && args.action ? String(args.action) : "instructions";
+
+        if (action === 'run_script') {
+          const script = args && args.script ? String(args.script) : "";
+          if (!script) {
+            return res.status(400).json({ error: "Missing 'script' parameter for run_script action." });
+          }
+          // Restrict execution to the skill's own scripts/ directory.
+          const normalized = path.normalize(script);
+          if (normalized.includes("..")) {
+            return res.status(400).json({ error: "Invalid script path (parent traversal not allowed)." });
+          }
+          const safeScript = normalized.startsWith("scripts/") ? normalized : `scripts/${normalized}`;
+          const entry = path.join(addon.path, safeScript);
+          if (!entry.startsWith(addon.path)) {
+            return res.status(400).json({ error: "Invalid script path." });
+          }
+          if (!existsSync(entry)) {
+            return res.status(404).json({ error: `Script not found: ${script}` });
+          }
+
+          const scriptArgs = Array.isArray(args.args) ? args.args.map(String) : [];
+          const quoted = scriptArgs.map(a => `'${a.replace(/'/g, "'\\''")}'`).join(" ");
+          const runner = safeScript.endsWith(".py") ? "python3"
+                       : safeScript.endsWith(".js") || safeScript.endsWith(".cjs") ? "node"
+                       : safeScript.endsWith(".sh") ? "bash" : "python3";
+          const cmd = `cd "${addon.path}" && ${runner} "${entry}" ${quoted}`.trim();
+
+          console.log(`[ADDON-SYSTEM] Executing skill script: ${cmd}`);
+          const { stdout, stderr } = await execPromise(cmd, { timeout: 60000 });
+          return res.json({ stdout, stderr, success: true, skill: id, script: safeScript });
+        }
+
+        // Default: return the SKILL.md instruction card so the LLM can follow
+        // the documented workflow and call run_script for each step.
+        const content = await fs.readFile(skillMdPath, "utf-8");
+        return res.json({ success: true, skill: id, content, dir: addon.path });
+      }
+
       const entry = path.join(addon.path, addon.entryPoint);
       let cmd = "";
 

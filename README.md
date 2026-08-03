@@ -1,4 +1,4 @@
-# 👑 Yuihime AI v4.228 - Autonomous VTuber Engine (Airi OS Core v2.39)
+# 👑 Yuihime AI v4.231 - Autonomous VTuber Engine (Airi OS Core v2.39)
 
 **Yuihime** adalah engine agen AI otonom untuk VTuber dengan arsitektur *daemon + web UI*.cognitive loop, memory jangka panjang (SQLite), eksekusi tool modular, dan antarmuka web real-time untuk kontrol kepribadian.
 
@@ -100,8 +100,14 @@ Semua module (driver, tool, addon) **otomatis terdaftar** via `RegistryInitializ
 - Spek tool pakai skema JSON OpenAI (`parameters`)
 
 ### Addon System
-- Folder `addons/` untuk plugin kustom
+- Folder `addons/` (default `~/.yuihime/addons`) untuk plugin kustom
 - Support format bawaan Yuihime dan Universal Skill (`skill.json` / `manifest.json`)
+- Entry point dideteksi otomatis: `main.js` / `main.cjs` / `index.js` / `index.cjs` / `main.py` / `main.sh` — atau dideklarasikan via `entry_point` + `runtime` di `config.toml`
+- Support **Claude Skills** (`SKILL.md` + `scripts/`, format seperti `Tensor-Art/tensorart-skills`): frontmatter YAML dibaca, eksekusi via API
+- Instal dari repo git: `POST /api/addons/install` dengan `{ repoUrl, skill }` (auto-clone + deteksi folder SKILL.md/config.toml)
+- Uninstall: `DELETE /api/addons/:id`
+- Eksekusi: `POST /api/addons/execute/:id` (addon biasa = run entry point; skill = `action:"instructions"` atau `action:"run_script"`)
+- Tool addon otomatis didaftarkan ke `available_tools.json` dan terlihat oleh agent via prompt builder
 
 ---
 
