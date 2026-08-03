@@ -7,6 +7,7 @@ import { StorageService } from '@shared/drivers/storage';
 import { safeLocalStorage } from '@shared/core/safeStorage';
 import { CortexApi } from '../services/cortexApi';
 import type { AppState } from './state';
+import { genId } from '@shared/core/idGen';
 
 const isCancellationPhrase = (text: string): boolean => {
   const normalized = text.toLowerCase().trim();
@@ -211,7 +212,7 @@ export function useAppHandlers(
     }, 100);
 
     s.setStreamEvents((prev: any[]) => [{
-      id: Math.random().toString(36).substr(2, 9),
+      id: genId(9),
       type,
       user: type === 'DONATION' ? 'SuperFan99' : 'NeonRaider',
       timestamp: Date.now()
@@ -553,7 +554,7 @@ export function useAppHandlers(
     }
     s.setLastInteractionTime(Date.now());
     const startTime = Date.now();
-    const currentStreamId = `stream_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const currentStreamId = `stream_${Date.now()}_${genId(9)}`;
     const controller = new AbortController();
     s.activeThinkControllerRef.current = controller;
 
@@ -701,7 +702,7 @@ export function useAppHandlers(
           linkedAccounts: Array.from(new Set([...(existingId.linkedAccounts || []), ...(result.viewerProfileUpdate?.linkedAccounts || []), ...updates])),
           lastMet: Date.now()
         } : {
-          id: Math.random().toString(36).substr(2, 9),
+          id: genId(9),
           ownerId: s.user?.uid || 'anon',
           perceivedName: result.perceivedNameUpdate || s.perceivedName || 'chat',
           source: 'live_stream',

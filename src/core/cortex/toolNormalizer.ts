@@ -4,6 +4,7 @@
  */
 
 import { extractJsonObject } from './jsonExtract';
+import { genId } from '@shared/core/idGen';
 
 export function normalizeToolCall(tc: any): any {
   if (!tc) return null;
@@ -22,7 +23,7 @@ export function normalizeToolCall(tc: any): any {
   }
   // Keep the canonical OpenAI-native `id` (generate one when missing) so the
   // cortex can propagate `role: "tool"` result messages with a stable `tool_call_id`.
-  const id = tc.id || tc.tool_call_id || `call_${Math.random().toString(36).slice(2, 10)}`;
+  const id = tc.id || tc.tool_call_id || `call_${genId(10)}`;
 
   // Clean / normalize tool names to actual registered IDs
   const toolAliases: { [key: string]: string } = {

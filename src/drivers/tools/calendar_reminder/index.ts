@@ -1,6 +1,7 @@
 import { ToolModule } from '@shared/include/types';
 import { getDb } from '@/core/database.js';
 import manifest from './manifest.json';
+import { genId } from '@shared/core/idGen';
 
 export const CalendarReminderTool: ToolModule = {
   metadata: manifest as any,
@@ -37,7 +38,7 @@ export const CalendarReminderTool: ToolModule = {
           nextRunTime = parsed;
         }
 
-        const id = 'rem_' + Math.random().toString(36).substr(2, 9);
+        const id = 'rem_' + genId(9);
         const contextId = context?.contextId || 'web_default';
         const chatType = context?.chatType || 'web';
         const senderName = context?.perceivedName || 'user';

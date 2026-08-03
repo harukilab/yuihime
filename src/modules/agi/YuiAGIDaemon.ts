@@ -21,13 +21,13 @@ export class YuiAGIDaemon {
   private static instance: YuiAGIDaemon;
   private state: AGIDaemonState = {
     totalInferences: 0,
-    totalEpochs: 142,
-    lossValue: 0.145,
-    accuracy: 0.942,
+    totalEpochs: 0,
+    lossValue: 0,
+    accuracy: 0,
     lastSynapseUpdate: Date.now(),
-    lastCognitiveEntropy: 20,
+    lastCognitiveEntropy: 0,
     lastCognitiveMode: "Stable Coherent Reflection",
-    lastHallucinationIndex: 12,
+    lastHallucinationIndex: 0,
     lastIntegrityStatus: "CORTEX_HEALTHY_COHERENCE"
   };
 

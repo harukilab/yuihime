@@ -10,6 +10,7 @@
  */
 
 import { getDb } from './database.js';
+import { genId } from '@shared/core/idGen';
 
 interface ReviewRow {
   id: string;
@@ -123,7 +124,7 @@ export function resolveReviewByMessage(messageId: string | number, reward: numbe
 export function createToolFailureReview(contextId: string, toolName: string, error: string): boolean {
   try {
     const db = getDb();
-    const id = `toolfail_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const id = `toolfail_${Date.now()}_${genId(7)}`;
     const lesson = `[EN] Tool "${toolName}" failed (${String(error || 'unknown').slice(0, 120)}). Be honest about it instead of guessing; retry once or offer web search. | [ID] Tool "${toolName}" gagal (${String(error || 'unknown').slice(0, 120)}). Akui dengan jujur, jangan menebak; coba sekali lagi atau tawarkan pencarian. | [JP] ツール「${toolName}」が失敗しました（${String(error || 'unknown').slice(0, 120)}）。推測せず正直に伝え、一度再試行するか検索を提案してください。`;
     stmts(db).insert.run(id, 'tool-call', contextId || 'web_default', `Tool ${toolName} failed`, 'resolved', lesson, 0, Date.now(), Date.now());
     return true;

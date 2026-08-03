@@ -1,4 +1,4 @@
-import { Soul } from '../soul';
+import { Soul } from '@shared/core/soul';
 import { Cortex } from '../cortex';
 import { NeuralCircuit, NeuralCircuitConfig } from './NeuralCircuitFramework';
 import { StorageService } from '@shared/drivers/storage';
@@ -63,8 +63,8 @@ export class MoodStabilizerCircuit extends NeuralCircuit {
       // Update AGI Telemetry to reward accuracy
       const telemetry = await StorageService.getCustom('yuiagi_telemetry');
       if (telemetry) {
-        telemetry.accuracy = Math.min(0.998, (telemetry.accuracy || 0.94) + 0.0002);
-        telemetry.lossValue = Math.max(0.012, (telemetry.lossValue || 0.14) - 0.0001);
+        telemetry.accuracy = Math.min(0.998, (telemetry.accuracy || 0) + 0.0002);
+        telemetry.lossValue = Math.max(0.012, (telemetry.lossValue || 0) - 0.0001);
         await StorageService.saveCustom('yuiagi_telemetry', telemetry);
       }
 
@@ -104,8 +104,8 @@ export class MemoryRefinerCircuit extends NeuralCircuit {
       // Update AGI Telemetry representing a compression synaptic update
       const telemetry = await StorageService.getCustom('yuiagi_telemetry');
       if (telemetry) {
-        telemetry.totalEpochs = (telemetry.totalEpochs || 142) + 1;
-        telemetry.lossValue = Math.max(0.012, (telemetry.lossValue || 0.14) - 0.0008);
+        telemetry.totalEpochs = (telemetry.totalEpochs || 0) + 1;
+        telemetry.lossValue = Math.max(0.012, (telemetry.lossValue || 0) - 0.0008);
         telemetry.lastSynapseUpdate = Date.now();
         await StorageService.saveCustom('yuiagi_telemetry', telemetry);
         this.log(`[SYNAPSE_CONSOLIDATION] Kompresi batin berhasil. Epochs dinaikkan ke ${telemetry.totalEpochs}. Loss dikurangi ke ${telemetry.lossValue.toFixed(4)}.`);

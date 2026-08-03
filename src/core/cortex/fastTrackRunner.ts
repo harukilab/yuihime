@@ -4,7 +4,7 @@
  */
 
 import { AgentState } from '@shared/include/types';
-import { Soul } from '../soul';
+import { Soul } from '@shared/core/soul';
 import { getDb } from '../database.js';
 import { Worker } from 'worker_threads';
 

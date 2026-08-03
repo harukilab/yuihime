@@ -4,18 +4,11 @@ import { SystemRegistry } from '@shared/core/registry';
 import { StorageService } from '@shared/drivers/storage';
 import { getDb } from '../core/database.js';
 import { formatUtcIso, formatLocalFullEn, getTzOffsetHours, tzLabel } from '../core/utils/dualClock.js';
+import { getAvailableToolsFile } from '../core/toolRegistryFile.js';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-
-function resolveHomePath(inputPath: string): string {
-  if (!inputPath) return '';
-  if (inputPath === '~') return os.homedir();
-  if (inputPath.startsWith('~/') || inputPath.startsWith('~\\')) {
-    return path.join(os.homedir(), inputPath.slice(2));
-  }
-  return inputPath;
-}
+import { expandHomePath } from '../core/systemPaths.js';
 
 let characterData = "";
 let loreData = "";
@@ -38,7 +31,7 @@ async function ensureInitialized() {
   if (initialized) return;
     if (typeof window === 'undefined') {
       try {
-        const rootEnvStr = resolveHomePath(process.env.YUIHIME_SYSTEM_ROOT || process.env.YUIHIME_ROOT || '~/.yuihime');
+        const rootEnvStr = expandHomePath(process.env.YUIHIME_SYSTEM_ROOT || process.env.YUIHIME_ROOT || '~/.yuihime');
         const customSystemRoot = path.isAbsolute(rootEnvStr) ? rootEnvStr : path.join(os.homedir(), rootEnvStr);
         const agentDir = process.env.YUIHIME_AGENT_PATH || path.join(customSystemRoot, 'agent');
 
@@ -357,7 +350,7 @@ export const PromptManagerModule: CortexModule = {
     let tools: any[] = [];
     if (typeof window === 'undefined') {
       try {
-        const toolsPath = path.join(os.homedir(), '.yuihime', 'data', 'available_tools.json');
+        const toolsPath = getAvailableToolsFile();
         if (fs.existsSync(toolsPath)) {
           const fileData = fs.readFileSync(toolsPath, 'utf8');
           tools = JSON.parse(fileData).map((m: any) => ({ metadata: m }));
@@ -488,7 +481,7 @@ export const PromptManagerModule: CortexModule = {
 
     if (typeof window === 'undefined') {
       try {
-        const rootEnvStr = resolveHomePath(process.env.YUIHIME_SYSTEM_ROOT || process.env.YUIHIME_ROOT || '~/.yuihime');
+        const rootEnvStr = expandHomePath(process.env.YUIHIME_SYSTEM_ROOT || process.env.YUIHIME_ROOT || '~/.yuihime');
         const customSystemRoot = path.isAbsolute(rootEnvStr) ? rootEnvStr : path.join(os.homedir(), rootEnvStr);
         const agentDir = process.env.YUIHIME_AGENT_PATH || path.join(customSystemRoot, 'agent');
 
@@ -736,8 +729,8 @@ Before responding or calling any tools, you MUST check the folder \`user_data/so
 - **Current Time (UTC)**: ${formatUtcIso()}
 - **Current Time (Local)**: ${formatLocalFullEn(getTzOffsetHours(context?.config))} (${tzLabel(getTzOffsetHours(context?.config))})
 - **Working Directory**: ${process.cwd()}
-- **Workspace Root**: ${resolveHomePath(process.env.YUIHIME_SYSTEM_ROOT || process.env.YUIHIME_ROOT || '~/.yuihime')}
-- **User Data Sandbox**: ${path.join(resolveHomePath(process.env.YUIHIME_SYSTEM_ROOT || process.env.YUIHIME_ROOT || '~/.yuihime'), 'user_data')}
+- **Workspace Root**: ${expandHomePath(process.env.YUIHIME_SYSTEM_ROOT || process.env.YUIHIME_ROOT || '~/.yuihime')}
+- **User Data Sandbox**: ${path.join(expandHomePath(process.env.YUIHIME_SYSTEM_ROOT || process.env.YUIHIME_ROOT || '~/.yuihime'), 'user_data')}
 </environment_details>
 
 **CRITICAL FORMAT RESOLUTION NOTICE:** The base system prompt below may reference XML tags like <animations>, <mood_impact>, or <tone>. Those XML instructions are PERMANENTLY DISABLED in this session's JSON mode. You MUST use the JSON keys 'animations' and 'mood_impact' only. Do NOT emit any XML tags in your response. Output EXACTLY ONE valid JSON object.

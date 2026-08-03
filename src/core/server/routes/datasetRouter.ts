@@ -8,6 +8,7 @@ import { existsSync, mkdirSync, writeFileSync } from "fs";
 import path from "path";
 import { apiCustomSystemRoot } from "../apiRouter.js";
 import AdmZip from "adm-zip";
+import { genId } from '@shared/core/idGen';
 
 export function registerDatasetRoutes(app: express.Express, db: any) {
   app.post("/api/cortex/import-dataset", express.json({ limit: "50mb" }), async (req, res) => {
@@ -32,7 +33,7 @@ export function registerDatasetRoutes(app: express.Express, db: any) {
           let count = 0;
           for (const item of dataList) {
             try {
-              const memoryId = `airi_train_${Math.random().toString(36).substr(2, 9)}_${Date.now()}`;
+              const memoryId = `airi_train_${genId(9)}_${Date.now()}`;
               const tags = JSON.stringify(["yuihime", "training", "dataset_import"]);
               const context = "Yuihime Training Dialogue Thread";
               

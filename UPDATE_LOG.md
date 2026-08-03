@@ -1,6 +1,18 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.238] - 2026-08-03
+### Cleanup: Remove fake AGI telemetry defaults; dedupe ProviderGateway registration; fix tool manifest mismatches
+- YuiAGIDaemon default state: totalEpochs 142/lossValue 0.145/accuracy 0.942/lastHallucinationIndex 12/lastCognitiveEntropy 20 diganti nilai netral (0) — telemetri tidak lagi berpura-pura sudah training; satu-satunya sumber adalah StorageService loadState.
+- StandardCircuits: fallback `|| 142` / `|| 0.14` / `|| 0.94` pada telemetri diganti 0 agar konsisten.
+- RegistryInitializer: registrasi ganda ProviderGatewayModule dihapus (di array allStaticModules saja, `SystemRegistry.register(ProviderGatewayModule)` manual di blok sub-agent dihapus).
+- code_interpreter manifest: klaim Python + executionSandbox (local/docker/lambda) dihapus — implementasi JS-only; hanya timeoutMs tersisa.
+- web_search manifest: field serperApiKey + searchProvider (google/bing/duckduckgo) yang tak pernah dibaca dihapus — implementasi Gemini Grounding via AIService.search; description dirapikan.
+- github_integration: githubToken (konfigurasi + env GITHUB_TOKEN) kini benar-benar dikirim sebagai Authorization header; defaultOwner dipakai saat repo argumen tanpa owner (owner/repo).
+- messaging_integration manifest: description + platform enum diperjelas — telegram real, discord/webhook disimulasikan (log only).
+- plugin-installer: type signature execute kini memuat repoUrl?/skill? sesuai manifest (route /api/addons/install sudah mendukung repo install mode).
+
+
 ## [4.237] - 2026-08-03
 ### Cleanup: Remove run_lua tool entirely (stub, source deleted); remove orphan log_viewer driver; consolidate available_tools.json writers into shared util; centralize JSON extraction via jsonExtract
 

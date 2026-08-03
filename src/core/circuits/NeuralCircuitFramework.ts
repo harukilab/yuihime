@@ -1,4 +1,4 @@
-import { Soul } from '../soul';
+import { Soul } from '@shared/core/soul';
 import { Cortex } from '../cortex';
 
 export interface NeuralCircuitConfig {

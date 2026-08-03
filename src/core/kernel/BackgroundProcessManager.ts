@@ -10,6 +10,7 @@
 
 import { spawn, ChildProcess } from 'child_process';
 import { EventEmitter } from 'events';
+import { genId } from '@shared/core/idGen';
 
 export type ProcessStatus = 'running' | 'stopped' | 'exited' | 'error';
 
@@ -65,7 +66,7 @@ export class BackgroundProcessManager extends EventEmitter {
    * the OS process starts asynchronously.
    */
   public spawn(opts: SpawnOptions): BackgroundProcess {
-    const id = `bgproc_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const id = `bgproc_${Date.now()}_${genId(7)}`;
     const maxLogLines = opts.maxLogLines ?? DEFAULT_MAX_LOG_LINES;
 
     const record: BackgroundProcess = {

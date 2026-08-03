@@ -3,20 +3,11 @@ import path from "path";
 import os from "os";
 import { readFileSync, readdirSync, existsSync } from "fs";
 import { fileURLToPath } from "url";
-import { resolveSystemRoot } from "../core/systemPaths.js";
-
-function resolveHomePath(inputPath: string): string {
-  if (!inputPath) return "";
-  if (inputPath === "~") return os.homedir();
-  if (inputPath.startsWith("~/") || inputPath.startsWith("~\\")) {
-    return path.join(os.homedir(), inputPath.slice(2));
-  }
-  return inputPath;
-}
+import { resolveSystemRoot, expandHomePath } from "../core/systemPaths.js";
 
 function getSopsDir(): string {
   const customSystemRoot = resolveSystemRoot();
-  const resolvedRoot = resolveHomePath(customSystemRoot);
+  const resolvedRoot = expandHomePath(customSystemRoot);
   return path.join(resolvedRoot, "user_data", "sops");
 }
 

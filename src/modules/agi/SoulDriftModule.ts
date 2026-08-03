@@ -1,5 +1,5 @@
 import { CortexModule, ModuleType } from '@shared/include/types';
-import { Soul } from '../../core/soul';
+import { Soul } from '@shared/core/soul';
 
 /**
  * MODULE: Sistem Pergeseran Karakter Batiniah (Dynamic Soul Personality Drift)

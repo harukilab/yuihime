@@ -6,7 +6,6 @@ import { ResearchAgent } from './agents/definitions/researchAgent.js';
 import { SubAgentRegistry } from './agents/SubAgentRegistry.js';
 import { ProviderGatewayModule } from '../modules/ProviderGatewayModule.js';
 import { Cortex } from './cortex.js';
-import { ContextCompressor } from '../modules/ContextCompressionModule.js';
 import { PluginManager } from './kernel/PluginManager.js';
 import { DynamicLoader } from './DynamicLoader.js';
 import { BackgroundToolDispatcher } from './kernel/BackgroundToolDispatcher.js';
@@ -509,7 +508,6 @@ export function initializeCortexModules(): Promise<void> {
        if (typeof window === 'undefined') {
          SubAgentRegistry.register(CreativeAgent);
          SubAgentRegistry.register(ResearchAgent);
-         SystemRegistry.register(ProviderGatewayModule);
          console.log(`[SUBAGENT] Registered ${SubAgentRegistry.getAll().length} sub-agents`);
        }
 

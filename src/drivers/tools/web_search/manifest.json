@@ -1,29 +1,13 @@
 {
   "id": "web_search",
   "name": "Web Search",
-  "description": "Search the internet for real-time information using multi-provider search grounding.",
+  "description": "Search the internet for real-time information via Gemini Grounding.",
   "version": "1.0.0",
   "type": "TOOL",
   "order": 10,
   "strict": true,
   "configSchema": {
     "fields": {
-      "serperApiKey": {
-        "type": "password",
-        "label": "Serper API Key",
-        "description": "Needed for real-time search extraction",
-        "default": ""
-      },
-      "searchProvider": {
-        "type": "select",
-        "label": "Search Provider",
-        "default": "google",
-        "options": [
-          { "label": "Google (Serper)", "value": "google" },
-          { "label": "Bing", "value": "bing" },
-          { "label": "DuckDuckGo", "value": "duckduckgo" }
-        ]
-      },
       "maxResults": {
         "type": "number",
         "label": "Max Results",

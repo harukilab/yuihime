@@ -29,7 +29,7 @@ import { normalizeToolCall } from './toolNormalizer';
 import { buildToolResultMessages } from '../openaiTools';
 import { StreamExtractor } from './streamExtractors';
 import { toSingleString } from '@/core/kernel/configNormalizer';
-import { repairJsonFormatWithLLM } from './jsonRepairer';
+import { repairJsonFormatWithLLM, stripCodeFences, isolateBraceBlock, liftNestedProperties } from './jsonRepairer';
 import { FastTrackRunner } from './fastTrackRunner';
 import { extractBestJsonObject, extractJsonObject } from './jsonExtract';
 import { makeToolCall } from './cortexThinkEngineUtils';
@@ -39,6 +39,7 @@ import { GlobalOutputDeduplicator } from '../kernel/GlobalOutputDeduplicator.js'
 import { DynamicToolSynthesizer } from './dynamicToolSynthesizer.js';
 import { LlmIoAuditor } from '../server/llmAuditor.js';
 import { BackgroundToolDispatcher } from '../kernel/BackgroundToolDispatcher.js';
+import { genId } from '@shared/core/idGen';
 
 /**
  * Build a canonical OpenAI-native tool call object enriched with backward
@@ -213,7 +214,7 @@ export async function executeCortexThink(
       const tags = StandardizedProcessor.extractTags(planRaw);
       const planData = JSON.parse(tags.plan || planRaw);
       currentPlan = {
-        id: Math.random().toString(36).substr(2, 9),
+        id: genId(9),
         originalGoal: input,
         tasks: planData.tasks.map((t: any, i: number) => ({ 
           id: t.id || `task_${i+1}`, 
@@ -567,11 +568,10 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
              try {
                 parsedPayload = JSON.parse(bestJson);
                 logs.push("[CORTEX_LOOP] Successfully parsed JSON_OBJECT using balanced-object extraction.");
-                if (parsedPayload && parsedPayload.properties && typeof parsedPayload.properties === 'object' && !Array.isArray(parsedPayload.properties)) {
-                   if (parsedPayload.properties.thought || parsedPayload.properties.tool_calls || parsedPayload.properties.tools_to_call || parsedPayload.properties.final_answer) {
-                      logs.push("[CORTEX_LOOP] Detected nested properties schema confusion, lifting properties values to root.");
-                      Object.assign(parsedPayload, parsedPayload.properties);
-                   }
+                if (liftNestedProperties(parsedPayload)) {
+
+                   logs.push("[CORTEX_LOOP] Detected nested properties schema confusion, lifting properties values to root.");
+
                 }
              } catch {}
           }
@@ -590,11 +590,10 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
            }
            if (!directParseOk) { const _rMatch = extractJsonObject(repaired); parsedPayload = _rMatch ? JSON.parse(_rMatch) : null; }
           logs.push("[CORTEX_LOOP] Successfully parsed JSON_OBJECT response layout.");
-          if (parsedPayload && parsedPayload.properties && typeof parsedPayload.properties === 'object' && !Array.isArray(parsedPayload.properties)) {
-             if (parsedPayload.properties.thought || parsedPayload.properties.tool_calls || parsedPayload.properties.tools_to_call || parsedPayload.properties.final_answer) {
-                logs.push("[CORTEX_LOOP] Detected nested properties schema confusion, lifting properties values to root.");
-                Object.assign(parsedPayload, parsedPayload.properties);
-             }
+          if (liftNestedProperties(parsedPayload)) {
+
+             logs.push("[CORTEX_LOOP] Detected nested properties schema confusion, lifting properties values to root.");
+
           }
        } catch (err: any) {
           parseError = err?.message || String(err);
@@ -603,29 +602,26 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
              try {
                 parsedPayload = JSON.parse(bestJson);
                 logs.push("[CORTEX_LOOP] Successfully parsed JSON_OBJECT using balanced-object extraction in catch fallback.");
-                if (parsedPayload && parsedPayload.properties && typeof parsedPayload.properties === 'object' && !Array.isArray(parsedPayload.properties)) {
-                   if (parsedPayload.properties.thought || parsedPayload.properties.tool_calls || parsedPayload.properties.tools_to_call || parsedPayload.properties.final_answer) {
-                      logs.push("[CORTEX_LOOP] Detected nested properties schema confusion, lifting properties values to root.");
-                      Object.assign(parsedPayload, parsedPayload.properties);
-                   }
+                if (liftNestedProperties(parsedPayload)) {
+
+                   logs.push("[CORTEX_LOOP] Detected nested properties schema confusion, lifting properties values to root.");
+
                 }
                 parseError = null;
              } catch {}
           }
-          if (!parsedPayload) {
-             const firstBrace = cleanJsonStr.indexOf('{');
-             const lastBrace = cleanJsonStr.lastIndexOf('}');
-             if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-                   try {
-                       const _bStr = cleanJsonStr.substring(firstBrace, lastBrace + 1);
-                       const _bMatch = extractJsonObject(_bStr);
+           if (!parsedPayload) {
+              const isolatedBrace = isolateBraceBlock(cleanJsonStr);
+              if (isolatedBrace !== cleanJsonStr) {
+                    try {
+                        const _bStr = isolatedBrace;
+                        const _bMatch = extractJsonObject(_bStr);
                        parsedPayload = _bMatch ? JSON.parse(_bMatch) : null;
                        logs.push("[CORTEX_LOOP] Successfully parsed JSON_OBJECT using bracket isolation.");
-                   if (parsedPayload && parsedPayload.properties && typeof parsedPayload.properties === 'object' && !Array.isArray(parsedPayload.properties)) {
-                      if (parsedPayload.properties.thought || parsedPayload.properties.tool_calls || parsedPayload.properties.tools_to_call || parsedPayload.properties.final_answer) {
-                         logs.push("[CORTEX_LOOP] Detected nested properties schema confusion, lifting properties values to root.");
-                         Object.assign(parsedPayload, parsedPayload.properties);
-                      }
+                   if (liftNestedProperties(parsedPayload)) {
+
+                      logs.push("[CORTEX_LOOP] Detected nested properties schema confusion, lifting properties values to root.");
+
                    }
                    parseError = null;
                 } catch (err2: any) {
@@ -867,7 +863,7 @@ if (extractedFromSpeech) {
       let rawToolsCall = parsedPayload.tool_calls || parsedPayload.tools_to_call || [];
       if (typeof rawToolsCall === 'string') {
         try {
-          const cleanedStr = rawToolsCall.replace(/```json/gi, '').replace(/```/gi, '').trim();
+          const cleanedStr = stripCodeFences(rawToolsCall);
           rawToolsCall = JSON.parse(cleanedStr);
         } catch (e) {
           console.warn('[CORTEX_LOOP] Failed parsing raw tools string as JSON:', e);
@@ -1457,7 +1453,7 @@ if (typeof parsedArgs === 'string') {
       // Integrate the tool calls and results sequentially into the existing memory context
       logs.push("[CORTEX] Sequential memory integration: Parsing tool output and integrating into the existing memory context...");
       try {
-        const toolCallMemoryId = `tool_call_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+        const toolCallMemoryId = `tool_call_${Date.now()}_${genId(5)}`;
         const parsedThought = parsedPayload ? (parsedPayload.thought || parsedPayload.thoughts || '') : '';
         const toolCallContent = `[TOOL_CALLS]: Yui thought: "${parsedThought}". Initiated tools: ${JSON.stringify(toolsToCall.map((tc: any) => ({ tool: tc.name || tc.tool, args: tc.args })))}${parsedPayload && parsedPayload.speech ? `\nSpeech: "${parsedPayload.speech}"` : ''}`;
         
@@ -1477,7 +1473,7 @@ if (typeof parsedArgs === 'string') {
         loopGeneratedMemories.push(toolCallMemory);
 
         for (const res of toolResults) {
-          const observationMemoryId = `tool_obs_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+          const observationMemoryId = `tool_obs_${Date.now()}_${genId(5)}`;
           const observationContent = res.success
             ? `Tool [${res.tool}] executed successfully. Result: ${typeof res.observation === 'object' ? JSON.stringify(res.observation) : String(res.observation)}`
             : `Tool [${res.tool}] failed. Error: ${res.error || 'Unknown error'}`;
@@ -1555,7 +1551,7 @@ Provide a concise validation summary. Start with [VALIDATION_SUCCESS] if everyth
 
               if (!validationOutput.startsWith("[VALIDATION_SUCCESS]")) {
                 // Store the validation result as a system memory so Yui has this verification context
-                const validationMemoryId = `tool_val_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+                const validationMemoryId = `tool_val_${Date.now()}_${genId(5)}`;
                 const validationMemory = {
                   id: validationMemoryId,
                   ownerId: 'local_user',

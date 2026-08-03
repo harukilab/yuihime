@@ -7,11 +7,12 @@ import { activeStreamClients, broadcastToWS, activeWSConnections } from "../apiR
 import { MultiChannelQueue } from "../../kernel/MultiChannelQueue.js";
 import { NeuralInterface } from "../../kernel/NeuralInterface.js";
 import { ChatSummaryEngine } from "../../kernel/ChatSummaryEngine.js";
-import { Soul } from "../../soul.js";
+import { Soul } from "@shared/core/soul";
 import { SettingsManager } from "@/core/kernel/settings";
 import { deduplicateAndMergeIdentities } from "../../database.js";
 import { DEFAULT_NEURAL_CORES } from "@shared/constants";
 import { LlmIoAuditor } from "../llmAuditor";
+import { genId } from '@shared/core/idGen';
 
 export function registerCortexRoutes(app: express.Express, db: any) {
   app.get("/api/stream/events", (req, res) => {
@@ -77,7 +78,7 @@ export function registerCortexRoutes(app: express.Express, db: any) {
     }
 
     const userMemory = {
-      id: "stream_usr_" + Math.random().toString(36).substr(2, 9),
+      id: "stream_usr_" + genId(9),
       type: "interaction",
       content: `[${sender}]: ${message}`,
       timestamp: Date.now()
@@ -174,7 +175,7 @@ export function registerCortexRoutes(app: express.Express, db: any) {
         return res.status(400).json({ error: "Input prompt cannot be empty" });
       }
 
-      const currentTaskId = req.body.taskId || `ctx_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+      const currentTaskId = req.body.taskId || `ctx_${Date.now()}_${genId(5)}`;
       const shouldStream = req.body.stream === true || req.query.stream === "true";
 
       const abortController = new AbortController();
@@ -447,7 +448,7 @@ export function registerCortexRoutes(app: express.Express, db: any) {
       );
 
       if (!receiverIdentity) {
-        const id = "api_usr_" + Math.random().toString(36).substr(2, 9);
+        const id = "api_usr_" + genId(9);
         db.prepare(`
           INSERT INTO identities (id, perceivedName, realName, habits, importantFacts, linkedAccounts, lastInteraction, ownerId, trust, affection, reputation)
           VALUES (?, ?, 'Belum diisikan', '[]', '[]', ?, ?, 'local_user', 50, 50, 50)
@@ -563,8 +564,8 @@ export function registerCortexRoutes(app: express.Express, db: any) {
          speaker: r.speaker || 'Unknown'
        }));
 
-       const currentTaskId = `ctx_api_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
-      const completionId = `chatcmpl-${Math.random().toString(36).substr(2, 12)}`;
+       const currentTaskId = `ctx_api_${Date.now()}_${genId(5)}`;
+      const completionId = `chatcmpl-${genId(12)}`;
       const createdTime = Math.floor(Date.now() / 1000);
 
       const shouldStream = stream === true || req.query.stream === "true";
@@ -632,7 +633,7 @@ export function registerCortexRoutes(app: express.Express, db: any) {
                   INSERT INTO memories (id, type, content, importance, speaker, context, timestamp, tags, sentiment)
                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 `).run(
-                  m.id || Math.random().toString(36).substr(2, 9),
+                  m.id || genId(9),
                   m.type || 'interaction',
                   savedContent,
                   m.importance || 0.4,
@@ -645,7 +646,7 @@ export function registerCortexRoutes(app: express.Express, db: any) {
               }
             }
           } else {
-            const userMemoryId = Math.random().toString(36).substr(2, 9);
+            const userMemoryId = genId(9);
             let savedUserInput = input;
             if (savedUserInput && typeof savedUserInput === "string") {
               savedUserInput = savedUserInput.replace("[PRE-PROCESS: ENFORCE_JSON_ONLY]", "").trim();
@@ -660,7 +661,7 @@ export function registerCortexRoutes(app: express.Express, db: any) {
               VALUES (?, 'interaction', ?, 0.4, ?, ?, ?, '[]', ?)
             `).run(userMemoryId, savedUserInput, senderName, finalContextId, Date.now(), updatedSentiment);
 
-            const agentMemoryId = Math.random().toString(36).substr(2, 9);
+            const agentMemoryId = genId(9);
             let savedAgentResponse = result.response;
             if (prepareForTraining) {
               savedAgentResponse = JSON.stringify({
@@ -718,7 +719,7 @@ export function registerCortexRoutes(app: express.Express, db: any) {
 
           if (result.fallbackTriggered) {
             console.log(`[YUI_LLM_GATEWAY] Fallback triggered for ${senderName}. Saving to pending_messages...`);
-            const pendingId = "pending_" + Math.random().toString(36).substr(2, 9);
+            const pendingId = "pending_" + genId(9);
             db.prepare(`
               INSERT INTO pending_messages (id, input, sender_name, context_id, chat_type, timestamp, attempts, status)
               VALUES (?, ?, ?, ?, ?, ?, 0, 'pending')

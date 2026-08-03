@@ -2,8 +2,7 @@ import readline from "readline";
 import { spawnSync, execSync } from "child_process";
 import fs from "fs";
 import path from "path";
-import os from "os";
-import { resolveSystemRoot } from "../core/systemPaths.js";
+import { resolveSystemRoot, expandHomePath } from "../core/systemPaths.js";
 
 // --- ANSI Terminal Color Palette ---
 const RESET = "\x1b[0m";
@@ -17,21 +16,13 @@ const BLUE = "\x1b[34m";
 const BG_DARK_GRAY = "\x1b[100m";
 
 // --- Path Configurations ---
-function resolveHomePath(inputPath: string): string {
-  if (!inputPath) return "";
-  if (inputPath === "~") return os.homedir();
-  if (inputPath.startsWith("~/") || inputPath.startsWith("~\\")) {
-    return path.join(os.homedir(), inputPath.slice(2));
-  }
-  return inputPath;
-}
 const yuihimeSystemRoot = resolveSystemRoot();
 
 const rawUserDataDir = process.env.YUIHIME_USER_DATA_PATH;
-const SANDBOX_ROOT = rawUserDataDir ? resolveHomePath(rawUserDataDir) : path.join(yuihimeSystemRoot, "user_data");
+const SANDBOX_ROOT = rawUserDataDir ? expandHomePath(rawUserDataDir) : path.join(yuihimeSystemRoot, "user_data");
 
 const rawDbPath = process.env.YUIHIME_DB_PATH;
-const DB_PATH = rawDbPath ? resolveHomePath(rawDbPath) : path.join(yuihimeSystemRoot, "data", "yuihime.db");
+const DB_PATH = rawDbPath ? expandHomePath(rawDbPath) : path.join(yuihimeSystemRoot, "data", "yuihime.db");
 
 // Ensure Sandbox root directory exists
 if (!fs.existsSync(SANDBOX_ROOT)) {

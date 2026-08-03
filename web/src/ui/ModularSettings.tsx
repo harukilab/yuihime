@@ -42,6 +42,7 @@ import { PendingQueueManager } from './PendingQueueManager';
 import { SearchableSelect } from '../components/SearchableSelect';
 import { LockedSlider } from '../components/LockedSlider';
 import { LockedTextarea } from '../components/LockedTextarea';
+import { genId } from '@shared/core/idGen';
 
 const CollapsibleDescription: React.FC<{ text: string }> = ({ text }) => {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -1327,7 +1328,7 @@ export const ModularSettings: React.FC<ModularSettingsProps> = ({
   const addFallbackRow = () => {
     const currentChain = settings.gemini?.fallbackChain || [];
     const newRow = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: genId(9),
       provider: 'gemini',
       model: 'gemini-2.0-flash',
       apiKey: ''

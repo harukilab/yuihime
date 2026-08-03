@@ -1,4 +1,5 @@
 import { logger } from "@/core/kernel/logger";
+import { stripCodeFences, isolateBraceBlock } from "./cortex/jsonRepairer.js";
 
 export class ValidationMiddleware {
   public static isEnabled = false; // Turn off validation by default
@@ -27,7 +28,7 @@ export class ValidationMiddleware {
       if (matches) {
         cleanStr = matches[1].trim();
       } else {
-        cleanStr = cleanStr.replace(/```json|```/g, "").trim();
+        cleanStr = stripCodeFences(cleanStr);
       }
     }
 
@@ -56,11 +57,10 @@ export class ValidationMiddleware {
       parsed = JSON.parse(cleanStr);
     } catch (e: any) {
       // Try bracket isolation fallback
-      const firstBrace = cleanStr.indexOf('{');
-      const lastBrace = cleanStr.lastIndexOf('}');
-      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      const isolated = isolateBraceBlock(cleanStr);
+      if (isolated !== cleanStr) {
         try {
-          parsed = JSON.parse(cleanStr.substring(firstBrace, lastBrace + 1));
+          parsed = JSON.parse(isolated);
         } catch (_) {
           errors.push(`JSON parsing failed: ${e.message}`);
         }

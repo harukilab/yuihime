@@ -1,6 +1,7 @@
 import { SubAgentDefinition, SubAgentRunOptions, SubAgentResult } from './SubAgentTypes';
 import { SubAgentRegistry } from './SubAgentRegistry';
 import { SystemRegistry } from '@shared/core/registry';
+import { genId } from '@shared/core/idGen';
 
 export class SubAgentManager {
   private static instance: SubAgentManager;
@@ -31,7 +32,7 @@ export class SubAgentManager {
     }
 
     const startTime = Date.now();
-    const runId = `${agentId}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+    const runId = `${agentId}_${Date.now()}_${genId(5)}`;
     this.activeRuns.set(runId, { startTime, options });
 
     try {

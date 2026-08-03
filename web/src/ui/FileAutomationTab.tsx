@@ -14,6 +14,7 @@ import {
   AlertTriangle 
 } from 'lucide-react';
 import { StorageService } from '@shared/drivers/storage';
+import { genId } from '@shared/core/idGen';
 
 interface FileAutomationRule {
   id: string;
@@ -204,7 +205,7 @@ export function FileAutomationTab() {
     }
 
     const updatedRule: FileAutomationRule = {
-      id: currentRuleId || `rule_${Math.random().toString(36).substr(2, 9)}`,
+      id: currentRuleId || `rule_${genId(9)}`,
       name: formName.trim(),
       enabled: formEnabled,
       triggerType: formTriggerType,
@@ -270,7 +271,7 @@ export function FileAutomationTab() {
 
   const handleAcceptSuggestion = (sug: any) => {
     const newRule: FileAutomationRule = {
-      id: `rule_suggest_${Math.random().toString(36).substr(2, 9)}`,
+      id: `rule_suggest_${genId(9)}`,
       name: sug.name,
       enabled: true,
       triggerType: sug.triggerType,

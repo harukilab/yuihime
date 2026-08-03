@@ -2,6 +2,7 @@ import { APICapability, APIEndpoint, AgentState } from "@shared/include/types";
 import { ConnectorRegistry, HttpConnector, APIError } from "@/core/api_framework";
 import { SystemRegistry } from "@shared/core/registry";
 import { logger } from '../core/kernel/logger';
+import { genId } from '@shared/core/idGen';
 
 /**
  * A framework for the agent to interact with external APIs dynamically,
@@ -246,7 +247,7 @@ export class APIService {
         const searchResults = await APIService.searchGoogle(query);
         
         const auditLog = {
-          id: Math.random().toString(36).substring(2, 9),
+          id: genId(9),
           timestamp: Date.now(),
           toolName: capability.name,
           endpointPath: endpoint.path,
@@ -295,7 +296,7 @@ export class APIService {
       const isComplianceMatch = typeof result === 'object' && result !== null;
 
       const auditLog = {
-        id: Math.random().toString(36).substring(2, 9),
+        id: genId(9),
         timestamp: Date.now(),
         toolName: capability.name,
         endpointPath: endpoint.path,
@@ -312,7 +313,7 @@ export class APIService {
       return result;
     } catch (error: any) {
       const auditLog = {
-        id: Math.random().toString(36).substring(2, 9),
+        id: genId(9),
         timestamp: Date.now(),
         toolName: capability.name,
         endpointPath: endpoint.path,
@@ -364,7 +365,7 @@ export class APIService {
    */
   static discover(spec: any): APICapability {
     return {
-      id: Math.random().toString(36).substr(2, 9),
+      id: genId(9),
       name: spec.name,
       description: spec.description,
       baseUrl: spec.baseUrl,

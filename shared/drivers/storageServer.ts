@@ -3,6 +3,7 @@ import { SettingsManager } from "@/core/kernel/settings.js";
 import { resolveDataPath } from "@/core/systemPaths.js";
 import fs from "fs";
 import path from "path";
+import { genId } from '@shared/core/idGen';
 
 const db = getDb();
 const workflowPath = resolveDataPath("workflow.json");
@@ -77,7 +78,7 @@ export class StorageServer {
   static async saveMemory(memory: any): Promise<any> {
     try {
       return await retryDbOperation(() => {
-        const id = Math.random().toString(36).substring(2, 11);
+        const id = genId(11);
         db.prepare(`
           INSERT INTO memories (id, type, speaker, content, timestamp, context, tags, importance, meta)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -225,7 +226,7 @@ export class StorageServer {
         `);
         for (const d of dreams) {
           insert.run(
-            d.id || Math.random().toString(36).substr(2, 9),
+            d.id || genId(9),
             d.concept,
             JSON.stringify(d.abstractions || []),
             d.strength,

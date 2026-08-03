@@ -2,11 +2,11 @@ import path from "path";
 import { renameSync, existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync, cpSync, readSync } from "fs";
 import { fileURLToPath } from "url";
 import * as toml from "smol-toml";
-import os from "os";
 import { execSync } from "child_process";
 import { getDb, withDbRetry, retryDbOperation } from "../database.js";
 import { appendLog } from "../fileLogger.js";
-import { resolveSystemRoot } from "../systemPaths.js";
+import { resolveSystemRoot, expandHomePath } from "../systemPaths.js";
+import { genId } from '@shared/core/idGen';
 
 let __filename = "";
 let __dirname = "";
@@ -25,16 +25,8 @@ try {
 
 // Expands home directory symbol (~) to full path using os.homedir()
 export function resolveHomePath(inputPath: string): string {
-  if (!inputPath) return "";
-  if (inputPath === "~") {
-    return os.homedir();
-  }
-  if (inputPath.startsWith("~/") || inputPath.startsWith("~\\")) {
-    return path.join(os.homedir(), inputPath.slice(2));
-  }
-  return inputPath;
+  return expandHomePath(inputPath);
 }
-
 // Custom Helper to Clear Terminal and Scrollback Screen gracefully
 function clearScreen() {
   process.stdout.write("\x1b[2J\x1b[3J\x1b[H");
@@ -711,7 +703,7 @@ try {
       // Best-effort: insert a pending welcome message to pending_messages so user sees it when connected
       try {
         const db = getDb();
-        const pendingId = 'pending_' + Math.random().toString(36).substr(2, 9);
+        const pendingId = 'pending_' + genId(9);
         withDbRetry(() => {
           db.prepare(`INSERT INTO pending_messages (id, input, sender_name, context_id, chat_type, timestamp, attempts, status) VALUES (?, ?, ?, ?, ?, ?, 0, 'pending')`).run(pendingId, 'Halo! Yui sudah aktif di perangkat ini. Bagaimana kabarmu hari ini? ✨', 'system', 'web_default', 'web', Date.now());
         }, 'onboarding-insert-pending-welcome');

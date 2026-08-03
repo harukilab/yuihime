@@ -3,6 +3,7 @@ import { appendFileSync, mkdirSync, existsSync, readdirSync, unlinkSync, readFil
 import { Cortex } from "../cortex.js";
 import { dbPath } from "../database.js";
 import { getTzOffsetHours, toLocalClock } from "../utils/dualClock.js";
+import { genId } from '@shared/core/idGen';
 
 interface BufferedMessage {
   speaker: string;
@@ -324,7 +325,7 @@ private hasDailySummary(dateStr: string): boolean {
    private persistIdleSummary(chunk: BufferedMessage[], summary: string) {
     if (!this.db || !this.stmtInsertIdleSummary) return;
     try {
-      const memoryId = "bg_digest_" + Math.random().toString(36).substr(2, 9);
+      const memoryId = "bg_digest_" + genId(9);
       this.stmtInsertIdleSummary.run(memoryId, `[RINGKASAN OBROLAN ${toDateKey(localDateFor(chunk[0]?.timestamp || Date.now()))}]: ${summary}`, chunk[chunk.length - 1]?.timestamp || Date.now());
     } catch (dbErr) {
       console.error("[CHAT_SUMMARY_IDLE_DB_ERR] Gagal menyimpan ringkasan jeda hening ke DB:", dbErr);

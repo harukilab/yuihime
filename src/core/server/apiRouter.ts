@@ -18,10 +18,11 @@ import { eventBus } from "@shared/core/kernel/event-bus";
 import { SystemRegistry } from '@shared/core/registry';
 import { initializeBot, getActiveTelegramBot } from "./telegram.js";
 import { Cortex } from "../cortex.js";
-import { Soul } from "../soul.js";
+import { Soul } from "@shared/core/soul";
 import { deduplicateAndMergeIdentities, getDb } from "../database.js";
 import { APIService } from "@shared/services/api";
 import { initializeCortexModules } from "../RegistryInitializer.js";
+import { genId } from '@shared/core/idGen';
 
 // Register server-side persistent tool audit log handlers on globalThis
 (globalThis as any).getToolAuditLogs = () => {
@@ -237,7 +238,7 @@ export const getCronAction = (id: string, name: string, repeating: boolean, db: 
   }
 
   // Add memory of the trigger
-  const memoryId = Math.random().toString(36).substr(2, 9);
+  const memoryId = genId(9);
   await withSqliteRetry('insert-cron-memory', db, () => db.prepare(`
     INSERT INTO memories (id, type, content, importance, speaker, context, timestamp)
     VALUES (?, 'system', ?, 0.8, 'System', ?, ?)
@@ -435,7 +436,7 @@ if (!globalThis.pendingConfirmations) {
 }
 
 export const requestFileOperationConfirmation = async (action: string, targetPath: string): Promise<boolean> => {
-  const id = Math.random().toString(36).substring(2, 8).toUpperCase();
+  const id = genId(8).toUpperCase();
   const item: {
     id: string;
     action: string;

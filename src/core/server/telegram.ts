@@ -14,6 +14,7 @@ import { describeImageFromBuffer } from "../../modules/YuiVisionModule.js";
 import { eventBus } from "@shared/core/kernel/event-bus";
 import { handleTgQuickCommand, handleTgCallback } from "../../drivers/tools/telegram_quick_tools/index.js";
 import { recordOutboundMessage, recordFeedback, lookupOutboundMessage, emojiToReward } from "../feedback.js";
+import { genId } from '@shared/core/idGen';
 
 async function withDeliveryTimeout<T>(fn: () => Promise<T>, timeoutMs: number, label: string): Promise<T> {
   return Promise.race([
@@ -315,7 +316,7 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
         'telegram-insert-user'
       );
 
-      const memoryId = Math.random().toString(36).substr(2, 9);
+      const memoryId = genId(9);
       await retryDbOperation(() =>
         db.prepare(`
           INSERT INTO memories (id, type, content, importance, speaker, context, timestamp)

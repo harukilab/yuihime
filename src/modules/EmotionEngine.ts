@@ -1,6 +1,6 @@
 import { CortexModule, ModuleType, AgentState, EmotionState, EmotionDelta } from "@shared/include/types";
 import { applyEmotionDelta, serializeEmotion } from "./EmotionUtils";
-import { Soul } from "../core/soul";
+import { Soul } from "@shared/core/soul";
 import { NanoBrain } from "../core/neural/Brain";
 import { PromptRegistry } from "../core/PromptRegistry";
 

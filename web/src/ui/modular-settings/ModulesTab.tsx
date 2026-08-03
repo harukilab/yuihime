@@ -10,6 +10,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { VoiceCalibration } from './voiceCalibration';
 import { SearchableSelect } from '../../components/SearchableSelect';
+import { genId } from '@shared/core/idGen';
 
 // Frontend fallback module schemas for gateway bridges.
 // On Vite builds, SystemRegistry.getModules() may not auto-register the daemon
@@ -961,7 +962,7 @@ export const ModulesTab: React.FC<ModulesTabProps> = ({
                     type="button"
                     onClick={() => {
                       const newRule = {
-                        id: 'rule_' + Math.random().toString(36).substr(2, 9),
+                        id: 'rule_' + genId(9),
                         pattern: '',
                         sensitivity: 1.0,
                         isPriority: false,

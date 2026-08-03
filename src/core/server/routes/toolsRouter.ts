@@ -2,7 +2,6 @@ import express from "express";
 import path from "path";
 import fs from "fs/promises";
 import { existsSync, readdirSync, statSync, realpathSync, mkdirSync, createReadStream } from "fs";
-import os from "os";
 import { exec } from "child_process";
 import { promisify } from "util";
 import { AIService } from "../../kernel/ai.js";
@@ -17,6 +16,7 @@ import { searchMemories } from "../../memorySearch";
 import { SystemRegistry } from "@shared/core/registry";
 import { BackgroundProcessManager } from "../../kernel/BackgroundProcessManager";
 import { load } from "cheerio";
+import { genId } from '@shared/core/idGen';
 
 const execPromise = promisify(exec);
 
@@ -109,7 +109,7 @@ export function registerToolsRoutes(app: express.Express, db: any) {
       }
 
       const logEntry = {
-        id: 'tool_' + Math.random().toString(36).substring(2, 9),
+        id: 'tool_' + genId(9),
         timestamp: Date.now(),
         toolName: toolName,
         endpointPath: "/api/tools" + req.path,
@@ -1150,10 +1150,7 @@ export function registerToolsRoutes(app: express.Express, db: any) {
          (SystemRegistry as any).tools = (SystemRegistry as any).tools.filter((t: any) => t.metadata.id !== id);
         
         // Re-generate available_tools.json
-        const tools = SystemRegistry.getTools();
-        const toolsData = tools.map((t: any) => t.metadata);
-        const outputFilePath = path.join(os.homedir(), ".yuihime", "data", "available_tools.json");
-        await fs.writeFile(outputFilePath, JSON.stringify(toolsData, null, 2), 'utf8');
+        writeAvailableToolsFile();
       } catch (err) {
         console.error("[SERVER] Memory unregister failed:", err);
       }

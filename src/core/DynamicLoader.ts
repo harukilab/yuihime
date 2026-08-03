@@ -5,10 +5,15 @@ import { logger } from '@/core/kernel/logger';
 import { writeAvailableToolsFile } from '@/core/toolRegistryFile';
 
 export class DynamicLoader {
+  private static getHost(): string {
+    if (typeof window !== 'undefined') return '';
+    return `http://127.0.0.1:${process.env.PORT ?? '3000'}`;
+  }
+
   static async syncAddons(attempt = 0, maxAttempts = 15) {
     try {
       logger.log('INFO', 'DYNAMIC_LOADER', 'Syncing addons from server...');
-      const host = typeof window !== 'undefined' ? '' : 'http://localhost:3000';
+      const host = DynamicLoader.getHost();
       const res = await fetch(`${host}/api/addons`);
       if (!res.ok) throw new Error("Failed to fetch addons");
       
@@ -90,7 +95,7 @@ export class DynamicLoader {
       execute: async (args: any) => {
         logger.log('TOOL', 'EXEC', `Executing addon tool: ${addon.id}`, args);
         try {
-          const host = typeof window !== 'undefined' ? '' : 'http://localhost:3000';
+          const host = DynamicLoader.getHost();
           const res = await fetch(`${host}/api/addons/execute/${addon.id}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

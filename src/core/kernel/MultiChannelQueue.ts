@@ -12,6 +12,7 @@ import { Kernel } from "../kernel/core.js";
 import { stateMachine } from "./state-machine.js";
 import { logDbRetry } from "../database.js";
 import { getFocusGoal, getGoalChildren } from "../goalDecomposition.js";
+import { genId } from '@shared/core/idGen';
 
 const DEFAULT_PENDING_FEEDBACK = `[SYSTEM MESSAGE]: Koneksi saraf batin Yuihime dengan kognisi LLM sedang sangat padat atau terputus sementara 📡. Tapi jangan khawatir! Pesanmu ("\${inputPreview}") sudah aman dalam antrean tunggu kognisi Yui. Yui akan membalas secara otomatis setelah tautan saraf sinkron kembali! 🌸`;
 
@@ -289,7 +290,7 @@ export class MultiChannelQueue {
         let queued = false;
         if (this.db) {
           try {
-            const pendingId = "pending_" + Math.random().toString(36).substring(2, 11);
+            const pendingId = "pending_" + genId(11);
             const stmt = this.stmtInsertPending;
             stmt.run(pendingId, input, senderName, contextId, chatType, timestamp);
             queued = true;
@@ -668,7 +669,7 @@ export class MultiChannelQueue {
           if (this.db) {
             try {
               await withSqliteRetry(`insert-failed-${Date.now()}`, this.db, () => {
-                const id = "pending_" + Math.random().toString(36).substr(2, 9);
+                const id = "pending_" + genId(9);
                 const stmt = this.stmtInsertPendingFailed;
                 stmt.run(id, item.input, item.senderName, item.contextId, item.chatType, item.timestamp, maxRetries);
                 if (!this.holdOutgoing) {

@@ -1,5 +1,6 @@
 import express from "express";
 import { datasetSynthesizer } from "../datasetSynthesizer.js";
+import { genId } from '@shared/core/idGen';
 
 export function registerSynthesizerRoutes(app: express.Express, db: any) {
   app.get("/api/cortex/synthesizer/status", (req, res) => {
@@ -103,7 +104,7 @@ export function registerSynthesizerRoutes(app: express.Express, db: any) {
   app.post("/api/cortex/synthesizer/records", express.json(), (req, res) => {
     try {
       const { userQuery, targetSpeech, thought, animations, mood_impact } = req.body;
-      const id = "man_" + Math.random().toString(36).substring(2, 9);
+      const id = "man_" + genId(9);
       const timestamp = Date.now();
 
       const synthesizedBlock = {

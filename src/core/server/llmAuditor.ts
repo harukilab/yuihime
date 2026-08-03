@@ -1,5 +1,6 @@
 import { getDb, withDbRetry } from '../database.js';
 import { appendLog } from '../fileLogger.js';
+import { genId } from '@shared/core/idGen';
 
 export interface ToolCallEntry {
   name: string;
@@ -36,7 +37,7 @@ export class LlmIoAuditor {
     try {
       const db = getDb();
       const timestamp = Date.now();
-      const id = 'llm_' + Math.random().toString(36).substring(2, 9);
+      const id = 'llm_' + genId(9);
       const newLog: LlmLogEntry = {
         id,
         timestamp,

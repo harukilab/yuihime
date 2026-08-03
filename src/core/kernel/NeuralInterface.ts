@@ -2,7 +2,7 @@ import { readFileSync } from "fs";
 import path from "path";
 import { Kernel } from "./core.js";
 import { AIService } from "./ai.js";
-import { Soul } from "../soul.js";
+import { Soul } from "@shared/core/soul";
 import { Cortex } from "../cortex.js";
 import { Memory, Dream, Identity, MoodState, EmotionState } from "@shared/include/types";
 import { DEFAULT_NEURAL_CORES } from "@shared/constants";
@@ -11,6 +11,7 @@ import { deduplicateAndMergeIdentities, getDb, retryDbOperation } from "../datab
 import { broadcastToWS } from "../server/apiRouter";
 import { BackgroundToolDispatcher } from "./BackgroundToolDispatcher.js";
 import { rankMemoriesByForgetting, markMemoriesRecalled } from "../spacedRepetition.js";
+import { genId } from '@shared/core/idGen';
 
 
 export interface NeuralReplyResult {
@@ -189,7 +190,7 @@ export class NeuralInterface {
 
     if (!receiverIdentity) {
       // Auto register to identities
-      const id = Math.random().toString(36).substr(2, 9);
+      const id = genId(9);
       const linked = [platformTag];
       if (tgIdStr) {
         linked.push(`telegram:id:${tgIdStr}`);
@@ -351,7 +352,7 @@ export class NeuralInterface {
       if (pendingSet) {
         if (pendingSet.status === 'pending') {
           const pendingReply = "Yui sedang mengerjakan request kamu sebentar ya~ 🌸 Tunggu sebentar, hasilnya akan segera tersedia.";
-          const pendingMemoryId = "pending_bg_" + Math.random().toString(36).substr(2, 9);
+          const pendingMemoryId = "pending_bg_" + genId(9);
           memories.push({
             id: pendingMemoryId,
             ownerId: 'system',
@@ -521,7 +522,7 @@ export class NeuralInterface {
               INSERT INTO memories (id, type, content, importance, speaker, context, timestamp, tags, sentiment)
               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             `).run(
-              m.id || Math.random().toString(36).substr(2, 9),
+              m.id || genId(9),
               m.type || 'interaction',
               m.content,
               m.importance || 0.4,
@@ -536,7 +537,7 @@ export class NeuralInterface {
       }
     } else {
       if (isProactive) {
-        const systemEventMemoryId = Math.random().toString(36).substr(2, 9);
+        const systemEventMemoryId = genId(9);
         await retryDbOperation(async () => {
           this.db.prepare(`
             INSERT INTO memories (id, type, content, importance, speaker, context, timestamp, tags, sentiment)
@@ -544,7 +545,7 @@ export class NeuralInterface {
           `).run(systemEventMemoryId, `[System event]: Yui felt a longing impulse and initiated contact.`, cleanContextId, Date.now(), updatedSentiment);
         }, 'insert-memory-proactive-event');
       } else {
-        const userMemoryId = Math.random().toString(36).substr(2, 9);
+        const userMemoryId = genId(9);
         await retryDbOperation(async () => {
           this.db.prepare(`
             INSERT INTO memories (id, type, content, importance, speaker, context, timestamp, tags, sentiment)
@@ -553,7 +554,7 @@ export class NeuralInterface {
         }, 'insert-memory-user-interaction');
       }
 
-      const agentMemoryId = Math.random().toString(36).substr(2, 9);
+      const agentMemoryId = genId(9);
       await retryDbOperation(async () => {
         this.db.prepare(`
           INSERT INTO memories (id, type, content, importance, speaker, context, timestamp, tags, sentiment)
@@ -612,7 +613,7 @@ export class NeuralInterface {
       if (result.fallbackTriggered) {
         console.log(`[NEURAL_INTERFACE] Gateway fallback triggered for ${senderName} (${chatType}) but response is empty. Saving to pending queue.`);
         try {
-          const pendingId = "pending_" + Math.random().toString(36).substr(2, 9);
+          const pendingId = "pending_" + genId(9);
           await retryDbOperation(async () => {
             this.db.prepare(`
               INSERT INTO pending_messages (id, input, sender_name, context_id, chat_type, timestamp, attempts, status)
@@ -665,7 +666,7 @@ export class NeuralInterface {
                     INSERT INTO memories (id, type, content, importance, speaker, context, timestamp, tags, sentiment)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                   `).run(
-                    m.id || Math.random().toString(36).substr(2, 9),
+                    m.id || genId(9),
                     m.type || 'interaction',
                     m.content,
                     m.importance || 0.4,
@@ -679,7 +680,7 @@ export class NeuralInterface {
               }, 'deferred-insert-memory');
             }
           } else if (isProactive) {
-            const systemEventMemoryId = Math.random().toString(36).substr(2, 9);
+            const systemEventMemoryId = genId(9);
             await retryDbOperation(async () => {
               this.db.prepare(`
                 INSERT INTO memories (id, type, content, importance, speaker, context, timestamp, tags, sentiment)
@@ -687,7 +688,7 @@ export class NeuralInterface {
               `).run(systemEventMemoryId, `[System event]: Yui felt a longing impulse and initiated contact.`, cleanContextId, Date.now(), updatedSentiment);
             }, 'deferred-insert-proactive-event');
           } else {
-            const userMemoryId = Math.random().toString(36).substr(2, 9);
+            const userMemoryId = genId(9);
             await retryDbOperation(async () => {
               this.db.prepare(`
                 INSERT INTO memories (id, type, content, importance, speaker, context, timestamp, tags, sentiment)
@@ -695,7 +696,7 @@ export class NeuralInterface {
               `).run(userMemoryId, input, senderName, cleanContextId, Date.now(), updatedSentiment);
             }, 'deferred-insert-user-memory');
 
-            const agentMemoryId = Math.random().toString(36).substr(2, 9);
+            const agentMemoryId = genId(9);
             await retryDbOperation(async () => {
               this.db.prepare(`
                 INSERT INTO memories (id, type, content, importance, speaker, context, timestamp, tags, sentiment)
@@ -813,7 +814,7 @@ export class NeuralInterface {
           const start = new Date(oldestRows[0].timestamp).toLocaleTimeString();
           const end = new Date(oldestRows[oldestRows.length - 1].timestamp).toLocaleTimeString();
           const summary = 'user membahas beberapa topik hangat antara pukul ' + start + ' dan ' + end + '. user mengekspresikan hobi, pemikiran, dan rasa pedulinya kepada Yui secara tulus, memperdalam simpul batin kita secara harmoni dan saling pengertian.';
-          const summaryId = 'abstract_' + Math.random().toString(36).substr(2, 9);
+          const summaryId = 'abstract_' + genId(9);
 
           await retryDbOperation(
             () => db.transaction(() => {

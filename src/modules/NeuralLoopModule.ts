@@ -1,5 +1,6 @@
 import { CortexModule, ModuleType } from '@shared/include/types';
 import { StandardizedProcessor } from '../core/kernel/processor';
+import { stripCodeFences } from '../core/cortex/jsonRepairer';
 import { L2DExpressionTranslator } from './L2DExpressionTranslator';
 
 /**
@@ -34,7 +35,7 @@ export const NeuralLoopModule: CortexModule = {
     let rawTools = parsed.tool_calls || parsed.tools_to_call || [];
     if (typeof rawTools === 'string') {
       try {
-        const cleanedStr = rawTools.replace(/```json/gi, '').replace(/```/gi, '').trim();
+        const cleanedStr = stripCodeFences(rawTools);
         rawTools = JSON.parse(cleanedStr);
       } catch (e) {
         console.warn('[PARSER] Failed parsing raw tools string as JSON:', e);
@@ -57,7 +58,7 @@ export const NeuralLoopModule: CortexModule = {
             let funcArgs = item.function.arguments;
             if (typeof funcArgs === 'string') {
               try {
-                const cleanedArgs = funcArgs.replace(/```json/gi, '').replace(/```/gi, '').trim();
+                const cleanedArgs = stripCodeFences(funcArgs);
                 funcArgs = JSON.parse(cleanedArgs);
               } catch (argsErr) {
                 console.warn('[PARSER] Failed parsing OpenAI function arguments as JSON:', argsErr);
@@ -88,7 +89,7 @@ export const NeuralLoopModule: CortexModule = {
     let animations = parsed.animations || [];
     if (typeof animations === 'string') {
       try {
-        const trimmed = animations.replace(/```json/gi, '').replace(/```/gi, '').trim();
+        const trimmed = stripCodeFences(animations);
         if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
           animations = JSON.parse(trimmed);
         } else {
@@ -141,7 +142,7 @@ export const NeuralLoopModule: CortexModule = {
     let moodImpact = parsed.moodImpact || {};
     if (typeof moodImpact === 'string') {
       try {
-        const trimmed = moodImpact.replace(/```json/gi, '').replace(/```/gi, '').trim();
+        const trimmed = stripCodeFences(moodImpact);
         moodImpact = JSON.parse(trimmed);
       } catch (e) {
         moodImpact = {};
@@ -158,7 +159,7 @@ export const NeuralLoopModule: CortexModule = {
       if (vpMatch) {
         const matchedStr = vpMatch[1].trim();
         try {
-          const trimmed = matchedStr.replace(/```json/gi, '').replace(/```/gi, '').trim();
+          const trimmed = stripCodeFences(matchedStr);
           viewerProfileUpdate = JSON.parse(trimmed);
         } catch (e) {
           console.warn('[PARSER] Failed parsing regex-extracted viewerProfileUpdate JSON:', e);
@@ -166,7 +167,7 @@ export const NeuralLoopModule: CortexModule = {
       }
     } else if (typeof viewerProfileUpdate === 'string') {
       try {
-        const trimmed = viewerProfileUpdate.replace(/```json/gi, '').replace(/```/gi, '').trim();
+        const trimmed = stripCodeFences(viewerProfileUpdate);
         viewerProfileUpdate = JSON.parse(trimmed);
       } catch (e) {
         console.warn('[PARSER] Failed parsing viewerProfileUpdate JSON:', e);

@@ -1,324 +1,8 @@
-import { AIService } from "./ai.js";
-import { SystemRegistry } from '@shared/core/registry';
 import { SettingsManager } from './settings.js';
-import { keyPool, ApiKeyPool } from './keyPool.js';
-import { ChatCompletionMessage } from '@shared/include/types';
-import { toSingleString } from '@/core/kernel/configNormalizer';
 import { extractJsonObject } from '../cortex/jsonExtract.js';
+import { stripCodeFences, isolateBraceBlock, liftNestedProperties, syncAlternateKeys } from '../cortex/jsonRepairer.js';
 
 export class NeuralProcessor {
-  private static instance: NeuralProcessor;
-
-  private constructor() {}
-
-  public static getInstance(): NeuralProcessor {
-    if (!NeuralProcessor.instance) {
-      NeuralProcessor.instance = new NeuralProcessor();
-    }
-    return NeuralProcessor.instance;
-  }
-
-  /**
-   * Main Neural Gateway & Orchestrator
-   * Follows Fallback Strategy (Step 1-3)
-   */
-  async process(input: string | ChatCompletionMessage[], options: any = {}) {
-    const settings = SettingsManager.getInstance().getAll();
-    const primaryProviderId = options.provider || settings.provider || '';
-    if (!primaryProviderId) {
-      throw new Error("No primary AI Provider is configured. Please select your active provider in Settings -> Consciousness.");
-    }
-    
-    // Convert string input to OpenAI-compatible messages if needed
-    const messages: ChatCompletionMessage[] = typeof input === 'string' 
-      ? [{ role: 'user', content: input }]
-      : input;
-
-    // Define fallback sequence (Step 3: Provider Failover - Configurable dynamically via settings)
-    const geminiConf = (settings.gemini || {}) as any;
-    let fallbackProviders = [primaryProviderId];
-
-    if (geminiConf.provFailoverSequence) {
-      fallbackProviders = geminiConf.provFailoverSequence
-        .split(',')
-        .map((s: string) => s.trim().toLowerCase())
-        .filter((s: string) => s.length > 0);
-    }
-
-    fallbackProviders = [primaryProviderId, ...fallbackProviders]
-      .filter((v, i, a) => v && a.indexOf(v) === i);
-
-    let lastError: any = null;
-
-    // Parallel execution mode: fire multiple providers concurrently and take the
-    // first successful response (fastest-wins). Controlled by setting parallelProviders
-    // or options.parallel. Concurrency is capped to avoid thundering-herd API abuse.
-    const parallelEnabled = options.parallel ?? geminiConf.parallelProviders ?? false;
-    const maxConcurrency = Math.max(1, Math.min(Number(geminiConf.parallelConcurrency) || 3, 8));
-
-    if (parallelEnabled && fallbackProviders.length > 1) {
-      console.log(`[NEURAL_GATEWAY] Parallel mode ON (concurrency=${maxConcurrency}) across ${fallbackProviders.length} providers...`);
-      try {
-        const result = await this.runProvidersInParallel(fallbackProviders, messages, options, settings, maxConcurrency);
-        if (result !== undefined) return result;
-      } catch (e: any) {
-        lastError = e;
-        console.error(`[NEURAL_GATEWAY_PARALLEL_FAIL] ${e?.message || e}`);
-      }
-    }
-
-    // Sequential fallback (default) — try one provider at a time
-    for (const providerId of fallbackProviders) {
-      try {
-        const provider = SystemRegistry.getProvider(providerId);
-        if (!provider) continue;
-
-        console.log(`[NEURAL_GATEWAY] Attempting request via provider: ${providerId}`);
-
-        // Multi-Step Fallback within the provider
-        const result = await this.executeWithResilience(provider, messages, options);
-        return result;
-      } catch (e: any) {
-        lastError = e;
-        const errorMsg = e.message || String(e);
-        console.error(`[NEURAL_GATEWAY_ERROR] ${providerId}: ${errorMsg}`);
-
-        // Standardization of error message as per rule 5
-        if (!errorMsg.startsWith('[NEURAL_GATEWAY_ERROR]')) {
-          lastError = new Error(`[NEURAL_GATEWAY_ERROR] ${providerId}: ${errorMsg}`);
-        }
-
-        // Try next provider unless it's a specific non-recoverable error
-        continue;
-      }
-    }
-
-    // Custom multi-provider fallbackChain cascade (Add Mode)
-    const fallbackChain = geminiConf.fallbackChain || [];
-    if (fallbackChain && fallbackChain.length > 0) {
-      console.log(`[NEURAL_GATEWAY] Standard providers failed. Entering custom fallback chain cascade with ${fallbackChain.length} steps...`);
-      for (const item of fallbackChain) {
-        const providerId = item.provider;
-        const modelId = item.model;
-        const customApiKey = item.apiKey;
-
-        try {
-          const provider = SystemRegistry.getProvider(providerId);
-          if (!provider) {
-            console.warn(`[NEURAL_GATEWAY] Fallback Provider ${providerId} not found in registry.`);
-            continue;
-          }
-
-          console.log(`[NEURAL_GATEWAY] Custom fallback step: ${providerId} (${modelId})`);
-
-          const specificConfig = {
-            ...options,
-            ...settings,
-            ...(settings[providerId] || {}),
-            model: modelId || settings[providerId]?.model,
-            apiKey: customApiKey || settings[providerId]?.apiKey
-          };
-
-          const result = await provider.generate(messages, specificConfig);
-          return result;
-        } catch (e: any) {
-          lastError = e;
-          const errorMsg = e.message || String(e);
-          console.error(`[NEURAL_GATEWAY_ERROR_FALLBACK] ${providerId} (${modelId}): ${errorMsg}`);
-          continue;
-        }
-      }
-    }
-
-    throw lastError || new Error("[NEURAL_GATEWAY_ERROR] All providers failed.");
-  }
-
-  /**
-   * Fire multiple providers concurrently with bounded concurrency.
-   * Returns the first successful (fastest) result, or throws an aggregated error
-   * if every provider fails. Provider order is preserved for tie-breaking — an
-   * earlier-listed provider that finishes at the same tick wins.
-   */
-  private async runProvidersInParallel(
-    providerIds: string[],
-    messages: ChatCompletionMessage[],
-    options: any,
-    settings: any,
-    maxConcurrency: number
-  ): Promise<string> {
-    const errors: string[] = [];
-    let settled = false;
-    let resolveFirst: ((v: string) => void) | null = null;
-    let rejectAll: ((e: any) => void) | null = null;
-
-    const done = new Promise<string>((resolve, reject) => {
-      resolveFirst = resolve;
-      rejectAll = reject;
-    });
-
-    // Bounded concurrency runner
-    let cursor = 0;
-    const worker = async () => {
-      while (cursor < providerIds.length) {
-        const idx = cursor++;
-        if (settled) return;
-        const providerId = providerIds[idx];
-        try {
-          const provider = SystemRegistry.getProvider(providerId);
-          if (!provider) {
-            errors.push(`${providerId}: provider not found`);
-            continue;
-          }
-          console.log(`[NEURAL_GATEWAY_PARALLEL] Dispatching provider: ${providerId}`);
-          const result = await this.executeWithResilience(provider, messages, options);
-          if (settled) return; // a faster provider already won
-          if (!settled) {
-            settled = true;
-            resolveFirst!(result);
-          }
-        } catch (e: any) {
-          const errorMsg = e?.message || String(e);
-          console.error(`[NEURAL_GATEWAY_PARALLEL_ERROR] ${providerId}: ${errorMsg}`);
-          errors.push(`${providerId}: ${errorMsg}`);
-        }
-      }
-    };
-
-    const workers = [];
-    const concurrency = Math.min(maxConcurrency, providerIds.length);
-    for (let i = 0; i < concurrency; i++) workers.push(worker());
-
-    // Do NOT block on workers: as soon as the first provider succeeds, `done`
-    // resolves and the caller returns immediately (fastest-wins). Workers keep
-    // running in the background. If every provider fails, resolve/reject `done`
-    // once all workers have settled.
-    Promise.all(workers).then(() => {
-      if (settled) return;
-      const aggregated = errors.length
-        ? `[NEURAL_GATEWAY_ERROR] All parallel providers failed. ` + errors.join(' | ')
-        : "[NEURAL_GATEWAY_ERROR] All parallel providers failed.";
-      rejectAll!(new Error(aggregated));
-    });
-
-    return done;
-  }
-
-  /**
-   * Internal resilience logic for a specific provider
-   * Handles Step 1 (Key Recovery) and Step 2 (Model Resilience)
-   */
-  private async executeWithResilience(provider: any, messages: ChatCompletionMessage[], options: any) {
-    const providerId = provider.metadata.id;
-    const settings = SettingsManager.getInstance().getAll();
-    const providerConfig = settings[providerId] || {};
-
-    // Step 2: Model Resilience - Priority list of models
-    const modelsToTryRaw: string[] = [];
-    if (options.model) {
-      if (Array.isArray(options.model)) {
-        modelsToTryRaw.push(...options.model.map((m: any) => String(m).trim()).filter(Boolean));
-      } else {
-        modelsToTryRaw.push(String(options.model).trim());
-      }
-    } else if (providerConfig.model) {
-      if (Array.isArray(providerConfig.model)) {
-        modelsToTryRaw.push(...providerConfig.model.map((m: any) => String(m).trim()).filter(Boolean));
-      } else {
-        modelsToTryRaw.push(String(providerConfig.model).trim());
-      }
-    }
-
-    if (modelsToTryRaw.length === 0 && provider.metadata?.models) {
-      if (Array.isArray(provider.metadata.models)) {
-        modelsToTryRaw.push(...provider.metadata.models.map((m: any) => String(m).trim()).filter(Boolean));
-      } else {
-        modelsToTryRaw.push(String(provider.metadata.models).trim());
-      }
-    }
-    const modelsToTry = Array.from(new Set(modelsToTryRaw)).filter(Boolean);
-
-    let lastProviderError: any = null;
-
-    // Precise detection of model-level failures only.
-    // AVOID naive substring matching (e.g. 'model') which caused false-positive
-    // failover on unrelated errors such as network/timeout/5xx.
-    const isModelLevelError = (rawMsg: string): boolean => {
-      const msg = rawMsg.toLowerCase();
-      // Explicit HTTP status codes tied to bad/invalid model selection
-      if (/\b404\b/.test(msg) || /\b400\b/.test(msg)) return true;
-      // Known model-not-found / unsupported model phrases
-      const modelPhrases = [
-        'model not found',
-        'model does not exist',
-        'unknown model',
-        'invalid model',
-        'unsupported model',
-        'the model',
-        'does not support',
-        'model has been deprecated',
-        'is not a supported model'
-      ];
-      return modelPhrases.some((p) => msg.includes(p));
-    };
-
-    // Step 1: API Key Recovery — register the provider's key set for rotation.
-    // Supports both a single `apiKey` and an `apiKeys` array. A provider with
-    // only one key behaves exactly as before.
-    const primaryKey = toSingleString(providerConfig.apiKey || (settings.apiKey as string)) || '';
-    keyPool.configure(providerId, providerConfig, settings);
-
-    for (const modelId of modelsToTry) {
-      let lastModelError: any = null;
-      // Try up to all configured keys once per model before giving up on the model.
-      const keyCount = Math.max(1, (providerConfig.apiKeys?.length || 0) || (primaryKey ? 1 : 1));
-
-      for (let keyAttempt = 0; keyAttempt < keyCount; keyAttempt++) {
-        const activeKey = keyPool.next(providerId, primaryKey, modelId);
-        try {
-          const config = { ...options, ...settings, model: modelId, apiKey: activeKey };
-
-          const result = await provider.generate(messages, config);
-          return result;
-        } catch (e: any) {
-          lastModelError = e;
-          lastProviderError = e;
-          const msg = e.message || String(e);
-
-          // Genuine model-selection error -> do NOT waste keys, jump to next model.
-          if (isModelLevelError(msg)) {
-            console.warn(`[NEURAL_RESILIENCE] Model ${modelId} not available, trying next model...`);
-            break;
-          }
-
-          // Quota / auth / rate-limit error -> cool down this key and try the next one.
-          const keyErrKind = ApiKeyPool.classifyError(msg);
-          if (keyErrKind !== 'none') {
-            keyPool.reportFailure(providerId, activeKey, modelId, msg);
-            console.warn(`[NEURAL_RESILIENCE] Key error (${keyErrKind}) on ${providerId}. Rotating key...`);
-            continue; // try next key for the same model
-          }
-
-          // Other errors (network/5xx/context-length) -> bubble up to provider failover.
-          throw e;
-        }
-      }
-
-      // If we exhausted all keys for this model, remember the last error and move on.
-      if (lastModelError && isModelLevelError(lastModelError.message || String(lastModelError))) {
-        continue; // already logged above
-      }
-    }
-
-    throw lastProviderError;
-  }
-
-  async thinkSimple(input: string, options: any = {}) {
-     return this.process(input, options);
-  }
-
-  async summarize(text: string) {
-    return await this.process(`Summarize the following text concisely:\n\n${text}`);
-  }
 
   public static extractTags(text: string): any {
     const tags: any = {};
@@ -353,7 +37,7 @@ export class NeuralProcessor {
     let clean = raw.trim();
     
     // Strip markdown fences first
-    clean = clean.replace(/```json/gi, '').replace(/```/gi, '').trim();
+    clean = stripCodeFences(clean);
     
     // If it doesn't start with '{', but has a '{', isolate it
     const firstBrace = clean.indexOf('{');
@@ -457,7 +141,7 @@ export class NeuralProcessor {
 
   public static parseLLMResponse(text: string, fallback: any = []): any {
      let cleaned = text.trim();
-     cleaned = cleaned.replace(/```json/gi, '').replace(/```/gi, '').trim();
+     cleaned = stripCodeFences(cleaned);
 
      const isXml = cleaned.startsWith("<") || (cleaned.includes("<thought>") || cleaned.includes("<animations>") || cleaned.includes("<tool_calls>") || cleaned.includes("<speech>"));
 
@@ -478,72 +162,30 @@ export class NeuralProcessor {
             const _parsedMatch = extractJsonObject(directParseOk ? cleaned : repaired);
             const parsedObj = _parsedMatch ? JSON.parse(_parsedMatch) : null;
             if (parsedObj && typeof parsedObj === 'object') {
-           if (parsedObj.properties && typeof parsedObj.properties === 'object' && !Array.isArray(parsedObj.properties)) {
-             const p = parsedObj.properties;
-             if (p.thought || p.tool_calls || p.tools_to_call || p.final_answer || p.speech || p.response) {
-               console.log("[PARSER] Detected nested properties schema confusion, lifting properties values to root context.");
-               Object.assign(parsedObj, p);
-             }
-           }
-           // Synchronize common alternate keys
-           if (parsedObj.mood_impact && !parsedObj.moodImpact) {
-             parsedObj.moodImpact = parsedObj.mood_impact;
-           }
-           if (parsedObj.moodImpact && !parsedObj.mood_impact) {
-             parsedObj.mood_impact = parsedObj.moodImpact;
-           }
-           if (parsedObj.tools_to_call && !parsedObj.tool_calls) {
-             parsedObj.tool_calls = parsedObj.tools_to_call;
-           }
-           if (parsedObj.tool_calls && !parsedObj.tools_to_call) {
-             parsedObj.tools_to_call = parsedObj.tool_calls;
-           }
-           if (parsedObj.thoughts && !parsedObj.thought) parsedObj.thought = parsedObj.thoughts;
-           if (parsedObj.thought && !parsedObj.thoughts) parsedObj.thoughts = parsedObj.thought;
-           if (parsedObj.final_answer && !parsedObj.speech) parsedObj.speech = parsedObj.final_answer;
-           if (parsedObj.speech && !parsedObj.final_answer) parsedObj.final_answer = parsedObj.speech;
-           return parsedObj;
-         }
-       } catch (innerErr) {
-         // Fall back to standard curly bracket isolation if local repair failed
-         const firstBrace = cleaned.indexOf('{');
-         const lastBrace = cleaned.lastIndexOf('}');
-         if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-           cleaned = cleaned.substring(firstBrace, lastBrace + 1);
-         }
-         
-          if (cleaned.startsWith("{") && cleaned.endsWith("}")) {
-             const _fMatch = extractJsonObject(cleaned);
-             const parsedObj = _fMatch ? JSON.parse(_fMatch) : null;
-            if (parsedObj && typeof parsedObj === 'object' && parsedObj.properties && typeof parsedObj.properties === 'object' && !Array.isArray(parsedObj.properties)) {
-             const p = parsedObj.properties;
-             if (p.thought || p.tool_calls || p.tools_to_call || p.final_answer || p.speech || p.response) {
-               console.log("[PARSER] Detected nested properties schema confusion, lifting properties values to root context.");
-               Object.assign(parsedObj, p);
-             }
-           }
-           if (parsedObj && typeof parsedObj === 'object') {
-             // Synchronize common alternate keys
-             if (parsedObj.mood_impact && !parsedObj.moodImpact) {
-               parsedObj.moodImpact = parsedObj.mood_impact;
-             }
-             if (parsedObj.moodImpact && !parsedObj.mood_impact) {
-               parsedObj.mood_impact = parsedObj.moodImpact;
-             }
-             if (parsedObj.tools_to_call && !parsedObj.tool_calls) {
-               parsedObj.tool_calls = parsedObj.tools_to_call;
-             }
-             if (parsedObj.tool_calls && !parsedObj.tools_to_call) {
-               parsedObj.tools_to_call = parsedObj.tool_calls;
-             }
-             if (parsedObj.thoughts && !parsedObj.thought) parsedObj.thought = parsedObj.thoughts;
-             if (parsedObj.thought && !parsedObj.thoughts) parsedObj.thoughts = parsedObj.thought;
-             if (parsedObj.final_answer && !parsedObj.speech) parsedObj.speech = parsedObj.final_answer;
-             if (parsedObj.speech && !parsedObj.final_answer) parsedObj.final_answer = parsedObj.speech;
-             return parsedObj;
-           }
-         }
-       }
+            if (liftNestedProperties(parsedObj)) {
+              console.log("[PARSER] Detected nested properties schema confusion, lifting properties values to root context.");
+            }
+            // Synchronize common alternate keys
+            syncAlternateKeys(parsedObj);
+            return parsedObj;
+          }
+        } catch (innerErr) {
+          // Fall back to standard curly bracket isolation if local repair failed
+          cleaned = isolateBraceBlock(cleaned);
+          
+           if (cleaned.startsWith("{") && cleaned.endsWith("}")) {
+              const _fMatch = extractJsonObject(cleaned);
+              const parsedObj = _fMatch ? JSON.parse(_fMatch) : null;
+            if (parsedObj && typeof parsedObj === 'object' && liftNestedProperties(parsedObj)) {
+              console.log("[PARSER] Detected nested properties schema confusion, lifting properties values to root context.");
+            }
+            if (parsedObj && typeof parsedObj === 'object') {
+              // Synchronize common alternate keys
+              syncAlternateKeys(parsedObj);
+              return parsedObj;
+            }
+          }
+        }
      } catch (e) {
        // Ignore JSON parse errors, enter custom tag/XML-based logic below
      }

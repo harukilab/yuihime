@@ -5,7 +5,7 @@ import manifest from './manifest.json';
 
 export const PluginInstallerTool: ToolModule = {
   metadata: manifest as any,
-  execute: async (args: { id: string, config: string, code: string, runtime: string }) => {
+  execute: async (args: { id: string, config: string, code: string, runtime: string, repoUrl?: string, skill?: string }) => {
     console.log(`[INSTALLER] Attempting to install plugin: ${args.id}`);
     
     try {

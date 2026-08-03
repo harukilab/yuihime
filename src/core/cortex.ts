@@ -17,7 +17,7 @@ import { StorageService } from '@shared/drivers/storage';
 import { DreamEngine } from './dream';
 import { NeuralCircuitManager } from './circuits/NeuralCircuitFramework';
 import { MoodStabilizerCircuit, MemoryRefinerCircuit } from './circuits/StandardCircuits';
-import { Soul } from './soul';
+import { Soul } from '@shared/core/soul';
 import { stateMachine } from './kernel/state-machine';
 
 import { fetchCortexSettings } from './cortex/cortexSettings';
@@ -29,7 +29,7 @@ import { executeCortexThink } from './cortex/cortexThinkEngine';
 import { eventBus } from '@shared/core/kernel/event-bus';
 
 export { normalizeToolCall } from './cortex/toolNormalizer';
-export { PartialJsonFinalAnswerExtractor, StreamExtractor } from './cortex/streamExtractors';
+export { StreamExtractor } from './cortex/streamExtractors';
 
 export class Cortex {
   private neuralCircuits: NeuralCircuitManager | null = null;
@@ -78,14 +78,6 @@ export class Cortex {
     this.neuralCircuits.startAll();
     
     this.startAutonomousPulse(this.currentInterval);
-  }
-
-  public getNeuralCircuitManager() {
-    return this.neuralCircuits;
-  }
-
-  public getNanobotManager() {
-    return this.neuralCircuits;
   }
 
   public getModule<T = any>(id: string): T | undefined {
@@ -226,10 +218,6 @@ export class Cortex {
      const result = await DreamEngine.startCycle(this, state);
      const dreams = await StorageService.getDreams();
      return { dreams, reflections: logicContext.dreamInsight || result.reflections };
-  }
-
-  async consolidateDreams(dreams: Dream[]): Promise<Dream[]> {
-    return dreams;
   }
 
   async thinkSimple(prompt: string, jsonMode: boolean = false, modelOverride?: string): Promise<string> {

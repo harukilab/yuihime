@@ -1,5 +1,6 @@
 import { SystemRegistry } from '@shared/core/registry';
 import { extractJsonObject } from './cortex/jsonExtract.js';
+import { genId } from '@shared/core/idGen';
 
 /**
  * Convert registered Yuihime tool metadata into the native OpenAI
@@ -53,7 +54,7 @@ export function normalizeToolCallsToOpenAI(message: any, providerId: string): an
       return content
         .filter((b: any) => b && b.type === 'tool_use')
         .map((b: any) => ({
-          id: b.id || `call_${Math.random().toString(36).slice(2, 10)}`,
+          id: b.id || `call_${genId(10)}`,
           type: 'function',
           function: {
             name: b.name,
@@ -70,7 +71,7 @@ export function normalizeToolCallsToOpenAI(message: any, providerId: string): an
         if (p && p.functionCall) {
           const fc = p.functionCall;
           calls.push({
-            id: `call_${fc.name}_${Math.random().toString(36).slice(2, 8)}`,
+            id: `call_${fc.name}_${genId(8)}`,
             type: 'function',
             function: {
               name: fc.name,
@@ -88,7 +89,7 @@ export function normalizeToolCallsToOpenAI(message: any, providerId: string): an
       return raw.map((tc: any) => {
         const fn = tc.function || {};
         return {
-          id: tc.id || `call_${Math.random().toString(36).slice(2, 10)}`,
+          id: tc.id || `call_${genId(10)}`,
           type: 'function',
           function: {
             name: fn.name,

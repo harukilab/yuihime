@@ -2,6 +2,7 @@ import { Memory, LearnedStrategy, PerformanceMetric, AgentState, CoreKnowledge }
 import { Cortex } from "./cortex";
 import { StorageService } from "@shared/drivers/storage";
 import { StandardizedProcessor } from "./kernel/processor";
+import { genId } from '@shared/core/idGen';
 
 export class LearningEngine {
   /**
@@ -70,7 +71,7 @@ export class LearningEngine {
           }
           return {
             ...newS,
-            id: Math.random().toString(36).substr(2, 9),
+            id: genId(9),
             lastOptimized: Date.now()
           };
         });
@@ -130,7 +131,7 @@ export class LearningEngine {
             };
           } else {
             updatedKnowledge.push({
-              id: Math.random().toString(36).substr(2, 9),
+              id: genId(9),
               topic: newK.topic,
               content: newK.content,
               confidence: newK.confidence,

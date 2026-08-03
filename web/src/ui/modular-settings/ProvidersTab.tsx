@@ -11,6 +11,7 @@ import { REGISTERED_PROVIDERS_STATIC_DATA } from './settingsConstants';
 import { SystemRegistry } from '@shared/core/registry';
 import { ModuleType } from '@shared/include/types';
 import { LockedSlider } from '../../components/LockedSlider';
+import { genId } from '@shared/core/idGen';
 
 interface ProvidersTabProps {
   settings: any;
@@ -124,7 +125,7 @@ export const ProvidersTab: React.FC<ProvidersTabProps> = ({
   const addFallbackRow = () => {
     const currentChain = settings.gemini?.fallbackChain || [];
     const newRow = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: genId(9),
       provider: 'gemini',
       model: 'gemini-2.0-flash',
       apiKey: ''

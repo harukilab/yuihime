@@ -1,5 +1,6 @@
 import { CortexModule, ModuleType, AgentState } from '@shared/include/types';
 import { PromptRegistry } from '../../core/PromptRegistry';
+import { genId } from '@shared/core/idGen';
 
 const DEFAULT_CONSOLIDATION_PROMPT = `
 Analyze these recent interactive memories of AI agent "Yuihime" and consolidate them into a singular "Dream" segment.
@@ -93,7 +94,7 @@ export const MemoryConsolidationModule: CortexModule = {
       const responseBody = await think(prompt, true);
       const dreamData = JSON.parse(responseBody);
       
-      const dreamId = Math.random().toString(36).substr(2, 9);
+      const dreamId = genId(9);
       db.prepare(`
         INSERT INTO dreams (id, concept, abstractions, strength, lastReinforced, underlyingMemories)
         VALUES (?, ?, ?, ?, ?, ?)

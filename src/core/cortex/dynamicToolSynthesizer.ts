@@ -1,4 +1,5 @@
 import { extractJsonObject } from './jsonExtract.js';
+import { isolateBraceBlock } from './jsonRepairer.js';
 import { SystemRegistry } from '@shared/core/registry';
 import { ModuleType } from '@shared/include/types';
 import os from "os";
@@ -241,11 +242,9 @@ Kembalikan HANYA objek JSON tersebut. Pastikan JSON valid dan main_cjs bebas dar
       if (parsed && typeof parsed === 'object') return parsed;
     }
 
-    const firstBrace = text.indexOf('{');
-    const lastBrace = text.lastIndexOf('}');
-    if (firstBrace !== -1 && lastBrace > firstBrace) {
-      const sliced = text.slice(firstBrace, lastBrace + 1);
-      const parsed = tryParse(sliced);
+    const isolated = isolateBraceBlock(text);
+    if (isolated !== text) {
+      const parsed = tryParse(isolated);
       if (parsed && typeof parsed === 'object') return parsed;
     }
 

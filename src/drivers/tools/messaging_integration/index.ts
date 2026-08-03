@@ -2,6 +2,7 @@ import { ToolModule } from '@shared/include/types';
 import { SystemRegistry } from '@shared/core/registry';
 import manifest from './manifest.json';
 import { getDb } from '../../../core/database.js';
+import { genId } from '@shared/core/idGen';
 
 async function resolveTelegramChatId(recipient: string | undefined, context: any): Promise<{ tg_id: number; matchedName: string; source: string } | null> {
   // Determine target search name(s)
@@ -239,7 +240,7 @@ export const MessagingTool: ToolModule = {
         success: true,
         platform: args.platform,
         timestamp: new Date().toISOString(),
-        messageId: Math.random().toString(36).substr(2, 9),
+        messageId: genId(9),
         status: "Queued for delivery (Mock platform)"
       };
     } catch (error: any) {

@@ -2,6 +2,7 @@ import express from "express";
 import { deduplicateAndMergeIdentities, retryDbOperation } from "../../database.js";
 import { Cortex } from "../../cortex.js";
 import { APIService } from "@shared/services/api";
+import { genId } from '@shared/core/idGen';
 
 export function registerIdentitiesRoutes(app: express.Express, db: any) {
   console.log("[IDENTITIES_ROUTE_INIT] registerIdentitiesRoutes executed!");
@@ -28,7 +29,7 @@ export function registerIdentitiesRoutes(app: express.Express, db: any) {
   app.post("/api/storage/identities", (req, res) => {
     try {
       const iden = req.body;
-      const id = iden.id || Math.random().toString(36).substr(2, 9);
+      const id = iden.id || genId(9);
       const stmt = db.prepare(`
         INSERT INTO identities (id, perceivedName, realName, habits, importantFacts, linkedAccounts, lastInteraction, ownerId, trust, affection, reputation, yuiPerspective)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -76,7 +77,7 @@ export function registerIdentitiesRoutes(app: express.Express, db: any) {
       // Find or create identity
       let identity = db.prepare("SELECT * FROM identities WHERE perceivedName = ?").get(perceivedName);
       if (!identity) {
-        const id = Math.random().toString(36).substr(2, 9);
+        const id = genId(9);
         db.prepare(`
           INSERT INTO identities (id, perceivedName, realName, habits, importantFacts, linkedAccounts, lastInteraction, ownerId, trust, affection, reputation)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -243,7 +244,7 @@ export function registerIdentitiesRoutes(app: express.Express, db: any) {
       // Look up identity case-insensitively, automatically initializing if missing
       let identity = db.prepare("SELECT * FROM identities WHERE LOWER(perceivedName) = ?").get(claimedName.toLowerCase());
       if (!identity) {
-        const id = Math.random().toString(36).substr(2, 9);
+        const id = genId(9);
         await retryDbOperation(() =>
           db.prepare(`
             INSERT INTO identities (id, perceivedName, realName, habits, importantFacts, linkedAccounts, lastInteraction, ownerId, trust, affection, reputation)

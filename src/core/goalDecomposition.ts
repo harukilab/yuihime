@@ -11,6 +11,7 @@
  */
 
 import { getDb } from './database.js';
+import { genId } from '@shared/core/idGen';
 
 export interface Goal {
   id: string;
@@ -79,7 +80,7 @@ export function resetGoalCache() {
 }
 
 export function uid(prefix = 'goal'): string {
-  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  return `${prefix}_${Date.now()}_${genId(8)}`;
 }
 
 function rowToGoal(row: any): Goal | null {

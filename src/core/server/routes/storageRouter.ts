@@ -1,6 +1,7 @@
 import express from "express";
 import { broadcastToWS } from "../apiRouter.js";
 import { retryDbOperation } from "../../database.js";
+import { genId } from '@shared/core/idGen';
 
 export function registerStorageRoutes(app: express.Express, db: any) {
   console.log("[STORAGE_ROUTE_INIT] registerStorageRoutes executed!");
@@ -43,7 +44,7 @@ export function registerStorageRoutes(app: express.Express, db: any) {
   app.post("/api/storage/memories", async (req, res) => {
     try {
       const memory = req.body;
-      const id = memory.id || Math.random().toString(36).substr(2, 9);
+      const id = memory.id || genId(9);
       const timestamp = memory.timestamp || Date.now();
       const type = memory.type || 'fact';
       const content = memory.content || '';
@@ -171,7 +172,7 @@ export function registerStorageRoutes(app: express.Express, db: any) {
           `);
           for (const d of dreams) {
             stmt.run(
-              d.id || Math.random().toString(36).substr(2, 9),
+              d.id || genId(9),
               d.concept,
               JSON.stringify(d.abstractions || []),
               d.strength,
@@ -587,7 +588,7 @@ export function registerStorageRoutes(app: express.Express, db: any) {
         `);
         for (const k of items) {
           stmt.run(
-            k.id || Math.random().toString(36).substr(2, 9),
+            k.id || genId(9),
             k.topic,
             k.content,
             JSON.stringify(k.tags || []),
@@ -671,7 +672,7 @@ export function registerStorageRoutes(app: express.Express, db: any) {
               INSERT OR REPLACE INTO memories (id, type, content, importance, tags, context, sentiment, timestamp, speaker, chat_type)
               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `).run(
-              item.id || Math.random().toString(36).substr(2, 9),
+              item.id || genId(9),
               item.type || 'interaction',
               item.content || '',
               item.importance || 0.5,

@@ -1,20 +1,12 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, unlinkSync } from 'fs';
 import path from 'path';
 import os from 'os';
+import { expandHomePath } from './systemPaths.js';
 
 const RETENTION_DAYS = 7; // Sama seperti chat_logs: rotasi & retensi per tanggal
 const CLEANUP_INTERVAL_MS = 3600_000; // Cleanup maksimal sekali per jam
 
-function resolveHomePath(inputPath: string): string {
-  if (!inputPath) return "";
-  if (inputPath === "~") return os.homedir();
-  if (inputPath.startsWith("~/") || inputPath.startsWith("~\\")) {
-    return path.join(os.homedir(), inputPath.slice(2));
-  }
-  return inputPath;
-}
-
-const DEFAULT_LOG_DIR = path.join(resolveHomePath(process.env.YUIHIME_SYSTEM_ROOT || path.join(os.homedir(), '.yuihime')), 'logs');
+const DEFAULT_LOG_DIR = path.join(expandHomePath(process.env.YUIHIME_SYSTEM_ROOT || path.join(os.homedir(), '.yuihime')), 'logs');
 
 function ensureLogDir(dir: string) {
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });

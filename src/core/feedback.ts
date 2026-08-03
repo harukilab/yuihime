@@ -9,6 +9,7 @@
 
 import { getDb } from './database.js';
 import { createActionReview, resolveReviewByMessage } from './afterActionReview.js';
+import { genId } from '@shared/core/idGen';
 
 let preparedCache: { [k: string]: any } | null = null;
 
@@ -89,7 +90,7 @@ export function recordFeedback(data: {
     const db = getDb();
     let { messageId, contextId, channel, content } = data;
     if (!messageId) {
-      messageId = `manual_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+      messageId = `manual_${Date.now()}_${genId(7)}`;
     }
     if (!content) {
       const outbound = lookupOutboundMessage(messageId);
