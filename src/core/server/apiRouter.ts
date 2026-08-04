@@ -435,7 +435,7 @@ if (!globalThis.pendingConfirmations) {
   globalThis.pendingConfirmations = [];
 }
 
-export const requestFileOperationConfirmation = async (action: string, targetPath: string): Promise<boolean> => {
+export const requestFileOperationConfirmation = async (action: string, targetPath: string, preview?: string): Promise<boolean> => {
   const id = genId(8).toUpperCase();
   const item: {
     id: string;
@@ -456,19 +456,28 @@ export const requestFileOperationConfirmation = async (action: string, targetPat
   const activeTelegramBot = (globalThis as any).activeTelegramBot;
   if (activeTelegramBot) {
     const settings = SettingsManager.getInstance().getAll();
-    const masterChatId = settings.telegram_bridge?.masterChatId || settings.telegram_bridge?.chatId;
+    const masterChatId = settings.telegram_bridge?.masterChatId || settings.telegram_bridge?.chatId || settings.telegram_bridge?.adminId;
     if (masterChatId) {
       try {
+        const previewText = preview && preview.trim()
+          ? `\n\n• *Preview*:\n\`\`\`\n${preview.trim().slice(0, 900)}${preview.trim().length > 900 ? "\n..." : ""}\n\`\`\``
+          : '';
         await activeTelegramBot.telegram.sendMessage(masterChatId, 
-          `⚠️ *YUIHIME FILE ACCESS REQUEST* ⚠️\n\n` +
+          `⚠️ *YUIHIME ACTION REQUEST* ⚠️\n\n` +
           `• *Action*: \`${action.toUpperCase()}\`\n` +
-          `• *File*: \`${targetPath}\`\n` +
-          `• *ID*: \`${id}\`\n\n` +
-          `Please reply with:\n` +
-          `- \`/approve ${id}\` (Acc once)\n` +
-          `- \`/always ${id}\` (Always Acc this session)\n` +
-          `- \`/deny ${id}\` (Tolak)`,
-          { parse_mode: 'Markdown' }
+          `• *Target*: \`${targetPath}\`\n` +
+          `• *ID*: \`${id}\`` +
+          previewText,
+          {
+            parse_mode: 'Markdown',
+            reply_markup: {
+              inline_keyboard: [[
+                { text: '✅ Approve', callback_data: `confirm:approve:${id}` },
+                { text: '🔁 Always', callback_data: `confirm:always:${id}` },
+                { text: '❌ Deny', callback_data: `confirm:deny:${id}` }
+              ]]
+            }
+          }
         );
       } catch (err: any) {
         console.error("[BOT_CONFIRM_NOTIFY_ERR] Failed to notify Telegram:", err.message);
@@ -481,6 +490,9 @@ export const requestFileOperationConfirmation = async (action: string, targetPat
   console.log(`⚠️  PENDING CONFIRMATION REQUEST [ID: ${id}]`);
   console.log(`👉 Action: ${action.toUpperCase()}`);
   console.log(`👉 File Path: ${targetPath}`);
+  if (preview && preview.trim()) {
+    console.log(`👉 Preview:\n${preview.trim().slice(0, 900)}${preview.trim().length > 900 ? "\n..." : ""}`);
+  }
   console.log(`👉 Approve via Web, Telegram bot, or CLI commands:`);
   console.log(`   - approve ${id}`);
   console.log(`   - always ${id}`);
@@ -532,7 +544,7 @@ const fuzzyFindFile = (dir: string, fileName: string): string | null => {
   return null;
 };
 
-export const verifySandboxPath = async (targetPath: string, action?: string, confirmed?: boolean): Promise<string> => {
+export const verifySandboxPath = async (targetPath: string, action?: string, confirmed?: boolean, preview?: string): Promise<string> => {
   if (targetPath.includes('\0')) {
     throw new Error("PATH_JAIL_ERROR: Null Byte injection detected. Please revise your path to avoid null character bytes.");
   }
@@ -649,59 +661,17 @@ export const verifySandboxPath = async (targetPath: string, action?: string, con
   }
 
   // Check file modifications / changes for "half" and "off" modes:
+  // Policy: WRITE/EDIT/DELETE/MOVE/COPY on ANY path always requires explicit user
+  // confirmation ("ask"), unless YOLO is FULL or auto_acc_user_data is enabled.
   const isChangeAction = action === 'write' || action === 'delete' || action === 'move' || action === 'copy';
-  
+
   if (isChangeAction) {
-    if (yoloMode === 'half') {
-      // Whitelist check
-      const checkWhitelist = (resolved: string): boolean => {
-        if (resolved.startsWith(dynamicSandboxRoot)) return true;
-        const dataDir = path.resolve(apiCustomSystemRoot, 'data');
-        if (resolved.startsWith(dataDir)) return true;
-        if (resolved.startsWith(apiCustomSystemRoot)) return true;
-
-        // Custom whitelist
-        const whitelistRaw = settings.sandbox_paths?.whitelist;
-        if (whitelistRaw) {
-          const list = Array.isArray(whitelistRaw)
-            ? whitelistRaw
-            : typeof whitelistRaw === 'string'
-              ? whitelistRaw.split(',').map(s => s.trim())
-              : [];
-          for (const item of list) {
-            if (!item) continue;
-            const resolvedItem = path.resolve(process.cwd(), item);
-            if (resolved === resolvedItem || resolved.startsWith(resolvedItem + path.sep)) {
-              return true;
-            }
-          }
-        }
-        return false;
-      };
-
-      if (!checkWhitelist(resolvedPath)) {
-        const autoAcc = settings.sandbox_paths?.auto_acc_user_data === true;
-        if (confirmed !== true && !autoAcc) {
-          const approved = await requestFileOperationConfirmation(action || 'write', targetPath);
-          if (!approved) {
-            throw new Error(`CONFIRMATION_REQUIRED: Action '${action}' on path '${targetPath}' was denied or timed out.`);
-          }
-        }
-      }
-    } else {
-      // Standard 'off' mode:
-      // Stage 2 (Secondary Users Data): Inside user_data (dynamicSandboxRoot). Write/Edit or Delete actions require explicit confirmation.
-      const isInsideUserData = resolvedPath.startsWith(dynamicSandboxRoot);
-      if (isInsideUserData) {
-        const fileExists = existsSync(resolvedPath);
-        const isEditOrDelete = (action === 'write' && fileExists) || action === 'delete' || action === 'move' || action === 'copy';
-
-        const autoAcc = settings.sandbox_paths?.auto_acc_user_data === true;
-        if (isEditOrDelete && confirmed !== true && !autoAcc) {
-          const approved = await requestFileOperationConfirmation(action || 'write', targetPath);
-          if (!approved) {
-            throw new Error(`CONFIRMATION_REQUIRED: Action '${action}' on user_data file/folder requires explicit confirmation.`);
-          }
+    if (yoloMode !== 'full') {
+      const autoAcc = settings.sandbox_paths?.auto_acc_user_data === true;
+      if (confirmed !== true && !autoAcc) {
+        const approved = await requestFileOperationConfirmation(action || 'write', targetPath, preview);
+        if (!approved) {
+          throw new Error(`CONFIRMATION_REQUIRED: Action '${action}' on path '${targetPath}' was denied or timed out.`);
         }
       }
     }
@@ -714,8 +684,8 @@ export const verifySandboxPath = async (targetPath: string, action?: string, con
  * Resolves a target path against the YUIHIME_SYSTEM_ROOT environment variable (apiCustomSystemRoot)
  * or the user_data sandbox directory, validating security boundaries and avoiding path escape risks.
  */
-export const resolveSystemRootPath = async (targetPath: string, action?: string, confirmed?: boolean): Promise<string> => {
-  return verifySandboxPath(targetPath, action, confirmed);
+export const resolveSystemRootPath = async (targetPath: string, action?: string, confirmed?: boolean, preview?: string): Promise<string> => {
+  return verifySandboxPath(targetPath, action, confirmed, preview);
 };
 
 // --- API Router Registration ---

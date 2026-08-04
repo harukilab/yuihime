@@ -13,6 +13,6 @@ export const ResearchAgent: SubAgentDefinition = {
     maxMemoryTokens: 20,
     memoryTags: ['research', 'fact', 'knowledge']
   },
-  allowedTools: ['web_search', 'web_fetch'],
+  allowedTools: ['websearch', 'webfetch'],
   maxIterations: 3
 };

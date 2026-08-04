@@ -75,9 +75,17 @@ export class CustomToolsLoader {
               }
             } catch (e) {}
 
-            exec(command, { timeout: shellTimeout }, (error, stdout, stderr) => {
+            exec(command, { timeout: shellTimeout, maxBuffer: 10 * 1024 * 1024 }, (error, stdout, stderr) => {
               if (error) {
-                reject(error);
+                const isTimeout = error.killed || (error.message && error.message.includes('timed out'));
+                resolve({
+                  stdout: stdout || '',
+                  stderr: stderr || '',
+                  error: isTimeout
+                    ? `Command timed out after ${shellTimeout / 1000}s.`
+                    : error.message,
+                  timedOut: !!isTimeout
+                });
               } else {
                 resolve({ stdout, stderr });
               }

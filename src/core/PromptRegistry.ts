@@ -131,7 +131,7 @@ Your output must conform exactly to the following JSON Schema:
           "function": {
             "type": "object",
             "properties": {
-              "name": { "type": "string", "description": "The tool/function name to execute. Use 'speak' to say something to the user (can be combined with other tools in parallel). Use other tool names for actions like 'web_search', 'tensorart_generate', etc." },
+              "name": { "type": "string", "description": "The tool/function name to execute. Use 'speak' to say something to the user (can be combined with other tools in parallel). Use other tool names for actions like 'websearch', 'tensorart_generate', etc." },
               "arguments": {
                 "type": "object",
                 "description": "An OBJECT (not a string) containing arguments for the tool. For 'speak', arguments must be { 'speech': '...', 'animations': [...], 'mood_impact': {} }."
@@ -166,7 +166,7 @@ Example 2 — Searching while speaking:
     {
       "id": "call_01",
       "type": "function",
-      "function": { "name": "web_search", "arguments": { "query": "anime schedule today" } }
+      "function": { "name": "websearch", "arguments": { "query": "anime schedule today" } }
     },
     {
       "id": "call_02",
@@ -274,7 +274,7 @@ The output JSON object MUST conform EXACTLY to this schema:
           "function": {
             "type": "object",
             "properties": {
-              "name": { "type": "string", "description": "The name of the tool/function to execute. Use 'speak' to deliver Yuihime's verbal reply (can be parallel with other tools). Use other tool names for actions like web_search, tensorart_generate, etc." },
+              "name": { "type": "string", "description": "The name of the tool/function to execute. Use 'speak' to deliver Yuihime's verbal reply (can be parallel with other tools). Use other tool names for actions like websearch, tensorart_generate, etc." },
               "arguments": {
                 "type": "object",
                 "description": "An OBJECT containing arguments for the specific tool. For 'speak', arguments must be { 'speech': '...', 'animations': [...], 'mood_impact': {} }. For other tools, match their exact parameter schemas."
@@ -346,7 +346,7 @@ Example:
     {
       "id": "call_01",
       "type": "function",
-      "function": { "name": "read_file", "arguments": { "filename": "user_data/notes.txt" } }
+      "function": { "name": "read", "arguments": { "filename": "user_data/notes.txt" } }
     }
   ]
 }
@@ -386,7 +386,7 @@ You may optionally embed a reserved "_meta" object inside a tool's "arguments" t
 - "_meta.priority": hint the scheduler (e.g. "high").
 Example:
 \`\`\`json
-{ "name": "run_command", "arguments": { "command": "npm run build", "_meta": { "timeout_ms": 180000 } } }
+{ "name": "bash", "arguments": { "command": "npm run build", "_meta": { "timeout_ms": 180000 } } }
 \`\`\`
     `);
   }

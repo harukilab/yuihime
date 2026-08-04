@@ -103,7 +103,7 @@ export const ConfidenceEstimatorModule: CortexModule = {
     // Jika fakta tapi tak ter-grounding, namun tool web search tersedia → bisa ditawarkan
     let webSearchAvailable = false;
     try {
-      webSearchAvailable = typeof window === 'undefined' && !!SystemRegistry.getTool('web_search');
+      webSearchAvailable = typeof window === 'undefined' && !!SystemRegistry.getTool('websearch');
     } catch (e) {
       webSearchAvailable = false;
     }

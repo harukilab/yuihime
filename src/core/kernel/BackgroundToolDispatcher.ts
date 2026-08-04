@@ -337,7 +337,7 @@ class BackgroundToolDispatcher {
       const generalTimeoutMs = toolExecutorConfig.timeoutMs !== undefined
         ? Number(toolExecutorConfig.timeoutMs)
         : DEFAULT_TIMEOUT_MS;
-      const isShell = ['run_command', 'shell', 'execute_shell'].includes(toolName);
+      const isShell = ['bash', 'shell'].includes(toolName);
       const activeTimeoutMs = metaTimeoutMs !== undefined
         ? metaTimeoutMs
         : (isShell

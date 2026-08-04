@@ -6,7 +6,7 @@ import { exec } from "child_process";
 import { promisify } from "util";
 import { AIService } from "../../kernel/ai.js";
 import { SettingsManager } from "@/core/kernel/settings";
-import { apiCustomSystemRoot, verifySandboxPath, getDynamicSandboxRoot, resolveSystemRootPath, getYoloMode, getCommandBlacklist, getCommandWhitelist } from "../apiRouter.js";
+import { apiCustomSystemRoot, verifySandboxPath, getDynamicSandboxRoot, resolveSystemRootPath, getYoloMode, getCommandBlacklist, getCommandWhitelist, requestFileOperationConfirmation } from "../apiRouter.js";
 import { CustomToolsLoader } from "../../CustomToolsLoader.js";
 import { getDb } from "../../database.js";
 import { writeAvailableToolsFile } from "@/core/toolRegistryFile";
@@ -42,6 +42,66 @@ function getCleanRelativePath(filename: string): string {
   cleaned = cleaned.replace(/^.*\.yuihime\//, '');
   if (cleaned.startsWith('/')) cleaned = cleaned.substring(1);
   return cleaned;
+}
+
+function toGrepModelOutput(output: any): string {
+  const lines = output.items.length === 0 ? ["No files found"] : [`Found ${output.items.length} matches`];
+  let current = "";
+  for (const match of output.items) {
+    if (current !== match.entry.path) {
+      if (current) lines.push("");
+      current = match.entry.path;
+      lines.push(`${match.entry.path}:`);
+    }
+    lines.push(`  Line ${match.line}: ${match.text}`);
+  }
+  if (output.truncated) lines.push("", `(Results truncated: showing first ${output.items.length} matches.)`);
+  if (output.partial) lines.push("", "(Some paths were inaccessible.)");
+  return lines.join("\n");
+}
+
+function globToRegExp(pattern: string): RegExp {
+  let re = "^";
+  for (let i = 0; i < pattern.length; i++) {
+    const c = pattern[i];
+    if (c === '*') {
+      re += '.*';
+    } else if (c === '?') {
+      re += '.';
+    } else if (c === '[') {
+      let j = i + 1;
+      let negate = false;
+      if (pattern[j] === '!' || pattern[j] === '^') { negate = true; j++; }
+      let cls = '';
+      while (j < pattern.length && pattern[j] !== ']') { cls += pattern[j]; j++; }
+      if (j < pattern.length) {
+        re += '[' + (negate ? '^' : '') + cls.replace(/\\/g, '\\\\') + ']';
+        i = j;
+      } else {
+        re += '\\[';
+      }
+    } else if (c === '{') {
+      let depth = 1;
+      let j = i + 1;
+      let body = '';
+      while (j < pattern.length && depth > 0) {
+        if (pattern[j] === '{') depth++;
+        if (pattern[j] === '}') depth--;
+        if (depth > 0) body += pattern[j];
+        j++;
+      }
+      if (depth === 0) {
+        re += '(?:' + body.split(',').map((s) => s.replace(/\*/g, '.*').replace(/\?/g, '.')).join('|') + ')';
+        i = j;
+      } else {
+        re += '\\{';
+      }
+    } else {
+      re += c.replace(/[.+^$()\[\]|\\]/g, '\\$&');
+    }
+  }
+  re += '$';
+  return new RegExp(re);
 }
 
 export function registerToolsRoutes(app: express.Express, db: any) {
@@ -112,7 +172,7 @@ export function registerToolsRoutes(app: express.Express, db: any) {
         id: 'tool_' + genId(9),
         timestamp: Date.now(),
         toolName: toolName,
-        endpointPath: "/api/tools" + req.path,
+        endpointPath: req.path,
         parameters: cleanParams,
         response: isSuccess ? cleanResponse : null,
         responseSchema: isSuccess ? APIService.inferSchema(cleanResponse) : null,
@@ -158,8 +218,9 @@ export function registerToolsRoutes(app: express.Express, db: any) {
   });
 
   app.post("/api/tools/snipper", async (req, res) => {
-    const { url, selector, saveToMemory, context, importance, defaultUserAgent, maxContentLength, engine, jinaApiKey } = req.body;
+    const { url, selector, saveToMemory, context, importance, defaultUserAgent, maxContentLength, engine, jinaApiKey, format: reqFormat } = req.body;
     if (!url) return res.status(400).json({ error: "No URL provided" });
+    const format = reqFormat || 'markdown';
 
     try {
       let extractedText = '';
@@ -169,9 +230,9 @@ export function registerToolsRoutes(app: express.Express, db: any) {
       // 1. Primary Engine: Jina Reader API
       if (scrapeEngine === 'jina') {
         try {
-          console.log(`[WEB_SNIPPER] Scraping via Jina Reader API (r.jina.ai) in Express Route for URL: ${url}`);
+          console.log(`[WEB_FETCH] Fetching via Jina Reader API (r.jina.ai) in Express Route for URL: ${url}`);
           const jinaHeaders: Record<string, string> = {
-            'Accept': 'text/plain'
+            'Accept': format === 'text' ? 'text/plain' : 'text/markdown, text/plain'
           };
           if (jinaApiKey) {
             jinaHeaders['Authorization'] = `Bearer ${jinaApiKey}`;
@@ -188,18 +249,19 @@ export function registerToolsRoutes(app: express.Express, db: any) {
           if (jinaResponse.ok) {
             extractedText = await jinaResponse.text();
             scrapeSuccess = true;
-            console.log(`[WEB_SNIPPER] Successfully scraped ${extractedText.length} chars via Jina Reader API.`);
+            console.log(`[WEB_FETCH] Successfully fetched ${extractedText.length} chars via Jina Reader API.`);
           } else {
-            console.warn(`[WEB_SNIPPER] Jina Reader in API route returned non-ok status: ${jinaResponse.status} ${jinaResponse.statusText}. Falling back to local scraper...`);
+            console.warn(`[WEB_FETCH] Jina Reader in API route returned non-ok status: ${jinaResponse.status} ${jinaResponse.statusText}. Falling back to local scraper...`);
           }
         } catch (jinaErr: any) {
-          console.warn(`[WEB_SNIPPER] Jina Reader in API route failed (${jinaErr.message}). Falling back to local scraper...`);
+          console.warn(`[WEB_FETCH] Jina Reader in API route failed (${jinaErr.message}). Falling back to local scraper...`);
         }
       }
 
       // 2. Secondary Engine/Fallback: Local scraping via Cheerio / Regex
+      let localContentType = 'text/html';
       if (!scrapeSuccess) {
-        console.log(`[WEB_SNIPPER] Scraping via Local Scraper in Express Route for URL: ${url}`);
+        console.log(`[WEB_FETCH] Scraping via Local Scraper in Express Route for URL: ${url}`);
         const userAgent = defaultUserAgent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
         const response = await fetch(url, { 
           headers: { 'User-Agent': userAgent },
@@ -209,6 +271,7 @@ export function registerToolsRoutes(app: express.Express, db: any) {
         if (!response.ok) {
           throw new Error(`Failed to fetch URL ${url}: ${response.status} ${response.statusText}`);
         }
+        localContentType = response.headers.get('content-type') || 'text/html';
 
         const html = await response.text();
         let cheerioFailed = false;
@@ -217,7 +280,7 @@ export function registerToolsRoutes(app: express.Express, db: any) {
         try {
           $ = load(html);
         } catch (cheerioErr: any) {
-          console.warn("[WEB_SNIPPER] Cheerio fallback triggered in API route:", cheerioErr.message);
+          console.warn("[WEB_FETCH] Cheerio fallback triggered in API route:", cheerioErr.message);
           cheerioFailed = true;
         }
 
@@ -238,6 +301,11 @@ export function registerToolsRoutes(app: express.Express, db: any) {
               });
               extractedText = texts.join('\n\n');
             }
+          } else if (format === 'text') {
+            extractedText = $('body').text()
+              .replace(/\s+/g, ' ')
+              .replace(/\n\s*\n/g, '\n')
+              .trim();
           } else {
             extractedText = $('body').text()
               .replace(/\s+/g, ' ')
@@ -262,6 +330,9 @@ export function registerToolsRoutes(app: express.Express, db: any) {
 
       const result: any = {
         url,
+        contentType: scrapeSuccess ? 'text/markdown' : localContentType,
+        format,
+        output: extractedText,
         selector: selector || null,
         length: extractedText.length,
         content: extractedText,
@@ -275,11 +346,11 @@ export function registerToolsRoutes(app: express.Express, db: any) {
         const memoryData = {
           type: "system",
           speaker: "system",
-          content: `[WEB_SNIPPER] Snipped data from ${url} (Selector: ${selector || 'Entire page'}):\n${extractedText}`,
-          tags: ["web_snip", "scraped_content"],
+          content: `[WEB_FETCH] Fetched data from ${url} (Format: ${format}):\n${extractedText}`,
+          tags: ["web_fetch", "scraped_content"],
           context: memoryContext,
           importance: imp,
-          meta: { url, selector, snippedAt: Date.now() }
+          meta: { url, format, snippedAt: Date.now() }
         };
 
         const saved = await StorageServer.saveMemory(memoryData);
@@ -290,7 +361,7 @@ export function registerToolsRoutes(app: express.Express, db: any) {
 
       res.json(result);
     } catch (error: any) {
-      console.error("[SERVER] WebSnipper route execution failed:", error);
+      console.error("[SERVER] WebFetch route execution failed:", error);
       res.status(500).json({ error: error.message });
     }
   });
@@ -464,9 +535,23 @@ export function registerToolsRoutes(app: express.Express, db: any) {
   });
 
   app.post("/api/tools/shell", async (req, res) => {
-    const { command } = req.body;
+    const { command, workdir, timeout: reqTimeout } = req.body;
     if (!command) return res.status(400).json({ error: "No command provided" });
-    
+
+    let shellTimeout = 120000;
+    try {
+      const settings = await SettingsManager.getInstance().load();
+      const toolExecutorConfig = settings['tool-executor'] || {};
+      if (toolExecutorConfig.shellTimeoutMs !== undefined) {
+        shellTimeout = Number(toolExecutorConfig.shellTimeoutMs);
+      }
+    } catch (e) {
+      console.warn("[SERVER] Failed to load tool-executor config for shell route, using 120s fallback.", e);
+    }
+    if (typeof reqTimeout === 'number' && reqTimeout > 0) {
+      shellTimeout = Math.min(reqTimeout, 600000);
+    }
+
     try {
       const yoloMode = getYoloMode();
       const isYoloFull = yoloMode === 'full';
@@ -479,44 +564,201 @@ export function registerToolsRoutes(app: express.Express, db: any) {
       const isWhitelisted = whitelist.some((w: string) => command.includes(w));
 
       if (!isYoloFull && isBlacklisted && !isWhitelisted) {
-        return res.status(403).json({ error: "Command restricted for safety." });
+        const approved = await requestFileOperationConfirmation('shell-command', command, command);
+        if (!approved) {
+          return res.status(403).json({ error: "Command denied by user confirmation." });
+        }
       }
 
       const sandboxDir = getDynamicSandboxRoot();
-      const workingDir = (isYoloFull || isYoloHalf) ? process.cwd() : sandboxDir;
+      let workingDir: string;
+      if (workdir && typeof workdir === 'string') {
+        workingDir = path.isAbsolute(workdir) ? path.resolve(workdir) : path.resolve(process.cwd(), workdir);
+      } else {
+        workingDir = (isYoloFull || isYoloHalf) ? process.cwd() : sandboxDir;
+      }
       await fs.mkdir(workingDir, { recursive: true });
 
-      let shellTimeout = 120000;
-      try {
-        const settings = await SettingsManager.getInstance().load();
-        const toolExecutorConfig = settings['tool-executor'] || {};
-        if (toolExecutorConfig.shellTimeoutMs !== undefined) {
-          shellTimeout = Number(toolExecutorConfig.shellTimeoutMs);
+      const MAX_BUFFER = 10 * 1024 * 1024;
+      const { stdout, stderr } = await execPromise(command, {
+        cwd: workingDir,
+        timeout: shellTimeout,
+        maxBuffer: MAX_BUFFER
+      });
+
+      const stdoutTruncated = Buffer.byteLength(stdout || '', 'utf8') >= MAX_BUFFER;
+      const stderrTruncated = Buffer.byteLength(stderr || '', 'utf8') >= MAX_BUFFER;
+
+      res.json({
+        command,
+        cwd: workingDir,
+        exitCode: 0,
+        stdout: stdout || '',
+        stderr: stderr || '',
+        truncated: stdoutTruncated || stderrTruncated,
+        stdoutTruncated,
+        stderrTruncated,
+        timedOut: false
+      });
+    } catch (error: any) {
+      const isTimeout = error.killed || (error.message && error.message.includes('timed out'));
+      res.status(isTimeout ? 200 : 500).json({
+        command,
+        cwd: workdir || process.cwd(),
+        exitCode: error.code ?? 1,
+        stdout: error.stdout || '',
+        stderr: error.stderr || '',
+        truncated: false,
+        timedOut: !!isTimeout,
+        error: isTimeout
+          ? `Command timed out after ${shellTimeout / 1000}s.`
+          : error.message
+      });
+    }
+  });
+
+  app.post("/api/tools/question", async (req, res) => {
+    const { questions } = req.body;
+    if (!Array.isArray(questions) || questions.length === 0) {
+      return res.status(400).json({ error: "No questions provided" });
+    }
+
+    try {
+      const answers: string[][] = [];
+      for (const q of questions) {
+        answers.push([]);
+      }
+      res.json({ success: true, answers });
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  app.post("/api/tools/apply-patch", async (req, res) => {
+    const { patchText } = req.body;
+    if (!patchText || !patchText.trim()) {
+      return res.status(400).json({ success: false, error: "patchText is required" });
+    }
+
+    try {
+      const lines = patchText.split("\n");
+      const applied: Array<{ type: string; resource: string; target: string }> = [];
+      let currentFile = "";
+      let currentLines: string[] = [];
+
+      const flushFile = async () => {
+        if (!currentFile) return;
+        const filePath = path.isAbsolute(currentFile) ? currentFile : path.resolve(process.cwd(), currentFile);
+        const dir = path.dirname(filePath);
+        await fs.mkdir(dir, { recursive: true });
+        await fs.writeFile(filePath, currentLines.join("\n") + "\n", "utf-8");
+        applied.push({ type: "add", resource: currentFile, target: filePath });
+      };
+
+      for (const line of lines) {
+        if (line.startsWith("--- a/") || line.startsWith("--- /dev/null")) continue;
+        if (line.startsWith("+++ b/")) {
+          await flushFile();
+          currentFile = line.slice(6);
+          currentLines = [];
+          continue;
         }
-      } catch (e) {
-        console.warn("[SERVER] Failed to load tool-executor config for shell route, using 120s fallback.", e);
+        if (line.startsWith("@@")) {
+          await flushFile();
+          currentFile = "";
+          currentLines = [];
+          continue;
+        }
+        if (line.startsWith("-")) {
+          continue;
+        }
+        if (line.startsWith("+")) {
+          currentLines.push(line.slice(1));
+          continue;
+        }
+        if (line.startsWith(" ")) {
+          currentLines.push(line.slice(1));
+          continue;
+        }
+      }
+      await flushFile();
+
+      res.json({ success: true, applied });
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  app.post("/api/tools/grep", async (req, res) => {
+    const { pattern, path: searchPath, include, limit } = req.body;
+    if (!pattern) return res.status(400).json({ error: "No pattern provided" });
+    try {
+      const sandboxDir = getDynamicSandboxRoot();
+      const cwd = searchPath || sandboxDir;
+      const includeFlag = include ? `--include '${include}'` : '';
+      const grepLimit = Math.min(Math.max(1, Number(limit) || 100), 500);
+      const cmd = `grep -rn ${includeFlag} -E '${pattern}' '${cwd}' 2>/dev/null | head -${grepLimit}`;
+      const { stdout } = await execPromise(cmd, { timeout: 10000, maxBuffer: 5 * 1024 * 1024 });
+
+      // Parse into Kilocode-style items: [{ entry: { path }, line, text }]
+      const items: any[] = [];
+      const totalLines = stdout.trim() ? stdout.split('\n') : [];
+      for (const line of totalLines) {
+        const idx = line.indexOf(':');
+        if (idx === -1) continue;
+        const p = line.substring(0, idx);
+        const rest = line.substring(idx + 1);
+        const idx2 = rest.indexOf(':');
+        if (idx2 === -1) continue;
+        const lineNo = parseInt(rest.substring(0, idx2), 10);
+        if (isNaN(lineNo)) continue;
+        items.push({
+          entry: { path: getCleanRelativePath(p) },
+          line: lineNo,
+          text: rest.substring(idx2 + 1)
+        });
       }
 
-      const { stdout, stderr } = await execPromise(command, { cwd: workingDir, timeout: shellTimeout });
-      res.json({ stdout, stderr });
+      res.json({
+        success: true,
+        items,
+        truncated: totalLines.length >= grepLimit,
+        partial: false,
+        output: toGrepModelOutput({ items, truncated: totalLines.length >= grepLimit, partial: false })
+      });
     } catch (error: any) {
-      res.status(500).json({ error: error.message, stderr: error.stderr });
+      res.json({
+        success: true,
+        items: [],
+        truncated: false,
+        partial: false,
+        output: 'No files found',
+        stderr: error.stderr || ''
+      });
     }
   });
 
   app.post("/api/tools/files/write", async (req, res) => {
-    const { filename, content } = req.body;
-    if (!filename) return res.status(400).json({ error: "No filename provided" });
+    const { filename, path: filePath, content } = req.body;
+    const target = filename || filePath;
+    if (!target) return res.status(400).json({ error: "No filename provided" });
 
     try {
-      const safePath = await resolveSystemRootPath(filename, 'write');
+      const preview = typeof content === 'string' ? content.slice(0, 900) : undefined;
+      const safePath = await resolveSystemRootPath(target, 'write', undefined, preview);
+      const existed = existsSync(safePath);
       await fs.mkdir(path.dirname(safePath), { recursive: true });
       await fs.writeFile(safePath, content || "");
+      const cleanRel = getCleanRelativePath(safePath);
       res.json({
         success: true,
-        path: getCleanRelativePath(safePath),
+        operation: 'write',
+        target: cleanRel,
+        resource: cleanRel,
+        existed,
+        path: cleanRel,
         folder: getCleanDisplayFolder(path.dirname(safePath)),
-        message: `Successfully wrote file to "${getCleanRelativePath(safePath)}"`
+        message: `${existed ? 'Wrote' : 'Created'} file successfully: ${cleanRel}`
       });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -524,28 +766,57 @@ export function registerToolsRoutes(app: express.Express, db: any) {
   });
 
   app.post("/api/tools/files/edit-segment", async (req, res) => {
-    const { filename, search, replace, changes } = req.body;
-    if (!filename) return res.status(400).json({ error: "No filename provided" });
+    const { filename, path: filePath, search, replace, changes, oldString, newString, replaceAll } = req.body;
+    const target = filename || filePath;
+    if (!target) return res.status(400).json({ error: "No filename provided" });
 
     try {
-      const safePath = await resolveSystemRootPath(filename, 'write');
-      if (!existsSync(safePath)) {
-        return res.status(404).json({ error: `File not found at path: ${filename}` });
-      }
+      let rawContent: string | null = null;
+      try {
+        const peek = await resolveSystemRootPath(target, 'read');
+        if (existsSync(peek)) {
+          rawContent = await fs.readFile(peek, "utf-8");
+        }
+      } catch (_) {}
 
-      let content = await fs.readFile(safePath, "utf-8");
-      
-      // Determine list of changes to process
+      // Determine list of changes to support (Kilocode oldString/newString/replaceAll)
       let changeList: Array<{ search: string; replace: string }> = [];
       if (changes && Array.isArray(changes)) {
         changeList = changes;
+      } else if (typeof oldString === 'string') {
+        if (oldString === newString) {
+          return res.status(400).json({ success: false, error: "No changes to apply: oldString and newString are identical." });
+        }
+        if (oldString === "") {
+          return res.status(400).json({ success: false, error: "oldString must not be empty. Use write to create or overwrite a file." });
+        }
+        changeList = [{ search: oldString, replace: newString || "" }];
       } else if (typeof search === 'string' && typeof replace === 'string') {
         changeList = [{ search, replace }];
       } else {
-        return res.status(400).json({ error: "Please provide either search/replace strings or a changes array." });
+        return res.status(400).json({ error: "Please provide either oldString/newString (Kilocode) or search/replace strings or a changes array." });
       }
 
+      // Build a compact diff preview for the confirmation prompt
+      const previewLines: string[] = [];
+      for (const change of changeList) {
+        const before = change.search.replace(/\r\n/g, "\n");
+        const after = change.replace.replace(/\r\n/g, "\n");
+        const beforeLines = before.split("\n").slice(0, 6).map(l => `- ${l.length > 240 ? l.slice(0, 240) + "..." : l}`);
+        const afterLines = after.split("\n").slice(0, 6).map(l => `+ ${l.length > 240 ? l.slice(0, 240) + "..." : l}`);
+        previewLines.push(...beforeLines, ...afterLines);
+      }
+      const preview = previewLines.join("\n");
+
+      const safePath = await resolveSystemRootPath(target, 'write', undefined, preview);
+      if (!existsSync(safePath)) {
+        return res.status(404).json({ error: `File not found at path: ${target}` });
+      }
+
+      let content = rawContent ?? await fs.readFile(safePath, "utf-8");
+
       let modified = false;
+      let totalReplacements = 0;
       const results: any[] = [];
 
       // Normalize content line-endings to avoid \r\n vs \n issues
@@ -572,8 +843,33 @@ export function registerToolsRoutes(app: express.Express, db: any) {
           continue;
         }
 
-        const lastIdx = normalizedContent.lastIndexOf(normalizedSearch);
-        if (firstIdx !== lastIdx) {
+        // Count all occurrences
+        let count = 0;
+        let off = 0;
+        while ((off = normalizedContent.indexOf(normalizedSearch, off)) !== -1) {
+          count++;
+          off += normalizedSearch.length;
+        }
+
+        const firstIdxOnly = firstIdx === normalizedContent.lastIndexOf(normalizedSearch);
+        if (count > 1 && replaceAll !== true && changeList.length === 1 && typeof oldString === 'string') {
+          results.push({
+            index: i,
+            success: false,
+            error: "Found multiple exact matches for oldString. Provide more surrounding context or set replaceAll to true.",
+            matches: count
+          });
+          continue;
+        }
+
+        // Replace (single unique occurrence or all when replaceAll)
+        if (replaceAll === true && changeList.length === 1 && typeof oldString === 'string') {
+          normalizedContent = normalizedContent.split(normalizedSearch).join(normalizedReplace);
+          totalReplacements += count;
+        } else if (firstIdxOnly) {
+          normalizedContent = normalizedContent.substring(0, firstIdx) + normalizedReplace + normalizedContent.substring(firstIdx + normalizedSearch.length);
+          totalReplacements += 1;
+        } else {
           results.push({ 
             index: i, 
             success: false, 
@@ -581,25 +877,28 @@ export function registerToolsRoutes(app: express.Express, db: any) {
           });
           continue;
         }
-
-        // Replace unique occurrence
-        normalizedContent = normalizedContent.substring(0, firstIdx) + normalizedReplace + normalizedContent.substring(firstIdx + normalizedSearch.length);
         modified = true;
-        results.push({ index: i, success: true });
+        results.push({ index: i, success: true, replacements: replaceAll === true && typeof oldString === 'string' ? count : 1 });
       }
 
       if (modified) {
         await fs.writeFile(safePath, normalizedContent, "utf-8");
+        const cleanRel = getCleanRelativePath(safePath);
         res.json({
           success: true,
-          path: getCleanRelativePath(safePath),
+          operation: 'write',
+          target: cleanRel,
+          resource: cleanRel,
+          existed: true,
+          replacements: totalReplacements,
+          path: cleanRel,
           workspacePath: path.relative(process.cwd(), safePath).replace(/\\/g, '/'),
           absolutePath: safePath.replace(/\\/g, '/'),
           physicalPath: safePath.replace(/\\/g, '/'),
           physicalFolder: path.dirname(safePath).replace(/\\/g, '/'),
           workspaceFolder: path.relative(process.cwd(), path.dirname(safePath)).replace(/\\/g, '/'),
           results,
-          message: `Successfully edited segments of file "${getCleanRelativePath(safePath)}"`
+          message: `Edited file successfully: ${cleanRel}`
         });
       } else {
         const failedResult = results.find(r => !r.success);
@@ -615,26 +914,53 @@ export function registerToolsRoutes(app: express.Express, db: any) {
   });
 
   app.get("/api/tools/files/read", async (req, res) => {
-    const { filename, limit, offset, line_start, line_end } = req.query as Record<string, string>;
-    if (!filename) return res.status(400).json({ error: "No filename provided" });
+    const { filename, path: filePath, limit, offset, line_start, line_end } = req.query as Record<string, string>;
+    const target = filename || filePath;
+    if (!target) return res.status(400).json({ error: "No filename provided" });
 
     try {
-      const safePath = await resolveSystemRootPath(filename as string, 'read');
+      const safePath = await resolveSystemRootPath(target as string, 'read');
+
+      // Directory listing (Kilocode read supports reading a directory page).
+      let stats;
+      try {
+        stats = statSync(safePath);
+      } catch (_) {
+        return res.status(404).json({ error: `File not found at path: ${target}` });
+      }
+
+      if (stats.isDirectory()) {
+        const entries = readdirSync(safePath, { withFileTypes: true });
+        const start = offset !== undefined ? Math.max(1, parseInt(offset, 10)) : 1;
+        const max = limit !== undefined ? Math.max(1, parseInt(limit, 10)) : entries.length;
+        const items = entries.slice(start - 1, start - 1 + max).map((e) => ({
+          path: path.join(target.replace(/\\/g, '/').replace(/\/$/, ''), e.name),
+          name: e.name,
+          type: e.isDirectory() ? 'directory' : 'file'
+        }));
+        return res.json({
+          success: true,
+          directory: true,
+          entries: items,
+          count: items.length,
+          total: entries.length,
+          path: getCleanRelativePath(safePath),
+          items
+        });
+      }
+
       let content = await fs.readFile(safePath, "utf-8");
 
-      // Line-based pagination (1-based inclusive).
+      // Line-based pagination (1-based inclusive) — Kilocode semantics.
+      const lines = content.split(/\r?\n/);
       if (line_start !== undefined || line_end !== undefined) {
-        const lines = content.split(/\r?\n/);
         const start = line_start !== undefined ? Math.max(1, parseInt(line_start, 10)) : 1;
         const end = line_end !== undefined ? parseInt(line_end, 10) : lines.length;
         content = lines.slice(start - 1, end).join('\n');
-      } else {
-        // Character-based pagination.
-        const charLimit = limit !== undefined ? Math.max(1, parseInt(limit, 10)) : undefined;
-        const charOffset = offset !== undefined ? Math.max(0, parseInt(offset, 10)) : 0;
-        if (charLimit !== undefined || charOffset > 0) {
-          content = content.substring(charOffset, charLimit !== undefined ? charOffset + charLimit : undefined);
-        }
+      } else if (offset !== undefined || limit !== undefined) {
+        const start = offset !== undefined ? Math.max(1, parseInt(offset, 10)) : 1;
+        const max = limit !== undefined ? Math.max(1, parseInt(limit, 10)) : lines.length;
+        content = lines.slice(start - 1, start - 1 + max).join('\n');
       }
 
       res.json({
@@ -646,7 +972,7 @@ export function registerToolsRoutes(app: express.Express, db: any) {
         physicalPath: safePath.replace(/\\/g, '/'),
         physicalFolder: path.dirname(safePath).replace(/\\/g, '/'),
         workspaceFolder: path.relative(process.cwd(), path.dirname(safePath)).replace(/\\/g, '/'),
-        message: `Successfully read file "${filename}"`
+        message: `Successfully read file "${target}"`
       });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -654,9 +980,9 @@ export function registerToolsRoutes(app: express.Express, db: any) {
   });
 
   app.get("/api/tools/files/list", async (req, res) => {
-    const { limit, offset } = req.query as Record<string, string>;
+    const { limit, offset, pattern, path: searchPath } = req.query as Record<string, string>;
     try {
-      const sandboxDir = getDynamicSandboxRoot();
+      const sandboxDir = searchPath ? await resolveSystemRootPath(searchPath, 'read') : getDynamicSandboxRoot();
       await fs.mkdir(sandboxDir, { recursive: true });
 
       const getFilesRecursively = async (dir: string): Promise<string[]> => {
@@ -687,11 +1013,18 @@ export function registerToolsRoutes(app: express.Express, db: any) {
         };
       });
 
-      const totalAvailable = detailedFiles.length;
+      // Kilocode glob semantics: filter by pattern when provided
+      let filteredFiles = detailedFiles;
+      if (pattern && pattern.trim()) {
+        const globRe = globToRegExp(pattern);
+        filteredFiles = detailedFiles.filter(d => globRe.test(d.name) || globRe.test(d.path));
+      }
+
+      const totalAvailable = filteredFiles.length;
       const charLimit = limit !== undefined ? Math.max(1, parseInt(limit, 10)) : undefined;
       const charOffset = offset !== undefined ? Math.max(0, parseInt(offset, 10)) : 0;
-      const pagedDetailed = detailedFiles.slice(charOffset, charLimit !== undefined ? charOffset + charLimit : undefined);
-      const pagedCleaned = cleanedFiles.slice(charOffset, charLimit !== undefined ? charOffset + charLimit : undefined);
+      const pagedDetailed = filteredFiles.slice(charOffset, charLimit !== undefined ? charOffset + charLimit : undefined);
+      const pagedCleaned = pagedDetailed.map(d => d.path);
 
       res.json({
         success: true,
@@ -699,7 +1032,10 @@ export function registerToolsRoutes(app: express.Express, db: any) {
         offset: charOffset,
         folder: getCleanDisplayFolder(sandboxDir),
         files: pagedCleaned,
-        detailedFiles: pagedDetailed
+        detailedFiles: pagedDetailed,
+        items: pagedDetailed.map(d => ({ path: d.path, name: d.name, type: 'file' })),
+        truncated: charLimit !== undefined && filteredFiles.length > charOffset + charLimit,
+        partial: false
       });
     } catch (error: any) {
       res.status(500).json({ error: error.message });

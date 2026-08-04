@@ -1,6 +1,82 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.251] - 2026-08-04
+### fix: fix: restore multi-key Gemini pool rotation (prevent offline fallback on single-key 503)
+- generateSegment unions API key pool across providers/settings/config so collapsed single key no longer clobbers multi-key pool; primaryKey stays single string
+
+
+## [4.250] - 2026-08-04
+### fix: fix: restore multi-key Gemini pool rotation so quota/503 on one key no longer triggers offline fallback
+- generateSegment now unions the API key pool across providers.gemini/settings.gemini/config instead of letting a collapsed single key (from fetchCortexSettings toSingleString) clobber the pool; primaryKey stays a single string for labels
+
+
+## [4.249] - 2026-08-04
+### change: todowrite activation: explicit task-list trigger + complex-task auto-tracking
+- todowrite tool description now conversation-neutral (was coding-session only)
+- System prompt §4.5: Yui MUST call todowrite when user requests todo/task list or hands a complex multi-step assignment
+- Yui shows the saved task list in reply and updates it as steps progress
+
+
+## [4.248] - 2026-08-04
+### fix: Memory forgetfulness tuning: chat continuity (Telegram single-chat context no longer drops)
+- Decay slowed from 0.05 to 0.02 per cycle; purge threshold lowered 0.15 to 0.08
+- Purge now requires retrievalCount=0 (never recalled); recalled memories are immune
+- Recency guard exempts the 20 newest memories per context from purge (active chat safe)
+- Retrieval limits raised: 40 recent intact + 60 forgetting-curve recall (was 20+30)
+- New [memory] forgetfulness_enabled config toggle; disabling keeps all conversations permanent (UI: System tab)
+
+
+## [4.247] - 2026-08-04
+### change: Confirmation ask-flow with inline keyboard + tool parity check
+- Shell blacklist now asks user confirmation instead of hard-block (403); command previewed
+- WRITE/EDIT/DELETE/MOVE/COPY on any path now requires explicit confirmation unless YOLO full or auto_acc_user_data
+- Telegram confirmation uses inline keyboard buttons (Approve/Always/Deny), preview of content/diff embedded in message
+- Preview diff (old->new) shown for edit-segment, file content preview for write
+- Confirmed all 12 Kilocode core tools (read/write/edit/glob/grep/bash/webfetch/websearch/question/todowrite/skill/apply_patch) present in Yui
+
+
+## [4.246] - 2026-08-04
+### change: Align shared tools (read, write, edit, glob, grep, bash, webfetch, websearch) to Kilocode contract
+- Tool IDs now match Kilocode: read, write, edit, glob, grep, bash, webfetch, websearch with identical input schemas, output shapes and execution logic
+- webfetch uses Jina Reader as primary engine with local Cheerio fallback; response flows back to model as feedback
+- read endpoint: line-based pagination + directory listing; glob: pattern+path filtering via globToRegExp; grep: Kilocode {items,truncated,partial} output
+- bash: description param, stdoutTruncated/stderrTruncated flags, 'Command exited with code X.' model output
+- toolNormalizer maps aliases to path instead of filename for file tools
+
+
+## [4.245] - 2026-08-04
+### feature: Persist todowrite ke custom_storage per conversation
+- todowrite sekarang menyimpan/merge todos ke custom_storage per contextId dengan mode update/clear/read
+
+
+## [4.244] - 2026-08-04
+### fix: Tool system alignment with Kilocode
+- Updated cortex, prompts, and agent references to new tool names
+
+
+## [4.243] - 2026-08-04
+### fix: Tool system alignment with Kilocode
+- Cleaned toolNormalizer: removed redundant aliases, fixed param normalization
+
+
+## [4.242] - 2026-08-04
+### feature: Tool system alignment with Kilocode
+- Added grep, todowrite, skill tools (Kilocode parity)
+
+
+## [4.241] - 2026-08-04
+### feature: Tool system alignment with Kilocode
+- Fixed tool IDs: read, write, edit, glob, websearch, webfetch now match Kilocode naming
+
+
+## [4.240] - 2026-08-04
+### Refactor: Tool filename refactoring + new tools
+- Renamed apply-patch.ts → apply_patch.ts, plugin-installer.ts → plugin_installer.ts
+- Added grep, todowrite, skill tools with RegistryInitializer and toolNormalizer aliases
+- Added /api/tools/grep endpoint in toolsRouter
+
+
 ## [4.239] - 2026-08-03
 ### Fix: Crash-recovery inbox/outbox (write-ahead pending_messages) + Telegram reply correlation + persistent dedup
 - pending_messages schema + migrasi ALTER: kolom baru `chat_id`, `source_message_id`, `update_id`, `started_at` (berlaku utk DB lama tanpa drop).

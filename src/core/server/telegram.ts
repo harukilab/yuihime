@@ -12,7 +12,7 @@ import { GlobalOutputDeduplicator } from "../kernel/GlobalOutputDeduplicator.js"
 import { extractChannelFileAttachments } from "./channelFileAttachment.js";
 import { describeImageFromBuffer } from "../../modules/YuiVisionModule.js";
 import { eventBus } from "@shared/core/kernel/event-bus";
-import { handleTgQuickCommand, handleTgCallback } from "../../drivers/tools/telegram_quick_tools/index.js";
+import { handleTgQuickCommand, handleTgCallback } from "../../drivers/tools/telegram_quick_tools.js";
 import { recordOutboundMessage, recordFeedback, lookupOutboundMessage, emojiToReward } from "../feedback.js";
 import { genId } from '@shared/core/idGen';
 
@@ -811,6 +811,34 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
   bot.on('callback_query', async (ctx) => {
     try {
       const data = (ctx.callbackQuery as any)?.data || '';
+      if (data && data.startsWith('confirm:')) {
+        await ctx.answerCbQuery().catch(() => {});
+        const [_, decision, id] = data.split(':');
+        const pendingId = (id || '').toUpperCase();
+        const list = globalThis.pendingConfirmations || [];
+        const item = list.find(i => i.id === pendingId && i.status === 'pending');
+        if (!item) {
+          try { await ctx.editMessageText('❌ Konfirmasi sudah tidak aktif / tidak ditemukan.'); } catch (_) {}
+          return;
+        }
+        if (decision === 'approve') {
+          item.status = 'approved';
+          try {
+            await ctx.editMessageText(`✅ Permintaan ${pendingId} (${item.action} -> ${item.targetPath}) DISETUJUI.`, { reply_markup: undefined });
+          } catch (_) {}
+        } else if (decision === 'always') {
+          item.status = 'always';
+          try {
+            await ctx.editMessageText(`🔁 Permintaan ${pendingId} DISETUJUI SELALU untuk sesi ini.`, { reply_markup: undefined });
+          } catch (_) {}
+        } else if (decision === 'deny') {
+          item.status = 'denied';
+          try {
+            await ctx.editMessageText(`❌ Permintaan ${pendingId} (${item.action} -> ${item.targetPath}) DITOLAK.`, { reply_markup: undefined });
+          } catch (_) {}
+        }
+        return;
+      }
       if (!data || !data.startsWith('qt:')) return;
       await ctx.answerCbQuery().catch(() => {});
       const currentSettings = Kernel.getInstance().getSettings().getAll();

@@ -25,7 +25,7 @@ export const ToolExecutorModule: CortexModule = {
           type: 'number',
           label: 'Shell Command Timeout (ms)',
           default: 120000,
-          description: 'Timeout in milliseconds for shell commands / run_command (default 120 seconds).'
+          description: 'Timeout in milliseconds for shell commands / bash (default 120 seconds).'
         },
         retryLimit: {
           type: 'number',

@@ -21,95 +21,92 @@ export function normalizeToolCall(tc: any): any {
   if (typeof args !== 'object' || args === null) {
     args = {};
   }
-  // Keep the canonical OpenAI-native `id` (generate one when missing) so the
-  // cortex can propagate `role: "tool"` result messages with a stable `tool_call_id`.
   const id = tc.id || tc.tool_call_id || `call_${genId(10)}`;
 
-  // Clean / normalize tool names to actual registered IDs
-  const toolAliases: { [key: string]: string } = {
-    'google_search': 'web_search',
-    'search_web': 'web_search',
-    'search': 'web_search',
-    'google': 'web_search',
-    'websearch': 'web_search',
-    'create_image': 'generate_image',
-    'image_generation': 'generate_image',
-    'run_command': 'run_command',
-    'execute_command': 'run_command',
-    'exec_command': 'run_command',
-    'command_executor': 'run_command',
-    'shell': 'run_command',
-    'terminal': 'run_command',
-    'shell_execution': 'run_command',
-    'exec': 'run_command',
-    'execute': 'run_command',
-    'run': 'run_command',
-    'bash': 'run_command',
-    'cmd': 'run_command',
-    'sh': 'run_command',
-    'run_shell': 'run_command',
-    'run_code': 'code_interpreter',
+  // Alias map: LLM may emit these old/common names — map to registered tool IDs.
+  const toolAliases: Record<string, string> = {
+    // websearch
+    'google_search': 'websearch',
+    'search_web': 'websearch',
+    'web_search': 'websearch',
+    // bash
+    'run_command': 'bash',
+    'execute_command': 'bash',
+    'shell': 'bash',
+    'terminal': 'bash',
+    'run_shell': 'bash',
+    'cmd': 'bash',
+    'sh': 'bash',
+    // code_interpreter
     'python': 'code_interpreter',
-    'python_exec': 'code_interpreter',
-    'python_interpreter_tool': 'code_interpreter',
     'run_python': 'code_interpreter',
-    'write_file_tool': 'write_file',
-    'read_file_tool': 'read_file',
-    'list_files_tool': 'list_files',
-    'list_dir': 'list_files',
-    'ls': 'list_files',
-    'modify_file': 'file_automation',
-    'file_manipulate_tool': 'file_automation',
+    // glob
+    'list_dir': 'glob',
+    'ls': 'glob',
+    // edit
+    'edit_file': 'edit',
+    'edit_segment': 'edit',
+    'replace': 'edit',
+    // webfetch
+    'web_fetch': 'webfetch',
+    'web_snipper': 'webfetch',
+    'scrape': 'webfetch',
+    'scrape_web': 'webfetch',
+    // question
+    'ask_user': 'question',
+    'ask': 'question',
+    'confirm': 'question',
+    // apply_patch
+    'patch': 'apply_patch',
+    'apply_diff': 'apply_patch',
+    // old tool IDs → new IDs
+    'read_file': 'read',
+    'write_file': 'write',
+    'list_files': 'glob',
+    // plugin_installer
+    'plugin-installer': 'plugin_installer',
+    'install_addon': 'plugin_installer',
+    'install_plugin': 'plugin_installer',
+    // file_manager
     'file_automation': 'file_manager',
+    // view_logs
     'view_system_logs': 'view_logs',
-    'view_system_log': 'view_logs',
-    'search_memory': 'search_chat',
-    'memory_search': 'search_chat',
-    'chat_search': 'search_chat',
-    'adjust_emotion': 'set_emotion',
-    'send_message': 'send_message',
-    'telegram_message': 'send_message',
-    'send_telegram': 'send_message',
-    'set_nickname': 'update_user_profile',
-    'update_identity': 'update_user_profile'
+    // search_chat_history
+    'search_memory': 'search_chat_history',
+    'memory_search': 'search_chat_history',
+    // generate_image
+    'create_image': 'tensorart_generate',
+    'image_generation': 'tensorart_generate',
   };
 
   const lowerName = name.trim().toLowerCase();
   if (toolAliases[lowerName]) {
-    console.log(`[TOOL_NORMALIZER] Mapping tool alias '${name}' -> '${toolAliases[lowerName]}'`);
+    console.log(`[TOOL_NORMALIZER] Mapping '${name}' -> '${toolAliases[lowerName]}'`);
     name = toolAliases[lowerName];
   }
 
-  // Parameter normalizations for common tools to maximize compatibility
-  if (name === 'run_command') {
+  // Parameter normalizations: adapt common param aliases to current tool schemas
+  if (name === 'bash') {
     const rawCmd = args.command || args.cmd || args.commandText || args.code || args.exec || args.script;
-    if (rawCmd) {
-      args.command = rawCmd;
-    }
-  } else if (name === 'web_search') {
+    if (rawCmd) args.command = rawCmd;
+  } else if (name === 'websearch') {
     const rawQuery = args.query || args.q || args.searchQuery || args.search;
-    if (rawQuery) {
-      args.query = rawQuery;
-    }
-  } else if (name === 'write_file') {
+    if (rawQuery) args.query = rawQuery;
+  } else if (name === 'write') {
     const rawPath = args.filename || args.filePath || args.path || args.file;
     const rawContent = args.content || args.data || args.text || args.body;
-    if (rawPath) args.filename = rawPath;
+    if (rawPath) args.path = rawPath;
     if (rawContent) args.content = rawContent;
-  } else if (name === 'read_file') {
+  } else if (name === 'read') {
     const rawPath = args.filename || args.filePath || args.path || args.file;
-    if (rawPath) args.filename = rawPath;
-  } else if (name === 'search_chat') {
-    // Memory-search legacy param `type` (memory-type filter) maps to `memoryType`.
-    if (args.memoryType === undefined && args.type !== undefined) {
-      args.memoryType = args.type;
-    }
-    // Default scope to 'chat' unless explicitly requested.
-    if (args.scope === undefined) {
-      args.scope = 'chat';
-    }
+    if (rawPath) args.path = rawPath;
+  } else if (name === 'glob') {
+    const rawPath = args.filename || args.dir || args.directory || args.folder || args.path;
+    if (rawPath && !args.path) args.path = rawPath;
+  } else if (name === 'edit') {
+    const rawPath = args.filename || args.filePath || args.path || args.file;
+    if (rawPath && !args.path) args.path = rawPath;
   } else if (name === 'file_manager') {
-    // Legacy file_automation param aliases.
     const rawTarget = args.target || args.path || args.source;
     if (rawTarget && args.target === undefined) args.target = rawTarget;
     if (Array.isArray(args.files) === false && typeof args.file === 'string') {
@@ -117,9 +114,6 @@ export function normalizeToolCall(tc: any): any {
     }
   }
 
-  // Return an OpenAI-native tool call enriched with backward-compatible aliases
-  // (`tool`, `name`, `args`) so downstream modules (NeuralLoop, executor)
-  // keep working while the canonical contract is preserved.
   return {
     id,
     type: 'function',

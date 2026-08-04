@@ -455,10 +455,10 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
         if (hasFailure) {
           instructionText = `Based on the tool execution results above (noting that some features/tools FAILED with errors), immediately formulate your casual spoken response to the user. Do NOT pretend you succeeded! Instead, as Yuihime, explain the failure or difficulty to the user in a charming, sweet, slightly apologetic and character-consistent way (e.g., 'Aduh, maaf ya user... Yui coba buat fotonya tapi sirkuit batin/servernya lagi agak ngambek... atau user mau Yui coba lagi?'). Maintain your lovable personality, do NOT provide raw technical code details/stack traces, and ask if they want you to retry, do something else, or just keep talking!`;
         } else {
-          instructionText = `Based on the successful tool execution results above, you can EITHER choose to call another tool if you need more actions/information to fully answer the user (such as list_files, read_file, run_command), OR if you have all the information required, formulate your final casual spoken response to the user. Do not repeat technical details, do not write internal thoughts, plans, or analysis blocks outside the JSON structure. Directly chat with the user in your natural, emotional, affectionate/tsundere personal character using the user's conversational language!`;
+          instructionText = `Based on the successful tool execution results above, you can EITHER choose to call another tool if you need more actions/information to fully answer the user (such as glob, read, bash), OR if you have all the information required, formulate your final casual spoken response to the user. Do not repeat technical details, do not write internal thoughts, plans, or analysis blocks outside the JSON structure. Directly chat with the user in your natural, emotional, affectionate/tsundere personal character using the user's conversational language!`;
           
           const readToolRes = lastExecuted.results.find((res: any) => 
-            ['read_file', 'list_files', 'view_logs', 'search_chat', 'file_manager'].includes(res.tool) && res.success
+            ['read', 'glob', 'view_logs', 'search_chat_history', 'file_manager'].includes(res.tool) && res.success
           );
           if (readToolRes) {
             instructionText += `\n\nCRITICAL DIRECTIVE FOR RETRIEVED CONTENTS: Since you successfully retrieved content, data, file list, or logs via '${readToolRes.tool}', you MUST share/display the exact retrieved file content, directory listing, or log data inside your 'speech' field so the user can see it! Do NOT give a false promise by saying 'Ini dia isinya...' or 'Yui sudah baca...' or 'Ini list catatan...' without actually writing out the retrieved contents or list of files in this very response. If the content, listing, or log is empty, clearly state to the user that it is currently empty.`;
@@ -484,7 +484,7 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
 
     let activeIterationInput = loopInput;
     if (iteration === 1 && (enforceStrictJson || !isResettingFormat)) {
-      activeIterationInput += "\n\n[CRITICAL PRE-PROCESSING DIRECTIVE (FIRST PASS)]: You are strictly prohibited from writing conversational/speech text if you are calling tools. If you populate the \"tool_calls\" array with tool calls (e.g., search_web, read_url, run_command, etc.), you MUST keep the \"speech\" field entirely empty (\"\") in this iteration! Your conversational response will be formulated in the subsequent pass once tools have executed. Only if you are not calling any tools should you output speech. Output valid JSON matching the schema.";
+      activeIterationInput += "\n\n[CRITICAL PRE-PROCESSING DIRECTIVE (FIRST PASS)]: You are strictly prohibited from writing conversational/speech text if you are calling tools. If you populate the \"tool_calls\" array with tool calls (e.g., search_web, read_url, bash, etc.), you MUST keep the \"speech\" field entirely empty (\"\") in this iteration! Your conversational response will be formulated in the subsequent pass once tools have executed. Only if you are not calling any tools should you output speech. Output valid JSON matching the schema.";
     }
 
     const requestPayloadBlueprint: PayloadBlueprint = {
@@ -662,10 +662,10 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
                 lowerRaw.includes("should call") ||
                 lowerRaw.includes("calling tool") ||
                 lowerRaw.includes("tool call") ||
-                lowerRaw.includes("list_files") ||
-                lowerRaw.includes("read_file") ||
-                lowerRaw.includes("run_command") ||
-                lowerRaw.includes("web_search") ||
+                lowerRaw.includes("glob") ||
+                lowerRaw.includes("read") ||
+                lowerRaw.includes("bash") ||
+                lowerRaw.includes("websearch") ||
                 lowerRaw.includes("plan:") ||
                 lowerRaw.includes("response draft:") ||
                 lowerRaw.includes("revised draft:") ||
@@ -691,12 +691,12 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
 
              if (!isTranslationOrLanguageTask) {
                 const hasSystemToolNames =
-                   lowerRaw.includes("list_files") ||
-                   lowerRaw.includes("read_file") ||
-                   lowerRaw.includes("run_command") ||
-                   lowerRaw.includes("web_search") ||
-                   lowerRaw.includes("scheduler") ||
-                   lowerRaw.includes("final_answer");
+                   lowerRaw.includes("glob") ||
+                   lowerRaw.includes("read") ||
+                    lowerRaw.includes("bash") ||
+                    lowerRaw.includes("websearch") ||
+                    lowerRaw.includes("scheduler") ||
+                    lowerRaw.includes("final_answer");
 
                 const hasPlanningAction =
                    lowerRaw.includes("i should use") ||
@@ -766,12 +766,11 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
                       trimmedLine.startsWith("here is") ||
                       trimmedLine.startsWith("my draft") ||
                       trimmedLine.startsWith("according to the instructions") ||
-                      trimmedLine.includes("list_files") ||
-                      trimmedLine.includes("read_file") ||
-                      trimmedLine.includes("run_command") ||
-                      trimmedLine.includes("web_search") ||
-                      trimmedLine.includes("scheduler") ||
-                      trimmedLine.includes("final_answer");
+                     trimmedLine.includes("glob") ||
+                     trimmedLine.includes("read") ||
+                      trimmedLine.includes("websearch") ||
+                       trimmedLine.includes("scheduler") ||
+                       trimmedLine.includes("final_answer");
 
                    return !isMonologue;
                 });
@@ -891,12 +890,12 @@ if (extractedFromSpeech) {
         const hasFinalReply = rawToolsCall.some((tc: any) => tc.tool === 'speak' || tc.tool === 'final_answer');
         if (!hasFinalReply && speechText.length > 0) {
           const blockingTools = [
-            'web_search', 'search', 'search_internet', 'google_search', 'bing_search', 'duckduckgo_search',
+            'websearch', 'search', 'search_internet', 'google_search', 'bing_search', 'duckduckgo_search',
             'execute_sql', 'cloudsql_execute_sql', 'query_database',
             'read_url', 'read_webpage', 'browse_url', 'fetch_url', 'visit_url',
             'tensorart_generate', 'generate_image', 'image_generate', 'dall_e', 'stable_diffusion',
-            'execute_bash', 'run_command', 'shell', 'execute_shell', 'run_script',
-            'read_file', 'list_files', 'list_dir', 'file_read', 'get_file_contents',
+            'bash', 'shell',
+            'read', 'glob', 'list_dir', 'file_read', 'get_file_contents',
             'get_weather', 'check_weather', 'weather',
             'translate', 'translation',
             'call_api', 'http_request', 'fetch_data'
@@ -1085,11 +1084,11 @@ if (extractedFromSpeech) {
             let indonesianStatus = "Yui sedang memproses sesuatu...";
             try {
               const toolNames = toolsToCall.map((tc: any) => tc.tool || tc.name).join(", ");
-              if (toolNames.includes("web_search") || toolNames.includes("search")) {
+              if (toolNames.includes("websearch") || toolNames.includes("search")) {
                 indonesianStatus = "Yui sedang berselancar mencari informasi terbaru untuk user... 🌐✨";
               } else if (toolNames.includes("execute_sql") || toolNames.includes("cloudsql_execute_sql")) {
                 indonesianStatus = "Yui sedang menelusuri data dalam pangkalan batin batin... 🗄️🔍";
-              } else if (toolNames.includes("execute_bash") || toolNames.includes("run_command")) {
+              } else if (toolNames.includes("bash")) {
                 indonesianStatus = "Yui sedang memproses instruksi sistem di balik layar... ⚙️💻";
               } else {
                 indonesianStatus = `Yui sedang memproses kemampuan: [${toolNames}]... 🌸`;
@@ -1177,11 +1176,11 @@ if (extractedFromSpeech) {
       try {
         const toolNames = toolsToCall.map((tc: any) => tc.tool || tc.name).join(", ");
         let indonesianStatus = "Yui sedang memproses sesuatu...";
-        if (toolNames.includes("web_search") || toolNames.includes("search")) {
+        if (toolNames.includes("websearch") || toolNames.includes("search")) {
           indonesianStatus = "Yui sedang berselancar mencari informasi terbaru untuk user... 🌐✨";
         } else if (toolNames.includes("execute_sql") || toolNames.includes("cloudsql_execute_sql")) {
           indonesianStatus = "Yui sedang menelusuri data dalam pangkalan batin batin... 🗄️🔍";
-        } else if (toolNames.includes("execute_bash") || toolNames.includes("run_command")) {
+        } else if (toolNames.includes("bash")) {
           indonesianStatus = "Yui sedang memproses instruksi sistem di balik layar... ⚙️💻";
         } else {
           indonesianStatus = `Yui sedang memproses kemampuan: [${toolNames}]... 🌸`;
@@ -1278,7 +1277,7 @@ if (typeof parsedArgs === 'string') {
 
             const toolExecutorConfig = settings['tool-executor'] || {};
             const generalTimeoutMs = toolExecutorConfig.timeoutMs !== undefined ? Number(toolExecutorConfig.timeoutMs) : 60000;
-            const isShell = ['run_command', 'shell', 'execute_shell'].includes(tc.name || tc.tool);
+            const isShell = ['bash', 'shell'].includes(tc.name || tc.tool);
             const toolName = tc.name || tc.tool || '';
             const TOOL_SPECIFIC_TIMEOUTS: Record<string, number> = {
               generate_image: 180000,
@@ -1675,12 +1674,12 @@ Provide a concise validation summary. Start with [VALIDATION_SUCCESS] if everyth
       const translateToolsToActivities = (tools: string[]) => {
         return tools.map(t => {
           switch(t) {
-            case 'read_file': return 'membaca berkas catatan';
-            case 'write_file': return 'menulis data berkas';
-            case 'list_files': return 'memeriksa isi folder';
-            case 'web_search': return 'mencari info di internet';
+            case 'read': return 'membaca berkas catatan';
+            case 'write': return 'menulis data berkas';
+            case 'glob': return 'memeriksa isi folder';
+            case 'websearch': return 'mencari info di internet';
             case 'search': return 'mencari info';
-            case 'run_command': return 'menjalankan perintah sistem';
+            case 'bash': return 'menjalankan perintah sistem';
             case 'download_file': return 'mengunduh berkas';
             case 'file_manager': return 'mengelola berkas batin';
             case 'set_emotion': return 'menyelaraskan suasana hati';
@@ -1709,7 +1708,7 @@ ${userFacingSucceeded.length > 0 ? `- Succeeded: ${readableSucceeded.join(', ')}
 ${uniqueFailedList.length > 0 ? `- Failed: ${readableFailed.join(', ')}` : ''}
 
 Currently, your cognitive verbal output channel is empty/blanked. Please formulate a short, warm, adorable, and character-appropriate spoken response (in Indonesian or the user's conversational language) to update the user.
-Explain what you did or found in a completely natural, non-technical, cute way. Avoid using any robotic words, code, JSON, or technical tool name syntax like "read_file" or "execute_bash". Talk to them directly and affectionately as Yuihime!
+Explain what you did or found in a completely natural, non-technical, cute way. Avoid using any robotic words, code, JSON, or technical tool name syntax like "read" or "bash". Talk to them directly and affectionately as Yuihime!
 `;
         const res = await cortexInstance.thinkSimple(fallbackPrompt);
         if (res && res.trim().length > 5) {
@@ -1735,7 +1734,7 @@ Explain what you did or found in a completely natural, non-technical, cute way. 
           for (const hist of toolExecutionHistory) {
             if (hist.results) {
               for (const res of hist.results) {
-                if (res.success && (res.tool === 'web_search' || res.tool === 'search')) {
+                if (res.success && (res.tool === 'websearch' || res.tool === 'search')) {
                   const obsVal = res.observation;
                   if (obsVal) {
                     searchResultsText = typeof obsVal === 'string' ? obsVal : (obsVal.result || obsVal.text || JSON.stringify(obsVal));

@@ -126,3 +126,11 @@ Peta struktur direktori pasca-pemisahan Web UI ↔ Daemon (lihat UPDATE_LOG `[4.
 - `core:server`
 - `src/core/server/apiRouter.ts GET /api/modules — Web UI module catalog (configSchema hydration for Modules tab).`
 - `ai-providers`
+- `tools`
+- `Cortex/Tools`
+- `Cortex/Tools`
+- `Cortex/Tools`
+- `Cortex/Tools`
+- `Cortex/Tools`
+- `core/kernel/ai/generateSegment.ts`
+- `core/kernel/ai/generateSegment.ts`

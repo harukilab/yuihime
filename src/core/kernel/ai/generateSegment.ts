@@ -90,11 +90,27 @@ export async function generateContent(
   // only the flat `gemini` key was read, which silently dropped fallbacks when
   // the config lived under `providers.gemini` or was passed via `config`.
   const providersTable = (settings.get('providers') as any) || {};
+  const settingsGemini = (settings.get('gemini') || {});
+  const configGemini = (config && typeof config === 'object') ? config : {};
   const geminiSettings: any = {
     ...(providersTable.gemini || {}),
-    ...(settings.get('gemini') || {}),
-    ...((config && typeof config === 'object') ? config : {})
+    ...settingsGemini,
+    ...configGemini
   };
+  // UNION the full API key pool across every source. Downstream callers (e.g.
+  // fetchCortexSettings) often collapse multi-key pools to a single string, and
+  // that single key spread last above would otherwise clobber the multi-key pool
+  // from settings, silently disabling key rotation (all requests would retry the
+  // same 503/quota-exhausted key and trigger the offline fallback).
+  const mergedApiKeys = Array.from(new Set([
+    ...toKeyArray(providersTable.gemini?.apiKey),
+    ...toKeyArray(settingsGemini.apiKey),
+    ...toKeyArray(configGemini.apiKey),
+    ...toKeyArray(geminiSettings.apiKeysPool)
+  ]));
+  if (mergedApiKeys.length > 0) {
+    geminiSettings.apiKey = mergedApiKeys;
+  }
   let defaultGeminiModel = '';
   try {
      const geminiModule = SystemRegistry.getProvider('gemini');
@@ -141,7 +157,7 @@ export async function generateContent(
 
   const runWithRetries = async (customPrompt?: string): Promise<string> => {
     const activePrompt = customPrompt || prompt;
-    const primaryKey = config.apiKey || settings.getApiKey();
+    const primaryKey = toSingleString(config.apiKey) || settings.getApiKey();
     const fallbackKey = fallbackApiKey;
 
     // Kumpulkan seluruh API Key unik dalam urutan prioritas

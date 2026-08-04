@@ -83,36 +83,41 @@ import { OfficialStreamingSpeechTTS } from '../core/tts/OfficialStreamingSpeechT
 import { CustomAPITTS } from '../core/tts/CustomAPITTS.js';
 import { GeminiTTS } from '../core/tts/GeminiTTS.js';
 
-import { TensorArtGenerateTool } from '../drivers/tools/tensorart_generate/index.js';
-import { SearchChatHistoryTool } from '../drivers/tools/search_chat_history/index.js';
-import { ShellTool } from '../drivers/tools/shell_exec/index.js';
-import { FileReadTool } from '../drivers/tools/read_file/index.js';
-import { WebSearchTool } from '../drivers/tools/web_search/index.js';
-import { PluginInstallerTool } from '../drivers/tools/plugin-installer/index.js';
-import { ViewLogsTool } from '../drivers/tools/view_logs/index.js';
-import { WebSnipperTool } from '../drivers/tools/web_snipper/index.js';
-import { CodeInterpreter } from '../drivers/tools/code_interpreter/index.js';
-import { CalendarReminderTool } from '../drivers/tools/calendar_reminder/index.js';
-import { EditFileSegmentTool } from '../drivers/tools/edit_file_segment/index.js';
-import { DownloadFileTool } from '../drivers/tools/download_file/index.js';
-import { SendFileTool } from '../drivers/tools/send_file/index.js';
-import { EmotionAdjustTool } from '../drivers/tools/emotion_adjust/index.js';
-import { FileListTool } from '../drivers/tools/list_files/index.js';
-import { CalculatorTool } from '../drivers/tools/calculator/index.js';
-import { GitHubTool } from '../drivers/tools/github_integration/index.js';
-import { GetCurrentTimeTool } from '../drivers/tools/get_current_time/index.js';
-import { MessagingTool } from '../drivers/tools/messaging_integration/index.js';
-import { BgProcTool } from '../drivers/tools/manage_bgproc/index.js';
-import { ManageIdentitiesTool } from '../drivers/tools/manage_identities/index.js';
-import { CronTool } from '../drivers/tools/manage_cron/index.js';
-import { OCRTool } from '../drivers/tools/ocr/index.js';
-import { ManagePairingTool } from '../drivers/tools/manage_pairing/index.js';
-import { FileManagerTool } from '../drivers/tools/file_manager/index.js';
-import { FileWriteTool } from '../drivers/tools/write_file/index.js';
-import { DailySummaryTool } from '../drivers/tools/daily_summary/index.js';
-import { ChatLogTool } from '../drivers/tools/chat_log/index.js';
-import { TelegramQuickToolkit } from '../drivers/tools/telegram_quick_tools/index.js';
-import { DiaryTool } from '../drivers/tools/diary/index.js';
+import { TensorArtGenerateTool } from '../drivers/tools/tensorart_generate.js';
+import { SearchChatHistoryTool } from '../drivers/tools/search_chat_history.js';
+import { BashTool } from '../drivers/tools/bash.js';
+import { FileReadTool } from '../drivers/tools/read.js';
+import { WebSearchTool } from '../drivers/tools/websearch.js';
+import { PluginInstallerTool } from '../drivers/tools/plugin_installer.js';
+import { ViewLogsTool } from '../drivers/tools/view_logs.js';
+import { WebSnipperTool } from '../drivers/tools/webfetch.js';
+import { CodeInterpreter } from '../drivers/tools/code_interpreter.js';
+import { CalendarReminderTool } from '../drivers/tools/calendar_reminder.js';
+import { EditFileSegmentTool } from '../drivers/tools/edit.js';
+import { DownloadFileTool } from '../drivers/tools/download_file.js';
+import { SendFileTool } from '../drivers/tools/send_file.js';
+import { EmotionAdjustTool } from '../drivers/tools/emotion_adjust.js';
+import { FileListTool } from '../drivers/tools/glob.js';
+import { QuestionTool } from '../drivers/tools/question.js';
+import { ApplyPatchTool } from '../drivers/tools/apply_patch.js';
+import { CalculatorTool } from '../drivers/tools/calculator.js';
+import { GitHubTool } from '../drivers/tools/github_integration.js';
+import { GetCurrentTimeTool } from '../drivers/tools/get_current_time.js';
+import { MessagingTool } from '../drivers/tools/messaging_integration.js';
+import { BgProcTool } from '../drivers/tools/manage_bgproc.js';
+import { ManageIdentitiesTool } from '../drivers/tools/manage_identities.js';
+import { CronTool } from '../drivers/tools/manage_cron.js';
+import { OCRTool } from '../drivers/tools/ocr.js';
+import { ManagePairingTool } from '../drivers/tools/manage_pairing.js';
+import { FileManagerTool } from '../drivers/tools/file_manager.js';
+import { FileWriteTool } from '../drivers/tools/write.js';
+import { DailySummaryTool } from '../drivers/tools/daily_summary.js';
+import { ChatLogTool } from '../drivers/tools/chat_log.js';
+import { TelegramQuickToolkit } from '../drivers/tools/telegram_quick_tools.js';
+import { DiaryTool } from '../drivers/tools/diary.js';
+import { GrepTool } from '../drivers/tools/grep.js';
+import { TodoWriteTool } from '../drivers/tools/todowrite.js';
+import { SkillTool } from '../drivers/tools/skill.js';
 
 let initPromise: Promise<void> | null = null;
 
@@ -466,7 +471,7 @@ export function initializeCortexModules(): Promise<void> {
         LocalProvider, GeminiProvider, CustomProvider, AnthropicProvider, OpenAIProvider,
         OfficialChatProvider, OpenRouter, OfficialSpeechTTS, ElevenLabsTTS, WebSpeechTTS,
         OpenRouterTTS, OfficialStreamingSpeechTTS, CustomAPITTS, GeminiTTS,
-        TensorArtGenerateTool, SearchChatHistoryTool, ShellTool, FileReadTool, WebSearchTool,
+        TensorArtGenerateTool, SearchChatHistoryTool, BashTool, FileReadTool, WebSearchTool,
         PluginInstallerTool, ViewLogsTool, WebSnipperTool, CodeInterpreter, CalendarReminderTool,
         EditFileSegmentTool, DownloadFileTool, SendFileTool,
         EmotionAdjustTool, FileListTool, CalculatorTool, GitHubTool,
@@ -476,6 +481,8 @@ export function initializeCortexModules(): Promise<void> {
         ChatLogTool,
         TelegramQuickToolkit,
         DiaryTool,
+        QuestionTool, ApplyPatchTool,
+        GrepTool, TodoWriteTool, SkillTool,
         SendFinalReplyTool, SendStatusUpdateTool
       ];
 

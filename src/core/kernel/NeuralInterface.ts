@@ -2,6 +2,7 @@ import { readFileSync } from "fs";
 import path from "path";
 import { Kernel } from "./core.js";
 import { AIService } from "./ai.js";
+import { SettingsManager } from "./settings.js";
 import { Soul } from "@shared/core/soul";
 import { Cortex } from "../cortex.js";
 import { Memory, Dream, Identity, MoodState, EmotionState } from "@shared/include/types";
@@ -25,6 +26,23 @@ export class NeuralInterface {
   private static db: any;
   private static lastForgetfulnessRun: number = 0;
   private static readonly FORGETFULNESS_COOLDOWN_MS = 5 * 60 * 1000;
+
+  /**
+   * Reads forgetfulness config from config.toml ([memory] section).
+   * Enabled by default; set [memory] forgetfulness_enabled = false to
+   * disable decay/purge/consolidation entirely (chat continuity forever).
+   */
+  private static isForgetfulnessEnabled(): boolean {
+    try {
+      const settings = SettingsManager.getInstance().getAll();
+      const memoryConf = settings['memory'] || {};
+      if (memoryConf.forgetfulness_enabled !== undefined) return !!memoryConf.forgetfulness_enabled;
+      if (memoryConf.forgetfulnessEnabled !== undefined) return !!memoryConf.forgetfulnessEnabled;
+    } catch (err: any) {
+      console.warn('[FORGETFULNESS_ALGORITHM] Gagal baca config memory:', err?.message || err);
+    }
+    return true;
+  }
 
   public static setDatabase(db: any) {
     this.db = db;
@@ -322,10 +340,10 @@ export class NeuralInterface {
       // + kepentingan, lalu tandai yang di-recall agar stabilitasnya menguat.
       try {
         const now = Date.now();
-        const recentCount = 20;
+        const recentCount = 40;
         const continuity = historyRows.slice(-recentCount);
         const older = historyRows.slice(0, historyRows.length - recentCount);
-        const { rows: recalledOlder } = rankMemoriesByForgetting(older, 30, now);
+        const { rows: recalledOlder } = rankMemoriesByForgetting(older, 60, now);
         historyRows = [...recalledOlder, ...continuity];
         markMemoriesRecalled(recalledOlder.map((r: any) => r.id));
       } catch (err: any) {
@@ -771,6 +789,10 @@ export class NeuralInterface {
     * Uses a moderate busy_timeout so a locked DB cannot freeze the event loop for 30s.
     */
   public static async performForgetfulnessProtocol(contextId: string) {
+    if (!NeuralInterface.isForgetfulnessEnabled()) {
+      console.log('[FORGETFULNESS_ALGORITHM] Skipping — forgetfulness disabled via config ([memory] forgetfulness_enabled = false).');
+      return;
+    }
     const now = Date.now();
     if (now - NeuralInterface.lastForgetfulnessRun < NeuralInterface.FORGETFULNESS_COOLDOWN_MS) {
       console.log(`[FORGETFULNESS_ALGORITHM] Skipping — cooldown active (${Math.round((NeuralInterface.FORGETFULNESS_COOLDOWN_MS - (now - NeuralInterface.lastForgetfulnessRun)) / 1000)}s remaining).`);
@@ -787,16 +809,31 @@ export class NeuralInterface {
 
       const decayResult = await retryDbOperation(
         () => db.prepare(
-          'UPDATE memories SET importance = MAX(0.0, importance - 0.05) WHERE context = ? AND speaker != ? AND timestamp < ?'
+          'UPDATE memories SET importance = MAX(0.0, importance - 0.02) WHERE context = ? AND speaker != ? AND timestamp < ?'
         ).run(cleanContextId, 'system', fiveMinutesAgo),
         'forgetfulness-decay'
       );
 
+      // Recency guard: exempt the 20 newest memories of this context from purge
+      // regardless of importance, so an active chat can never lose recent context.
+      const recencyGuardRows = db.prepare(
+        'SELECT id FROM memories WHERE context = ? AND speaker != ? ORDER BY timestamp DESC LIMIT 20'
+      ).all(cleanContextId, 'system') as { id: string }[];
+      const recencyGuardIds = recencyGuardRows.map((r) => r.id);
+
+      const purgePlaceholders = recencyGuardIds.map(() => '?').join(',');
       const purgeResult = await retryDbOperation(
         () => db.transaction(() => {
-          return db.prepare(
-            'DELETE FROM memories WHERE context = ? AND importance < 0.15 AND speaker != ? AND timestamp < ?'
-          ).run(cleanContextId, 'system', fiveMinutesAgo);
+          const stmt = purgePlaceholders
+            ? db.prepare(
+                'DELETE FROM memories WHERE context = ? AND importance < 0.08 AND speaker != ? AND timestamp < ? AND (retrievalCount = 0 OR retrievalCount IS NULL) AND id NOT IN (' + purgePlaceholders + ')'
+              )
+            : db.prepare(
+                'DELETE FROM memories WHERE context = ? AND importance < 0.08 AND speaker != ? AND timestamp < ? AND (retrievalCount = 0 OR retrievalCount IS NULL)'
+              );
+          return purgePlaceholders
+            ? stmt.run(cleanContextId, 'system', fiveMinutesAgo, ...recencyGuardIds)
+            : stmt.run(cleanContextId, 'system', fiveMinutesAgo);
         })(),
         'forgetfulness-purge'
       );

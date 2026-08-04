@@ -56,7 +56,7 @@ export const RAGModule: CortexModule = {
     const needsSearch = searchKeywords.some(w => (input || "").toLowerCase().includes(w)) || (isSystemSignal && (input || "").toLowerCase().includes('news'));
 
     if (needsSearch) {
-      const searchTool = SystemRegistry.getTool('web_search');
+      const searchTool = SystemRegistry.getTool('websearch');
       if (searchTool) {
         const query = isSystemSignal ? "trending global news and interesting facts" : input;
         logs.push(`[RAG] Autonomous research initiated. Triggering web bridge for query: "${query}"...`);

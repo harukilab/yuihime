@@ -724,7 +724,7 @@ ${context.viewerIdentity?.importantFacts && context.viewerIdentity.importantFact
 
     const systemContext = `
 # SOP PRIORITY DIRECTIVE
-Before responding or calling any tools, you MUST check the folder \`user_data/sops/\` using \`list_files\` or \`read_file\`. If there is an SOP file whose name is relevant to the user's request (for example, an image request matches \`user_data/sops/foto.md\`), you MUST read that SOP and treat it as the highest-priority instruction to guide your answer or tool execution.
+Before responding or calling any tools, you MUST check the folder \`user_data/sops/\` using \`glob\` or \`read\`. If there is an SOP file whose name is relevant to the user's request (for example, an image request matches \`user_data/sops/foto.md\`), you MUST read that SOP and treat it as the highest-priority instruction to guide your answer or tool execution.
 <environment_details>
 - **Current Time (UTC)**: ${formatUtcIso()}
 - **Current Time (Local)**: ${formatLocalFullEn(getTzOffsetHours(context?.config))} (${tzLabel(getTzOffsetHours(context?.config))})

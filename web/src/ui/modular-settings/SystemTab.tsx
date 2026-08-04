@@ -1900,6 +1900,33 @@ export const SystemTab: React.FC<SystemTabProps> = ({
             </div>
           </div>
 
+          {/* Memory & Forgetfulness Configurations */}
+          <div className="bg-[#0e0e14]/55 border border-white/5 p-6 rounded-2xl">
+            <h4 className="text-[10px] uppercase font-mono tracking-widest text-zinc-550 mb-4">🧠 Memory & Forgetfulness</h4>
+            {renderFields(
+              {
+                metadata: { id: 'memory' },
+                configSchema: {
+                  fields: {
+                    forgetfulness_enabled: {
+                      label: 'Enable Memory Forgetfulness Protocol (Ebbinghaus Decay)',
+                      type: 'boolean',
+                      default: true,
+                      description: 'Saat aktif, memori lama pelan-pelan dilupakan (decay importance) lalu dihapus jika sangat usang dan tidak pernah diingat ulang. Saat nonaktif, seluruh percakapan (termasuk Telegram) dipertahankan utuh tanpa decay, purge, maupun konsolidasi otomatis.'
+                    }
+                  }
+                }
+              } as any,
+              settings.memory || { forgetfulness_enabled: true },
+              (field: string, val: any) => {
+                setSettings((prev: any) => ({
+                  ...prev,
+                  memory: { ...(prev.memory || {}), [field]: val }
+                }));
+              }
+            )}
+          </div>
+
           {/* Diagnostics and Developer Configurations */}
           <div className="bg-[#0e0e14]/55 border border-white/5 p-6 rounded-2xl">
             <h4 className="text-[10px] uppercase font-mono tracking-widest text-zinc-550 mb-4">Engine Diagnostics & Configurations</h4>
