@@ -131,7 +131,7 @@ export const ProviderGatewayModule: CortexModule = {
         const result = await primaryProvider.generate(input, {
           ...context,
           config: providerConfig,
-          tools: buildOpenAITools()
+          tools: context.disableTools ? [] : buildOpenAITools()
         });
 
         console.log(`[GATEWAY] Provider ${selectedProviderId} response successfully captured.`);
@@ -180,7 +180,7 @@ export const ProviderGatewayModule: CortexModule = {
             const result = await fallbackProvider.generate(input, {
               ...context,
               config: providerConfig,
-              tools: buildOpenAITools()
+              tools: context.disableTools ? [] : buildOpenAITools()
             });
 
             console.log(`[GATEWAY_FALLBACK] Fallback Step ${providerId} succeeded!`);

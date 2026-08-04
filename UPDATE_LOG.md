@@ -1,6 +1,16 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.254] - 2026-08-04
+### Change: Loop-agent adoption: max-steps shutdown turn, anchored compaction, transient-only retry, tool name hygiene
+- MAX_STEPS_PROMPT + SUMMARY_TEMPLATE registered in PromptRegistry; compileMaxStepsPrompt injects shutdown directive when iteration === maxIterations; final turn disables tools via ProviderGatewayModule disableTools
+- Context compactor: maybeCompactContext triggers when loop context threatens provider window; compactionTurns summarize earlier tool pairs into <conversation-checkpoint>; recent tool turns kept verbatim
+- isTransientToolError gate on retry loop; exponential backoff 500ms→10s replaces fixed 1s sleep; classifyToolExecutionError maps native errors to abort/timeout/execution for user-facing telemetry
+- dynamicToolSynthesizer: validateToolName guards synthesis; stale-tool detection in catch block distinguishes stale vs not_found for model
+- ToolExecutorModule: configSchema fields for maxIterations, compactionEnabled, compactionContextLimit, compactionKeepTokens, compactionBuffer, compactionMaxOutputTokens, compactionSummaryTemplate, maxStepsPrompt
+- max_iterations_override ceiling fixed: total cap now base + ceiling (default 55, hard max 50)
+
+
 ## [4.253] - 2026-08-04
 ### Change: loop iterations effectively unbounded: safety cap 50
 - maxIterations raised from 3 to 50 (last-resort safety cap only); loop now ends naturally when model calls final_answer/speak or stops calling tools

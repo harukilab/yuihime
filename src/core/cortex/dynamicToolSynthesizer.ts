@@ -1,5 +1,6 @@
 import { extractJsonObject } from './jsonExtract.js';
 import { isolateBraceBlock } from './jsonRepairer.js';
+import { validateToolName } from './loopGuards.js';
 import { SystemRegistry } from '@shared/core/registry';
 import { ModuleType } from '@shared/include/types';
 import os from "os";
@@ -76,6 +77,14 @@ export class DynamicToolSynthesizer {
   ): Promise<any> {
     if (this.activeSynthesis.has(toolId)) {
       console.log(`[DYNAMIC_SYNTHESIS] Modul '${toolId}' sedang disintesis, menunggu penyelesaian...`);
+      return null;
+    }
+
+    // Registry hygiene (Kilo tool-name pattern): never persist or register a
+    // tool whose id does not satisfy the OpenAI-compatible name grammar.
+    if (!validateToolName(toolId)) {
+      console.warn(`[DYNAMIC_SYNTHESIS] Tool name '${toolId}' does not match the allowed pattern /^[A-Za-z][A-Za-z0-9_-]{0,63}$/. Skipping synthesis.`);
+      this.activeSynthesis.delete(toolId);
       return null;
     }
 

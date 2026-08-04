@@ -1,5 +1,6 @@
 import { CortexModule, ModuleType } from '@shared/include/types';
 import { SystemRegistry } from '@shared/core/registry';
+import { MAX_STEPS_PROMPT, SUMMARY_TEMPLATE } from '@/core/cortex/loopGuards';
 
 /**
  * Tool Executor Module: Secure execution of tools identified by the parser.
@@ -9,7 +10,7 @@ export const ToolExecutorModule: CortexModule = {
     id: 'tool-executor',
     name: 'yui-tool-executor: Sandbox Unit',
     description: 'Securely dispatches and executes tool calls requested by the AI core.',
-    version: '1.1.0',
+    version: '1.2.0',
     type: ModuleType.CORTEX,
     phase: 'PHASE 4: EXECUTION',
     order: 2,
@@ -31,13 +32,61 @@ export const ToolExecutorModule: CortexModule = {
           type: 'number',
           label: 'Retry Limit on Failure',
           default: 2,
-          description: 'Number of times Yui can retry executing a tool if it fails or times out.'
+          description: 'Number of times Yui can retry executing a tool after a transient (network/service) failure.'
+        },
+        maxIterations: {
+          type: 'number',
+          label: 'Max Iterations (Safety Cap)',
+          default: 50,
+          description: 'Last-resort safety cap for the cognitive loop. Normal reasoning finishes earlier; the final iteration becomes a shutdown turn where tools are disabled and the model must summarize.'
         },
         maxIterationsCeiling: {
           type: 'number',
           label: 'Max Iterations Ceiling',
           default: 5,
-          description: 'Hard cap for the cognitive loop iterations. The LLM may request more turns via max_iterations_override in tool arguments, but never beyond this ceiling.'
+          description: 'How many extra turns the LLM may request via max_iterations_override in tool arguments, on top of the base cap.'
+        },
+        maxStepsPrompt: {
+          type: 'textarea',
+          label: 'Max Steps Prompt (shutdown turn directive)',
+          default: MAX_STEPS_PROMPT,
+          description: 'Injected into the final cognitive iteration when the max steps cap is reached; instructs the model to stop calling tools and produce a text summary.'
+        },
+        compactionEnabled: {
+          type: 'boolean',
+          label: 'Enable Context Compaction',
+          default: true,
+          description: 'Summarizes earlier tool turns into an anchored <conversation-checkpoint> when the accumulated context threatens the provider window.'
+        },
+        compactionContextLimit: {
+          type: 'number',
+          label: 'Compaction Context Limit (tokens)',
+          default: 128000,
+          description: 'Estimated provider context window. Compaction triggers when the accumulated loop context approaches this limit.'
+        },
+        compactionKeepTokens: {
+          type: 'number',
+          label: 'Compaction Keep Tokens',
+          default: 8000,
+          description: 'Recent tool turns kept verbatim (not summarized) after compaction.'
+        },
+        compactionBuffer: {
+          type: 'number',
+          label: 'Compaction Buffer (tokens)',
+          default: 20000,
+          description: 'Safety margin between the estimated context and the trigger threshold.'
+        },
+        compactionMaxOutputTokens: {
+          type: 'number',
+          label: 'Compaction Max Output Tokens',
+          default: 4096,
+          description: 'Token budget for the summary-generation call.'
+        },
+        compactionSummaryTemplate: {
+          type: 'textarea',
+          label: 'Compaction Summary Template',
+          default: SUMMARY_TEMPLATE,
+          description: 'Anchored summary structure produced by the compaction call.'
         },
         enableManualCheck: {
           type: 'boolean',

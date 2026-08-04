@@ -33,6 +33,8 @@ import { stripCodeFences, isolateBraceBlock, liftNestedProperties } from './json
 import { FastTrackRunner } from './fastTrackRunner';
 import { extractBestJsonObject, extractJsonObject } from './jsonExtract';
 import { makeToolCall } from './cortexThinkEngineUtils';
+import { compileMaxStepsPrompt, isDeliveryTool, isTransientToolError, classifyToolExecutionError } from './loopGuards.js';
+import { maybeCompactContext } from './contextCompactor.js';
 import { DEFAULT_NEURAL_CORES } from '@shared/constants';
 import { broadcastToWS } from '../server/apiRouter.js';
 import { GlobalOutputDeduplicator } from '../kernel/GlobalOutputDeduplicator.js';
@@ -327,10 +329,15 @@ export async function executeCortexThink(
   }
   // General agent loop: iterations run until the model stops calling tools
   // (final_answer/speak) or the request is aborted. `maxIterations` is a
-  // last-resort safety cap (50) to prevent runaway tool loops — it does NOT
-  // bound normal reasoning. Parallel multi-tool execution stays enabled.
-  let maxIterations = 50;
+  // last-resort safety cap (default 50, configurable via
+  // `tool-executor.maxIterations`) — it does NOT bound normal reasoning. The
+  // final iteration is a shutdown turn (tools disabled, model must summarize).
+  // Parallel multi-tool execution stays enabled.
+  let maxIterations = Number(settings['tool-executor']?.maxIterations) || 50;
   let loopContext = { ...augContext, config: settings, think };
+  loopContext.compactionTurns = [];
+  loopContext.compactionCheckpoint = undefined;
+  loopContext.compactionSummary = undefined;
 
   if (!state.systemHealth) {
     state.systemHealth = { latency: 0, successRate: 1.0, tasksCompleted: 0 };
@@ -364,6 +371,10 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
 
   while (iteration < maxIterations) {
     iteration++;
+    // Final iteration doubles as the graceful shutdown turn (Kilo MAX_STEPS_PROMPT):
+    // tools are disabled and the model is asked to summarize instead of being
+    // hard-cut, so the loop always ends with a coherent response.
+    const isLastStep = iteration >= maxIterations;
     
     if (signal?.aborted) {
       logs.push(`[CORTEX] Abort signal detected in loop iteration ${iteration}. Terminating loop gracefully.`);
@@ -444,6 +455,26 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
     if (iteration === 1) {
       activeIterationInput += "\n\n[CRITICAL PRE-PROCESSING DIRECTIVE (FIRST PASS)]: You are strictly prohibited from writing conversational/speech text if you are calling tools. If you populate the \"tool_calls\" array with tool calls (e.g., search_web, read_url, bash, etc.), you MUST keep the \"speech\" field entirely empty (\"\") in this iteration! Your conversational response will be formulated in the subsequent pass once tools have executed. Only if you are not calling any tools should you output speech. Output valid JSON matching the schema.";
     }
+    if (isLastStep) {
+      activeIterationInput += `\n\n${compileMaxStepsPrompt(settings)}`;
+      logs.push(`[CORTEX_LOOP] Iteration ${iteration} is the final shutdown turn (max ${maxIterations}). Tools disabled; model must summarize.`);
+    }
+
+    // Anchored compaction: when accumulated tool history threatens the context
+    // window, summarize the earlier turns, keep the recent tail verbatim, and
+    // prepend a <conversation-checkpoint> block (non-blocking on failure).
+    try {
+      activeIterationInput = await maybeCompactContext({
+        loopContext,
+        settings,
+        logs,
+        activeIterationInput,
+        activeProviderId,
+        think
+      });
+    } catch (compactErr: any) {
+      logs.push(`[COMPACTION] Non-blocking compaction error: ${compactErr?.message || compactErr}`);
+    }
 
     const requestPayloadBlueprint: PayloadBlueprint = {
       model: targetModelId,
@@ -488,6 +519,7 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
     } else {
       console.log("[DEBUG_TRACE] calling gateway.run now");
       const gwT0 = Date.now();
+      loopContext.disableTools = isLastStep;
       loopContext = await gateway.run(activeIterationInput, state, { 
         ...loopContext, 
         config: loopSettings, 
@@ -644,6 +676,17 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
         rawToolsCall = rawToolsCall.map(normalizeToolCall).filter(Boolean);
       } else {
         rawToolsCall = [];
+      }
+
+      // Shutdown turn: enforce the MAX_STEPS constraint by discarding any
+      // non-delivery tool call the model still emitted (Kilo: "Tools are
+      // disabled after the maximum agent steps").
+      if (isLastStep && rawToolsCall.length > 0) {
+        const discarded = rawToolsCall.filter((tc: any) => !isDeliveryTool(tc?.tool || tc?.name));
+        if (discarded.length > 0) {
+          logs.push(`[MAX_STEPS] Tools are disabled after the maximum agent steps; discarded tool call(s): ${discarded.map((tc: any) => tc?.tool || tc?.name || '?').join(', ')}.`);
+          rawToolsCall = rawToolsCall.filter((tc: any) => isDeliveryTool(tc?.tool || tc?.name));
+        }
       }
 
       let speechText = (parsedPayload.speech || parsedPayload.final_answer || parsedPayload.response || "").trim();
@@ -812,9 +855,9 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
       }
 
       // LLM-configurable iteration ceiling: the model may request more turns via
-      // `max_iterations_override` inside a tool call's arguments. It is capped by
-      // the `tool-executor.maxIterationsCeiling` config key (default 5) and the
-      // hard safety cap of 50, and never lowers the current max.
+      // `max_iterations_override` inside a tool call's arguments. The request is
+      // capped at maxIterations + `tool-executor.maxIterationsCeiling` (default 5,
+      // hard safety cap 50) and never lowers the current max.
       try {
         const configured = settings['tool-executor']?.maxIterationsCeiling !== undefined
           ? Number(settings['tool-executor'].maxIterationsCeiling)
@@ -822,9 +865,9 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
         const ceiling = Math.min(configured, 50);
         for (const tc of toolsToCall) {
           const override = tc?.args?.max_iterations_override ?? tc?.function?.arguments?.max_iterations_override;
-          if (typeof override === 'number' && override > maxIterations && override <= ceiling) {
-            maxIterations = Math.floor(override);
-            logs.push(`[CORTEX] max_iterations_override accepted: extended loop to ${maxIterations} (ceiling ${ceiling}).`);
+          if (typeof override === 'number' && override > maxIterations && override <= maxIterations + ceiling) {
+            maxIterations = Math.min(Math.floor(override), maxIterations + ceiling);
+            logs.push(`[CORTEX] max_iterations_override accepted: extended loop to ${maxIterations} (ceiling +${ceiling}).`);
           }
         }
        } catch (_) {}
@@ -1069,11 +1112,15 @@ if (typeof parsedArgs === 'string') {
                 success = true;
               } catch (err: any) {
                 lastErr = err;
-                console.warn(`[CORTEX] Attempt ${attempts} failed for tool ${tc.name || tc.tool}:`, err.message);
-                if (attempts >= maxAttempts) {
+                // Kilo retry policy: only transient (network/service) errors are
+                // worth burning an attempt on; aborts and schema errors fail fast.
+                const transient = isTransientToolError(err);
+                console.warn(`[CORTEX] Attempt ${attempts} failed for tool ${tc.name || tc.tool}: ${err.message}${transient ? ' (transient, retriable)' : ' (non-transient, aborting retries)'}`);
+                if (attempts >= maxAttempts || !transient) {
                   throw err;
                 }
-                await new Promise(resolve => setTimeout(resolve, 1000));
+                const backoffMs = Math.min(500 * Math.pow(2, attempts - 1), 10000);
+                await new Promise(resolve => setTimeout(resolve, backoffMs));
               }
             }
 
@@ -1084,10 +1131,23 @@ if (typeof parsedArgs === 'string') {
             res = { tool: tc.name || tc.tool, observation: toolRes, success: true, durationMs: Date.now() - execStart };
           } catch (err: any) {
             console.error(`[CORTEX] Tool schema validation or execution failed for ${tc.name || tc.tool}:`, err.message);
-            res = { tool: tc.name || tc.tool, error: `Execution failed: ${err.message}`, success: false, durationMs: Date.now() - execStart };
+            const classified = classifyToolExecutionError(err);
+            res = { tool: tc.name || tc.tool, error: classified.label, errorType: classified.errorType, success: false, durationMs: Date.now() - execStart };
           }
         } else {
-          res = { tool: tc.name || tc.tool, error: 'Tool not found', success: false, notFound: true };
+          const tName = tc.name || tc.tool || '';
+          const previouslySeen = toolExecutionHistory.some(h =>
+            Array.isArray(h.tools_called) && h.tools_called.some((c: any) => (c?.name || c?.tool) === tName)
+          );
+          res = {
+            tool: tName,
+            error: previouslySeen
+              ? `Stale tool call: ${tName} (the tool was available earlier but is no longer registered)`
+              : `Tool not found: ${tName}`,
+            success: false,
+            notFound: true,
+            errorType: previouslySeen ? 'stale' : 'not_found'
+          };
         }
         
         let pathDetail = '';
@@ -1177,6 +1237,11 @@ if (typeof parsedArgs === 'string') {
           ...(Array.isArray(loopContext.toolMessages) ? loopContext.toolMessages : []),
           ...buildToolResultMessages(newToolMessages, activeProviderId)
         ];
+        // Canonical [call, toolMessage] pairs feed the anchored context compactor.
+        if (!Array.isArray(loopContext.compactionTurns)) loopContext.compactionTurns = [];
+        for (let i = 0; i < newToolMessages.length; i++) {
+          loopContext.compactionTurns.push({ call: newAssistantToolCalls[i], toolMessage: newToolMessages[i] });
+        }
         logs.push(`[CORTEX] Built ${newToolMessages.length} native tool result message(s) for provider '${activeProviderId}'.`);
       } catch (tmErr: any) {
         logs.push(`[CORTEX] Warning: Failed to build native tool result messages: ${tmErr.message || tmErr}`);
