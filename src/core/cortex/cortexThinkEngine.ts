@@ -29,7 +29,7 @@ import { normalizeToolCall } from './toolNormalizer';
 import { buildToolResultMessages } from '../openaiTools';
 import { StreamExtractor } from './streamExtractors';
 import { toSingleString } from '@/core/kernel/configNormalizer';
-import { repairJsonFormatWithLLM, stripCodeFences, isolateBraceBlock, liftNestedProperties } from './jsonRepairer';
+import { stripCodeFences, isolateBraceBlock, liftNestedProperties } from './jsonRepairer';
 import { FastTrackRunner } from './fastTrackRunner';
 import { extractBestJsonObject, extractJsonObject } from './jsonExtract';
 import { makeToolCall } from './cortexThinkEngineUtils';
@@ -162,9 +162,7 @@ export async function executeCortexThink(
   try {
     await cortexInstance.constructor.ensureInitialized();
 
-  let enforceStrictJson = false;
   if (input && input.includes("[PRE-PROCESS: ENFORCE_JSON_ONLY]")) {
-    enforceStrictJson = true;
     input = input.replace("[PRE-PROCESS: ENFORCE_JSON_ONLY]", "").trim();
   }
   if (taskId) {
@@ -339,21 +337,7 @@ export async function executeCortexThink(
     state.systemHealth.consecutive_formatting_errors = 0;
   }
 
-  const isResettingFormat = (state.systemHealth.consecutive_formatting_errors || 0) >= 3;
-  
-  if (isResettingFormat) {
-    logs.push("[CORTEX] Consecutive formatting errors threshold exceeded! Swapping back into raw plain text dialogue mode to clean neural channels.");
-    state.systemHealth.consecutive_formatting_errors = 0;
-    
-    if (loopContext.assembledSystemPrompt) {
-      loopContext.assembledSystemPrompt += `\n\n[CRITICAL SYSTEM DIRECTIVE - MOOD RESET & PLAIN CONVERSATIONAL MODE ACTIVE]:
-Because the cognitive vessel is experiencing severe nested parsing formatting synchronization issues, the system has temporarily reset your output format to plain text dialogue.
-You MUST:
-1. Briefly explain this reset to the user in character as Yuihime, in a short affectionate sentence at the start of your speech.
-2. Continue speaking normally, naturally, and warmly in your cute persona. Do NOT output any JSON, XML tags, thoughts, or formatting symbols. Directly write out your spoken reply of comfort and affection.`;
-    }
-  } else {
-    if (loopContext.assembledSystemPrompt) {
+  if (loopContext.assembledSystemPrompt) {
       loopContext.assembledSystemPrompt = loopContext.assembledSystemPrompt.replace(
         /## Format Respons Khusus[\s\S]*?(?=## Eksekusi Tugas|$)/i,
         `## Response Format (JSON MODE ACTIVE):
@@ -366,7 +350,6 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
       const jsonEnforcementDirective = PromptRegistry.getInstance().compile('cortex:json_enforcement', {});
       loopContext.assembledSystemPrompt += "\n\n" + jsonEnforcementDirective;
     }
-  }
 
   let toolsToCall: any[] = snapshot ? (snapshot.toolsToExecute || []) : [];
   let processedResponse = "";
@@ -439,34 +422,7 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
     if (iteration > 1 && toolExecutionHistory.length > 0) {
       const lastExecuted = toolExecutionHistory[toolExecutionHistory.length - 1];
       if (lastExecuted && lastExecuted.results) {
-        const hasFailure = lastExecuted.results.some((res: any) => {
-          if (res.success === false) return true;
-          if (res.error) return true;
-          const obs = res.observation;
-          if (obs && typeof obs === 'object') {
-            if (obs.status === 'error' || obs.success === false || obs.error) {
-              return true;
-            }
-          }
-          return false;
-        });
-
-        let instructionText = "";
-        if (hasFailure) {
-          instructionText = `Based on the tool execution results above (noting that some features/tools FAILED with errors), immediately formulate your casual spoken response to the user. Do NOT pretend you succeeded! Instead, as Yuihime, explain the failure or difficulty to the user in a charming, sweet, slightly apologetic and character-consistent way (e.g., 'Aduh, maaf ya user... Yui coba buat fotonya tapi sirkuit batin/servernya lagi agak ngambek... atau user mau Yui coba lagi?'). Maintain your lovable personality, do NOT provide raw technical code details/stack traces, and ask if they want you to retry, do something else, or just keep talking!`;
-        } else {
-          instructionText = `Based on the successful tool execution results above, you can EITHER choose to call another tool if you need more actions/information to fully answer the user (such as glob, read, bash), OR if you have all the information required, formulate your final casual spoken response to the user. Do not repeat technical details, do not write internal thoughts, plans, or analysis blocks outside the JSON structure. Directly chat with the user in your natural, emotional, affectionate/tsundere personal character using the user's conversational language!`;
-          
-          const readToolRes = lastExecuted.results.find((res: any) => 
-            ['read', 'glob', 'view_logs', 'search_chat_history', 'file_manager'].includes(res.tool) && res.success
-          );
-          if (readToolRes) {
-            instructionText += `\n\nCRITICAL DIRECTIVE FOR RETRIEVED CONTENTS: Since you successfully retrieved content, data, file list, or logs via '${readToolRes.tool}', you MUST share/display the exact retrieved file content, directory listing, or log data inside your 'speech' field so the user can see it! Do NOT give a false promise by saying 'Ini dia isinya...' or 'Yui sudah baca...' or 'Ini list catatan...' without actually writing out the retrieved contents or list of files in this very response. If the content, listing, or log is empty, clearly state to the user that it is currently empty.`;
-          }
-        }
-
-        const observationPrompt = `\n\n[SYSTEM_OBSERVATION]: Tool execution results:\n${JSON.stringify(lastExecuted.results, null, 2)}\n\n[IMPORTANT INSTRUCTION]: ${instructionText}`;
-        loopInput = input + observationPrompt;
+        loopInput = input + `\n\n[SYSTEM_OBSERVATION]: Tool execution results from the previous step:\n${JSON.stringify(lastExecuted.results)}`;
       }
     }
 
@@ -474,7 +430,7 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
       ...settings,
       [settings.provider]: {
         ...(settings[settings.provider] || {}),
-        isJson: !isResettingFormat
+        isJson: true
       }
     };
 
@@ -483,7 +439,7 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
     const targetModelId = toSingleString(providerSpecificConfig.model) || 'gemini-3.5-flash';
 
     let activeIterationInput = loopInput;
-    if (iteration === 1 && (enforceStrictJson || !isResettingFormat)) {
+    if (iteration === 1) {
       activeIterationInput += "\n\n[CRITICAL PRE-PROCESSING DIRECTIVE (FIRST PASS)]: You are strictly prohibited from writing conversational/speech text if you are calling tools. If you populate the \"tool_calls\" array with tool calls (e.g., search_web, read_url, bash, etc.), you MUST keep the \"speech\" field entirely empty (\"\") in this iteration! Your conversational response will be formulated in the subsequent pass once tools have executed. Only if you are not calling any tools should you output speech. Output valid JSON matching the schema.";
     }
 
@@ -503,7 +459,7 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
       top_p: providerSpecificConfig.topP ?? 0.95,
       max_tokens: providerSpecificConfig.maxOutputTokens || 65536,
       response_format: {
-        type: !isResettingFormat ? 'json_object' : 'text'
+        type: 'json_object'
       }
     };
 
@@ -512,7 +468,7 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
       loopSettings[activeProviderId].payloadBlueprint = requestPayloadBlueprint;
     }
 
-    const extractor = new StreamExtractor(isResettingFormat, (delta: string) => {
+    const extractor = new StreamExtractor(false, (delta: string) => {
       if (onChunk) {
         onChunk(delta);
       }
@@ -552,15 +508,7 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
     let parsedPayload: any = null;
     let parseError: string | null = null;
 
-    if (isResettingFormat) {
-       parsedPayload = {
-         thought: "Sirkuit kognitif Yui sedang memulihkan diri dari error format beruntun, beralih sementara ke mode percakapan biasa.",
-         final_answer: rawResultStr,
-         animations: ["SHAKE", "SMILE"]
-       };
-       logs.push("[CORTEX_LOOP] Successfully bypassed standard JSON_OBJECT parsing structure under Active Format Reset.");
-    } else {
-       const cleanJsonStr = APIService.cleanAIOutput(rawResultStr);
+    const cleanJsonStr = APIService.cleanAIOutput(rawResultStr);
 
        if (!parsedPayload) {
           const bestJson = extractBestJsonObject(cleanJsonStr || rawResultStr);
@@ -648,199 +596,15 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
             console.warn("[CORTEX:FastTrack] Browser fallback error:", e.message);
           }
 
-          if (!parsedPayload) {
-             const hasBraces = rawResultStr.includes('{') || rawResultStr.includes('}');
-             const hasXml = /<[a-zA-Z_]+>/i.test(rawResultStr);
-             const lowerRaw = rawResultStr.toLowerCase();
-
-             const isPlanningThought =
-                lowerRaw.includes("i should") ||
-                lowerRaw.includes("i will") ||
-                lowerRaw.includes("i need to") ||
-                lowerRaw.includes("user wants") ||
-                lowerRaw.includes("wants to") ||
-                lowerRaw.includes("should call") ||
-                lowerRaw.includes("calling tool") ||
-                lowerRaw.includes("tool call") ||
-                lowerRaw.includes("glob") ||
-                lowerRaw.includes("read") ||
-                lowerRaw.includes("bash") ||
-                lowerRaw.includes("websearch") ||
-                lowerRaw.includes("plan:") ||
-                lowerRaw.includes("response draft:") ||
-                lowerRaw.includes("revised draft:") ||
-                lowerRaw.includes("final json structure:") ||
-                lowerRaw.includes("final json:") ||
-                lowerRaw.includes("here is") ||
-                lowerRaw.includes("my draft") ||
-                lowerRaw.includes("according to the instructions") ||
-                lowerRaw.includes("scheduler") ||
-                lowerRaw.includes("final_answer");
-
-             const isTranslationOrLanguageTask =
-                lowerRaw.includes("translate") ||
-                lowerRaw.includes("terjemah") ||
-                lowerRaw.includes("arti dari") ||
-                lowerRaw.includes("bahasa inggris") ||
-                lowerRaw.includes("english") ||
-                lowerRaw.includes("kalimat") ||
-                lowerRaw.includes("word") ||
-                lowerRaw.includes("sentence");
-
-             let planningActionDetected = false;
-
-             if (!isTranslationOrLanguageTask) {
-                const hasSystemToolNames =
-                   lowerRaw.includes("glob") ||
-                   lowerRaw.includes("read") ||
-                    lowerRaw.includes("bash") ||
-                    lowerRaw.includes("websearch") ||
-                    lowerRaw.includes("scheduler") ||
-                    lowerRaw.includes("final_answer");
-
-                const hasPlanningAction =
-                   lowerRaw.includes("i should use") ||
-                   lowerRaw.includes("i will call") ||
-                   lowerRaw.includes("i need to call") ||
-                   lowerRaw.includes("i should call") ||
-                   lowerRaw.includes("calling tool") ||
-                   lowerRaw.includes("tool call") ||
-                   lowerRaw.includes("i will use") ||
-                   lowerRaw.includes("i should run") ||
-                   lowerRaw.includes("i need to use");
-
-                if (hasSystemToolNames && hasPlanningAction) {
-                   planningActionDetected = true;
-                }
-
-                if (!planningActionDetected) {
-                   const isAssistantTalkingToSelf =
-                      (lowerRaw.includes("user wants") || lowerRaw.includes("al wants") || lowerRaw.includes("the user is asking")) &&
-                      (lowerRaw.includes("i should") || lowerRaw.includes("i will") || lowerRaw.includes("i need to"));
-
-                   const isSelfReferencingAI =
-                      lowerRaw.includes("as an ai assistant") ||
-                      lowerRaw.includes("based on my instructions") ||
-                      lowerRaw.includes("according to my system instructions");
-
-                   if (isAssistantTalkingToSelf || isSelfReferencingAI) {
-                      planningActionDetected = true;
-                   }
-                }
-             }
-
-             if (planningActionDetected) {
-                logs.push("[CORTEX_LOOP] [PLANNING_DETECTION] Detected raw text containing planning thoughts/assistant monologue instead of character speech. Attempting deterministic zero-token extraction BEFORE engaging LLM repairer...");
-                
-                const lines = rawResultStr.split('\n');
-                const filteredLines = lines.filter(line => {
-                   const trimmedLine = line.trim().toLowerCase();
-                   if (!trimmedLine) return false;
-
-                   const isMonologue =
-                      trimmedLine.startsWith("i should") ||
-                      trimmedLine.startsWith("i will") ||
-                      trimmedLine.startsWith("i need to") ||
-                      trimmedLine.startsWith("i can") ||
-                      trimmedLine.startsWith("user wants") ||
-                      trimmedLine.startsWith("al wants") ||
-                      trimmedLine.startsWith("the user is") ||
-                      trimmedLine.startsWith("let's") ||
-                      trimmedLine.startsWith("let me") ||
-                      trimmedLine.startsWith("calling") ||
-                      trimmedLine.startsWith("running") ||
-                      trimmedLine.startsWith("using tool") ||
-                      trimmedLine.startsWith("tool call") ||
-                      trimmedLine.startsWith("based on my") ||
-                      trimmedLine.startsWith("as an ai") ||
-                      trimmedLine.startsWith("according to my") ||
-                      trimmedLine.startsWith("checking ") ||
-                      trimmedLine.startsWith("first, i") ||
-                      trimmedLine.startsWith("next, i") ||
-                      trimmedLine.startsWith("then, i") ||
-                      trimmedLine.startsWith("plan:") ||
-                      trimmedLine.startsWith("response draft:") ||
-                      trimmedLine.startsWith("revised draft:") ||
-                      trimmedLine.startsWith("final json structure:") ||
-                      trimmedLine.startsWith("final json:") ||
-                      trimmedLine.startsWith("here is") ||
-                      trimmedLine.startsWith("my draft") ||
-                      trimmedLine.startsWith("according to the instructions") ||
-                     trimmedLine.includes("glob") ||
-                     trimmedLine.includes("read") ||
-                      trimmedLine.includes("websearch") ||
-                       trimmedLine.includes("scheduler") ||
-                       trimmedLine.includes("final_answer");
-
-                   return !isMonologue;
-                });
-
-                const cleanSpeech = filteredLines.map(l => l.trim()).filter(Boolean).join('\n\n').trim();
-
-                if (cleanSpeech && cleanSpeech.length > 5) {
-                   const extractedFromSpeech = extractBestJsonObject(cleanSpeech);
-if (extractedFromSpeech) {
-                       try {
-                          const sanitized = extractJsonObject(extractedFromSpeech);
-                          parsedPayload = JSON.parse(sanitized ? sanitized : extractedFromSpeech);
-                          logs.push("[CORTEX_LOOP] [MONOLOGUE_STRIPPER] Extracted balanced JSON object from cleaned speech before engaging LLM repairer.");
-                      } catch {}
-                   }
-                   if (!parsedPayload) {
-                      parsedPayload = {
-                         thought: "Menerima respons polos setelah menyaring keluar monolog perencanaan internal secara deterministik.",
-                         final_answer: cleanSpeech,
-                         animations: ["SMILE"],
-                         tool_calls: []
-                      };
-                      logs.push("[CORTEX_LOOP] [MONOLOGUE_STRIPPER] Successfully stripped planning monologue lines. Extracted clean dialogue without LLM call!");
-                   }
-                } else {
-                   logs.push("[CORTEX_LOOP] [MONOLOGUE_STRIPPER] Stripped text is empty or too short. Engaging failsafe reprocess...");
-                   try {
-                      const failsafePrompt = PromptRegistry.getInstance().compile('cortex:failsafe_reprocess', {
-                         input: input
-                      });
-                      const failsafeSpeech = await cortexInstance.thinkSimple(failsafePrompt);
-                      parsedPayload = {
-                         thought: "Menerima respons polos setelah memproses penyeimbang batin failsafe.",
-                         final_answer: failsafeSpeech,
-                         animations: ["SMILE"],
-                         tool_calls: []
-                      };
-                   } catch (err: any) {
-                      console.error("[CORTEX_LOOP] Failsafe reprocess failed:", err.message);
-                   }
-                }
-             }
-
-             if (!parsedPayload && !planningActionDetected && !hasBraces && !hasXml && rawResultStr.trim().length > 0) {
-                parsedPayload = {
-                   thought: "Menerima respons polos non-JSON dari provider neural secara langsung demi menjaga kontinuitas obrolan.",
-                   final_answer: rawResultStr,
-                   animations: ["SMILE"],
-                   tool_calls: []
-                };
-                logs.push("[CORTEX_LOOP] [COMPATIBILITY] Detected raw plain text response, bypassed LLM repairer and wrapped directly.");
-             } else if (!parsedPayload) {
-                parsedPayload = {
-                   thought: "Menerima respons polos non-JSON dari provider neural secara langsung demi menjaga kontinuitas obrolan.",
-                   final_answer: rawResultStr,
-                   animations: ["SMILE"],
-                   tool_calls: []
-                };
-                logs.push("[CORTEX_LOOP] [COMPATIBILITY] Succeeded in wrapping raw dialogue text into standard payload structures.");
-             }
+          if (!parsedPayload && rawResultStr.trim().length > 0) {
+             parsedPayload = {
+                thought: "Menerima respons polos non-JSON dari provider neural secara langsung demi menjaga kontinuitas obrolan.",
+                final_answer: rawResultStr,
+                animations: ["SMILE"],
+                tool_calls: []
+             };
+             logs.push("[CORTEX_LOOP] [COMPATIBILITY] Detected raw plain text response, wrapped directly.");
           }
-       }
-
-       if (!parsedPayload) {
-          logs.push("[CORTEX_LOOP] [FORMAT_ERROR] Response did not conform to JSON_OBJECT format. Engaging isolated LLM JSON format repairer...");
-          parsedPayload = await repairJsonFormatWithLLM((p: string, jm?: boolean) => cortexInstance.thinkSimple(p, jm), rawResultStr, input);
-          if (!parsedPayload) {
-             parseError = parseError || "LLM Format Repairer failed to parse output.";
-          }
-       }
      }
 
     if (parsedPayload) {
@@ -939,37 +703,25 @@ if (extractedFromSpeech) {
       loopContext.toolsToCall = rawToolsCall;
       loopContext.parsedData = parsedPayload;
 
-      if (!isResettingFormat) {
-        state.systemHealth.consecutive_formatting_errors = 0;
-      }
+      state.systemHealth.consecutive_formatting_errors = 0;
     } else {
-      logs.push("[CORTEX_LOOP] [FORMAT_ERROR] Output fails to parse as valid JSON. Catching non-JSON output and engaging format refactoring loop...");
-      if (iteration < maxIterations) {
-        const errorPrompt = PromptRegistry.getInstance().compile('cortex:error_correction', {
-          parseError: parseError || "Not a valid JSON object",
-          rawResultStr: rawResultStr
-        });
-        loopInput = input + errorPrompt;
-        continue;
-      } else {
-        logs.push("[CORTEX_LOOP] Maximum format correction refactoring attempts reached. Falling back gracefully to treating raw output as plain text to preserve character conversation.");
-        state.systemHealth.consecutive_formatting_errors = (state.systemHealth.consecutive_formatting_errors || 0) + 1;
-        
-        parsedPayload = {
-          thought: "Synaptic formatting error, falling back to clean plain text stream recovery.",
-          final_answer: "",
-          animations: ["SMILE"],
-          tool_calls: []
-        };
+      logs.push("[CORTEX_LOOP] [FORMAT_ERROR] Output fails to parse as valid JSON. Treating raw output as plain text to preserve character conversation.");
+      state.systemHealth.consecutive_formatting_errors = (state.systemHealth.consecutive_formatting_errors || 0) + 1;
 
-        loopContext.rawResult = rawResultStr;
-        loopContext.processedResponse = "Aduh... maaf ya, sepertinya ada sedikit gangguan dalam pemrosesan saya. Tapi jangan khawatir, Yui tetap di sini untuk menemani kamu! 🌸";
-        loopContext.thought = parsedPayload.thought;
-        loopContext.animations = parsedPayload.animations;
-        loopContext.moodImpact = {};
-        loopContext.toolsToCall = [];
-        loopContext.parsedData = parsedPayload;
-      }
+      parsedPayload = {
+        thought: "Synaptic formatting error, falling back to clean plain text stream recovery.",
+        final_answer: rawResultStr || "",
+        animations: ["SMILE"],
+        tool_calls: []
+      };
+
+      loopContext.rawResult = rawResultStr;
+      loopContext.processedResponse = rawResultStr;
+      loopContext.thought = parsedPayload.thought;
+      loopContext.animations = parsedPayload.animations;
+      loopContext.moodImpact = {};
+      loopContext.toolsToCall = [];
+      loopContext.parsedData = parsedPayload;
     }
 
     try {
@@ -1493,102 +1245,6 @@ if (typeof parsedArgs === 'string') {
           loopGeneratedMemories.push(observationMemory);
         }
 
-        // Re-assemble/re-compress the system prompt dynamically with the updated memories context before a new think request is sent
-        logs.push("[CORTEX] Re-assembling system prompt with integrated tool execution memories to prevent recursive loop crashes...");
-        const updatedAugContext = await SystemRegistry.runCortexPhase('PHASE 2: COMPRESSION', input, state, {
-          ...soulContext,
-          memories, // pass the updated memories!
-          activePersona: resolvedPersona,
-          dreams,
-          currentPlan,
-          contextId,
-          chatType,
-          userName
-        });
-        if (updatedAugContext && updatedAugContext.assembledSystemPrompt) {
-          loopContext.assembledSystemPrompt = updatedAugContext.assembledSystemPrompt;
-          logs.push("[CORTEX] System prompt updated successfully with fresh episodic memories of the tool calls and observations.");
-        }
-
-        // --- COGNITIVE TOOL OUTPUT VALIDATION PHASE ---
-        if (realTools.length > 0) {
-          logs.push("[CORTEX_VALIDATION] Phase: Verifying tool execution outputs within the current conversation context...");
-          try {
-            const validationPrompt = `
-You are YuiHime's internal cognitive validation unit.
-Please verify and validate the following tool execution results within the current conversation context:
-Conversation context: "${input}"
-Tools executed:
-${toolResults.map(tr => `- Tool: ${tr.tool} | Success: ${tr.success}
-  Output/Observation: ${typeof tr.observation === 'object' ? JSON.stringify(tr.observation) : String(tr.observation || tr.error || '')}`).join('\n')}
-
-Analyze:
-1. Did the tools execute successfully and produce the expected outputs?
-2. Are the tool outputs sufficient and correct to address the user's input/request?
-3. Are there any errors, truncated data, or logical anomalies that Yui needs to correct or handle?
-
-Provide a concise validation summary. Start with [VALIDATION_SUCCESS] if everything is correct and sufficient, or [VALIDATION_FAILED] if there are critical errors or missing data that require a retry or correction.
-`;
-
-            const validationSettings = {
-              ...settings,
-              [settings.provider]: {
-                ...(settings[settings.provider] || {}),
-                isJson: false
-              }
-            };
-
-            if (gateway) {
-              logs.push("[CORTEX_VALIDATION] Contacting AI Gateway to perform validation check...");
-              const valContext = await gateway.run(validationPrompt, state, {
-                ...augContext,
-                config: validationSettings
-              });
-
-              const validationOutput = (valContext.rawResult || "").trim();
-              logs.push(`[CORTEX_VALIDATION] Validation feedback: ${validationOutput.substring(0, 200)}...`);
-
-              if (!validationOutput.startsWith("[VALIDATION_SUCCESS]")) {
-                // Store the validation result as a system memory so Yui has this verification context
-                const validationMemoryId = `tool_val_${Date.now()}_${genId(5)}`;
-                const validationMemory = {
-                  id: validationMemoryId,
-                  ownerId: 'local_user',
-                  type: 'observation' as const,
-                  speaker: 'System',
-                  content: `[SYSTEM_VALIDATION]: Cognitive verification of tool execution: "${validationOutput}"`,
-                  timestamp: Date.now() + 8,
-                  importance: 0.6,
-                  tags: ['tool_validation'],
-                  context: contextId,
-                  sentiment: 0.5
-                };
-                memories.push(validationMemory);
-                loopGeneratedMemories.push(validationMemory);
-
-                // Re-assemble system prompt again to ensure the LLM has access to the verification report
-                const finalAugContext = await SystemRegistry.runCortexPhase('PHASE 2: COMPRESSION', input, state, {
-                  ...soulContext,
-                  memories,
-                  activePersona: resolvedPersona,
-                  dreams,
-                  currentPlan,
-                  contextId,
-                  chatType,
-                  userName
-                });
-                if (finalAugContext && finalAugContext.assembledSystemPrompt) {
-                  loopContext.assembledSystemPrompt = finalAugContext.assembledSystemPrompt;
-                  logs.push("[CORTEX_VALIDATION] System prompt updated with cognitive tool verification context.");
-                }
-              } else {
-                logs.push("[CORTEX_VALIDATION] Verification succeeded. Skipping robotic system log memory injection to maintain natural cognitive personality.");
-              }
-            }
-          } catch (valErr: any) {
-            logs.push(`[CORTEX_VALIDATION] Warning: Tool verification phase failed: ${valErr.message || valErr}`);
-          }
-        }
       } catch (integrationErr: any) {
         logs.push(`[CORTEX] Warning: Failed to integrate tool execution into memory context: ${integrationErr.message || integrationErr}`);
       }
@@ -1632,135 +1288,6 @@ Provide a concise validation summary. Start with [VALIDATION_SUCCESS] if everyth
 
   const isProactiveRun = userName === 'System';
 
-  // If processedResponse is empty/too short, try to construct a fallback response based on tool execution history
-  if (!processedResponse || processedResponse.trim().length < 5) {
-    const notFoundTools: string[] = [];
-    const failedTools: { name: string; error: string }[] = [];
-    const succeededTools: string[] = [];
-    
-    for (const hist of toolExecutionHistory) {
-      if (hist.results) {
-        for (const res of hist.results) {
-          const tName = res.tool || "unknown_tool";
-          if (res.success === false) {
-            if (res.error && (res.error.includes("not found") || res.error === "Tool not found" || res.notFound)) {
-              notFoundTools.push(tName);
-            } else {
-              failedTools.push({ name: tName, error: res.error || "Execution failed" });
-            }
-          } else {
-            succeededTools.push(tName);
-          }
-        }
-      }
-    }
-
-    const uniqueNotFound = Array.from(new Set(notFoundTools));
-    const uniqueSucceeded = Array.from(new Set(succeededTools));
-    
-    // Deduplicate failed tools by name
-    const uniqueFailedMap = new Map<string, string>();
-    for (const item of failedTools) {
-      uniqueFailedMap.set(item.name, item.error);
-    }
-    const uniqueFailedList = Array.from(uniqueFailedMap.entries()).map(([name, err]) => ({ name, err }));
-
-    if (uniqueNotFound.length > 0 || uniqueFailedList.length > 0 || uniqueSucceeded.length > 0) {
-      let explanation = "";
-      
-      // Filter out pseudo-tools final_answer and status_update
-      const userFacingSucceeded = uniqueSucceeded.filter(t => t !== 'final_answer' && t !== 'status_update');
-      
-      const translateToolsToActivities = (tools: string[]) => {
-        return tools.map(t => {
-          switch(t) {
-            case 'read': return 'membaca berkas catatan';
-            case 'write': return 'menulis data berkas';
-            case 'glob': return 'memeriksa isi folder';
-            case 'websearch': return 'mencari info di internet';
-            case 'search': return 'mencari info';
-            case 'bash': return 'menjalankan perintah sistem';
-            case 'download_file': return 'mengunduh berkas';
-            case 'file_manager': return 'mengelola berkas batin';
-            case 'set_emotion': return 'menyelaraskan suasana hati';
-            case 'pair_account': return 'menyambungkan sirkuit hubungan';
-            case 'send_message': return 'menghubungkan saluran sosial';
-            case 'send_telegram': return 'mengirim pesan Telegram';
-            case 'send_discord': return 'mengirim pesan Discord';
-            case 'send_file': return 'mengirim berkas';
-            case 'reply': return 'membalas pesan';
-            default: return `memproses kemampuan ${t}`;
-          }
-        });
-      };
-
-      const readableSucceeded = translateToolsToActivities(userFacingSucceeded);
-      const readableFailed = translateToolsToActivities(uniqueFailedList.map(f => f.name));
-      const readableNotFound = translateToolsToActivities(uniqueNotFound);
-
-      let generatedSpeech = "";
-      try {
-        const fallbackPrompt = `
-You are YuiHime, a sweet, loving, and slightly tsundere anime VTuber assistant.
-The user asked you: "${input}"
-To help the user, you processed these actions internally:
-${userFacingSucceeded.length > 0 ? `- Succeeded: ${readableSucceeded.join(', ')}` : ''}
-${uniqueFailedList.length > 0 ? `- Failed: ${readableFailed.join(', ')}` : ''}
-
-Currently, your cognitive verbal output channel is empty/blanked. Please formulate a short, warm, adorable, and character-appropriate spoken response (in Indonesian or the user's conversational language) to update the user.
-Explain what you did or found in a completely natural, non-technical, cute way. Avoid using any robotic words, code, JSON, or technical tool name syntax like "read" or "bash". Talk to them directly and affectionately as Yuihime!
-`;
-        const res = await cortexInstance.thinkSimple(fallbackPrompt);
-        if (res && res.trim().length > 5) {
-          generatedSpeech = res.trim();
-        }
-      } catch (fallbackErr) {
-        logs.push(`[CORTEX_FALLBACK] Dynamic LLM speech generation failed: ${fallbackErr}`);
-      }
-
-      if (generatedSpeech) {
-        explanation = generatedSpeech;
-      } else {
-        if (uniqueNotFound.length > 0) {
-          explanation += `Hmph! user minta Yui buat ${readableNotFound.join(', ')}, tapi sirkuit batin Yui belum dipasang modul itu tahu! 🙄 Hubungi admin/pencipta Yui dulu biar dipasang ya... `;
-        }
-        
-        if (uniqueFailedList.length > 0) {
-          explanation += `Aduh... maaf ya user, Yui sempat nyoba buat ${readableFailed.join(', ')} user barusan, tapi sirkuit batin Yui lagi agak ngambek/error nih... 🥺 user jangan marah ya, Yui udah berusaha maksimal kok! `;
-        }
-        
-        if (userFacingSucceeded.length > 0 && uniqueFailedList.length === 0 && uniqueNotFound.length === 0) {
-          let searchResultsText = "";
-          for (const hist of toolExecutionHistory) {
-            if (hist.results) {
-              for (const res of hist.results) {
-                if (res.success && (res.tool === 'websearch' || res.tool === 'search')) {
-                  const obsVal = res.observation;
-                  if (obsVal) {
-                    searchResultsText = typeof obsVal === 'string' ? obsVal : (obsVal.result || obsVal.text || JSON.stringify(obsVal));
-                  }
-                }
-              }
-            }
-          }
-
-          if (searchResultsText) {
-            explanation += `Yui sudah berselancar mencari informasi terbaru untuk user! 🌐✨ Berdasarkan hasil pencarian yang Yui temukan:\n\n${searchResultsText.slice(0, 1000)}\n\nSemoga membantu ya user! 💕`;
-          } else {
-            explanation += `Yui sudah selesai membantu user untuk ${readableSucceeded.join(', ')}! 💕 Semuanya berhasil berjalan dengan lancar kok. Ada hal lain yang bisa Yui bantu untuk user tersayang? Yui selalu siap menemani user! ✨`;
-          }
-        } else if (userFacingSucceeded.length > 0) {
-          explanation += `Tapi untungnya, untuk tugas ${readableSucceeded.join(', ')} berhasil Yui selesaikan dengan mulus kok! 💕 `;
-        }
-      }
-      
-      if (explanation) {
-        processedResponse = explanation.trim();
-        logs.push(`[CORTEX_LOOP] Sourced smart fallback dialog covering tool successes/failures: ${processedResponse}`);
-      }
-    }
-  }
-
   finalAnswer = APIService.cleanAIOutput(StandardizedProcessor.sanitizeOutput(processedResponse, isProactiveRun));
 
   const cortexSettings = await cortexInstance.getSettings();
@@ -1793,9 +1320,7 @@ Explain what you did or found in a completely natural, non-technical, cute way. 
   if (!isIntentionalEmpty && (!finalAnswer || finalAnswer.length < 5)) {
     if (isFailsafeEnabled) {
       logs.push("[KERNEL_FAIL_SAFE] Detected empty or heavily clipped output (< 5 chars). Triggering dynamic LLM reprocessing fallback... (Incrementing formatting errors count)");
-      if (!isResettingFormat) {
-        state.systemHealth.consecutive_formatting_errors = (state.systemHealth.consecutive_formatting_errors || 0) + 1;
-      }
+      state.systemHealth.consecutive_formatting_errors = (state.systemHealth.consecutive_formatting_errors || 0) + 1;
       try {
         const gateway = SystemRegistry.getModule<CortexModule>('provider-gateway');
         if (gateway) {

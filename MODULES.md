@@ -134,3 +134,4 @@ Peta struktur direktori pasca-pemisahan Web UI ↔ Daemon (lihat UPDATE_LOG `[4.
 - `Cortex/Tools`
 - `core/kernel/ai/generateSegment.ts`
 - `core/kernel/ai/generateSegment.ts`
+- `core/cortex/cortexThinkEngine.ts`

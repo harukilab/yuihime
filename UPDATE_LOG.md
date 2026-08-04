@@ -1,6 +1,13 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.252] - 2026-08-04
+### Refactor: core loop rewritten as uniform general agent loop (ReAct), parallel execution kept
+- cortexThinkEngine loop now uniform per-iteration: compress once, gateway call, parallel tool execution, observations fed back via native tool messages + neutral [SYSTEM_OBSERVATION] prompt injection
+- removed double PHASE 2 re-compress, cognitive validation sub-loop, failure/success heuristic instructions, format-reset mode, error-correction retry loop, monologue-stripper heuristics, LLM JSON repairer fallback, and fallback speech generation (single-layer KERNEL_FAIL_SAFE retained)
+- kept: parallel Promise.all execution, tool_call/observation memory integration, tool dedup, max_iterations_override + dynamic +1 extension, OpenAI-native tool messages, background tool dispatch, snapshot/resume
+
+
 ## [4.251] - 2026-08-04
 ### fix: fix: restore multi-key Gemini pool rotation (prevent offline fallback on single-key 503)
 - generateSegment unions API key pool across providers/settings/config so collapsed single key no longer clobbers multi-key pool; primaryKey stays single string
