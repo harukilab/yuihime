@@ -325,9 +325,11 @@ export async function executeCortexThink(
     memories = snapshot.observationHistory as Memory[];
     logs.push(`[CORTEX] Restored observation history containing ${memories.length} entries from suspended task snapshot.`);
   }
-  // UPDATE: Mode Berpikir Cepat (Bypass Multi-Turn Reasoning) tidak lagi membatasi turn/iterasi ke 1 (maxIterations tetap 3).
-  // Sebagai gantinya, mode ini mengaktifkan eksekusi paralel multi-proses / multi-node untuk seluruh tool calls secara simultan.
-  let maxIterations = 3;
+  // General agent loop: iterations run until the model stops calling tools
+  // (final_answer/speak) or the request is aborted. `maxIterations` is a
+  // last-resort safety cap (50) to prevent runaway tool loops — it does NOT
+  // bound normal reasoning. Parallel multi-tool execution stays enabled.
+  let maxIterations = 50;
   let loopContext = { ...augContext, config: settings, think };
 
   if (!state.systemHealth) {
@@ -810,12 +812,14 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
       }
 
       // LLM-configurable iteration ceiling: the model may request more turns via
-      // `max_iterations_override` inside a tool call's arguments. It is capped by the
-      // `tool-executor.maxIterationsCeiling` config key and never lowers the current max.
+      // `max_iterations_override` inside a tool call's arguments. It is capped by
+      // the `tool-executor.maxIterationsCeiling` config key (default 5) and the
+      // hard safety cap of 50, and never lowers the current max.
       try {
-        const ceiling = settings['tool-executor']?.maxIterationsCeiling !== undefined
+        const configured = settings['tool-executor']?.maxIterationsCeiling !== undefined
           ? Number(settings['tool-executor'].maxIterationsCeiling)
           : 5;
+        const ceiling = Math.min(configured, 50);
         for (const tc of toolsToCall) {
           const override = tc?.args?.max_iterations_override ?? tc?.function?.arguments?.max_iterations_override;
           if (typeof override === 'number' && override > maxIterations && override <= ceiling) {
@@ -1263,15 +1267,6 @@ if (typeof parsedArgs === 'string') {
           animations = finalReplyResult.observation.animations || animations;
           moodImpact = finalReplyResult.observation.mood_impact || moodImpact;
         }
-      }
-
-      // Dynamic Extension Check for Multi-Turn Reasoning Disabled or Last Iteration with Real Tools
-      if (realTools.length > 0 && maxIterations === 1) {
-        logs.push("[CORTEX] Real tools executed while Multi-Turn Reasoning is disabled. Dynamically extending max iterations to 2 to allow Yui to process results and formulate a natural response.");
-        maxIterations = 2;
-      } else if (realTools.length > 0 && iteration === maxIterations && maxIterations < 5) {
-        logs.push(`[CORTEX] Real tools executed on the last iteration (${iteration}). Dynamically extending max iterations to ${maxIterations + 1} to ensure Yui can process results.`);
-        maxIterations++;
       }
 
       const currentIterObj = iterationsHistory[iterationsHistory.length - 1];

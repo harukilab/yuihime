@@ -1,6 +1,12 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.253] - 2026-08-04
+### Change: loop iterations effectively unbounded: safety cap 50
+- maxIterations raised from 3 to 50 (last-resort safety cap only); loop now ends naturally when model calls final_answer/speak or stops calling tools
+- removed dead dynamic-extension logic (maxIterations===1 / <5 branches); max_iterations_override ceiling clamped to 50
+
+
 ## [4.252] - 2026-08-04
 ### Refactor: core loop rewritten as uniform general agent loop (ReAct), parallel execution kept
 - cortexThinkEngine loop now uniform per-iteration: compress once, gateway call, parallel tool execution, observations fed back via native tool messages + neutral [SYSTEM_OBSERVATION] prompt injection
