@@ -114,9 +114,12 @@ export class MultiChannelQueue {
   private isProactiveRunning = false;
   private lastHighFreqNotifyTime = 0;
 
-  // Output dedup: track recently delivered message hashes to prevent duplicate sends
+  // Output dedup: track recently delivered message hashes to prevent duplicate sends.
+  // Window diperlebar dari 10s ke 300s agar menutupi durasi pipeline kognitif (hingga
+  // 240s) sehingga pesan yang sama dari pipeline/retry kedua tetap tersaring. Hash
+  // discope per contextId supaya channel/user yang berbeda tidak saling menekan.
   private recentOutputHashes: { hash: string; timestamp: number }[] = [];
-  private static readonly OUTPUT_DEDUP_WINDOW_MS = 10000;
+  private static readonly OUTPUT_DEDUP_WINDOW_MS = 300000;
 
   // Crash-recovery: row pending yang nyangkut di 'processing' lebih lama dari TTL ini
   // akan di-claim ulang sebagai 'pending' agar diproses kembali setelah restart.
@@ -551,12 +554,13 @@ export class MultiChannelQueue {
        if (reply && reply.trim()) {
          // Output dedup: skip if the same message was delivered within the dedup window
          const now = Date.now();
+         const dedupHashKey = `${pending.context_id || 'unknown'}::${reply}`;
          this.recentOutputHashes = this.recentOutputHashes.filter(h => now - h.timestamp < MultiChannelQueue.OUTPUT_DEDUP_WINDOW_MS);
-         const isDuplicateOutput = this.recentOutputHashes.some(h => h.hash === reply);
+         const isDuplicateOutput = this.recentOutputHashes.some(h => h.hash === dedupHashKey);
          if (isDuplicateOutput) {
            console.log(`[QUEUE_DEDUP_OUTPUT] Duplicate background output for ${pending.sender_name}, skipping delivery.`);
          } else {
-           this.recentOutputHashes.push({ hash: reply, timestamp: now });
+           this.recentOutputHashes.push({ hash: dedupHashKey, timestamp: now });
            console.log(`[QUEUE_BG_WORKER_SUCCESS] [ID: ${pending.id}] Thinking complete! Delivering reply to target platform...`);
 
             // 3. Distribusikan balasan ke platform masing-masing
@@ -800,13 +804,14 @@ export class MultiChannelQueue {
 
        // Output dedup: skip if the same message was delivered within the dedup window
        const outputHash = reply ?? "";
+       const dedupHashKey = `${item.contextId || 'unknown'}::${outputHash}`;
        const now = Date.now();
        this.recentOutputHashes = this.recentOutputHashes.filter(h => now - h.timestamp < MultiChannelQueue.OUTPUT_DEDUP_WINDOW_MS);
-       const isDuplicateOutput = this.recentOutputHashes.some(h => h.hash === outputHash);
+       const isDuplicateOutput = this.recentOutputHashes.some(h => h.hash === dedupHashKey);
        if (isDuplicateOutput) {
          console.log(`[QUEUE_DEDUP_OUTPUT] Duplicate output detected for ${item.senderName}, skipping delivery.`);
        } else {
-         this.recentOutputHashes.push({ hash: outputHash, timestamp: now });
+         this.recentOutputHashes.push({ hash: dedupHashKey, timestamp: now });
        }
 
         if (this.holdOutgoing) {
@@ -1153,10 +1158,11 @@ Unggkit topik nyata tersebut dari memori jika ingin, sapa dia dengan manis, atau
 
               // Output dedup: skip if the same message was delivered within the dedup window
               const dedupNow = Date.now();
+              const proactiveDedupHashKey = `${contextId || 'unknown'}::${reply}`;
               this.recentOutputHashes = this.recentOutputHashes.filter(h => dedupNow - h.timestamp < MultiChannelQueue.OUTPUT_DEDUP_WINDOW_MS);
-              const isDuplicateOutput = this.recentOutputHashes.some(h => h.hash === reply);
+              const isDuplicateOutput = this.recentOutputHashes.some(h => h.hash === proactiveDedupHashKey);
               if (!isDuplicateOutput) {
-                this.recentOutputHashes.push({ hash: reply, timestamp: dedupNow });
+                this.recentOutputHashes.push({ hash: proactiveDedupHashKey, timestamp: dedupNow });
 
                 const globalDedup = GlobalOutputDeduplicator.getInstance();
                 if (globalDedup.isDuplicate(reply, contextId)) {
@@ -1270,12 +1276,13 @@ Unggkit topik nyata tersebut dari memori jika ingin, sapa dia dengan manis, atau
         if (reply && reply.trim()) {
           // Output dedup: skip if the same message was delivered within the dedup window
           const dedupNow = Date.now();
+          const resumeDedupHashKey = `${task.contextId || 'unknown'}::${reply}`;
           this.recentOutputHashes = this.recentOutputHashes.filter(h => dedupNow - h.timestamp < MultiChannelQueue.OUTPUT_DEDUP_WINDOW_MS);
-          const isDuplicateOutput = this.recentOutputHashes.some(h => h.hash === reply);
+          const isDuplicateOutput = this.recentOutputHashes.some(h => h.hash === resumeDedupHashKey);
           if (isDuplicateOutput) {
             console.log(`[QUEUE_DEDUP_OUTPUT] Duplicate resumed output for task ${task.taskId}, skipping delivery.`);
           } else {
-            this.recentOutputHashes.push({ hash: reply, timestamp: dedupNow });
+            this.recentOutputHashes.push({ hash: resumeDedupHashKey, timestamp: dedupNow });
             console.log(`[QUEUE_RESUME_SUCCESS] [TaskID: ${task.taskId}] Task resumed and completed. Reply: ${reply}`);
             
             // Mark as completed

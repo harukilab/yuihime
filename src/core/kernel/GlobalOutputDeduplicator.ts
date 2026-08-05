@@ -1,7 +1,7 @@
 export class GlobalOutputDeduplicator {
   private static instance: GlobalOutputDeduplicator;
   private recentOutputs: Map<string, number> = new Map();
-  private readonly windowMs: number = 8000;
+  private readonly windowMs: number = 300000;
 
   private constructor() {}
 

@@ -74,9 +74,17 @@ export function normalizeToolCall(tc: any): any {
     // search_chat_history
     'search_memory': 'search_chat_history',
     'memory_search': 'search_chat_history',
-    // generate_image
-    'create_image': 'tensorart_generate',
-    'image_generation': 'tensorart_generate',
+    // generate_image (registered id of the TensorArt driver)
+    'tensorart_generate': 'generate_image',
+    'create_image': 'generate_image',
+    'image_generation': 'generate_image',
+    'text_to_image': 'generate_image',
+    'txt2img': 'generate_image',
+    'draw': 'generate_image',
+    'dalle': 'generate_image',
+    'dall_e': 'generate_image',
+    'dall-e': 'generate_image',
+    'generateImage': 'generate_image',
   };
 
   const lowerName = name.trim().toLowerCase();

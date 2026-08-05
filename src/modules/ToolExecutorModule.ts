@@ -105,6 +105,12 @@ export const ToolExecutorModule: CortexModule = {
           label: 'Enable Manual Tool Verification',
           default: true,
           description: 'Allows Yui to manually check running or failed processes and retry if necessary.'
+        },
+        dynamicSynthesis: {
+          type: 'boolean',
+          label: 'Dynamic Tool Synthesis (off = opencode-style)',
+          default: false,
+          description: 'OFF (default, opencode-style): unregistered tools are NOT synthesized automatically — the model receives a clear "tool not found" error with near-match suggestions and corrects itself. ON: Yui attempts to autonomously synthesize and register a missing tool on the fly.'
         }
       }
     }

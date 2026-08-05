@@ -1,6 +1,22 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.271] - 2026-08-05
+### Fix: opencode-style loop guard: tool gagal tidak lagi menghentikan loop + tool not found memberi saran near-match (dynamicSynthesis default off)
+- cortexThinkEngine: flag realToolFailurePending — saat real tool (non speak/final_answer/status_update) gagal, loop TIDAK langsung break lagi. final_answer dengan realTools.length===0 TAPI ada real tool gagal sebelumnya → lanjut satu iterasi agar model membaca error & mengoreksi (bukan hanya bilang 'Tunggu sebentar'). Iterasi tanpa tool call sama sekali dengan realToolFailurePending → lanjut, bukan break. Flag di-reset agar tidak infinite loop.
+- DYNAMIC_SYNTHESIS kini di-gate setting 'tool-executor'.dynamicSynthesis (default OFF, opencode-style): tool tidak terdaftar TIDAK lagi disintesis otomatis yang kerap gagal (No number after minus sign in JSON) — error dikembalikan ke model untuk dikoreksi mandiri.
+- Tool not found error kini menyertakan saran near-match (substring + token overlap) dari daftar tool terdaftar (mis. 'Tool not found: tensorart_generate. Did you mean: generate_image?') sehingga model bisa memanggil ulang nama yang benar tanpa intervensi.
+- ToolExecutorModule configSchema + field dynamicSynthesis (boolean, default false) agar bisa diaktifkan kembali via UI bila diinginkan.
+
+
+## [4.270] - 2026-08-05
+### Fix: Fix: dedup pesan kembar + perbaiki loop berhenti setelah Yui bicara (generate_image)
+- GlobalOutputDeduplicator windowMs 8000→300000; MultiChannelQueue OUTPUT_DEDUP_WINDOW_MS 10000→300000 + recentOutputHashes discope per contextId (4 situs: bgWorker, processNext, proactive, resume) agar channel berbeda tidak saling menekan — menutupi durasi pipeline kognitif hingga 240s.
+- LiveStatusToolsModule DEDUP_WINDOW_MS 10s→300s; isDuplicateSend hanya cek (markDeduplicated terpisah setelah kirim sukses) sehingga speak yang GAGAL dikirim (mis. Telegram 400 message too long) tidak menandai dedup — user tetap menerima balasan via jalur queue; tambah sendTelegramMessage chunking 4000 char.
+- cortexThinkEngine: dedup markSent pada hasil tool speak + finalSpeech HANYA saat observation.sentDirectly===true (speak benar-benar terkirim langsung ke TG/Discord); speak gagal tidak lagi menekan delivery queue.
+- FIX regresi: toolNormalizer alias 'tensorart_generate'/'create_image'/'image_generation'/dll kini map ke 'generate_image' (id terdaftar), bukan 'tensorart_generate' yang sudah tidak ada — sebelumnya LLM yang memanggil 'tensorart_generate' memicu DYNAMIC_SYNTHESIS gagal, Yui hanya bilang 'Tunggu sebentar' lalu loop berhenti tanpa proses lanjutan. PromptRegistry contoh tool name 'tensorart_generate'→'generate_image'.
+
+
 ## [4.269] - 2026-08-05
 ### Feature: Feature: Pool rotation + opencode-style pipeline (two-phase deadline)
 - generateSegment.ts (pool rotation): fast-skip model saat 503/429 — begitu satu model overload di key manapun pada cycle ini, sisa key untuk model itu di-skip (overloadedModelsThisCall) sehingga pool tidak membakar seluruh key terhadap model yang down. Stall timeout adaptif: attempt pertama (expected healthy) dapat PRIMARY_STALL_MS 90s, fallback attempt cukup FALLBACK_STALL_MS 30s agar rotasi key/model yang lambat tidak menghabiskan budget pipeline.

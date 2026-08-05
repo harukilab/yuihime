@@ -1,6 +1,6 @@
 import { ToolModule, ModuleType } from '@shared/include/types';
 
-const DEDUP_WINDOW_MS = 10_000;
+const DEDUP_WINDOW_MS = 300_000;
 const dedupRegistry = new Map<string, number>();
 
 function getDedupKey(contextId: string, text: string): string {
@@ -11,11 +11,24 @@ function getDedupKey(contextId: string, text: string): string {
 function isDuplicateSend(key: string): boolean {
   const now = Date.now();
   const last = dedupRegistry.get(key);
-  if (last && now - last < DEDUP_WINDOW_MS) {
+  return !!(last && now - last < DEDUP_WINDOW_MS);
+}
+
+function markDeduplicated(key: string): void {
+  dedupRegistry.set(key, Date.now());
+}
+
+async function sendTelegramMessage(bot: any, chatId: string, text: string): Promise<boolean> {
+  const MAX_CHUNK = 4000;
+  if ((text || '').length <= MAX_CHUNK) {
+    await bot.telegram.sendMessage(chatId, text);
     return true;
   }
-  dedupRegistry.set(key, now);
-  return false;
+  const chunks = (text || '').match(new RegExp(`[\\s\\S]{1,${MAX_CHUNK}}`, 'g')) || [text];
+  for (const chunk of chunks) {
+    await bot.telegram.sendMessage(chatId, chunk);
+  }
+  return true;
 }
 
 export const SendStatusUpdateTool: ToolModule = {
@@ -79,6 +92,8 @@ export const SendStatusUpdateTool: ToolModule = {
       } catch (fetchErr: any) {
         console.warn("[LiveStatus] Gagal mengirim status update ke stream events (bypassed):", fetchErr.message);
       }
+
+      markDeduplicated(dedupKey);
 
       return { status: "success", info: `Status update sent: ${args.message}`, senderName };
     } catch (err: any) {
@@ -166,7 +181,7 @@ export const SendFinalReplyTool: ToolModule = {
           const bot = (globalThis as any).activeTelegramBot;
           if (bot && bot.telegram) {
             const chatId = contextId.split("|")[0].replace("tg_", "");
-            await bot.telegram.sendMessage(chatId, args.speech);
+            await sendTelegramMessage(bot, chatId, args.speech);
             sentDirectly = true;
           }
         } catch (tgErr: any) {
@@ -186,6 +201,10 @@ export const SendFinalReplyTool: ToolModule = {
         } catch (dcErr: any) {
           console.warn("[LiveStatus] Gagal mengirim speak ke Discord:", dcErr.message);
         }
+      }
+
+      if (sentDirectly) {
+        markDeduplicated(dedupKey);
       }
 
       return { 

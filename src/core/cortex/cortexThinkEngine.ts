@@ -416,6 +416,12 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
 
   let toolsToCall: any[] = snapshot ? (snapshot.toolsToExecute || []) : [];
   let processedResponse = "";
+  let speakDeliveredDirectly = false;
+  // opencode-style recovery guard: jika real tool (bukan speak/final_answer/status_update)
+  // gagal pada iterasi sebelumnya, loop tidak boleh langsung break hanya karena model
+  // memberi jawaban final — beri satu kesempatan untuk mengoreksi (mirip opencode yang
+  // mengembalikan error tool ke model lalu melanjutkan sampai model benar-benar selesai).
+  let realToolFailurePending = false;
   let animations: string[] = snapshot ? (snapshot.accumulatingBuffer?.animations || []) : [];
   let moodImpact: any = snapshot ? (snapshot.accumulatingBuffer?.moodImpacts || {}) : {};
   const toolExecutionHistory: any[] = [];
@@ -1155,11 +1161,20 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
         
         if (!tool) {
           const tName = tc.name || tc.tool;
-          console.log(`[DYNAMIC_SYNTHESIS] Tool '${tName}' not found. Attempting autonomous dynamic tool synthesis...`);
-          try {
-             tool = await DynamicToolSynthesizer.synthesizeAndRegister(tName, input, cortexInstance);
-          } catch (synthErr: any) {
-            console.error(`[CORTEX_SYNTHESIS_FAIL] Failed during dynamic tool synthesis for '${tName}':`, synthErr.message);
+          // opencode-style: secara default tool yang tidak terdaftar TIDAK disintesis
+          // otomatis — error dikembalikan ke model bersama saran near-match agar model
+          // mengoreksi sendiri. DYNAMIC_SYNTHESIS hanya aktif bila diaktifkan eksplisit
+          // lewat setting 'tool-executor'.dynamicSynthesis = true.
+          const synthesisEnabled = settings['tool-executor']?.dynamicSynthesis === true;
+          if (synthesisEnabled) {
+            console.log(`[DYNAMIC_SYNTHESIS] Tool '${tName}' not found. Attempting autonomous dynamic tool synthesis...`);
+            try {
+               tool = await DynamicToolSynthesizer.synthesizeAndRegister(tName, input, cortexInstance);
+            } catch (synthErr: any) {
+              console.error(`[CORTEX_SYNTHESIS_FAIL] Failed during dynamic tool synthesis for '${tName}':`, synthErr.message);
+            }
+          } else {
+            logs.push(`[CORTEX_TOOL_MISSING] Tool '${tName}' tidak terdaftar. Error dikembalikan ke model untuk dikoreksi (opencode-style, dynamicSynthesis off).`);
           }
         }
 
@@ -1293,11 +1308,38 @@ if (typeof parsedArgs === 'string') {
           const previouslySeen = toolExecutionHistory.some(h =>
             Array.isArray(h.tools_called) && h.tools_called.some((c: any) => (c?.name || c?.tool) === tName)
           );
+          // opencode-style near-match suggestion: saat tool tidak terdaftar, beri tahu
+          // model daftar tool valid yang mirip agar ia bisa mengoreksi nama sendiri.
+          let suggestion = '';
+          try {
+            const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+            const wanted = norm(tName);
+            const registered = SystemRegistry.getTools()
+              .map((t: any) => String(t.metadata?.id || t.id || ''))
+              .filter(Boolean);
+            const scored = registered
+              .map(id => {
+                const rid = norm(id);
+                let score = 0;
+                if (wanted && (rid.includes(wanted) || wanted.includes(rid))) score += 2;
+                if (wanted && rid.length > 2 && wanted.length > 2) {
+                  const wt = wanted.split(/[^a-zA-Z0-9]+/).filter(Boolean);
+                  const rt = rid.split(/[^a-zA-Z0-9]+/).filter(Boolean);
+                  score += rt.filter(r => wt.includes(r)).length;
+                }
+                return { id, score };
+              })
+              .filter(s => s.score > 0)
+              .sort((a, b) => b.score - a.score)
+              .slice(0, 3)
+              .map(s => s.id);
+            if (scored.length) suggestion = ` Did you mean: ${scored.join(', ')}?`;
+          } catch (_) { /* suggestions are best-effort */ }
           res = {
             tool: tName,
             error: previouslySeen
-              ? `Stale tool call: ${tName} (the tool was available earlier but is no longer registered)`
-              : `Tool not found: ${tName}`,
+              ? `Stale tool call: ${tName} (the tool was available earlier but is no longer registered)${suggestion}`
+              : `Tool not found: ${tName}.${suggestion}`,
             success: false,
             notFound: true,
             errorType: previouslySeen ? 'stale' : 'not_found'
@@ -1333,9 +1375,14 @@ if (typeof parsedArgs === 'string') {
           if (res.success && (tc.tool === 'speak' || tc.name === 'speak')) {
             const speech = res.observation?.speech;
             if (speech) {
+              if (res.observation?.sentDirectly === true) {
+                speakDeliveredDirectly = true;
+              }
               const dedup = GlobalOutputDeduplicator.getInstance();
               if (!dedup.isDuplicate(speech, contextId || 'web_default')) {
-                dedup.markSent(speech, contextId || 'web_default');
+                if (res.observation?.sentDirectly === true) {
+                  dedup.markSent(speech, contextId || 'web_default');
+                }
                 eventBus.emit('OUTPUT_EMITTED', { response: speech });
               }
             }
@@ -1349,6 +1396,17 @@ if (typeof parsedArgs === 'string') {
       stateMachine.transitionTo('IDLE');
 
       const realTools = toolsToCall.filter((tc: any) => tc.tool !== 'speak' && tc.tool !== 'final_answer' && tc.tool !== 'status_update');
+
+      // opencode-style: tandai jika ada real tool yang gagal pada iterasi ini.
+      // Jangan tandai saat shutdown/drain tengah berjalan (graceful shutdown).
+      try {
+        const deliveryNames = ['speak', 'final_answer', 'status_update'];
+        const failedRealTool = toolResults.some((res: any) => !res.success && !deliveryNames.includes(res.tool));
+        const aborting = (signal as any)?.aborted === true || (signal as any)?.shutdownRequested === true;
+        if (failedRealTool && !aborting) {
+          realToolFailurePending = true;
+        }
+      } catch (_) {}
 
       // Build OpenAI-native `role: "tool"` result messages and the paired assistant
       // `tool_calls` so providers with native function calling receive tool feedback
@@ -1501,12 +1559,21 @@ if (typeof parsedArgs === 'string') {
 
       const finalReplyResult = toolResults.find(res => res.observation && res.observation.isFinalReply);
       if (finalReplyResult) {
-        if (realTools.length === 0) {
+        if (realTools.length === 0 && !realToolFailurePending) {
           logs.push("[CORTEX] final_answer executed successfully. Stopping cognitive loop iteration.");
           processedResponse = finalReplyResult.observation.speech;
           animations = finalReplyResult.observation.animations || animations;
           moodImpact = finalReplyResult.observation.mood_impact || moodImpact;
           break;
+        } else if (realTools.length === 0 && realToolFailurePending) {
+          // opencode-style: real tool gagal pada iterasi sebelumnya, namun model justru
+          // memberikan jawaban final. Jangan break — beri model satu kesempatan untuk
+          // mengoreksi (membaca error + memanggil ulang tool yang benar).
+          logs.push("[CORTEX] final_answer given, but a real tool failed earlier. Continuing loop to let the model correct itself (opencode-style).");
+          processedResponse = finalReplyResult.observation.speech;
+          animations = finalReplyResult.observation.animations || animations;
+          moodImpact = finalReplyResult.observation.mood_impact || moodImpact;
+          realToolFailurePending = false;
         } else {
           logs.push("[CORTEX] final_answer executed, but real tools are running in parallel. Continuing loop to process observations.");
           processedResponse = finalReplyResult.observation.speech;
@@ -1523,7 +1590,15 @@ if (typeof parsedArgs === 'string') {
         }));
       }
     } else {
-      break;
+      if (realToolFailurePending) {
+        // opencode-style: iterasi tanpa tool call sama sekali, padahal ada real tool yang
+        // masih gagal. Lanjut satu iterasi agar model diberi kesempatan memanggil tool
+        // yang benar setelah membaca error (bukan diam-diam mengakhiri).
+        logs.push("[CORTEX] No tool calls, but a real tool failed earlier. Continuing loop to let the model correct itself (opencode-style).");
+        realToolFailurePending = false;
+      } else {
+        break;
+      }
     }
   }
 
@@ -1618,7 +1693,9 @@ if (typeof parsedArgs === 'string') {
 
   const dedup = GlobalOutputDeduplicator.getInstance();
   if (!dedup.isDuplicate(finalSpeech, contextId || 'web_default')) {
-    dedup.markSent(finalSpeech, contextId || 'web_default');
+    if (speakDeliveredDirectly) {
+      dedup.markSent(finalSpeech, contextId || 'web_default');
+    }
     eventBus.emit('OUTPUT_EMITTED', { response: finalSpeech });
   }
 

@@ -141,7 +141,7 @@ Your output must conform exactly to the following JSON Schema:
           "function": {
             "type": "object",
             "properties": {
-              "name": { "type": "string", "description": "The tool/function name to execute. Use 'speak' to say something to the user (can be combined with other tools in parallel). Use other tool names for actions like 'websearch', 'tensorart_generate', etc." },
+              "name": { "type": "string", "description": "The tool/function name to execute. Use 'speak' to say something to the user (can be combined with other tools in parallel). Use other tool names for actions like 'websearch', 'generate_image', etc." },
               "arguments": {
                 "type": "object",
                 "description": "An OBJECT (not a string) containing arguments for the tool. For 'speak', arguments must be { 'speech': '...', 'animations': [...], 'mood_impact': {} }."
@@ -284,7 +284,7 @@ The output JSON object MUST conform EXACTLY to this schema:
           "function": {
             "type": "object",
             "properties": {
-              "name": { "type": "string", "description": "The name of the tool/function to execute. Use 'speak' to deliver Yuihime's verbal reply (can be parallel with other tools). Use other tool names for actions like websearch, tensorart_generate, etc." },
+              "name": { "type": "string", "description": "The name of the tool/function to execute. Use 'speak' to deliver Yuihime's verbal reply (can be parallel with other tools). Use other tool names for actions like websearch, generate_image, etc." },
               "arguments": {
                 "type": "object",
                 "description": "An OBJECT containing arguments for the specific tool. For 'speak', arguments must be { 'speech': '...', 'animations': [...], 'mood_impact': {} }. For other tools, match their exact parameter schemas."

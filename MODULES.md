@@ -154,3 +154,5 @@ Peta struktur direktori pasca-pemisahan Web UI ↔ Daemon (lihat UPDATE_LOG `[4.
 - `src/core/kernel/ai/generateSegment.ts — Pool rotation: fast-skip model on 503 (overloadedModelsThisCall) + adaptive stall (90s primary / 30s fallback).`
 - `src/core/kernel/MultiChannelQueue.ts — Two-phase deadline ala opencode: soft queueTimeoutMs → signal.shutdownRequested (no abort), hard processing watchdog → force abort + fallback.`
 - `src/core/cortex/cortexThinkEngine.ts — Loop honors signal.shutdownRequested: next iteration becomes graceful shutdown turn (tools disabled + MAX_STEPS_PROMPT).`
+- `core`
+- `tool-executor: added dynamicSynthesis toggle (default off = opencode-style, model self-corrects via not-found error + near-match suggestions); cortex loop no longer stops after speak when a real tool failed.`
