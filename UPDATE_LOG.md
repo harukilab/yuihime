@@ -1,6 +1,12 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.279] - 2026-08-05
+### Feature: Yui bisa baca inventory (termasuk items) + hapus custom item (/invdel & tombol 🗑️)
+- LifeSimulationModule.buildInventoryText kini menyertakan seksi ITEMS — custom item (lifeInventory.items) terlihat di direktif LLM tiap turn, jadi Yui tahu isi inventory-nya (sebelumnya hanya foods+drinks)
+- Command baru /invdel <nama> [qty] (alias /delitem, /removeitem, /delinv): menghapus custom item, tanpa qty = hapus seluruh item; tombol 🗑️ per item custom di tampilan inventory (qt:care:invdel:<type>:<idx>) mengurangi qty, hilang jika 0
+
+
 ## [4.278] - 2026-08-05
 ### Feature: Custom inventory: /invadd + tombol ➕ Custom item (tab Items)
 - Command baru /invadd <nama> [qty] (alias /additem, /item): menambah custom item ke lifeInventory.items (emoji 📦, flag custom, id item_<slug>); jika nama sama, qty ditambahkan; hasil langsung menampilkan tampilan inventory dengan keyboard

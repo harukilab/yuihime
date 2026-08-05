@@ -1056,6 +1056,27 @@ function runCareAction(action: string, tc: TgToolContext): TgReply {
     return { text: `➕ Added +1 ${item.emoji || ''} ${item.name || item.id}.\n\n${view.text}`, keyboard: view.keyboard };
   }
 
+  if (a.startsWith('invdel:')) {
+    const [, type, idxStr] = a.split(':');
+    const list = (inv[type] || []);
+    const item = list[Number(idxStr)];
+    if (!item) {
+      return { text: '⚠️ Item not found.', keyboard: careInventoryView(inv).keyboard };
+    }
+    item.qty = Math.max(0, Number(item.qty || 0) - 1);
+    if (item.qty <= 0) {
+      list.splice(Number(idxStr), 1);
+    }
+    sh.lifeVitals = v;
+    sh.lifeInventory = inv;
+    db.prepare('UPDATE agent_state SET systemHealth = ? WHERE id = 1').run(JSON.stringify(sh));
+    const view = careInventoryView(inv);
+    return {
+      text: `${item.qty > 0 ? `🗑️ Removed 1x from ${item.emoji || ''} ${item.name} (${item.qty} left).` : `🗑️ Removed ${item.emoji || ''} ${item.name} entirely.`}\n\n${view.text}`,
+      keyboard: view.keyboard
+    };
+  }
+
   switch (a) {
     case 'eat':
     case 'feed': {
@@ -1117,7 +1138,7 @@ function runCareAction(action: string, tc: TgToolContext): TgReply {
       return careInventoryView(inv);
     case 'invnew':
       return {
-        text: `➕ ADD CUSTOM ITEM\n\nCustom items appear under 🎒 ITEMS and can be added by typing:\n\n/invadd <nama> [jumlah]\n\nExample:\n/invadd Kue Coklat 3\n/invadd Buku Sakti\n\nOr just ask Yui in chat to add an item to her inventory.`,
+        text: `➕ ADD CUSTOM ITEM\n\nCustom items appear under 🎒 ITEMS and can be added by typing:\n\n/invadd <nama> [jumlah]\n\nExample:\n/invadd Kue Coklat 3\n/invadd Buku Sakti\n\nRemove with:\n/invdel <nama> [jumlah]\n(without jumlah = remove entirely)\n\nOr just ask Yui in chat to add an item to her inventory.`,
         keyboard: careInventoryView(inv).keyboard
       };
     default:
@@ -1166,7 +1187,12 @@ function careInventoryView(inv: any): TgReply {
   };
   pushRows('foods');
   pushRows('drinks');
-  pushRows('items');
+  (inv.items || []).forEach((it: any, i: number) => {
+    keyboard.push([
+      { text: `➕ ${it.emoji || '·'} ${String(it.name || it.id || '?').slice(0, 12)}`, callback_data: `qt:care:invadd:items:${i}` },
+      { text: '🗑️', callback_data: `qt:care:invdel:items:${i}` }
+    ]);
+  });
   keyboard.push([{ text: '➕ Custom item', callback_data: 'qt:care:invnew' }]);
   keyboard.push([{ text: '« Care', callback_data: 'qt:care' }, { text: '« Menu', callback_data: 'qt:menu' }]);
   return { text: sections.join('\n').slice(0, 3000), keyboard: { inline_keyboard: keyboard } };
@@ -1714,6 +1740,40 @@ export const tgQuickCommands: TgCommandDef[] = [
       db.prepare('UPDATE agent_state SET systemHealth = ? WHERE id = 1').run(JSON.stringify(sh));
       const view = careInventoryView(inv);
       return { text: `➕ Added custom item: 📦 ${name} x${qty}.\n\n${view.text}`, keyboard: view.keyboard };
+    }
+  },
+  {
+    name: 'invdel',
+    aliases: ['delitem', 'removeitem', 'delinv'],
+    description: 'Remove a custom item from Yui\u2019s inventory',
+    usage: '/invdel <name> [qty]',
+    handler: async (tc, args) => {
+      const toks = splitArgsQuoted(args.trim());
+      const name = toks[0];
+      if (!name) return { text: '⚠️ Usage: /invdel <name> [qty]\n\nExample: /invdel Kue Coklat 2\n\nOmitting qty removes the whole item.' };
+      const db = tc.db;
+      if (!db) return { text: 'Database unavailable.' };
+      const row = db.prepare('SELECT systemHealth FROM agent_state LIMIT 1').get() as any;
+      const sh = (row && row.systemHealth) ? JSON.parse(row.systemHealth) : {};
+      const inv: any = sh.lifeInventory || { foods: [], drinks: [], items: [] };
+      const items = inv.items || [];
+      const idx = items.findIndex((it: any) => String(it.name).toLowerCase().includes(name.toLowerCase()));
+      if (idx === -1) return { text: `❌ Custom item not found: "${name}"`, keyboard: careInventoryView(inv).keyboard };
+      const it = items[idx];
+      const qty = toks[1] !== undefined ? Math.max(1, Number(toks[1]) || 1) : null;
+      let msg: string;
+      if (qty === null || qty >= Number(it.qty || 1)) {
+        items.splice(idx, 1);
+        msg = `🗑️ Removed item: 📦 ${it.name}`;
+      } else {
+        it.qty -= qty;
+        msg = `🗑️ Removed ${qty}x from 📦 ${it.name} (${it.qty} left)`;
+      }
+      inv.items = items;
+      sh.lifeInventory = inv;
+      db.prepare('UPDATE agent_state SET systemHealth = ? WHERE id = 1').run(JSON.stringify(sh));
+      const view = careInventoryView(inv);
+      return { text: `${msg}\n\n${view.text}`, keyboard: view.keyboard };
     }
   },
   {

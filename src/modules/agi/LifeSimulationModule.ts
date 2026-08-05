@@ -150,10 +150,16 @@ function consumeFromInventory(inventory: any, type: string): any {
 }
 
 function buildInventoryText(inventory: any): string {
-  const fmt = (item: any) => `${item.emoji} ${item.name} (${item.en} / ${item.jp}) ×${item.qty}`;
+  const fmt = (item: any) => {
+    const en = item.en ? ` (${item.en})` : '';
+    const jp = item.jp ? ` / ${item.jp}` : '';
+    return `${item.emoji || '·'} ${item.name}${en}${jp} ×${item.qty}`;
+  };
   const foods = (inventory?.foods || []).filter((i: any) => i.qty > 0).map(fmt);
   const drinks = (inventory?.drinks || []).filter((i: any) => i.qty > 0).map(fmt);
+  const items = (inventory?.items || []).filter((i: any) => i.qty > 0).map(fmt);
   const parts = [...foods, ...drinks];
+  if (items.length) parts.push(`ITEMS: ${items.join(', ')}`);
   return parts.length ? parts.join(' | ') : 'Out of stock - nothing left to eat or drink!';
 }
 
