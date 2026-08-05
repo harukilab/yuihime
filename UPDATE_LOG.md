@@ -1,6 +1,12 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.284] - 2026-08-05
+### fix: v4.284: Gemini pool pakai array model penuh (gemma-4 ikut dicoba)
+- cortexSettings.ts: model tidak lagi dipampat toSingleString (3 jalur) -> array penuh dari config.toml mengalir ke generateContent
+- generateSegment: extraModelsFromArray kini mencakup gemma-4-26b-a4b-it & gemma-4-31b-it saat model gemini 429/503
+
+
 ## [4.283] - 2026-08-05
 ### chore: Migrasi sisa bahasa ID -> EN + placeholder nama karakter di semua prompt LLM
 - Terjemahkan sisa string ID di telegram_quick_tools, LocalNanoNLPModule, aiRouter, telegramRouter, chat_log, onboarding; hardcode 'Yui' di prompt -> ${characterName} + injectCharacterName; focus presets UI -> EN; fix syntax SubAgentManager; verifikasi tsc/build/health OK.

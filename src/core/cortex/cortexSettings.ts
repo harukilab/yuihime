@@ -47,7 +47,7 @@ export async function fetchCortexSettings(localConfigOverride?: any): Promise<an
       combined[activeProvider] = {
         ...activeConf,
         apiKey: apiKey,
-        model: toSingleString(activeConf.model) || defaultModel,
+        model: activeConf.model || defaultModel,
         temperature: activeConf.temperature || 0.7,
         topP: activeConf.topP || 0.95,
         topK: activeConf.topK || 40,
@@ -93,7 +93,7 @@ export async function fetchCortexSettings(localConfigOverride?: any): Promise<an
     combined[activeProvider] = {
       ...combined[activeProvider],
       apiKey: toSingleString(combined[activeProvider].apiKey || localConfig.apiKey),
-      model: toSingleString(combined[activeProvider].model || localConfig.model) || defaultModel,
+      model: combined[activeProvider].model || localConfig.model || defaultModel,
       temperature: combined[activeProvider].temperature || localConfig.temperature || 0.7,
       topP: combined[activeProvider].topP || localConfig.topP || 0.95,
       topK: combined[activeProvider].topK || localConfig.topK || 40,
@@ -124,7 +124,7 @@ export async function fetchCortexSettings(localConfigOverride?: any): Promise<an
       provider: prov,
       [prov]: { 
         apiKey: toSingleString(localConfig.apiKey), 
-        model: toSingleString(localConfig.model) || defaultModel
+        model: localConfig.model || defaultModel
       } 
     };
   }

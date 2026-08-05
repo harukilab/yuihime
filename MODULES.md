@@ -166,3 +166,4 @@ Peta struktur direktori pasca-pemisahan Web UI ↔ Daemon (lihat UPDATE_LOG `[4.
 - `agi/LifeSimulationModule: buildInventoryText menyertakan seksi ITEMS (custom item terlihat LLM); telegram_quick_tools: /invdel <nama> [qty] + tombol 🗑️ per custom item (qt:care:invdel:<type>:<idx>)`
 
 - `telegram,queue,generatesegment`
+- `AI Gateway / Cortex`
