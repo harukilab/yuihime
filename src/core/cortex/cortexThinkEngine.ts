@@ -43,6 +43,17 @@ import { DynamicToolSynthesizer } from './dynamicToolSynthesizer.js';
 import { LlmIoAuditor } from '../server/llmAuditor.js';
 import { BackgroundToolDispatcher } from '../kernel/BackgroundToolDispatcher.js';
 import { genId } from '@shared/core/idGen';
+import { ApprovalGate, isApprovalReply, isDenialReply, ApprovalRequest } from './approvalGate';
+import { SnapshotManager } from '../kernel/snapshotManager';
+
+// opencode-style permission gating: tool yang dianggap berisiko memerlukan izin
+// saat tool-executor.permissionMode = ask/deny. Daftar default bisa dioverride
+// lewat setting tool-executor.riskyTools (array of tool ids).
+const DEFAULT_RISKY_TOOLS = [
+  'bash', 'apply_patch', 'write', 'edit', 'file_manager', 'code_interpreter',
+  'install_addon', 'scheduler', 'manage_bgproc', 'github', 'send_file',
+  'send_message', 'generate_image'
+];
 
 /**
  * Build a canonical OpenAI-native tool call object enriched with backward
@@ -193,6 +204,57 @@ export async function executeCortexThink(
 
   logs.push("[PHASE 1] Initializing Input Aggregation...");
   const settings = await cortexInstance.getSettings();
+
+  // opencode-style approval resolution: jika sebelumnya Yui bertanya (plan mode /
+  // permission gating) dan user baru saja membalas, resolve request di sini. Hasil
+  // keputusan ditulis sebagai memori agar model tahu persetujuan/penolakan user.
+  try {
+    const approval = ApprovalGate.getInstance().get(contextId);
+    if (approval && approval.status === 'pending') {
+      if (isApprovalReply(input)) {
+        const resolved = ApprovalGate.getInstance().approve(contextId);
+        if (resolved) {
+          logs.push(`[APPROVAL] User approved ${resolved.kind}: ${resolved.toolNames.join(', ')}.`);
+          memories.push({
+            id: 'approval_' + Date.now(),
+            ownerId: 'system',
+            type: 'observation',
+            speaker: 'System',
+            content: `[SYSTEM_APPROVAL] User approved the ${resolved.kind === 'plan' ? 'plan' : 'tool execution'}: ${resolved.toolNames.join(', ')}. Proceed with the execution.`,
+            timestamp: Date.now(),
+            importance: 0.8,
+            tags: ['approval', contextId],
+            context: contextId,
+            sentiment: 0.5
+          });
+        }
+      } else if (isDenialReply(input)) {
+        const resolved = ApprovalGate.getInstance().deny(contextId);
+        if (resolved) {
+          logs.push(`[APPROVAL] User denied ${resolved.kind}: ${resolved.toolNames.join(', ')}.`);
+          memories.push({
+            id: 'denial_' + Date.now(),
+            ownerId: 'system',
+            type: 'observation',
+            speaker: 'System',
+            content: `[SYSTEM_DENIAL] User denied the ${resolved.kind === 'plan' ? 'plan' : 'tool execution'}: ${resolved.toolNames.join(', ')}. DO NOT execute the denied items; ask or offer alternatives.`,
+            timestamp: Date.now(),
+            importance: 0.8,
+            tags: ['denial', contextId],
+            context: contextId,
+            sentiment: 0.5
+          });
+        }
+      } else {
+        // Balasan tidak jelas ya/tidak — anggap ditolak (konservatif) agar tidak
+        // menahan loop; Yui akan menyesuaikan rencana.
+        const resolved = ApprovalGate.getInstance().deny(contextId);
+        if (resolved) {
+          logs.push(`[APPROVAL] Non-explicit reply — ${resolved.kind} treated as denied.`);
+        }
+      }
+    }
+  } catch (_) {}
   const preContext = await SystemRegistry.runCortexPhase('PHASE 1: AGGREGATION', input, state, {
     memories,
     userName,
@@ -1023,6 +1085,114 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
         }
        } catch (_) {}
 
+        // ===== opencode-style Plan Mode (#1) + Permission Gating (#6) =====
+        {
+          const approval = ApprovalGate.getInstance();
+          const deliveryNames = ['speak', 'final_answer', 'status_update'];
+          const realCalls = toolsToCall.filter((tc: any) => !deliveryNames.includes(tc.tool || tc.name));
+          const planModeEnabled = settings['tool-executor']?.planMode === true;
+          const permissionMode = settings['tool-executor']?.permissionMode || 'auto';
+          const riskyToolsCfg = Array.isArray(settings['tool-executor']?.riskyTools)
+            ? settings['tool-executor'].riskyTools
+            : [];
+
+          const pauseAndAsk = (request: ApprovalRequest): any => {
+            const msg = request.kind === 'plan'
+              ? `${request.summary}\n\n⚠️ Approval needed before I proceed. Reply "yes"/"continue" to approve, or "no"/"change" to adjust.`
+              : `${request.summary}\n\n🔒 Reply "yes" to allow, or "no" to deny.`;
+            logs.push(`[APPROVAL] ${request.kind} request: ${request.toolNames.join(', ')}`);
+            return {
+              response: msg,
+              logs,
+              nextMood: loopContext.moodImpact,
+              moodImpact: loopContext.moodImpact,
+              sentiment: loopContext.sentiment,
+              newMemories: loopGeneratedMemories,
+              actions: toolsToCall,
+              perceivedNameUpdate: loopContext.perceivedNameUpdate || preContext.perceivedNameUpdate,
+              linkedAccountUpdate: loopContext.linkedAccountUpdate || preContext.linkedAccountUpdate,
+              viewerProfileUpdate: loopContext.viewerProfileUpdate,
+              shouldStartDreaming: loopContext.shouldStartDreaming,
+              animations,
+              tone: loopContext.tone,
+              tool_calls: toolsToCall,
+              updatedPlan: currentPlan,
+              iterations: iterationsHistory,
+              moodDelta: {},
+              relationDelta: {},
+              queuedIdentityUpdate: {},
+              fallbackTriggered: false,
+              systemHealth: state.systemHealth,
+              status: 'awaiting_approval' as const
+            };
+          };
+
+          // Plan Mode hanya untuk aksi MODIFIKASI/EKSEKUSI (bukan baca/akses).
+          // Baca file, cari file, websearch/webfetch, view_logs, dll jalan langsung.
+          const isModifyingName = (name: string) =>
+            riskyToolsCfg.length > 0 ? riskyToolsCfg.includes(name) : DEFAULT_RISKY_TOOLS.includes(name);
+          const modifyingCalls = realCalls.filter((tc: any) => isModifyingName(tc.tool || tc.name));
+
+          // 1) Plan Mode: tanyakan rencana sebelum eksekusi tool modifikasi (pertama kali saja).
+          if (planModeEnabled && modifyingCalls.length > 0 && !approval.isPlanApproved(contextId)) {
+            const planText = modifyingCalls.map((tc: any) => {
+              const name = tc.tool || tc.name;
+              const args = typeof tc.args === 'object' && tc.args ? tc.args : {};
+              const summary = Object.entries(args).slice(0, 4)
+                .map(([k, v]: [string, any]) => `${k}=${typeof v === 'string' ? (v.length > 60 ? v.slice(0, 60) + '…' : v) : JSON.stringify(v)}`)
+                .join(', ');
+              return summary ? `  • ${name} (${summary})` : `  • ${name}`;
+            }).join('\n');
+            const planMsg = `📋 *My plan:*\n${planText}`;
+            approval.requestPlan(contextId, planMsg, modifyingCalls.map((tc: any) => tc.tool || tc.name));
+            return pauseAndAsk(approval.get(contextId)!);
+          }
+
+          // 2) Permission Gating: filter tool berisiko (deny) / minta izin (ask).
+          if ((permissionMode === 'ask' || permissionMode === 'deny') && realCalls.length > 0) {
+            const isRiskyName = (name: string) =>
+              riskyToolsCfg.length > 0 ? riskyToolsCfg.includes(name) : DEFAULT_RISKY_TOOLS.includes(name);
+
+            const deniedCalls = realCalls.filter((tc: any) => {
+              const name = tc.tool || tc.name;
+              return approval.isToolDenied(contextId, name);
+            });
+            if (deniedCalls.length > 0) {
+              const deniedNames = deniedCalls.map((tc: any) => tc.tool || tc.name);
+              logs.push(`[PERMISSION] Denied tools will be blocked: ${deniedNames.join(', ')}.`);
+              toolsToCall = toolsToCall.map((tc: any) => {
+                const name = tc.tool || tc.name;
+                return deniedNames.includes(name)
+                  ? { ...tc, __blocked: true, __blockReason: 'User denied permission to execute this tool.' }
+                  : tc;
+              });
+            }
+
+            const riskyCalls = realCalls.filter((tc: any) => {
+              const name = tc.tool || tc.name;
+              return isRiskyName(name) && !approval.isToolApproved(contextId, name) && !approval.isToolDenied(contextId, name);
+            });
+
+            if (permissionMode === 'ask' && riskyCalls.length > 0) {
+              const riskyNames = riskyCalls.map((tc: any) => tc.tool || tc.name);
+              const askMsg = `🔒 *I need your permission for risky tools:* ${riskyNames.join(', ')}.`;
+              approval.requestPermission(contextId, riskyNames);
+              return pauseAndAsk(approval.get(contextId)!);
+            }
+
+            if (permissionMode === 'deny' && riskyCalls.length > 0) {
+              const riskyNames = riskyCalls.map((tc: any) => tc.tool || tc.name);
+              logs.push(`[PERMISSION] permissionMode=deny — blocking risky tools: ${riskyNames.join(', ')}.`);
+              toolsToCall = toolsToCall.map((tc: any) => {
+                const name = tc.tool || tc.name;
+                return riskyNames.includes(name)
+                  ? { ...tc, __blocked: true, __blockReason: 'Permission denied (tool-executor.permissionMode = deny).' }
+                  : tc;
+              });
+            }
+          }
+        }
+
         if (settings['tool-executor']?.bgEnabled === true && contextId) {
           const blockingTools = ['speak', 'final_answer', 'status_update'];
           const nonBlockingTools = toolsToCall.filter(
@@ -1158,6 +1328,19 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
 
       const toolPromises = toolsToCall.map(async (tc) => {
         let tool = SystemRegistry.getTool(tc.name || tc.tool);
+
+        if ((tc as any).__blocked) {
+          const tName = tc.name || tc.tool;
+          logs.push(`[PERMISSION] Tool '${tName}' blocked: ${(tc as any).__blockReason || 'no permission'}.`);
+          return {
+            tool: tName,
+            error: `Tool not executed: ${(tc as any).__blockReason || 'Permission denied by user policy.'}`,
+            success: false,
+            durationMs: 0,
+            notFound: false,
+            blocked: true
+          };
+        }
         
         if (!tool) {
           const tName = tc.name || tc.tool;
@@ -1182,6 +1365,15 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
         if (tool) {
           let execStart = Date.now();
           try {
+            // opencode-style snapshot (#5): sebelum file-modifying tool menulis,
+            // tangkap konten asli file target agar bisa di-undo.
+            try {
+              const tName = tc.name || tc.tool;
+              if (['write', 'edit', 'apply_patch', 'file_manager'].includes(tName)) {
+                const captured = await SnapshotManager.getInstance().capture(contextId, tName, tc.args || {});
+                if (captured > 0) logs.push(`[SNAPSHOT] Menyimpan ${captured} file sebelum ${tName} (undo tersedia).`);
+              }
+            } catch (_) {}
             // Reserved control metadata: `_meta` lets the LLM request per-call
             // execution tweaks (e.g. timeout_ms). It is NEVER forwarded to the tool.
             let metaTimeoutMs: number | undefined;

@@ -111,6 +111,29 @@ export const ToolExecutorModule: CortexModule = {
           label: 'Dynamic Tool Synthesis (off = opencode-style)',
           default: false,
           description: 'OFF (default, opencode-style): unregistered tools are NOT synthesized automatically — the model receives a clear "tool not found" error with near-match suggestions and corrects itself. ON: Yui attempts to autonomously synthesize and register a missing tool on the fly.'
+        },
+        planMode: {
+          type: 'boolean',
+          label: 'Plan Mode (opencode-style)',
+          default: false,
+          description: 'Before executing MODIFYING/executing tools (write, edit, bash, apply_patch, send, etc.), Yui drafts an action plan and asks the user for approval. Read-only access (read, glob, grep, websearch, webfetch, view_logs) runs directly without asking. After approval (reply "yes"/"continue"), execution runs normally for this context. Reply "no"/"change" to adjust.'
+        },
+        permissionMode: {
+          type: 'select',
+          label: 'Permission Mode (risky tools)',
+          default: 'auto',
+          options: [
+            { value: 'auto', label: 'Auto (no confirmation)' },
+            { value: 'ask', label: 'Ask (require approval first)' },
+            { value: 'deny', label: 'Deny (block without approval)' }
+          ],
+          description: 'auto: risky tools run directly. ask: Yui asks the user before running risky tools (reply "yes"/"no"). deny: risky tools are always blocked and the model receives a Permission denied error.'
+        },
+        riskyTools: {
+          type: 'textarea',
+          label: 'Risky Tools (JSON array of tool ids)',
+          default: '["bash","apply_patch","write","edit","file_manager","code_interpreter","install_addon","scheduler","manage_bgproc","github","send_file","send_message","generate_image"]',
+          description: 'List of tool ids treated as risky when permissionMode = ask/deny. Format: JSON array of string tool ids. Empty = use the built-in default list.'
         }
       }
     }

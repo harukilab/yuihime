@@ -3,6 +3,8 @@ import { ModuleType, ModulePhase } from '@shared/include/types';
 import { CustomToolsLoader } from './CustomToolsLoader';
 import { CreativeAgent } from './agents/definitions/creativeAgent.js';
 import { ResearchAgent } from './agents/definitions/researchAgent.js';
+import { ExplorerAgent } from './agents/definitions/explorerAgent.js';
+import { PlannerAgent } from './agents/definitions/plannerAgent.js';
 import { SubAgentRegistry } from './agents/SubAgentRegistry.js';
 import { ProviderGatewayModule } from '../modules/ProviderGatewayModule.js';
 import { Cortex } from './cortex.js';
@@ -28,12 +30,16 @@ import { PlanningModule } from '../modules/PlanningModule.js';
 import { ParallelStreamerModule } from '../modules/ParallelStreamerModule.js';
 import { OutputRendererModule } from '../modules/OutputRendererModule.js';
 import { ToolExecutorModule } from '../modules/ToolExecutorModule.js';
+import { McpBridgeModule } from '../modules/McpBridgeModule.js';
 import { TTSSelectorModule } from '../modules/TTSSelectorModule.js';
 import { SubAgentDelegationModule } from '../modules/SubAgentDelegationModule.js';
 import { YuiVisionModule } from '../modules/YuiVisionModule.js';
 import { L2DExpressionTranslatorModule } from '../modules/L2DExpressionTranslator.js';
 import { SendFinalReplyTool, SendStatusUpdateTool } from '../modules/LiveStatusToolsModule.js';
 import { DelegateTool } from '../drivers/tools/delegate.js';
+import { UndoLastChangesTool } from '../drivers/tools/undo_last_changes.js';
+import { DiagnosticsTool } from '../drivers/tools/diagnostics.js';
+import { McpGateway } from './kernel/mcpGateway.js';
 
 import { YUIAGICoreModule } from '../modules/agi/YUIAGICoreModule.js';
 import { WeatherNewsEmpathyModule } from '../modules/agi/WeatherNewsEmpathyModule.js';
@@ -461,7 +467,7 @@ export function initializeCortexModules(): Promise<void> {
         LocalNanoNLPModule, FileManipulationModule, EmotionEngine, NeuralEchoAddon,
         SandboxFSModule, SandboxTerminalModule, SOPModule, RAGModule, ProviderGatewayModule,
         PromptManagerModule, PlanningModule, ParallelStreamerModule, OutputRendererModule,
-        ToolExecutorModule, TTSSelectorModule, SubAgentDelegationModule, YuiVisionModule, L2DExpressionTranslatorModule,
+        ToolExecutorModule, TTSSelectorModule, SubAgentDelegationModule, YuiVisionModule, L2DExpressionTranslatorModule, McpBridgeModule,
         YUIAGICoreModule, WeatherNewsEmpathyModule, TopDownExecutiveControlModule, SubconsciousMonologueModule,
         SpontaneousProactiveModule, SoulDriftModule, SomaticSensorGroundingModule, SelfAwarenessMirrorModule,
         ProactiveVolitionModule, NeuroSymbolicModule, MicroCognitiveSynthesizer, MemoryResonanceModule,
@@ -485,7 +491,9 @@ export function initializeCortexModules(): Promise<void> {
         QuestionTool, ApplyPatchTool,
         GrepTool, TodoWriteTool, SkillTool,
         SendFinalReplyTool, SendStatusUpdateTool,
-        DelegateTool
+        DelegateTool,
+        UndoLastChangesTool,
+        DiagnosticsTool
       ];
 
       allStaticModules.forEach(m => SystemRegistry.register(m));
@@ -517,7 +525,11 @@ export function initializeCortexModules(): Promise<void> {
        if (typeof window === 'undefined') {
          SubAgentRegistry.register(CreativeAgent);
          SubAgentRegistry.register(ResearchAgent);
+         SubAgentRegistry.register(ExplorerAgent);
+         SubAgentRegistry.register(PlannerAgent);
          console.log(`[SUBAGENT] Registered ${SubAgentRegistry.getAll().length} sub-agents`);
+
+         McpGateway.ensureInitialized().catch(e => console.warn('[MCP] init deferred:', e?.message));
        }
 
        BackgroundToolDispatcher.getInstance();

@@ -63,14 +63,31 @@ export const DelegateTool: ToolModule = {
     const availableAgents = SubAgentRegistry.getAll();
     const agentIds = availableAgents.map((a: any) => a.id);
 
+    // opencode-style auto-routing: pilih sub-agent berdasarkan kata kunci tugas,
+    // bukan asal ambil urutan pertama.
+    const pickAgent = (prompt: string): string => {
+      const p = String(prompt || '').toLowerCase();
+      const has = (re: RegExp) => re.test(p);
+      if (has(/explore|cari.*file|cari.*fungsi|codebase|struktur|dimana.*(file|kode|class|function)|find.*(file|function|class)|grep|search.*(code|source)/i)) {
+        return 'explorer-agent';
+      }
+      if (has(/plan|rencana|decompose|langkah|step|urutan|strategi|bagaimana caranya|how to|approach|rincian langkah/i)) {
+        return 'planner-agent';
+      }
+      if (has(/riset|research|fakta|fact.?check|latest|terbaru|berita|news|penelitian|analy.?z|analisa/i)) {
+        return 'research-agent';
+      }
+      return agentIds[0] || 'research-agent';
+    };
+
     const results = await Promise.allSettled(
       tasks.map(async (task: DelegateTask) => {
-        const requested = task.agentId || 'direct';
-        const agentId = requested === 'direct'
-          ? agentIds[0] || 'research-agent'
+        const requested = task.agentId || 'auto';
+        const agentId = requested === 'auto' || requested === 'direct'
+          ? pickAgent(task.prompt)
           : agentIds.includes(requested)
             ? requested
-            : agentIds[0] || 'research-agent';
+            : pickAgent(task.prompt);
 
         const start = Date.now();
         try {

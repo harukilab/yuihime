@@ -1,6 +1,16 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.272] - 2026-08-05
+### Feature: Adopsi opencode: plan mode, permission gating, subagents explorer/planner, MCP bridge, snapshots/undo, diagnostics
+- #1 Plan mode (tool-executor.planMode): sebelum eksekusi tool MODIFIKASI/EKSEKUSI (write, edit, bash, apply_patch, send, dll), Yui menyusun rencana & minta persetujuan user (balas yes/continue). Tool BACA/AKSES (read, glob, grep, websearch, webfetch, view_logs) jalan langsung tanpa nanya. ApprovalGate singleton (cortex/approvalGate.ts) keyed per contextId + TTL 30m; persetujuan/penolakan ditulis sebagai memori [SYSTEM_APPROVAL]/[SYSTEM_DENIAL] agar model menyesuaikan.
+- #6 Permission gating (tool-executor.permissionMode: auto/ask/deny + riskyTools JSON): tool berisiko di-ask (minta izin) atau di-block (deny, model dapat error Permission denied → self-correct opencode-style). Read-only tidak pernah ditanya. Default list: bash, apply_patch, write, edit, file_manager, code_interpreter, install_addon, scheduler, manage_bgproc, github, send_file, send_message, generate_image.
+- #2 Subagents: tambah explorer-agent (codebase recon) + planner-agent (task decomposition), didaftarkan di SubAgentRegistry; tool delegate auto-route berdasarkan kata kunci tugas (explore/plan/research/creative) — delegation tetap paralel via Promise.allSettled.
+- #3 MCP Bridge (mcp-bridge module + kernel/mcpGateway.ts): minimal MCP stdio client (JSON-RPC newline-delimited, tanpa dependency baru, aman untuk pkg). Config enabled + serversJson; tool server didaftarkan otomatis sebagai mcp_<server>_<tool> saat boot.
+- #5 Snapshots/undo (kernel/snapshotManager.ts + tool undo_last_changes): sebelum write/edit/apply_patch/file_manager, konten asli file target dicapture ke ~/.yuihime/snapshots/; undo_last_changes mengembalikan snapshot terakhir per context. Tanpa dependency tambahan.
+- #7 Diagnostics tool (LSP-lite): jalankan tsc --noEmit / eslint --format json / py_compile pada sebuah direktori dan kembalikan diagnostics terstruktur (file,line,col,severity) sebagai observation — model langsung bisa memperbaiki error.
+
+
 ## [4.271] - 2026-08-05
 ### Fix: opencode-style loop guard: tool gagal tidak lagi menghentikan loop + tool not found memberi saran near-match (dynamicSynthesis default off)
 - cortexThinkEngine: flag realToolFailurePending — saat real tool (non speak/final_answer/status_update) gagal, loop TIDAK langsung break lagi. final_answer dengan realTools.length===0 TAPI ada real tool gagal sebelumnya → lanjut satu iterasi agar model membaca error & mengoreksi (bukan hanya bilang 'Tunggu sebentar'). Iterasi tanpa tool call sama sekali dengan realToolFailurePending → lanjut, bukan break. Flag di-reset agar tidak infinite loop.
