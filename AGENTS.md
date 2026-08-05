@@ -19,6 +19,8 @@
 - Tests in `tools/tester/` are standalone and run with `tsx` (no test framework configured).
 - `python3 tools/update_log.py` — prepend `UPDATE_LOG.md` entry
 - `python3 tools/push_gh.py` — update logs + git add/commit/push
+- Deploy & verify after every change (build → restart daemon → health check):
+  `npm run build 2>&1 | tail -3 && tools/yui-daemon.sh restart 2>&1 | tail -3 && curl -s http://127.0.0.1:3000/api/health; echo`
 
 ## Paths & Config
 - Path aliases (tsconfig.json): `@/*` → `src/*`, `@shared/*` → `shared/*`, `@web/*` → `web/src/*`

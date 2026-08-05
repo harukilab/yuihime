@@ -964,16 +964,39 @@ function yuiStatusText(tc?: TgToolContext): string {
 
   // ── Life simulation ──
   if (life && (life.hunger !== undefined || life.energy !== undefined || life.thirst !== undefined)) {
+    const markBad = (v: number, badAt: number, midAt: number) => {
+      const n = Number(v ?? 0);
+      return n >= badAt ? '🔴' : n >= midAt ? '🟡' : '🟢';
+    };
+    const markGood = (v: number, badBelow: number, midBelow: number) => {
+      const n = Number(v ?? 0);
+      return n <= badBelow ? '🔴' : n <= midBelow ? '🟡' : '🟢';
+    };
+    const txtBad = (v: number, bad: string, mid: string, good: string) => {
+      const n = Number(v ?? 0);
+      return n >= 70 ? bad : n >= 40 ? mid : good;
+    };
+    const txtGood = (v: number, bad: string, mid: string, good: string) => {
+      const n = Number(v ?? 0);
+      return n <= 40 ? bad : n <= 70 ? mid : good;
+    };
+
     lines.push(
       ``,
       `🧬 LIFE SIMULATION`,
-      `🍽️  Hunger       ${val(life.hunger)}%  ${bar(life.hunger)}`,
-      `💧  Thirst       ${val(life.thirst)}%  ${bar(life.thirst)}`,
-      `🚿  Cleanliness  ${val(life.cleanliness)}%  ${bar(life.cleanliness)}`,
-      `😴  Sleepiness   ${val(life.sleepiness)}%  ${bar(life.sleepiness)}`,
-      `🔋  Energy       ${val(life.energy)}%  ${bar(life.energy)}`,
+      `🍽️  Hunger       ${val(life.hunger)}%  ${bar(life.hunger)} ${markBad(life.hunger, 70, 40)} ${txtBad(life.hunger, 'Lapar Parah', 'Lapar', 'Kenyang')}`,
+      `💧  Thirst       ${val(life.thirst)}%  ${bar(life.thirst)} ${markBad(life.thirst, 70, 40)} ${txtBad(life.thirst, 'Haus Parah', 'Haus', 'Segar')}`,
+      `🚿  Cleanliness  ${val(life.cleanliness)}%  ${bar(life.cleanliness)} ${markGood(life.cleanliness, 40, 70)} ${txtGood(life.cleanliness, 'Perlu Mandi', 'Sedikit Kotor', 'Bersih')}`,
+      `🚽  Bladder      ${val(life.bladder)}%  ${bar(life.bladder)} ${markBad(life.bladder, 70, 40)} ${txtBad(life.bladder, 'Kebelet Banget', 'Kebelet', 'Aman')}`,
+      `😴  Sleepiness   ${val(life.sleepiness)}%  ${bar(life.sleepiness)} ${markBad(life.sleepiness, 70, 40)} ${txtBad(life.sleepiness, 'Kurang Tidur', 'Ngantuk', 'Segar')}`,
+      `🔋  Energy       ${val(life.energy)}%  ${bar(life.energy)} ${markGood(life.energy, 30, 60)} ${txtGood(life.energy, 'Kehabisan', 'Lelah', 'Cukup')}`,
       `🛏️  Sleep        ${life.sleepState === 'asleep' ? '😴 Asleep' : '🙂 Awake'} (${val(life.effectiveBedtime)}–${val(life.effectiveWake)})`
     );
+    if (life.playUrge !== undefined || life.fishCraving !== undefined) {
+      lines.push(
+        `🎾  Play urge    ${val(life.playUrge)}%  ${bar(life.playUrge)} ${markBad(life.playUrge, 70, 40)} · 🐟 Fish ${val(life.fishCraving)}% ${markBad(life.fishCraving, 70, 40)}`
+      );
+    }
   }
 
   // ── Relation ──

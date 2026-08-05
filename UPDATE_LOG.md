@@ -1,6 +1,12 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.276] - 2026-08-05
+### Feature: Status care: label kondisi + indikator 🟢/🟡/🔴 agar arah stat tidak membingungkan
+- yuiStatusText kini menampilkan kondisi per stat (hunger: Kenyang/Lapar/Lapar Parah; thirst: Segar/Haus/Haus Parah; cleanliness: Bersih/Sedikit Kotor/Perlu Mandi; bladder: Aman/Kebelet/Kebelet Banget; sleepiness: Segar/Ngantuk/Kurang Tidur; energy: Cukup/Lelah/Kehabisan) + indikator warna 🔴=butuh perawatan, 🟡=waspada, 🟢=aman — meski arah stat terbalik (rendah bagus vs tinggi bagus), langsung terbaca tanpa harus menafsirkan angka
+- Baris tambahan: 🚽 Bladder di status + baris 🎾 Play urge & 🐟 Fish craving (indikator masing-masing)
+
+
 ## [4.275] - 2026-08-05
 ### Feature: Care: stat quick action langsung berubah + tambah inventory via tombol ➕ + menu admin terpisah
 - Perbaiki quick action care: eat/drink/bath/toilet/sleep/play/fish sekarang langsung mengubah stat tersimpan (hunger 0, thirst 0, cleanliness 100, bladder 0, sleepiness 5, playUrge 0, fishCraving 0) — status langsung terlihat berubah, tidak menunggu tick LifeSimulation berikutnya
