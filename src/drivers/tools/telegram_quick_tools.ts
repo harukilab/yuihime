@@ -1115,6 +1115,11 @@ function runCareAction(action: string, tc: TgToolContext): TgReply {
     case 'inv':
     case 'bag':
       return careInventoryView(inv);
+    case 'invnew':
+      return {
+        text: `➕ ADD CUSTOM ITEM\n\nCustom items appear under 🎒 ITEMS and can be added by typing:\n\n/invadd <nama> [jumlah]\n\nExample:\n/invadd Kue Coklat 3\n/invadd Buku Sakti\n\nOr just ask Yui in chat to add an item to her inventory.`,
+        keyboard: careInventoryView(inv).keyboard
+      };
     default:
       return { text: `⚠️ Unknown action: "${action}".\n\nUsage: /care <eat|drink|bath|toilet|sleep|play|fish|inventory>` };
   }
@@ -1162,6 +1167,7 @@ function careInventoryView(inv: any): TgReply {
   pushRows('foods');
   pushRows('drinks');
   pushRows('items');
+  keyboard.push([{ text: '➕ Custom item', callback_data: 'qt:care:invnew' }]);
   keyboard.push([{ text: '« Care', callback_data: 'qt:care' }, { text: '« Menu', callback_data: 'qt:menu' }]);
   return { text: sections.join('\n').slice(0, 3000), keyboard: { inline_keyboard: keyboard } };
 }
@@ -1672,6 +1678,42 @@ export const tgQuickCommands: TgCommandDef[] = [
         return { text: `${yuiStatusText(tc)}\n\n🧬 CARE MENU\nPick an action:`, keyboard: careMenuKeyboard() };
       }
       return runCareAction(a, tc);
+    }
+  },
+  {
+    name: 'invadd',
+    aliases: ['additem', 'item'],
+    description: 'Add a custom item to Yui\u2019s inventory (shown in the Items tab)',
+    usage: '/invadd <name> [qty]',
+    handler: async (tc, args) => {
+      const toks = splitArgsQuoted(args.trim());
+      const name = toks[0];
+      if (!name) return { text: '⚠️ Usage: /invadd <name> [qty]\n\nExample: /invadd Kue Coklat 3' };
+      const qty = Math.max(1, Number(toks[1]) || 1);
+      const db = tc.db;
+      if (!db) return { text: 'Database unavailable.' };
+      const row = db.prepare('SELECT systemHealth FROM agent_state LIMIT 1').get() as any;
+      const sh = (row && row.systemHealth) ? JSON.parse(row.systemHealth) : {};
+      const inv: any = sh.lifeInventory || { foods: [], drinks: [], items: [] };
+      const items = inv.items || [];
+      const slug = String(name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+      const existing = items.find((it: any) => it.custom && it.id === `item_${slug}`);
+      if (existing) {
+        existing.qty = Number(existing.qty || 0) + qty;
+      } else {
+        items.push({
+          id: `item_${slug || Date.now()}`,
+          name: String(name).slice(0, 40),
+          emoji: '📦',
+          qty,
+          custom: true
+        });
+      }
+      inv.items = items;
+      sh.lifeInventory = inv;
+      db.prepare('UPDATE agent_state SET systemHealth = ? WHERE id = 1').run(JSON.stringify(sh));
+      const view = careInventoryView(inv);
+      return { text: `➕ Added custom item: 📦 ${name} x${qty}.\n\n${view.text}`, keyboard: view.keyboard };
     }
   },
   {

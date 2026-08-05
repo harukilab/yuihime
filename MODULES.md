@@ -162,4 +162,5 @@ Peta struktur direktori pasca-pemisahan Web UI ↔ Daemon (lihat UPDATE_LOG `[4.
 - `telegram_quick_tools: Care quick actions langsung mengubah stat (hunger/thirst/cleanliness/bladder/sleepiness/playUrge/fishCraving); tombol ➕ menambah qty item inventory; main menu hanya untuk all-user, Daemon/Tools/Cron dipindah ke tab 🔐 Admin (qt:admin)`
 - `telegram_quick_tools: yuiStatusText menampilkan label kondisi per stat + indikator 🟢/🟡/🔴 (butuh perawatan), baris Bladder + Play urge/Fish craving; AGENTS.md menambahkan perintah deploy & verify`
 - `telegram_quick_tools: fix tombol ➕ inventory — handler invadd pindah ke prefix check (invadd:<type>:<idx>) sebelum switch, karena callback dikirim berprefix`
+- `telegram_quick_tools: custom inventory — command /invadd <nama> [qty] (alias /additem, /item) menambah item custom ke lifeInventory.items; tombol ➕ Custom item (qt:care:invnew) di tampilan inventory`
 

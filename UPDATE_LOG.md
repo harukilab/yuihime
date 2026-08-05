@@ -1,6 +1,12 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.278] - 2026-08-05
+### Feature: Custom inventory: /invadd + tombol ➕ Custom item (tab Items)
+- Command baru /invadd <nama> [qty] (alias /additem, /item): menambah custom item ke lifeInventory.items (emoji 📦, flag custom, id item_<slug>); jika nama sama, qty ditambahkan; hasil langsung menampilkan tampilan inventory dengan keyboard
+- Inventory view: tombol ➕ Custom item (qt:care:invnew) menampilkan petunjuk cara menambah; seksi 🎒 ITEMS otomatis merender custom item beserta qty
+
+
 ## [4.277] - 2026-08-05
 ### Fix: Perbaiki tombol ➕ inventory (Unknown action: invadd)
 - case switch 'invadd' hanya cocok string persis, sedangkan callback dikirim sebagai 'invadd:drinks:0' (prefix) sehingga jatuh ke default error. Dipindah ke pengecekan a.startsWith('invadd:') sebelum switch — tombol ➕ per item sekarang menambah qty dan me-render ulang inventory dengan benar
