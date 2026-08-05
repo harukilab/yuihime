@@ -13,6 +13,7 @@ import { extractChannelFileAttachments } from "./channelFileAttachment.js";
 import { describeImageFromBuffer } from "../../modules/YuiVisionModule.js";
 import { eventBus } from "@shared/core/kernel/event-bus";
 import { handleTgQuickCommand, handleTgCallback } from "../../drivers/tools/telegram_quick_tools.js";
+import { resolveAskCallback } from "../kernel/tgAskChoice.js";
 import { recordOutboundMessage, recordFeedback, lookupOutboundMessage, emojiToReward } from "../feedback.js";
 import { genId } from '@shared/core/idGen';
 
@@ -841,6 +842,14 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
       }
       if (!data || !data.startsWith('qt:')) return;
       await ctx.answerCbQuery().catch(() => {});
+      if (data.startsWith('qt:ask:')) {
+        const handled = resolveAskCallback(data, async (text, clearKeyboard) => {
+          try {
+            await ctx.editMessageText(text, { reply_markup: clearKeyboard ? { inline_keyboard: [] } : undefined });
+          } catch (_) {}
+        });
+        if (handled) return;
+      }
       const currentSettings = Kernel.getInstance().getSettings().getAll();
       if (currentSettings['telegram_quick_tools']?.enabled === false) return;
       const result = await handleTgCallback(data, {

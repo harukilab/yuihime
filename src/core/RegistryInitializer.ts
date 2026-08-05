@@ -39,6 +39,7 @@ import { SendFinalReplyTool, SendStatusUpdateTool } from '../modules/LiveStatusT
 import { DelegateTool } from '../drivers/tools/delegate.js';
 import { UndoLastChangesTool } from '../drivers/tools/undo_last_changes.js';
 import { DiagnosticsTool } from '../drivers/tools/diagnostics.js';
+import { AskChoiceTool } from '../drivers/tools/ask_choice.js';
 import { McpGateway } from './kernel/mcpGateway.js';
 
 import { YUIAGICoreModule } from '../modules/agi/YUIAGICoreModule.js';
@@ -493,7 +494,8 @@ export function initializeCortexModules(): Promise<void> {
         SendFinalReplyTool, SendStatusUpdateTool,
         DelegateTool,
         UndoLastChangesTool,
-        DiagnosticsTool
+        DiagnosticsTool,
+        AskChoiceTool
       ];
 
       allStaticModules.forEach(m => SystemRegistry.register(m));

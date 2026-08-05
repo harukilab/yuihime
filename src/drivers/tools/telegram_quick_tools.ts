@@ -815,10 +815,55 @@ function menuKeyboard(tc?: TgToolContext) {
   rows.push([{ text: '🎯 Goals', callback_data: 'qt:goals' }, { text: '🧹 New Chat', callback_data: 'qt:new' }]);
   if (tc && isAdmin(tc)) {
     rows.push([{ text: '🛠️ Daemon', callback_data: 'qt:daemon' }]);
-    rows.push([{ text: '🧰 Tools', callback_data: 'qt:tools' }]);
+    rows.push([{ text: '🧰 Tools', callback_data: 'qt:tools' }, { text: '⏰ Cron', callback_data: 'qt:cron' }]);
   }
   rows.push([{ text: '✖️ Close Menu', callback_data: 'qt:close' }]);
   return { inline_keyboard: rows };
+}
+
+function cronMenuKeyboard() {
+  return {
+    inline_keyboard: [
+      [{ text: '📋 List tasks', callback_data: 'qt:cron:list' }, { text: '➕ Add task', callback_data: 'qt:cron:add' }],
+      [{ text: '❓ Help', callback_data: 'qt:cron:help' }],
+      [{ text: '« Back to Menu', callback_data: 'qt:menu' }]
+    ]
+  };
+}
+
+function cronListReply(tc: TgToolContext): { text: string; keyboard: any } {
+  if (!tc.db) return { text: 'Database unavailable.', keyboard: cronMenuKeyboard() };
+  let rows: any[] = [];
+  try {
+    rows = tc.db.prepare('SELECT * FROM cron_tasks ORDER BY enabled DESC, name ASC').all() as any[];
+  } catch (err: any) {
+    return { text: `⚠️ Failed to read cron table: ${err?.message || err}`, keyboard: cronMenuKeyboard() };
+  }
+  if (!rows.length) {
+    return {
+      text: '🗓️ No cron tasks yet.\n\nAdd one: /cron add <name> <schedule> <prompt…>',
+      keyboard: cronMenuKeyboard()
+    };
+  }
+  const lines = ['🗓️ CRON TASKS', ''];
+  const buttons: any[][] = [];
+  rows.slice(0, 15).forEach((t, i) => {
+    const last = t.lastRun ? fmtTimestamp(t.lastRun) : 'never';
+    const prompt = String(t.prompt || '').replace(/\s*\n+/g, ' ').slice(0, 60);
+    lines.push(
+      `${t.enabled === 1 ? '🟢' : '⚪'} ${t.name}`,
+      `   🆔 ${t.id}`,
+      `   ⏱ ${t.schedule}${t.repeating === 1 ? ' (repeat)' : ' (once)'} · Last run: ${last}`,
+      `   📝 ${prompt || '(no prompt)'}`
+    );
+    buttons.push([
+      { text: '▶️ Run', callback_data: `qt:cron:run:${i}` },
+      { text: t.enabled === 1 ? '⏹️ Off' : '🟢 On', callback_data: `qt:cron:toggle:${i}` },
+      { text: '🗑️ Del', callback_data: `qt:cron:del:${i}` }
+    ]);
+  });
+  buttons.push([{ text: '« Cron', callback_data: 'qt:cron' }, { text: '« Menu', callback_data: 'qt:menu' }]);
+  return { text: lines.join('\n').slice(0, 3000), keyboard: { inline_keyboard: buttons } };
 }
 
 function daemonMenuKeyboard() {
@@ -1866,6 +1911,33 @@ export async function handleTgCallback(data: string, tc: TgToolContext): Promise
     if (sub === 'img') return { action: 'edit', text: TOOLS_IMG_HELP, keyboard: toolsMenuKeyboard() };
     if (sub === 'files') return { action: 'edit', text: TOOLS_FILES_HELP, keyboard: toolsMenuKeyboard() };
     return { action: 'edit', text: TOOLS_HELP, keyboard: toolsMenuKeyboard() };
+  }
+
+  if (cmd === 'cron') {
+    if (!isAdmin(tc)) return { action: 'edit', text: '⛔ This command is for the bot admin only.', keyboard: backToMenuKeyboard() };
+    return { action: 'edit', text: '⏰ Cron Menu\n\nManage scheduled autonomous tasks:', keyboard: cronMenuKeyboard() };
+  }
+  if (cmd.startsWith('cron:')) {
+    if (!isAdmin(tc)) return { action: 'edit', text: '⛔ This command is for the bot admin only.', keyboard: backToMenuKeyboard() };
+    const sub = cmd.slice(5);
+    if (sub === 'list') return { action: 'edit', ...cronListReply(tc) };
+    if (sub === 'add' || sub === 'help') return { action: 'edit', text: CRON_HELP, keyboard: cronMenuKeyboard() };
+    const parts = sub.split(':');
+    const op = parts[0];
+    if ((op === 'run' || op === 'toggle' || op === 'del') && parts[1] !== undefined) {
+      const idx = Number(parts[1]);
+      const rows = tc.db
+        ? ((tc.db.prepare('SELECT * FROM cron_tasks ORDER BY enabled DESC, name ASC').all() as any[]) || [])
+        : [];
+      const task = rows[idx];
+      if (!task) {
+        return { action: 'edit', text: '⚠️ Task no longer exists.', keyboard: cronMenuKeyboard() };
+      }
+      const reply = await runCronCommand(`${op} ${task.id}`, tc);
+      const list = cronListReply(tc);
+      return { action: 'edit', text: `${reply.text}\n\n${list.text}`.slice(0, 3000), keyboard: list.keyboard };
+    }
+    return { action: 'edit', text: '⏰ Cron Menu', keyboard: cronMenuKeyboard() };
   }
 
   if (cmd === 'img:yui' || cmd === 'img:default' || cmd === 'img:cancel' || cmd === 'img:refresh' || cmd.startsWith('img:model:')) {

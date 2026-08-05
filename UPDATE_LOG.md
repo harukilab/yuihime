@@ -1,6 +1,12 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.273] - 2026-08-05
+### Feature: Inline menu TG lengkap (Cron) + tool ask_choice (AI kirim tombol pilihan di Telegram)
+- Cron masuk inline keyboard: tombol ⏰ Cron di main menu (admin); cronMenuKeyboard() dengan List/Add/Help/Back; qt:cron:list menampilkan semua task + tombol per-task ▶️ Run / 🟢 On/⏹️ Off / 🗑️ Del (callback qt:cron:run|toggle|del:<idx>), hasil mutasi langsung di-render ulang
+- Tool baru ask_choice (drivers/tools/ask_choice.ts + kernel/tgAskChoice.ts): Yui (LLM) bisa kirim pesan interaktif di Telegram dengan tombol pilihan inline dan menunggu jawaban; callback qt:ask:<token>:<idx> di telegram.ts meresolve promise, jawaban dikembalikan ke model sebagai chosen label; timeout default 120s (max 300s) + fallback default_option; hanya aktif di chat Telegram
+
+
 ## [4.272] - 2026-08-05
 ### Feature: Adopsi opencode: plan mode, permission gating, subagents explorer/planner, MCP bridge, snapshots/undo, diagnostics
 - #1 Plan mode (tool-executor.planMode): sebelum eksekusi tool MODIFIKASI/EKSEKUSI (write, edit, bash, apply_patch, send, dll), Yui menyusun rencana & minta persetujuan user (balas yes/continue). Tool BACA/AKSES (read, glob, grep, websearch, webfetch, view_logs) jalan langsung tanpa nanya. ApprovalGate singleton (cortex/approvalGate.ts) keyed per contextId + TTL 30m; persetujuan/penolakan ditulis sebagai memori [SYSTEM_APPROVAL]/[SYSTEM_DENIAL] agar model menyesuaikan.
