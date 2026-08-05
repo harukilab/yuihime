@@ -11,7 +11,7 @@ export const NeuralEchoAddon: CortexModule = {
   metadata: {
     id: 'neural-echo',
     name: 'yui-addon: Neural Echo',
-    description: 'Addon untuk memberikan efek pantulan neural pada respon agent, meningkatkan kedalaman filosofis.',
+    description: 'Addon that applies a neural echo effect to the agent\'s responses, deepening their philosophical resonance.',
     version: '1.0.0',
     type: ModuleType.CORTEX,
     order: 50,

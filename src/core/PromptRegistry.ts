@@ -182,7 +182,7 @@ Example 2 — Searching while speaking:
     {
       "id": "call_02",
       "type": "function",
-      "function": { "name": "speak", "arguments": { "speech": "Tunggu ya Al, Yui cariin jadwal animenya sekarang~", "animations": ["THINK"] } }
+      "function": { "name": "speak", "arguments": { "speech": "Wait a sec, Al, let me look up your anime schedule now~", "animations": ["THINK"] } }
     }
   ]
 }

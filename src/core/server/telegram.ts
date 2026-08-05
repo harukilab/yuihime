@@ -326,7 +326,7 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
         return ctx.reply("❌ The source Web identity was not found in the system.");
       }
 
-      const senderName = ctx.from.first_name || 'Anonymous';
+      const senderName = ctx.from.first_name || 'user';
       const tgUsername = ctx.from.username;
 
       let accounts = identity.linkedAccounts ? JSON.parse(identity.linkedAccounts) : [];
@@ -544,7 +544,7 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
       return;
     }
     const tgUserId = ctx.from.id;
-    const senderName = ctx.from.first_name || 'Anonymous';
+    const senderName = ctx.from.first_name || 'user';
 
     // ── Telegram Quick Toolkit: "/" commands processed directly without LLM ──
     if (rawInput.trim().startsWith('/')) {

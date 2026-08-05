@@ -2,6 +2,7 @@ import { SubAgentDefinition, SubAgentRunOptions, SubAgentResult } from './SubAge
 import { SubAgentRegistry } from './SubAgentRegistry';
 import { SystemRegistry } from '@shared/core/registry';
 import { genId } from '@shared/core/idGen';
+import { injectCharacterName } from '../kernel/characterName.js';
 
 export class SubAgentManager {
   private static instance: SubAgentManager;
@@ -133,7 +134,7 @@ export class SubAgentManager {
       // caller-authored prompt (opencode "direct session" analogue). Scoped
       // context is still attached so the fresh LLM call has grounding.
       const systemPrompt = options.systemPromptOverride || definition.systemPrompt;
-      return `${systemPrompt}
+      return injectCharacterName(`${systemPrompt}
 
 [SUB-AGENT DIRECT SESSION]
 You are operating as a specialized sub-agent: ${definition.name}
@@ -152,10 +153,10 @@ Sender: ${options.senderName}
 ${options.promptOverride}
 
 [INSTRUCTION]
-Process the task above using your specialized capabilities. Output a concise, actionable result. Do not break the fourth wall.`;
+Process the task above using your specialized capabilities. Output a concise, actionable result. Do not break the fourth wall.`);
     }
 
-    return `${definition.systemPrompt}
+    return injectCharacterName(`${definition.systemPrompt}
 
 [SUB-AGENT CONTEXT]
 You are operating as a specialized sub-agent: ${definition.name}
@@ -172,6 +173,6 @@ Channel: ${options.chatType}
 Sender: ${options.senderName}
 
 [INSTRUCTION]
-Process the user's request using your specialized capabilities. Output a concise, actionable response in character. Do not break the fourth wall.`;
+Process the user's request using your specialized capabilities. Output a concise, actionable response in character. Do not break the fourth wall.`);
   }
 }

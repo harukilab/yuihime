@@ -1,6 +1,21 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.283] - 2026-08-05
+### chore: Migrasi sisa bahasa ID -> EN + placeholder nama karakter di semua prompt LLM
+- Terjemahkan sisa string ID di telegram_quick_tools, LocalNanoNLPModule, aiRouter, telegramRouter, chat_log, onboarding; hardcode 'Yui' di prompt -> ${characterName} + injectCharacterName; focus presets UI -> EN; fix syntax SubAgentManager; verifikasi tsc/build/health OK.
+
+
+## [4.282] - 2026-08-05
+### chore: Migrasi sisa bahasa ID -> EN + placeholder nama karakter di semua prompt LLM
+- Terjemahkan sisa string ID di telegram_quick_tools (prompt TensorArt, summarizer, narasi perawatan), LocalNanoNLPModule (log dual-cognition + thought fallback), aiRouter, telegramRouter, chat_log, onboarding (default welcome message).
+- Ganti hardcode nama 'Yui' di prompt LLM -> placeholder ${characterName} + injectCharacterName (telegram_quick_tools, LocalNanoNLPModule, SubAgentManager ke-2 path assembly, tensorart).
+- Hilangkan hardcode bahasa '(in Indonesian)' pada prompt summarizer -> ikuti bahasa user.
+- Terjemahkan UI-visible focus presets DEFAULT_NEURAL_CORES (shared/constants.ts): description, traits, archetype -> EN.
+- Perbaiki typo syntax injectCharacterName di SubAgentManager:176 (tutup kurung hilang).
+- Verifikasi: tsc --noEmit clean, build OK, daemon restart sehat di /api/health.
+
+
 ## [4.281] - 2026-08-05
 ### chore: Migrasi penuh bahasa ID -> EN di seluruh kode (683 baris / 79 file) + perbaikan regresi v4.280
 - Terjemahkan semua string bahasa Indonesia di UI, log, prompt, dan komentar kode ke English sesuai kebijakan bahasa AGENTS.md (bahasa ID kini hanya diizinkan di UPDATE_LOG.md).

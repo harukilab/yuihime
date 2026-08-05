@@ -7,8 +7,9 @@ import { DecisionRouter, EpisodicMemory } from '../core/neural/Brain.js';
 import { LlmIoAuditor } from '../core/server/llmAuditor.js';
 import { buildOpenAITools } from '../core/openaiTools.js';
 import { SettingsManager } from '../core/kernel/settings.js';
+import { injectCharacterName } from '../core/kernel/characterName';
 
-const DEFAULT_OFFLINE_FALLBACK = `Halo user! Saat ini sirkuit kognitif Yui sedang berdiet internet (server sedang sibuk/habis kuota)`;
+const DEFAULT_OFFLINE_FALLBACK = `Hi user! \${characterName}'s cognitive circuit is currently on an internet diet (the server is busy/out of quota)`;
 
 const DEFAULT_NANO_NLP_THOUGHT = `<thought>Online cognitive circuit failed. Subconscious offline path activated dynamically.</thought>\${localResponse}`;
 
@@ -235,7 +236,7 @@ export const ProviderGatewayModule: CortexModule = {
     const offlineTemplate = (gatewayConfig && gatewayConfig.offlineFallbackMessage) || PromptRegistry.getInstance().get('provider-gateway:offline_fallback');
     return {
       ...context,
-      rawResult: offlineTemplate,
+      rawResult: injectCharacterName(offlineTemplate),
       activeProvider: 'hard_offline_fallback',
       fallbackTriggered: true
     };

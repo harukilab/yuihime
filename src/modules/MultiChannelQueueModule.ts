@@ -1,6 +1,6 @@
 import { CortexModule, ModuleType } from '@shared/include/types';
 
-const DEFAULT_PENDING_FEEDBACK = `[SYSTEM MESSAGE]: Koneksi saraf batin Yuihime dengan kognisi LLM sedang sangat padat atau terputus sementara 📡. Tapi jangan khawatir! Pesanmu ("\${inputPreview}") sudah aman dalam antrean tunggu kognisi Yui. Yui akan membalas secara otomatis setelah tautan saraf sinkron kembali! 🌸`;
+const DEFAULT_PENDING_FEEDBACK = `[SYSTEM MESSAGE]: \${characterName}'s inner neural link to LLM cognition is very congested or temporarily disconnected 📡. But don't worry! Your message ("\${inputPreview}") is safely queued in \${characterName}'s cognition. \${characterName} will reply automatically once the neural link is back in sync! 🌸`;
 
 /**
  * Settings holder for the Multi-Channel Queue pending-wait feedback.

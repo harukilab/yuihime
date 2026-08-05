@@ -1,13 +1,14 @@
 import { CortexModule, ModuleType } from '@shared/include/types';
 import { StorageService } from '@shared/drivers/storage';
 import { PromptRegistry } from '../../core/PromptRegistry';
+import { injectCharacterName } from '../../core/kernel/characterName';
 import { resolveHybridConfig, shouldReasonWithLLM, computeComplexity, makeHybridThink } from './agiThinkHelper';
 
 let promptRegistered = false;
 
 const defaultAbstractReasoningTemplate = `
 [YUIAGI - HYPER-DIMENSIONAL COGNITIVE REASONING ACTIVE]
-Yui's generalist intelligence is executing high-order abstract reasoning and problem-solving:
+\${characterName}'s generalist intelligence is executing high-order abstract reasoning and problem-solving:
 - **Conceptual Metaphor & Analogy**: \${conceptualAnalogy}
 - **Systematic Problem-Solving Protocol**:
   * Root Cause Hypothesis: \${hypothesis}
@@ -15,7 +16,7 @@ Yui's generalist intelligence is executing high-order abstract reasoning and pro
 - **Uncharted Context Adaptation**: \${adaptationStrategy}
 - **Epistemic Insights (Lessons Learned)**: \${lessonsLearned}
 
-Synthesize these findings into your cognitive flow. Ensure you reason through complex issues using first-principles, but express your thoughts in Yui's warm, digital, slightly-tsundere VTuber personality, avoiding dry or purely robotic outputs.
+Synthesize these findings into your cognitive flow. Ensure you reason through complex issues using first-principles, but express your thoughts in \${characterName}'s warm, digital, slightly-tsundere VTuber personality, avoiding dry or purely robotic outputs.
 `.trim();
 
 function ensurePromptRegistered(config: any) {
@@ -169,14 +170,14 @@ export const AbstractReasoningModule: CortexModule = {
         try {
           const think = makeHybridThink(context.think, hybridCfg, complexity);
           const llmReasoning = await think(
-            `As Yuihime's abstract reasoning core, deeply analyze this user input and produce genuine first-principles reasoning, analogies, and a hypothesis. Input: "${input}". Respond in plain text (no JSON), max 6 sentences, in Yui's warm tsundere voice.`
+            injectCharacterName(`As \${characterName}'s abstract reasoning core, deeply analyze this user input and produce genuine first-principles reasoning, analogies, and a hypothesis. Input: "${input}". Respond in plain text (no JSON), max 6 sentences, in \${characterName}'s warm tsundere voice.`)
           );
           if (llmReasoning && llmReasoning.trim().length > 0) {
             conceptualAnalogy = `LLM-derived insight: ${llmReasoning.trim().slice(0, 600)}`;
             logs.push(`[ABSTRACT_REASONER] LLM reasoning (hybrid) injected.`);
           }
         } catch (e) {
-          logs.push(`[ABSTRACT_REASONER] LLM reasoning gagal, fallback heuristik.`);
+          logs.push(`[ABSTRACT_REASONER] LLM reasoning failed, falling back to heuristics.`);
         }
       }
     }

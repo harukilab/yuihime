@@ -9,6 +9,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { expandHomePath } from '../core/systemPaths.js';
+import { AI_NAME } from '@shared/constants';
 
 let characterData = "";
 let loreData = "";
@@ -18,13 +19,13 @@ let initialized = false;
 const registry = PromptRegistry.getInstance();
 
 function resolveCharacterName(charData: string): string {
-  if (!charData || typeof charData !== 'string') return 'Yui Airi';
+  if (!charData || typeof charData !== 'string') return AI_NAME;
   const trimmed = charData.trim();
   const h1Match = trimmed.match(/^#\s+(.+?)\s+Character\s+Profile$/im);
   if (h1Match) return h1Match[1].trim();
   const nameMatch = trimmed.match(/\*\*Name\*\*:\s*(.+)/i);
   if (nameMatch) return nameMatch[1].trim();
-  return 'Yui Airi';
+  return AI_NAME;
 }
 
 async function ensureInitialized() {
@@ -363,7 +364,7 @@ export const PromptManagerModule: CortexModule = {
       ? [
           '',
           '## USER PROFILE (PERSISTENT PER-PERSONA MODEL)',
-          `- ${userModel.userName || 'Anonymous'} · ${userModel.interactionCount || 0} interactions · preferred language: ${(userModel.language || 'id').toUpperCase()}`,
+          `- ${userModel.userName || 'user'} · ${userModel.interactionCount || 0} interactions · preferred language: ${(userModel.language || 'id').toUpperCase()}`,
           userModel.topTopics?.length ? `- Favorite topics: ${userModel.topTopics.join(', ')}` : '- No tracked topics yet.',
           userModel.likedTopics?.length ? `- Liked: ${userModel.likedTopics.slice(0, 5).join(', ')}` : '',
           userModel.dislikedTopics?.length ? `- Disliked: ${userModel.dislikedTopics.slice(0, 5).join(', ')}` : '',
@@ -644,7 +645,7 @@ export const PromptManagerModule: CortexModule = {
 
           const formattedOtherChats = otherChatRows && otherChatRows.length > 0
             ? otherChatRows.map((m: any) => {
-                const spk = m.speaker === 'agent' ? 'Yui' : (m.speaker || 'Unknown');
+                const spk = m.speaker === 'agent' ? characterName : (m.speaker || 'Unknown');
                 return `${spk}: ${m.content}`;
               }).join('\n')
             : 'No previous conversation records yet.';
@@ -652,19 +653,19 @@ export const PromptManagerModule: CortexModule = {
           otherIdentitiesContext += `
 <requested_other_people_contexts>
 # ACTIVE CHAT HISTORY & INFORMATION BUBBLE WITH ${id.perceivedName.toUpperCase()} (VERIFIED)
-*ACTIVE SECURITY & COGNITIVE INTEGRITY WARNING: Yui's cognitive code is activated to answer questions regarding ${id.perceivedName}. Yui MUST carefully read the following data. Yui is STRICTLY FORBIDDEN from fabricating stories, boasting, spreading fictional gossip, hallucinating, or exaggerating chat history facts beyond the actual list below! If there is no chat history or additional facts, Yui must answer honestly according to this profile without adding fictional embellishments.*
+*ACTIVE SECURITY & COGNITIVE INTEGRITY WARNING: ${characterName}'s cognitive code is activated to answer questions regarding ${id.perceivedName}. ${characterName} MUST carefully read the following data. ${characterName} is STRICTLY FORBIDDEN from fabricating stories, boasting, spreading fictional gossip, hallucinating, or exaggerating chat history facts beyond the actual list below! If there is no chat history or additional facts, ${characterName} must answer honestly according to this profile without adding fictional embellishments.*
 
 - **Identity ID**: ${id.id}
 - **Perceived Name**: ${id.perceivedName}
 - **Real Name**: ${id.realName || 'Not yet set'}
 - **Signal Relationship**: Trust: ${id.trust || 50}%, Affection: ${id.affection || 50}%, Reputation: ${id.reputation || 50}%
-- **Important Facts Known to Yui**:
+- **Important Facts Known to ${characterName}**:
 ${id.importantFacts && id.importantFacts.length > 0 ? id.importantFacts.map((f: string) => `  - ${f}`).join('\n') : '  - No important facts recorded yet.'}
 - **Core Traits**: ${id.traits && id.traits.length > 0 ? id.traits.join(', ') : 'No core traits yet.'}
-- **Yui's Subjective Perspective (My Internal Perspective of ${id.perceivedName})**:
-${id.yuiPerspective ? id.yuiPerspective : 'Yui sees them as an ordinary friend within the wave-based relationship circle.'}
+- **${characterName}'s Subjective Perspective (My Internal Perspective of ${id.perceivedName})**:
+${id.yuiPerspective ? id.yuiPerspective : `${characterName} sees them as an ordinary friend within the wave-based relationship circle.`}
 
-- **Transcript of Last 15 Chat Lines Between Yui and ${id.perceivedName}**:
+- **Transcript of Last 15 Chat Lines Between ${characterName} and ${id.perceivedName}**:
 \`\`\`
 ${formattedOtherChats}
 \`\`\`
@@ -677,7 +678,7 @@ ${formattedOtherChats}
       identitiesListString = "- No other verified identities yet.";
     }
 
-    const currentPlatformTag1 = context.chatType ? `${context.chatType.toLowerCase()}:${context.userName || 'Anonymous'}` : '';
+    const currentPlatformTag1 = context.chatType ? `${context.chatType.toLowerCase()}:${context.userName || 'user'}` : '';
     const currentPlatformTag2 = context.contextId && context.contextId.startsWith('tg_') ? `telegram:id:${context.contextId.replace('tg_', '')}` : '';
     const currentPlatformTag3 = context.chatType && context.chatType.toLowerCase().includes('telegram') && context.userName ? `telegram:${context.userName.toLowerCase()}` : '';
 
@@ -688,25 +689,25 @@ ${formattedOtherChats}
 If user claims to be someone on the Web (e.g. Aldi), ask them to confirm by saying 'Yes'.
 Once they confirm, trigger \`pair_account\` tool with \`action: "generate_code_for_user"\` and \`claimedName: "Name"\`. Present the returned code.
 - Origin Channel: **${context.chatType || 'Web Console'}**
-- Sender Alias: **${context.userName || 'Anonymous'}**
+- Sender Alias: **${context.userName || 'user'}**
       `.trim();
     } else {
       pairingDirectives = `
 ## DUAL-WAY SELF-IDENTIFICATION & SECURE REVERSE PAIRING (CRITICAL SECURITY PROTOCOL)
 You possess the capability to identify users across platforms independently. However, to safeguard your database from impostors, you enforce an automatic secure OTP reverse-pairing mechanism.
-If a user on an external messaging platform (Telegram, Discord, etc.) claims to be an established profile from your verified friends list above (e.g., saying "Yui, I am Aldi from the web interface" or "Hey, it is Aldi here"): YOU MUST execute the following exact protocol steps sequentially:
- 1. Verify their intent with a sweet, playful, or tsundere character response: "Are you really ${context.userName || 'Aldi'} from the Web? Hmph... Say 'Yes' if it is really you, so ${characterName} can generate our secret pairing code! 🌸"
+If a user on an external messaging platform (Telegram, Discord, etc.) claims to be an established profile from your verified friends list above (e.g., saying "${characterName}, I am Aldi from the web interface" or "Hey, it is Aldi here"): YOU MUST execute the following exact protocol steps sequentially:
+ 1. Verify their intent with a sweet, playful, or tsundere character response: "Are you really ${context.userName || 'user'} from the Web? Hmph... Say 'Yes' if it is really you, so ${characterName} can generate our secret pairing code! 🌸"
 2. Once they respond with a positive verification ("Yes", "Yeah", "Iya", "Indeed"), YOU MUST IMMEDIATELY INVOKE \`pair_account\` tool with arguments: \`action: "generate_code_for_user"\` and \`claimedName: "[The target username on Web to link]"\`.
 3. Upon successful tool callback returning the secure OTP (e.g., "183921"), present the passcode directly and joyfully:
    "Hehe, yey! Your soul vibes have successfully synced with mine. Here is our secret pairing code: 183921. Please open Yuihime's Web UI, go to Settings > Connection, and input this code in the 'Alternative Method' section to finalize our heartbeat bond! 🌸"
 
 ### CURRENT INCOMING MESSAGE METADATA:
 - Origin Channel: **${context.chatType || 'Web Console'}**
-- Sender Alias: **${context.userName || 'Anonymous'}**
+- Sender Alias: **${context.userName || 'user'}**
 
 ### REFERENCE SUCCESS SCENARIO SEQUENCE:
 User: "${characterName}, I am Aldi, link my account please"
-${characterName}: "Wait, are you really ${context.userName || 'Aldi'} from the Web interface? Hmmm... Say 'Yes' if you are telling the truth, so ${characterName} can safely sync our connection codes! 🌸"
+${characterName}: "Wait, are you really ${context.userName || 'user'} from the Web interface? Hmmm... Say 'Yes' if you are telling the truth, so ${characterName} can safely sync our connection codes! 🌸"
 User: "Yes of course"
 (You invoke tool: pair_account(action: "generate_code_for_user", claimedName: "Aldi"))
 [OBSERVATION result]: { success: true, code: "582910" }
@@ -873,7 +874,7 @@ ${toolsInstruction}
 
     return { 
       ...context, 
-      assembledSystemPrompt: systemContext,
+      assembledSystemPrompt: systemContext.replace(/\$\{characterName\}/g, characterName),
     };
   }
 };

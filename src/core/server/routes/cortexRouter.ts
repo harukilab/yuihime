@@ -69,12 +69,12 @@ export function registerCortexRoutes(app: express.Express, db: any) {
   // --- Live Stream Chat API Webhook ---
   app.post("/api/stream/chat", (req, res) => {
     const message = req.body.message || req.body.text || req.body.comment || req.body.chat || (req.query.message as string) || "";
-    const sender = req.body.sender || req.body.user || req.body.username || req.body.speaker || (req.query.sender as string) || "Penonton";
+    const sender = req.body.sender || req.body.user || req.body.username || req.body.speaker || (req.query.sender as string) || "user";
     const contextId = req.body.context || (req.query.context as string) || "live_stream";
     const chatType = req.body.channel || req.body.platform || (req.query.channel as string) || "Live Chat";
 
     if (!message || !message.trim()) {
-      return res.status(400).json({ error: "Pesan tidak boleh kosong" });
+      return res.status(400).json({ error: "Message must not be empty." });
     }
 
     const userMemory = {
@@ -102,7 +102,7 @@ export function registerCortexRoutes(app: express.Express, db: any) {
             success: true, 
             processed: false, 
             sampledOut: true, 
-            message: "Komentar diterima tetapi melewati filter sampling kecepatan tinggi. Tetap tecatat di ringkasan subkesadaran." 
+            message: "Comment received but passed through the high-frequency sampling filter. Still recorded in the subconscious summary." 
           });
         }
 
@@ -130,7 +130,7 @@ export function registerCortexRoutes(app: express.Express, db: any) {
       },
       (err) => {
         console.error("[STREAM_WEBHOOK_ERROR] Failed to process streaming chat:", err);
-        res.status(500).json({ error: "Kegagalan neural sync asinkron di antrean." });
+        res.status(500).json({ error: "Async neural sync failure in the queue." });
       }
     );
   });
@@ -241,7 +241,7 @@ export function registerCortexRoutes(app: express.Express, db: any) {
             sendSse("suspended", {
               suspended: true,
               taskId: currentTaskId,
-              message: "Tugas ditangguhkan demi mendahulukan interaksi prioritas tinggi user."
+              message: "Task suspended to prioritize the user's high-priority interaction."
             });
           } else if (thinkErr.message && thinkErr.message.includes("COGNITIVE_LOOP_ABORTED")) {
             console.log(`[API_THINK] Task ${currentTaskId} aborted cleanly due to client disconnect.`);
@@ -278,7 +278,7 @@ export function registerCortexRoutes(app: express.Express, db: any) {
             success: true,
             suspended: true,
             taskId: currentTaskId,
-            message: "Tugas ditangguhkan demi mendahulukan interaksi prioritas tinggi user."
+            message: "Task suspended to prioritize the user's high-priority interaction."
           });
         }
         if (thinkErr.message && thinkErr.message.includes("COGNITIVE_LOOP_ABORTED")) {
@@ -296,7 +296,7 @@ export function registerCortexRoutes(app: express.Express, db: any) {
       res.json(finalized);
     } catch (err: any) {
       console.error("[CORTEX_POST_ERROR] Failed to process cognitive request on server:", err);
-      res.status(500).json({ error: err.message || "Gagal memproses kognisi di sisi server." });
+      res.status(500).json({ error: err.message || "Failed to process cognition on the server side." });
     }
   });
 
@@ -742,7 +742,7 @@ export function registerCortexRoutes(app: express.Express, db: any) {
             id: completionId,
             object: "chat.completion.chunk",
             created: createdTime,
-            model: "yuihime-batin",
+            model: "yuihime-core",
             choices: [{
               index: 0,
               delta: content ? { content } : {},
@@ -782,7 +782,7 @@ export function registerCortexRoutes(app: express.Express, db: any) {
           processResultAndSave(result);
         } catch (thinkErr: any) {
           if (thinkErr.message && thinkErr.message.includes("TASK_SUSPENDED")) {
-            sendOaiSse("\n[Tugas ditangguhkan demi mendahulukan interaksi prioritas tinggi user.]", "stop");
+            sendOaiSse("\n[Task suspended to prioritize the user's high-priority interaction.]", "stop");
             res.write("data: [DONE]\n\n");
             res.end();
             return;
@@ -815,7 +815,7 @@ export function registerCortexRoutes(app: express.Express, db: any) {
           id: completionId,
           object: "chat.completion",
           created: createdTime,
-          model: "yuihime-batin",
+          model: "yuihime-core",
           choices: [{
             index: 0,
             message: {
@@ -834,7 +834,7 @@ export function registerCortexRoutes(app: express.Express, db: any) {
       }
     } catch (err: any) {
       console.error("[YUI_LLM_GATEWAY_ERROR] Failed to process LLM gateway request:", err);
-      res.status(500).json({ error: { message: err.message || "Gagal memproses LLM Gateway." } });
+      res.status(500).json({ error: { message: err.message || "Failed to process LLM Gateway." } });
     }
   };
 
@@ -843,7 +843,7 @@ export function registerCortexRoutes(app: express.Express, db: any) {
       object: "list",
       data: [
         {
-          id: "yuihime-batin",
+          id: "yuihime-core",
           object: "model",
           created: 1677652288,
           owned_by: "yuihime"

@@ -59,7 +59,7 @@ export const ContinuousLearningMemoryModule: CortexModule = {
         protectedAnchorsList: {
           type: 'textarea',
           label: 'Protected Cognitive Anchors',
-          default: 'Yuihime\'s self as a loving AI VTuber companion; Sincere MHCP-v1 program listening to Big Brother\'s thoughts; Yui\'s independent cognition logic; Romantic persistent promise to accompany Big Brother across every session.',
+          default: '${characterName}\'s self as a loving AI VTuber companion; Sincere MHCP-v1 program listening to Big Brother\'s thoughts; ${characterName}\'s independent cognition logic; Romantic persistent promise to accompany Big Brother across every session.',
           description: 'List of essential mental schemas that must never fade during dynamic memory consolidation cycles.'
         },
         coreInvariantsPrompt: {
@@ -96,7 +96,7 @@ export const ContinuousLearningMemoryModule: CortexModule = {
     }
 
     // 2. Load the protected anchors defined in the config (SOP-aligned metadata)
-    const anchors = config.protectedAnchorsList || "Aesthetic visual, identity batiniah Yuihime, and relation logic.";
+    const anchors = config.protectedAnchorsList || "Aesthetic visual, ${characterName}'s inner identity, and relation logic.";
 
     // 3. Compile the Long Term Memory Stabilizer Directive
     const registry = PromptRegistry.getInstance();

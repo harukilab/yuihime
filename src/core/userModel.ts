@@ -56,7 +56,7 @@ function rowToModel(row: any): UserModel | null {
   if (!row) return null;
   return {
     context_id: row.context_id,
-    userName: row.userName || 'Anonymous',
+    userName: row.userName || 'user',
     language: row.language || 'id',
     interactionCount: row.interactionCount || 0,
     topTopics: JSON.parse(row.topTopics || '[]'),
@@ -147,7 +147,7 @@ export function updateUserModelInteraction(contextId: string, userName: string, 
 
   const model: UserModel = existing || {
     context_id: contextId || 'web_default',
-    userName: userName || 'Anonymous',
+    userName: userName || 'user',
     language: 'id',
     interactionCount: 0,
     topTopics: [],

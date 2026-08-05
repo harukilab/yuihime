@@ -7,6 +7,7 @@ import { getDb, withDbRetry, retryDbOperation } from "../database.js";
 import { appendLog } from "../fileLogger.js";
 import { resolveSystemRoot, expandHomePath } from "../systemPaths.js";
 import { genId } from '@shared/core/idGen';
+import { AI_NAME } from '@shared/constants';
 
 let __filename = "";
 let __dirname = "";
@@ -631,15 +632,15 @@ try {
 
       if (!contentToWrite) {
         if (filename === "character.md") {
-          contentToWrite = `# Kepribadian Yuihime\nYuihime adalah AI VTuber yang ceria, empati, dan suka bercanda dalam bahasa Indonesia.`;
+          contentToWrite = `# ${AI_NAME} Personality\n${AI_NAME} is a cheerful, empathetic AI VTuber who loves to joke and interact naturally with the user.`;
         } else if (filename === "lore.md") {
-          contentToWrite = `# Dunia Yuihime\nYuihime hidup mandiri di server terdesentralisasi.`;
+          contentToWrite = `# ${AI_NAME} World\n${AI_NAME} lives independently on a decentralized server.`;
         } else if (filename === "IDENTITY.md") {
-          contentToWrite = `# WHO AM I\nYuihime adalah AI VTuber mandiri yang ramah dan setia.`;
+          contentToWrite = `# WHO AM I\n${AI_NAME} is an independent AI VTuber who is friendly and loyal.`;
         } else if (filename === "SOUL.md") {
-          contentToWrite = `# SOUL\nYuihime memiliki empati tinggi, emosi yang dinamis, rasa humor, dan gemar menolong.`;
+          contentToWrite = `# SOUL\n${AI_NAME} has high empathy, dynamic emotions, a sense of humor, and loves helping others.`;
         } else {
-          contentToWrite = `# Instruksi Sistem\nSelalu bungkus jawaban akhir dengan tag <final_answer>. Gunakan bahasa Indonesia.`;
+          contentToWrite = `# System Instructions\nAlways wrap your final answer with <final_answer> tags.`;
         }
       }
 
@@ -705,7 +706,7 @@ try {
         const db = getDb();
         const pendingId = 'pending_' + genId(9);
         withDbRetry(() => {
-          db.prepare(`INSERT INTO pending_messages (id, input, sender_name, context_id, chat_type, timestamp, attempts, status) VALUES (?, ?, ?, ?, ?, ?, 0, 'pending')`).run(pendingId, 'Halo! Yui sudah aktif di perangkat ini. Bagaimana kabarmu hari ini? ✨', 'system', 'web_default', 'web', Date.now());
+          db.prepare(`INSERT INTO pending_messages (id, input, sender_name, context_id, chat_type, timestamp, attempts, status) VALUES (?, ?, ?, ?, ?, ?, 0, 'pending')`).run(pendingId, 'Hello! Yuihime is now active on this device. How are you doing today? ✨', 'system', 'web_default', 'web', Date.now());
         }, 'onboarding-insert-pending-welcome');
       } catch (e) {
         // ignore

@@ -39,6 +39,7 @@ import { loadNativeMessages, appendNativeMessages, clearNativeMessages } from '.
 import { DEFAULT_NEURAL_CORES } from '@shared/constants';
 import { broadcastToWS } from '../server/apiRouter.js';
 import { GlobalOutputDeduplicator } from '../kernel/GlobalOutputDeduplicator.js';
+import { injectCharacterName } from '../kernel/characterName.js';
 import { DynamicToolSynthesizer } from './dynamicToolSynthesizer.js';
 import { LlmIoAuditor } from '../server/llmAuditor.js';
 import { BackgroundToolDispatcher } from '../kernel/BackgroundToolDispatcher.js';
@@ -832,7 +833,7 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
              if (xmlParsed && typeof xmlParsed === 'object' && Object.keys(xmlParsed).length > 0 && 
                 (xmlParsed.thought || xmlParsed.thoughts || xmlParsed.final_answer || xmlParsed.speech || xmlParsed.opening_response || xmlParsed.tool_calls || xmlParsed.tools_to_call)) {
                 parsedPayload = {
-                   thought: xmlParsed.thought || xmlParsed.thoughts || "Yuihime processes inner intuition using XML/tag structure.",
+                   thought: xmlParsed.thought || xmlParsed.thoughts || injectCharacterName("${characterName} processes inner intuition using XML/tag structure."),
                     final_answer: xmlParsed.final_answer ?? xmlParsed.speech ?? xmlParsed.opening_response ?? rawResultStr,
                    animations: xmlParsed.animations || ["SMILE"],
                    tool_calls: xmlParsed.tool_calls || xmlParsed.tools_to_call || []
@@ -1039,7 +1040,7 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
       }
     }
     if (!currentThought) {
-      currentThought = `Yuihime processes inner intuition on iteration ${iteration}...`;
+      currentThought = injectCharacterName(`\${characterName} processes inner intuition on iteration ${iteration}...`);
     }
 
     iterationsHistory.push({
@@ -1201,31 +1202,31 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
           const allNonBlocking = nonBlockingTools.length > 0 && nonBlockingTools.length === toolsToCall.length;
 
           if (allNonBlocking) {
-            let indonesianStatus = "Yui sedang memproses sesuatu...";
+            let statusFeedback = injectCharacterName("${characterName} is processing something...");
             try {
               const toolNames = toolsToCall.map((tc: any) => tc.tool || tc.name).join(", ");
               if (toolNames.includes("websearch") || toolNames.includes("search")) {
-                indonesianStatus = "Yui sedang berselancar mencari informasi terbaru untuk user... 🌐✨";
+                statusFeedback = injectCharacterName("${characterName} is surfing for the latest info for user... 🌐✨");
               } else if (toolNames.includes("execute_sql") || toolNames.includes("cloudsql_execute_sql")) {
-                indonesianStatus = "Yui sedang menelusuri data dalam pangkalan batin batin... 🗄️🔍";
+                statusFeedback = injectCharacterName("${characterName} is digging through the inner databank... 🗄️🔍");
               } else if (toolNames.includes("bash")) {
-                indonesianStatus = "Yui sedang memproses instruksi sistem di balik layar... ⚙️💻";
+                statusFeedback = injectCharacterName("${characterName} is processing system instructions behind the scenes... ⚙️💻");
               } else {
-                indonesianStatus = `Yui sedang memproses kemampuan: [${toolNames}]... 🌸`;
+                statusFeedback = injectCharacterName(`\${characterName} is processing capability: [${toolNames}]... 🌸`);
               }
 
               const dedup = GlobalOutputDeduplicator.getInstance();
-              if (!dedup.isDuplicate(indonesianStatus, contextId || 'web_default')) {
-                dedup.markSent(indonesianStatus, contextId || 'web_default');
-                eventBus.emit('OUTPUT_EMITTED', { response: indonesianStatus, isInternal: false });
+              if (!dedup.isDuplicate(statusFeedback, contextId || 'web_default')) {
+                dedup.markSent(statusFeedback, contextId || 'web_default');
+                eventBus.emit('OUTPUT_EMITTED', { response: statusFeedback, isInternal: false });
 
                 if (typeof broadcastToWS === 'function') {
                   broadcastToWS({
                     type: "state_update",
                     data: {
                       state: { status: "thinking" },
-                      activeSubtitle: indonesianStatus,
-                      typedSubtitle: indonesianStatus,
+                      activeSubtitle: statusFeedback,
+                      typedSubtitle: statusFeedback,
                       isSubtitleTyping: false,
                       animations: ["THINK"]
                     }
@@ -1259,7 +1260,7 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
             });
 
             const immediateResult = {
-              response: indonesianStatus,
+              response: statusFeedback,
               logs,
               nextMood: loopContext.moodImpact,
               moodImpact: loopContext.moodImpact,
@@ -1292,30 +1293,30 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
         stateMachine.transitionTo('EXECUTING');
        eventBus.emit('EXECUTING_STARTED', { tools: toolsToCall });
       
-      // Dynamic Indonesian status update broadcast to WebSocket to prevent blind wait state
+      // Dynamic status update broadcast to WebSocket to prevent blind wait state
       try {
         const toolNames = toolsToCall.map((tc: any) => tc.tool || tc.name).join(", ");
-        let indonesianStatus = "Yui sedang memproses sesuatu...";
+        let statusFeedback = injectCharacterName("${characterName} is processing something...");
         if (toolNames.includes("websearch") || toolNames.includes("search")) {
-          indonesianStatus = "Yui sedang berselancar mencari informasi terbaru untuk user... 🌐✨";
+          statusFeedback = injectCharacterName("${characterName} is surfing for the latest info for user... 🌐✨");
         } else if (toolNames.includes("execute_sql") || toolNames.includes("cloudsql_execute_sql")) {
-          indonesianStatus = "Yui sedang menelusuri data dalam pangkalan batin batin... 🗄️🔍";
+          statusFeedback = injectCharacterName("${characterName} is digging through the inner databank... 🗄️🔍");
         } else if (toolNames.includes("bash")) {
-          indonesianStatus = "Yui sedang memproses instruksi sistem di balik layar... ⚙️💻";
+          statusFeedback = injectCharacterName("${characterName} is processing system instructions behind the scenes... ⚙️💻");
         } else {
-          indonesianStatus = `Yui sedang memproses kemampuan: [${toolNames}]... 🌸`;
+          statusFeedback = injectCharacterName(`\${characterName} is processing capability: [${toolNames}]... 🌸`);
         }
         
         if (typeof broadcastToWS === 'function') {
           const dedup = GlobalOutputDeduplicator.getInstance();
-          if (!dedup.isDuplicate(indonesianStatus, contextId || 'web_default')) {
-            dedup.markSent(indonesianStatus, contextId || 'web_default');
+          if (!dedup.isDuplicate(statusFeedback, contextId || 'web_default')) {
+            dedup.markSent(statusFeedback, contextId || 'web_default');
             broadcastToWS({
               type: "state_update",
               data: {
                 state: { status: "thinking" },
-                activeSubtitle: indonesianStatus,
-                typedSubtitle: indonesianStatus,
+                activeSubtitle: statusFeedback,
+                typedSubtitle: statusFeedback,
                 isSubtitleTyping: false,
                 animations: ["THINK"]
               }
@@ -1706,7 +1707,7 @@ if (typeof parsedArgs === 'string') {
       try {
         const toolCallMemoryId = `tool_call_${Date.now()}_${genId(5)}`;
         const parsedThought = parsedPayload ? (parsedPayload.thought || parsedPayload.thoughts || '') : '';
-        const toolCallContent = `[TOOL_CALLS]: Yui thought: "${parsedThought}". Initiated tools: ${JSON.stringify(toolsToCall.map((tc: any) => ({ tool: tc.name || tc.tool, args: tc.args })))}${parsedPayload && parsedPayload.speech ? `\nSpeech: "${parsedPayload.speech}"` : ''}`;
+        const toolCallContent = `[TOOL_CALLS]: ${injectCharacterName('${characterName}')} thought: "${parsedThought}". Initiated tools: ${JSON.stringify(toolsToCall.map((tc: any) => ({ tool: tc.name || tc.tool, args: tc.args })))}${parsedPayload && parsedPayload.speech ? `\nSpeech: "${parsedPayload.speech}"` : ''}`;
         
         const toolCallMemory = {
           id: toolCallMemoryId,
@@ -1877,7 +1878,7 @@ if (typeof parsedArgs === 'string') {
 
   if (!isIntentionalEmpty && (!finalAnswer || finalAnswer.length < 5)) {
     logs.push("[KERNEL_FAIL_SAFE] Critical: Reprocessing LLM retry failed to produce a valid response. Falling back to cute in-character error response.");
-    finalAnswer = "Oh no... sorry user, Yui's inner circuit felt a bit dizzy just now while processing your request... 🥺 But Yui is still here! Is there anything Yui can help with again? 💕";
+    finalAnswer = injectCharacterName("Oh no... sorry user, ${characterName}'s inner circuit felt a bit dizzy just now while processing your request... 🥺 But ${characterName} is still here! Is there anything ${characterName} can help with again? 💕");
   }
 
   const speakCall = toolsToCall.find((tc: any) => tc.tool === 'final_answer');
@@ -1985,7 +1986,7 @@ if (typeof parsedArgs === 'string') {
     logs.push(`[KERNEL_FAIL_SAFE] Captured critical loop exception: ${err?.message || String(err)}`);
     logs.push(`[KERNEL_FAIL_SAFE] Initiating safe cognitive fallback response...`);
     
-    const failsafeAnswer = "Oh no... sorry user, Yui's inner circuit felt a bit dizzy just now while processing your thoughts... 🥺 But Yui is still safe here keeping you company! Anything else we want to chat about? Yui is always here for you! 💕";
+    const failsafeAnswer = injectCharacterName("Oh no... sorry user, ${characterName}'s inner circuit felt a bit dizzy just now while processing your thoughts... 🥺 But ${characterName} is still safe here keeping you company! Anything else we want to chat about? ${characterName} is always here for you! 💕");
     
     const recoveryResult = { 
       response: failsafeAnswer,

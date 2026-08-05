@@ -14,7 +14,7 @@ export const YuiVisionModule: CortexModule = {
   metadata: {
     id: 'vision',
     name: 'yui-vision: Optical Frame Analysis',
-    description: 'Modul pengolahan visi ramah token untuk mengompresi gambar menjadi deskripsi teks komparatif universal.',
+    description: 'Token-friendly vision processing module that compresses images into a universal comparative text description.',
     version: '1.2.0',
     type: ModuleType.CORTEX,
     order: 11,
@@ -26,7 +26,7 @@ export const YuiVisionModule: CortexModule = {
           type: 'boolean', 
           label: 'Enable Vision Module Processing', 
           default: true,
-          description: 'Mengaktifkan analisis gambar dari attachment Telegram, Discord, atau snapshot viewport.'
+          description: 'Enables image analysis from Telegram or Discord attachments, or viewport snapshots.'
         },
         provider: {
           type: 'select',
@@ -39,31 +39,31 @@ export const YuiVisionModule: CortexModule = {
             { label: 'Anthropic Claude (Official API)', value: 'anthropic' },
             { label: 'Custom Vision API Gateway', value: 'custom' }
           ],
-          description: 'Penyedia layanan AI Vision untuk menganalisis payload media yang diupload.'
+          description: 'AI vision service provider used to analyze uploaded media payloads.'
         },
         preferredModel: {
           type: 'string',
           label: 'Preferred Vision Model',
           default: 'gemini-3.5-flash',
-          description: 'Nama model vision yang dipanggil. Contoh: gemini-3.5-flash, gpt-4o-mini, claude-3-5-sonnet-latest, atau llava.'
+          description: 'Vision model name to call. Examples: gemini-3.5-flash, gpt-4o-mini, claude-3-5-sonnet-latest, or llava.'
         },
         customUrl: {
           type: 'string',
           label: 'Custom API Endpoint URL',
           default: '',
-          description: 'Hanya jika memilih "Custom Vision API Gateway". Masukkan URL endpoint dasar (v1) lengkap Anda.'
+          description: 'Only when "Custom Vision API Gateway" is selected. Enter your full (v1) base endpoint URL.'
         },
         customKey: {
           type: 'password',
           label: 'Custom API Token Key',
           default: '',
-          description: 'Hanya jika memilih "Custom Vision API Gateway". Kunci rahasia API untuk otorisasi.'
+          description: 'Only when "Custom Vision API Gateway" is selected. Secret API key for authorization.'
         },
         lowTokenMode: { 
           type: 'boolean', 
           label: 'Low Token Optimization', 
           default: true,
-          description: 'Memaksa AI menghasilkan deskripsi yang sangat singkat dan padat untuk menghemat token memori batin.'
+          description: 'Forces the AI to produce very short, dense descriptions to save inner memory tokens.'
         },
         maxWords: { 
           type: 'slider', 
@@ -72,19 +72,19 @@ export const YuiVisionModule: CortexModule = {
           max: 100, 
           step: 5, 
           default: 20,
-          description: 'Batas jumlah kata maksimum untuk deskripsi gambar yang dihasilkan.'
+          description: 'Maximum number of words for the generated image description.'
         },
         describeFace: { 
           type: 'boolean', 
           label: 'Facial Expression Analysis', 
           default: false,
-          description: 'Berusaha mendeteksi emosi wajah, usia, dan gender secara spesifik jika ada orang di dalam gambar.'
+          description: 'Attempts to specifically detect facial emotion, age, and gender if people are present in the image.'
         },
         customVisionPrompt: {
           type: 'textarea',
           label: 'Custom Vision Instructions',
           default: 'Analyze this image and describe it in a brief, highly concise sentence or two. Focus on identifying the main subjects, elements, text, colors, characters, and environment. Keep it compact, descriptive, and low-token. Respond using standard descriptive language, no filler.',
-          description: 'Instruksi kustom yang dikirimkan ke model vision saat memproses objek gambar.'
+          description: 'Custom instructions sent to the vision model when processing image objects.'
         }
       }
     }

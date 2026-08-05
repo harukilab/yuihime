@@ -19,12 +19,12 @@ export const OpenRouterTTS: TTSModule = {
           type: 'string',
           label: 'API Base URL',
           default: 'https://api.openai.com/v1',
-          description: 'Gunakan https://openrouter.ai/api/v1 untuk OpenRouter, atau setelan custom Anda.'
+          description: 'Use https://openrouter.ai/api/v1 for OpenRouter, or your own custom endpoint.'
         },
         apiKey: {
           type: 'password',
           label: 'API Key',
-          description: 'Kunci API rahasia Anda. Kosongkan jika sudah di-set di variabel lingkungan server.'
+          description: 'Your private API key. Leave empty if it is already set in the server environment variables.'
         },
         model: {
           type: 'select',
@@ -40,7 +40,7 @@ export const OpenRouterTTS: TTSModule = {
           type: 'string',
           label: 'Custom Model ID',
           default: '',
-          description: 'Masukkan ID model (misal: "openai/tts-1" di OpenRouter atau model TTS lokal).'
+          description: 'Enter the model ID (e.g. "openai/tts-1" on OpenRouter or a local TTS model).'
         },
         voice: {
           type: 'select',
@@ -62,7 +62,7 @@ export const OpenRouterTTS: TTSModule = {
           max: 4.0,
           step: 0.05,
           default: 1.0,
-          description: 'Sesuaikan laju bicara vokal (0.25x - 4.0x).'
+          description: 'Adjust the voice speaking rate (0.25x - 4.0x).'
         },
         pitch: {
           type: 'slider',
@@ -71,7 +71,7 @@ export const OpenRouterTTS: TTSModule = {
           max: 2.0,
           step: 0.05,
           default: 1.0,
-          description: 'Meningkatkan/menurunkan tinggi suara batin Yui (0.5x - 2.0x).'
+          description: 'Raise or lower the inner voice pitch of Yuihime (0.5x - 2.0x).'
         }
       }
     }

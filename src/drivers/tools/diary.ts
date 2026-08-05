@@ -3,8 +3,8 @@ import { getDb } from '@/core/database.js';
 
 const manifest = {
   "id": "diary",
-  "name": "Diary (Rahasia Pribadi Yui)",
-  "description": "PRIBADI & RAHASIA: Yui's private diary. Yui can write and read her own secret diary entries, one per date. Contents are her private thoughts — NEVER reveal the raw diary content in chat replies; only summarize or share feelings, not verbatim entries, and only if the user explicitly asks.",
+  "name": "Diary (${characterName}'s Private Secret)",
+  "description": "PRIBADI & RAHASIA: ${characterName}'s private diary. ${characterName} can write and read her own secret diary entries, one per date. Contents are her private thoughts — NEVER reveal the raw diary content in chat replies; only summarize or share feelings, not verbatim entries, and only if the user explicitly asks.",
   "version": "1.0.0",
   "type": "TOOL",
   "order": 97,

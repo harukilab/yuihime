@@ -20,7 +20,7 @@ const manifest = {
         "type": "textarea",
         "label": "Summary Extraction Context",
         "description": "Custom tuning prompt for summarizing text documents (summarize action).",
-        "default": "Buatlah ringkasan kognitif yang padat, informatif, dan terstruktur rapi dari dokumen berikut dalam bahasa Indonesia yang anggun:"
+        "default": "Create a dense, informative, well-structured cognitive summary of the following document, written in the user's language:"
       }
     }
   },
@@ -93,7 +93,7 @@ export const FileManagerTool: ToolModule = {
         const config = await SystemRegistry.getConfig('file_manager').catch(() => ({} as any));
         const defaultZip = (config && config.defaultArchiveName) || 'archive_sync';
         const summaryPrompt = (config && config.summaryInstruction) ||
-          'Buatlah ringkasan kognitif yang padat, informatif, dan terstruktur rapi dari dokumen berikut dalam bahasa Indonesia yang anggun:';
+          'Create a dense, informative, well-structured cognitive summary of the following document, written in the user\'s language:';
 
         const payload = {
           action,

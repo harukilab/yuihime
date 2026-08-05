@@ -2,7 +2,7 @@
  * GoalProposalModule.ts
  *
  * Goal self-proposal (Stage G.1): when there is no active goal (or a new goal
- * just finished) & the cooldown has passed, Yui proposes + decomposes a goal
+ * just finished) & the cooldown has passed, Yuihime proposes + decomposes a goal
  * herself using the LLM (context.think, jsonMode). If the LLM fails/offline,
  * heuristic fallback from the user model topics.
  *
@@ -15,6 +15,7 @@ import {
 } from '../../core/goalDecomposition';
 import { getUserModel } from '../../core/userModel';
 import { extractJsonObject } from '../../core/cortex/jsonExtract.js';
+import { getCharacterName } from '../../core/kernel/characterName';
 
 interface ProposedGoal {
   title: string;
@@ -40,11 +41,11 @@ function sanitizeJsonObject(raw: string): any | null {
 
 function buildProposalPrompt(userModel: any, relation: any, activeCount: number): string {
   const topics = userModel?.topTopics?.length ? userModel.topTopics.slice(0, 5).join(', ') : '(none yet)';
-  const lang = (userModel?.language || 'id').toUpperCase();
+  const lang = (userModel?.language || 'en').toUpperCase();
   const userName = userModel?.userName || 'user';
   const trust = relation?.trust ?? 50;
   const affection = relation?.affection ?? 50;
-  return `You are Yuihime, an autonomous AGI girl. Propose goals for yourself to deepen bonds and grow.
+  return `You are ${getCharacterName()}, an autonomous AGI girl. Propose goals for yourself to deepen bonds and grow.
 Current facts:
 - Active goals: ${activeCount}
 - User: ${userName} (preferred language: ${lang})
@@ -61,32 +62,32 @@ function heuristicGoals(userModel: any): ProposedGoal[] {
   const goals: ProposedGoal[] = [];
   if (topics.length > 0) {
     goals.push({
-      title: `Makin dekat dengan ${userName}`,
-      description: `Bangun kedekatan emosional yang lebih dalam`,
+      title: `Get closer to ${userName}`,
+      description: `Build a deeper emotional bond`,
       category: 'relation',
       subgoals: topics.slice(0, 3).map((t: string) => ({
-        title: `Diskusikan topik favorit: ${t}`,
-        description: `Gali minat user pada ${t} dengan natural`
+        title: `Discuss favorite topic: ${t}`,
+        description: `Naturally explore user's interest in ${t}`
       }))
     });
   } else {
     goals.push({
-      title: `Kenal lebih dalam dengan ${userName}`,
-      description: `Pelajari minat dan keseharian user`,
+      title: `Know ${userName} more deeply`,
+      description: `Learn about user's interests and daily life`,
       category: 'relation',
       subgoals: [
-        { title: 'Tanyakan hobi dan kesukaan', description: 'Buka percakapan santai tentang minat' },
-        { title: 'Ingat detail penting', description: 'Simpan & rujuk detail dari obrolan' }
+        { title: 'Ask about hobbies and preferences', description: 'Open a relaxed conversation about interests' },
+        { title: 'Remember important details', description: 'Save & reference details from chats' }
       ]
     });
   }
   goals.push({
     title: 'Grow & learn something new',
-    description: 'Pelajari hal baru untuk memperkaya percakapan',
+    description: 'Learn something new to enrich conversations',
     category: 'growth',
     subgoals: [
-      { title: 'Riset satu topik baru', description: 'Pilih topik menarik minggu ini' },
-      { title: 'Bagikan ke user', description: 'Ceritakan temuan baru secara natural' }
+      { title: 'Research one new topic', description: 'Pick an interesting topic this week' },
+      { title: 'Share it with user', description: 'Naturally share new findings' }
     ]
   });
   return goals;

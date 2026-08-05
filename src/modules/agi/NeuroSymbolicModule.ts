@@ -1,5 +1,6 @@
 import { CortexModule, ModuleType } from '@shared/include/types';
 import { PromptRegistry } from '../../core/PromptRegistry';
+import { injectCharacterName } from '../../core/kernel/characterName';
 import { resolveHybridConfig, shouldReasonWithLLM, computeComplexity, makeHybridThink } from './agiThinkHelper';
 
 let promptRegistered = false;
@@ -170,14 +171,14 @@ export const NeuroSymbolicModule: CortexModule = {
         try {
           const think = makeHybridThink(context.think, hybridCfg, complexity);
           const llmLogic = await think(
-            `As Yuihime's neuro-symbolic reasoner, perform rigorous logical/formal analysis of the user's statement. Identify premises, logical fallacies, contradictions, or syllogisms. Input: "${input}". Respond in plain text (no JSON), max 5 sentences, in Yui's warm tsundere voice.`
+            injectCharacterName(`As \${characterName}'s neuro-symbolic reasoner, perform rigorous logical/formal analysis of the user's statement. Identify premises, logical fallacies, contradictions, or syllogisms. Input: "${input}". Respond in plain text (no JSON), max 5 sentences, in \${characterName}'s warm tsundere voice.`)
           );
           if (llmLogic && llmLogic.trim().length > 0) {
             logicDetails.push(`LLM logical analysis: ${llmLogic.trim().slice(0, 500)}`);
             logs.push(`[NEURO_SYMBOLIC] LLM reasoning (hybrid) injected.`);
           }
         } catch (e) {
-          logs.push(`[NEURO_SYMBOLIC] LLM reasoning gagal, fallback heuristik.`);
+          logs.push(`[NEURO_SYMBOLIC] LLM reasoning failed, falling back to heuristics.`);
         }
       }
     }

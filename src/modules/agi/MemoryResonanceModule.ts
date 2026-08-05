@@ -167,7 +167,7 @@ export const MemoryResonanceModule: CortexModule = {
     }
 
     if (chosenResonances.length > 0) {
-      resonanceBlock += `- Other Viewers Connected in Yui's Brain Network:\n`;
+      resonanceBlock += `- Other Viewers Connected in \${characterName}'s Brain Network:\n`;
       chosenResonances.forEach((res, i) => {
         const otherName = res.identity.perceivedName;
         const otherGroup = res.relationGrouping;

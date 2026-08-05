@@ -23,11 +23,11 @@ export const GeminiProvider: ProviderModule = {
     ],
     configSchema: {
       fields: {
-        apiKey: { type: 'textarea', label: 'Gemini API Key Pool', description: 'Satu baris = satu API Key. Disarankan minimal 2 key agar rotasi pool aktif.', default: '' },
+        apiKey: { type: 'textarea', label: 'Gemini API Key Pool', description: 'One line = one API key. At least 2 keys recommended to enable pool rotation.', default: '' },
         model: { 
           type: 'multiselect', 
           label: 'Model Pool', 
-          description: 'Pilih satu atau lebih model. Model pertama dipakai sebagai primary, sisanya masuk urutan fallback.',
+          description: 'Select one or more models. The first model is used as the primary, the rest are used as fallback order.',
           dynamicOptions: true,
           default: []
         },

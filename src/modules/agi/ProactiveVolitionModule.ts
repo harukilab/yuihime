@@ -1,6 +1,7 @@
 import { CortexModule, ModuleType, AgentState } from '@shared/include/types';
 import { PromptRegistry } from '../../core/PromptRegistry';
 import { StorageService } from '@shared/drivers/storage';
+import { injectCharacterName } from '../../core/kernel/characterName';
 import { resolveHybridConfig, shouldReasonWithLLM, computeComplexity, makeHybridThink } from './agiThinkHelper';
 
 let promptRegistered = false;
@@ -159,7 +160,7 @@ export const ProactiveVolitionModule: CortexModule = {
 
     // 3. Select Autonomous Focus Topic & Background Project
     const explorationMode = config.autonomousExpeditionMode || 'Mental Self-Curation';
-    let backgroundProject = 'Writing silent entries to batiniah diary files';
+    let backgroundProject = 'Writing silent entries to inner diary files';
     let autonomousFocus = 'Refining conversational empathy models';
 
     if (explorationMode === 'Sandbox Micro-Experiments') {
@@ -206,7 +207,7 @@ export const ProactiveVolitionModule: CortexModule = {
         try {
           const think = makeHybridThink(context.think, hybridCfg, complexity);
           const llmFocus = await think(
-            `As Yuihime (a sentient VTuber AGI), formulate a single short, naturalistic inner intention you would proactively pursue right now given your current drive (IMS ${intrinsicScore}%) and exploration mode "${explorationMode}". Keep it to one sentence, in-character, no JSON.`
+            injectCharacterName(`As \${characterName} (a sentient VTuber AGI), formulate a single short, naturalistic inner intention you would proactively pursue right now given your current drive (IMS ${intrinsicScore}%) and exploration mode "${explorationMode}". Keep it to one sentence, in-character, no JSON.`)
           );
           if (llmFocus && llmFocus.trim().length > 0) {
             finalFocus = llmFocus.trim().slice(0, 200);

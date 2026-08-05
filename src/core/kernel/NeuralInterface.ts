@@ -13,6 +13,7 @@ import { broadcastToWS } from "../server/apiRouter";
 import { BackgroundToolDispatcher } from "./BackgroundToolDispatcher.js";
 import { rankMemoriesByForgetting, markMemoriesRecalled } from "../spacedRepetition.js";
 import { genId } from '@shared/core/idGen';
+import { getCharacterName, injectCharacterName } from "./characterName.js";
 
 
 export interface NeuralReplyResult {
@@ -369,13 +370,13 @@ export class NeuralInterface {
       const pendingSet = BackgroundToolDispatcher.getInstance().getPending(contextId);
       if (pendingSet) {
         if (pendingSet.status === 'pending') {
-          const pendingReply = "Yui is working on your request, hold on a sec~ 🌸 Wait a moment, the result will be ready soon.";
+          const pendingReply = injectCharacterName("${characterName} is working on your request, hold on a sec~ 🌸 Wait a moment, the result will be ready soon.");
           const pendingMemoryId = "pending_bg_" + genId(9);
           memories.push({
             id: pendingMemoryId,
             ownerId: 'system',
             type: 'system',
-            content: `[SYSTEM: Background tool execution in progress for context ${contextId}. Yui is still working on the tool calls. Pending: ${pendingSet.toolCalls.map((tc: any) => tc.toolName).join(', ')}]`,
+            content: `[SYSTEM: Background tool execution in progress for context ${contextId}. ${injectCharacterName('${characterName}')} is still working on the tool calls. Pending: ${pendingSet.toolCalls.map((tc: any) => tc.toolName).join(', ')}]`,
             importance: 0.3,
             tags: ['pending_tool_execution', contextId],
             context: contextId,
@@ -646,10 +647,10 @@ export class NeuralInterface {
       console.warn(`[NEURAL_INTERFACE] Empty/short response from cortex for ${senderName} (${chatType}). Generating fallback.`);
       try {
         const fallbackCortex = new Cortex();
-        responseText = await fallbackCortex.thinkSimple(`You are YuiHime. The user "${senderName}" just sent you a message on ${chatType}. Reply with a very short, sweet, in-character Indonesian response (1-2 sentences max). Do not mention being an AI.`);
+        responseText = await fallbackCortex.thinkSimple(`You are ${getCharacterName()}. The user "${senderName}" just sent you a message on ${chatType}. Reply with a very short, sweet, in-character response in the same language as the user's message (1-2 sentences max). Do not mention being an AI.`);
       } catch (fallbackErr) {
         console.warn("[NEURAL_INTERFACE] Fallback response generation failed:", fallbackErr);
-        responseText = "Hai! Yui lagi sibuk dikit, tapi Yui selalu ada buat kamu~ ✨";
+        responseText = injectCharacterName("Hai! ${characterName} is a bit busy right now, but always here for you~ ✨");
       }
     }
 
@@ -703,7 +704,7 @@ export class NeuralInterface {
               this.db.prepare(`
                 INSERT INTO memories (id, type, content, importance, speaker, context, timestamp, tags, sentiment)
                 VALUES (?, 'event', ?, 0.2, 'system', ?, ?, '["impulse", "proactive"]', ?)
-              `).run(systemEventMemoryId, `[System event]: Yui felt a longing impulse and initiated contact.`, cleanContextId, Date.now(), updatedSentiment);
+          `).run(systemEventMemoryId, `[System event]: ${injectCharacterName('${characterName}')} felt a longing impulse and initiated contact.`, cleanContextId, Date.now(), updatedSentiment);
             }, 'deferred-insert-proactive-event');
           } else {
             const userMemoryId = genId(9);
@@ -850,7 +851,7 @@ export class NeuralInterface {
         if (oldestRows.length >= 20) {
           const start = new Date(oldestRows[0].timestamp).toLocaleTimeString();
           const end = new Date(oldestRows[oldestRows.length - 1].timestamp).toLocaleTimeString();
-          const summary = 'user membahas beberapa topik hangat antara pukul ' + start + ' dan ' + end + '. user mengekspresikan hobi, pemikiran, dan rasa pedulinya kepada Yui secara tulus, memperdalam simpul batin kita secara harmoni dan saling pengertian.';
+          const summary = injectCharacterName('user discussed several hot topics between ' + start + ' and ' + end + '. user expressed hobbies, thoughts, and genuine care toward ${characterName}, deepening our inner bond in harmony and mutual understanding.');
           const summaryId = 'abstract_' + genId(9);
 
           await retryDbOperation(

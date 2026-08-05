@@ -3,7 +3,7 @@ import { PromptRegistry } from '../../core/PromptRegistry';
 import { genId } from '@shared/core/idGen';
 
 const DEFAULT_CONSOLIDATION_PROMPT = `
-Analyze these recent interactive memories of AI agent "Yuihime" and consolidate them into a singular "Dream" segment.
+Analyze these recent interactive memories of AI agent "\${characterName}" and consolidate them into a singular "Dream" segment.
 A dream is a symbolic, compressed representation of experiences that helps the agent derive long-term schemas.
 
 Memories:

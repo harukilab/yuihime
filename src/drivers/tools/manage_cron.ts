@@ -148,7 +148,7 @@ export const CronTool: ToolModule = {
 
           let final_context_id = context?.contextId || 'live_stream';
           let final_chat_type = args.targetChannel || context?.chatType || 'Live Chat';
-          const final_sender_name = context?.userName || 'Penonton';
+          const final_sender_name = context?.userName || 'user';
 
           // Auto-resolve Telegram context if target chat type is Telegram but context is live_stream or generic
           if (final_chat_type.toLowerCase().includes('telegram') && (final_context_id === 'live_stream' || !final_context_id.startsWith('tg_'))) {
@@ -383,7 +383,7 @@ export const CronTool: ToolModule = {
             instruction: typeof args.instruction === 'string' ? args.instruction : undefined,
             context_id: context?.contextId || 'live_stream',
             chat_type: args.targetChannel || context?.chatType || 'Live Chat',
-            sender_name: context?.userName || 'Penonton'
+            sender_name: context?.userName || 'user'
           })
         });
         return res.json();
@@ -419,7 +419,7 @@ export const CronTool: ToolModule = {
       return { error: "Invalid action" };
     } catch (httpErr: any) {
       console.error("[CRON_TOOL_HTTP] HTTP loopback fallback failed:", httpErr.message || httpErr);
-      return { error: `Gagal mengeksekusi operasi cron: ${httpErr.message || httpErr}` };
+      return { error: `Failed to execute cron operation: ${httpErr.message || httpErr}` };
     }
   }
 };

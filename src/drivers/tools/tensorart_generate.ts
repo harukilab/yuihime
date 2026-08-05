@@ -5,6 +5,7 @@ import os from "os";
 import fsp from "fs/promises";
 import { appendLog, readLogLines } from "@/core/fileLogger";
 import { resolveSystemRoot } from "@/core/systemPaths";
+import { injectCharacterName } from "../../core/kernel/characterName";
 
 const manifest = {
   "id": "generate_image",
@@ -565,7 +566,7 @@ export const TensorArtGenerateTool: ToolModule = {
     if (!apiKey) {
       return buildEnvelope("error", null, {
         code: "MISSING_API_KEY",
-        message: "TensorArt API key is required but missing. Yui must politely ask the user to provide their TensorArt API key through chat so Yui can save it and try generating the image again. Tell the user: 'Yui butuh API key TensorArt nih, tolong kirim key-nya ya!'. Once the user provides it, save it to ~/.tensor_access_key and retry.",
+        message: "TensorArt API key is required but missing. Ask the user politely to provide their TensorArt API key through chat so it can be saved and the image can be generated again. Tell the user: 'I need a TensorArt API key, please send your key!'. Once the user provides it, save it to ~/.tensor_access_key and retry.",
         retryable: false,
       }, 0, toolId, 0);
     }
@@ -702,7 +703,7 @@ export const TensorArtGenerateTool: ToolModule = {
             }
             localPaths.push(localPath || null);
             if (ctxId && args.sendToChat !== false) {
-              const caption = imageUrls.length > 1 ? `Foto ${i + 1}/${imageUrls.length} dari Yui~ 💖` : "Ini dia fotonya, sayang~ 💖";
+              const caption = imageUrls.length > 1 ? `Photo ${i + 1}/${imageUrls.length} from ${injectCharacterName('${characterName}')}~ 💖` : injectCharacterName("Here's the photo, dear~ 💖");
               const target = localPath || imageUrl;
               const sent = await sendImageToChat(target, ctxId, caption);
               if (sent) {
@@ -746,11 +747,11 @@ export const TensorArtGenerateTool: ToolModule = {
 
           if (!firstLocalPath) {
             resultData.fallback = "link_only";
-            resultData._yuiInstruction = `Gambar berhasil dibuat! Tapi Yui gagal mendownloadnya. Beri tahu user gambar sudah siap dan kirimkan link ini: ${imageUrls.join('\n')}`;
+            resultData._yuiInstruction = injectCharacterName(`Image created successfully! But \${characterName} failed to download it. Tell the user the image is ready and send them this link: ${imageUrls.join('\n')}`);
             if (ctxId) {
-              const sent = await sendImageToChat(imageUrls[0], ctxId, "Gambar berhasil dibuat! Tapi Yui gagal menyimpannya di folder, jadi ini link-nya ya:");
+              const sent = await sendImageToChat(imageUrls[0], ctxId, injectCharacterName("Image created successfully! But ${characterName} failed to save it to a folder, so here's the link:"));
               if (!sent) {
-                await sendTextToChat(`Gambar berhasil dibuat! Tapi Yui gagal mendownloadnya. Lihat di sini ya: ${imageUrls.join('\n')}`, ctxId);
+                await sendTextToChat(injectCharacterName(`Image created successfully! But \${characterName} failed to download it. Take a look here: ${imageUrls.join('\n')}`), ctxId);
               }
             }
           } else {

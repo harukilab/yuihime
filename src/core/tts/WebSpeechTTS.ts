@@ -29,7 +29,7 @@ export const WebSpeechTTS: TTSModule = {
           max: 2.0,
           step: 0.1,
           default: 1.0,
-          description: 'Sesuaikan kelancaran kecepatan berbicara (0.5x - 2.0x).'
+          description: 'Adjust the smoothness of speaking speed (0.5x - 2.0x).'
         },
         pitch: {
           type: 'slider',
@@ -38,7 +38,7 @@ export const WebSpeechTTS: TTSModule = {
           max: 2.0,
           step: 0.1,
           default: 1.0,
-          description: 'Mengubah tingkat tinggi/rendahnya modul nada berbicara.'
+          description: 'Adjusts the high/low level of the speaking pitch module.'
         },
         emotionVariance: {
           type: 'slider',
@@ -47,7 +47,7 @@ export const WebSpeechTTS: TTSModule = {
           max: 1.0,
           step: 0.05,
           default: 0.5,
-          description: 'Mengatur seberapa ekspresif Yuihime mengubah intonasi suaranya.'
+          description: 'Controls how expressively the character varies the intonation of her voice.'
         }
       }
     }

@@ -2,6 +2,7 @@ import { ToolModule } from '@shared/include/types';
 import { SystemRegistry } from '@shared/core/registry';
 import { AIService } from '../../core/kernel/ai.js';
 import { StandardizedProcessor } from '../../core/kernel/processor';
+import { injectCharacterName } from '../../core/kernel/characterName';
 
 const manifest = {
   "id": "websearch",
@@ -143,8 +144,8 @@ export const WebSearchTool: ToolModule = {
     }
 
     return [{
-      title: 'Pencarian Web Sedang Dalam Perbaikan',
-      snippet: 'Layanan pencarian web Yui sedang dalam perbaikan dan gagal merespons tepat waktu (kendala teknis/network). Sampaikan ke user bahwa fitur pencarian web sedang diperbaiki, lalu bantu dengan jawaban terbaikmu tanpa data web real-time.',
+      title: 'Web Search Under Maintenance',
+      snippet: injectCharacterName('Web search for ${characterName} is currently under maintenance and failed to respond in time (technical/network issue). Let the user know that the web search feature is being fixed, then help them with your best answer without real-time web data.'),
       url: ''
     }];
   }

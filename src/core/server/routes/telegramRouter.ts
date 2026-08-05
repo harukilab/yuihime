@@ -101,7 +101,7 @@ export function registerTelegramRoutes(app: express.Express, db: any) {
 
       return res.status(404).json({
         success: false,
-        error: `Profil Telegram untuk "${recipient}" tidak ditemukan. Pastikan target pernah mengirimkan pesan ke robot Yuihime agar ID chat terekam.`
+        error: `No Telegram profile found for "${recipient}". Make sure the target has sent a message to the Yuihime bot so the chat ID is recorded.`
       });
     } catch (err: any) {
       console.error("[SERVER] GET /api/telegram/resolve error:", err);
@@ -119,12 +119,12 @@ export function registerTelegramRoutes(app: express.Express, db: any) {
 
       const bot = getActiveTelegramBot();
       if (!bot) {
-        return res.status(503).json({ error: "Bot Telegram saat ini tidak aktif atau token belum dikonfigurasi di pengaturan." });
+        return res.status(503).json({ error: "Telegram bot is currently inactive or the token has not been configured in settings." });
       }
 
       const searchName = recipient ? String(recipient).trim() : "";
       if (!searchName) {
-        return res.status(400).json({ error: "Penerima tidak ditentukan." });
+        return res.status(400).json({ error: "Recipient not specified." });
       }
 
       let tg_id: number | null = null;
@@ -201,7 +201,7 @@ export function registerTelegramRoutes(app: express.Express, db: any) {
 
       if (!tg_id) {
         return res.status(404).json({
-          error: `Gagal mendeteksi profil Telegram untuk "${recipient}". Pastikan target telah mengirimkan pesan /start ke bot Telegram Yuihime agar ID chat terekam, atau tautkan akun menggunakan pola 'id telegram saya <username>' di obrolan.`
+          error: `Failed to detect a Telegram profile for "${recipient}". Make sure the target has sent /start to the Yuihime bot so the chat ID is recorded, or link the account using the pattern 'my telegram id <username>' in chat.`
         });
       }
 
@@ -212,7 +212,7 @@ export function registerTelegramRoutes(app: express.Express, db: any) {
       } catch (tgSendErr: any) {
         console.error(`[SERVER_MSG] Telegraf sendMessage failed:`, tgSendErr.message || tgSendErr);
         return res.status(502).json({
-          error: `Gagal mengirimkan pesan Telegram ke Chat ID ${tg_id}: ${tgSendErr.message || tgSendErr}. Pastikan user sudah mengirimkan perintah /start ke bot Telegram Yuihime dan tidak memblokir bot tersebut.`
+          error: `Failed to send Telegram message to Chat ID ${tg_id}: ${tgSendErr.message || tgSendErr}. Make sure the user has already sent the /start command to the Telegram bot and has not blocked it.`
         });
       }
 

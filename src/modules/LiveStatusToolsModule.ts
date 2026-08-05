@@ -35,7 +35,7 @@ export const SendStatusUpdateTool: ToolModule = {
   metadata: {
     id: 'status_update',
     name: 'status_update',
-    description: 'Mengirimkan pesan suara/teks transisi singkat atau indikator visual agar pengguna tahu Yui sedang bekerja di sela-sela berpikir.',
+    description: 'Sends a short voice/text transition message or visual indicator so the user knows ${characterName} is working in the middle of thinking.',
     version: '1.0.0',
     type: ModuleType.TOOL,
     order: 201,
@@ -44,7 +44,7 @@ export const SendStatusUpdateTool: ToolModule = {
       properties: {
         message: {
           type: "string",
-          description: "Ucapan transisi manis yang diucapkan asisten (misal: 'Yui cari datanya dulu ya user!~')"
+          description: "Sweet transition phrase spoken by the assistant (e.g. 'Let me look that up for you, user!~')"
         },
         animation: {
           type: "string",
@@ -107,7 +107,7 @@ export const SendFinalReplyTool: ToolModule = {
   metadata: {
     id: 'speak',
     name: 'speak',
-    description: 'Speak aloud to the user mid-loop or as a final reply. Use this tool to deliver Yuihime\'s verbal response — either while other tools are running in parallel, or as the conclusive reply after tools complete.',
+    description: 'Speak aloud to the user mid-loop or as a final reply. Use this tool to deliver ${characterName}\'s verbal response — either while other tools are running in parallel, or as the conclusive reply after tools complete.',
 
     version: '1.0.0',
     type: ModuleType.TOOL,
@@ -117,16 +117,16 @@ export const SendFinalReplyTool: ToolModule = {
       properties: {
         speech: {
           type: "string",
-          description: "Jawaban murni, hangat, dan manis berkarakter yang ditujukan langsung ke the user (tidak boleh memuat XML, JSON, atau data log)."
+          description: "A pure, warm, sweetly in-character reply addressed directly to the user (must NOT contain XML, JSON, or log data)."
         },
         animations: {
           type: "array",
           items: { type: "string" },
-          description: "Daftar gerakan tubuh/wajah yang dilakukan Yuihime (contoh: ['HAPPY', 'SMILE'])"
+          description: "List of body/face gestures performed by ${characterName} (e.g. ['HAPPY', 'SMILE'])"
         },
         mood_impact: {
           type: "object",
-          description: "Perubahan status mood akumulatif batin."
+          description: "Accumulative inner mood status changes."
         }
       },
       required: ["speech"]

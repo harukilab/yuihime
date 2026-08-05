@@ -1,5 +1,6 @@
 import { ProviderModule, ModuleType } from '@shared/include/types';
 import { SystemRegistry } from '@shared/core/registry';
+import { injectCharacterName } from '../../core/kernel/characterName';
 
 /**
  * OfficialChatProvider: Local module that implements 'official_chat'.
@@ -80,6 +81,6 @@ export const OfficialChatProvider: ProviderModule = {
       console.warn('[OFFICIAL_LOCAL_CHAT] Markov dynamic routing failed, falling back to clean text signature:', markovErr.message);
     }
 
-    return `[Lokal] Halo user! Saat ini sirkuit kognitif Yui sedang beroperasi secara mandiri tanpa internet. Tapi Yui akan selalu menemani user di sini kok! 🌸`;
+    return injectCharacterName(`[Local] Hi there! Right now \${characterName}'s cognitive circuits are running fully offline, without internet. But \${characterName} will always be here for you, no matter what! 🌸`);
   }
 };

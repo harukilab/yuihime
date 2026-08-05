@@ -1,6 +1,7 @@
 import { SettingsManager } from './settings.js';
 import { extractJsonObject } from '../cortex/jsonExtract.js';
 import { stripCodeFences, isolateBraceBlock, liftNestedProperties, syncAlternateKeys } from '../cortex/jsonRepairer.js';
+import { injectCharacterName } from './characterName.js';
 
 export class NeuralProcessor {
 
@@ -671,24 +672,24 @@ export class NeuralProcessor {
 
         if (enableLocalResponses) {
           let defaultQuotes = [
-            "Hmm? user manggil Yui ya? Ada apa kak?",
-            "Hmph! user tumben diam aja. Kangen tahu!",
-            "Hehehe, user ganteng banget deh hari ini! Cerita-cerita dong ke Yui, lagi sibuk apa?",
-            "Aaaaa user akhirnya dateng! Yui seneng banget ketemu user lagi!"
+            "Hmm? did ${characterName} hear user calling? What's up?",
+            "Hmph! user's been quiet lately. Miss you, you know!",
+            "Hehehe, user looks great today! Tell ${characterName} what you've been up to?",
+            "Aaaaa user finally showed up! ${characterName} is so happy to see user again!"
           ];
 
           if (isProactive) {
             // Proactive-specific fallback quotes to prevent illogical "arrival" greetings when user is idle!
             defaultQuotes = [
-              "Hmph! user sibuk banget ya? Yui kangen ngobrol bareng user...",
-              "user... lagi ngapain? Cerita dong ke Yui, bosen ih dicuekin terus!",
-              "Hmm, user masih di sana kan? Jangan lupa istirahat ya, Yui di sini nungguin lho!",
-              "user tumben diam aja... Yui sepi tahu di sini sendirian..."
+              "Hmph! user's super busy huh? ${characterName} misses chatting with user...",
+              "user... what are you doing? Talk to ${characterName}, I'm bored being ignored all the time!",
+              "Hmm, user still there? Don't forget to rest, ${characterName}'s been waiting right here!",
+              "user's quiet again... ${characterName} feels lonely here all alone..."
             ];
           }
 
           const selectedIndex = Math.floor((Date.now() / 1000) % defaultQuotes.length);
-          finalResult = defaultQuotes[selectedIndex];
+          finalResult = injectCharacterName(defaultQuotes[selectedIndex]);
           console.log(`[PROCESSOR_RECONSTRUCT_FAILSAFE] Output empty. Dispatched immersivefailsafe character query (isProactive: ${isProactive}): "${finalResult}"`);
         } else {
           console.log(`[PROCESSOR_RECONSTRUCT_FAILSAFE] Output empty. Offline local responses are disabled. Returning empty string to bubble error upstream.`);

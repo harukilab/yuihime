@@ -18,7 +18,7 @@ export const GeminiTTS: TTSModule = {
         apiKey: {
           type: 'password',
           label: 'Gemini API Key (Optional)',
-          description: 'Kunci API Google AI Studio Anda. Kosongkan jika sudah di-set di variabel lingkungan server.'
+          description: 'Your Google AI Studio API key. Leave empty if it is already set in the server environment variables.'
         },
         model: {
           type: 'select',
@@ -49,7 +49,7 @@ export const GeminiTTS: TTSModule = {
           max: 2.5,
           step: 0.1,
           default: 1.0,
-          description: 'Sesuaikan tingkat kecepatan berbicara Yui (0.5x - 2.5x).'
+          description: 'Adjust the speaking speed of Yuihime (0.5x - 2.5x).'
         },
         pitch: {
           type: 'slider',
@@ -58,7 +58,7 @@ export const GeminiTTS: TTSModule = {
           max: 2.0,
           step: 0.05,
           default: 1.0,
-          description: 'Menyesuaikan tinggi pitch audio (0.5x - 2x).'
+          description: 'Adjust the audio pitch level (0.5x - 2x).'
         }
       }
     }

@@ -13,12 +13,13 @@ import { stateMachine } from "./state-machine.js";
 import { logDbRetry } from "../database.js";
 import { getFocusGoal, getGoalChildren } from "../goalDecomposition.js";
 import { genId } from '@shared/core/idGen';
+import { injectCharacterName } from "./characterName.js";
 
-const DEFAULT_PENDING_FEEDBACK = `[SYSTEM MESSAGE]: Koneksi saraf batin Yuihime dengan kognisi LLM sedang sangat padat atau terputus sementara 📡. Tapi jangan khawatir! Pesanmu ("\${inputPreview}") sudah aman dalam antrean tunggu kognisi Yui. Yui akan membalas secara otomatis setelah tautan saraf sinkron kembali! 🌸`;
+const DEFAULT_PENDING_FEEDBACK = `[SYSTEM MESSAGE]: \${characterName}'s inner neural link to LLM cognition is very congested or temporarily disconnected 📡. But don't worry! Your message ("\${inputPreview}") is safely queued in \${characterName}'s cognition. \${characterName} will reply automatically once the neural link is back in sync! 🌸`;
 
 PromptRegistry.getInstance().register('multi-channel-queue:pending_feedback', DEFAULT_PENDING_FEEDBACK);
 
-const PIPELINE_TIMEOUT_FALLBACK = "Yui lagi gangguan saraf kognitif sebentar... Pesanmu ke-hold dulu, coba kirim ulang dalam beberapa saat ya~ 🌸";
+const PIPELINE_TIMEOUT_FALLBACK = "${characterName}'s cognitive nerves are acting up for a moment... Your message is on hold, please resend in a little while~ 🌸";
 
 async function withHardTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -403,7 +404,7 @@ export class MultiChannelQueue {
         // Row already saved as 'pending' — the background dispatcher will process it later.
         const feedbackText = (pendingId ? '' : '[QUEUE_WARN] Persistence failed; ') +
           '[SYSTEM MESSAGE]: The chat stream is flowing extremely fast! 🌪️ Messages from @' + senderName +
-          ' and other viewers are temporarily diverted into Yui\'s inner subconscious queue. Yui is recording your topics and will respond with a COLLECTIVE SUMMARY shortly! 🌸';
+          ` and other viewers are temporarily diverted into ${injectCharacterName('${characterName}')}'s inner subconscious queue. ${injectCharacterName('${characterName}')} is recording your topics and will respond with a COLLECTIVE SUMMARY shortly! 🌸`;
 
         // Only output notifier once every 20 seconds to prevent flooding/spamming the timeline
         const nowTime = Date.now();
@@ -725,7 +726,7 @@ export class MultiChannelQueue {
       hardTimer = setTimeout(() => {
         controller.abort();
         console.warn(`[QUEUE_PIPELINE_HARD_TIMEOUT] Pipeline exceeded ${hardTimeoutMs}ms for ${senderName}. Hard-aborted to keep channel I/O flowing.`);
-        resolve({ processed: { text: PIPELINE_TIMEOUT_FALLBACK }, timedOut: true });
+        resolve({ processed: { text: injectCharacterName(PIPELINE_TIMEOUT_FALLBACK) }, timedOut: true });
       }, hardTimeoutMs);
 
       NeuralInterface.processNeuralInputWithMeta(input, senderName, contextId, chatType, false, taskId, controller.signal)
@@ -737,7 +738,7 @@ export class MultiChannelQueue {
           cleanupTimers();
           if (controller.signal.aborted) {
             console.warn(`[QUEUE_PIPELINE_ABORTED] Pipeline aborted for ${senderName}: ${err?.message || err}`);
-            resolve({ processed: { text: PIPELINE_TIMEOUT_FALLBACK }, timedOut: true });
+            resolve({ processed: { text: injectCharacterName(PIPELINE_TIMEOUT_FALLBACK) }, timedOut: true });
           } else {
             reject(err);
           }
@@ -878,7 +879,7 @@ export class MultiChannelQueue {
                   stmt.run(id, item.input, item.senderName, item.contextId, item.chatType, item.timestamp, maxRetries);
                 }
                 if (!this.holdOutgoing) {
-                  item.onReply("Maaf, pesan Anda gagal diproses setelah beberapa percobaan. Silakan coba lagi nanti.");
+                  item.onReply("Sorry, your message failed to process after several attempts. Please try again later.");
                 }
               });
             } catch (dbErr) {

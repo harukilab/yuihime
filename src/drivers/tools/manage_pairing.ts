@@ -27,11 +27,11 @@ export const ManagePairingTool: ToolModule = {
   metadata: manifest as any,
   execute: async (args: any, context?: any) => {
     if (args.action !== 'generate_code_for_user') {
-      return { success: false, error: `Operasi '${args.action}' tidak dikenal.` };
+      return { success: false, error: `Unknown operation: '${args.action}'.` };
     }
 
     if (!args.claimedName) {
-      return { success: false, error: 'claimedName wajib dicantumkan.' };
+      return { success: false, error: "'claimedName' is required." };
     }
 
     try {
@@ -53,7 +53,7 @@ export const ManagePairingTool: ToolModule = {
       return await res.json();
     } catch (err: any) {
       console.error("[TOOL_MANAGE_PAIRING] Error:", err);
-      return { success: false, error: `Gagal memproses penyandingan: ${err.message}` };
+      return { success: false, error: `Failed to process pairing: ${err.message}` };
     }
   }
 };

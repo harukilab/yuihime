@@ -151,7 +151,7 @@ export function registerAiRoutes(app: express.Express, db: any) {
       const rawTargetModel = model || geminiSettings.model || defaultGeminiModel;
       const targetModel = Array.isArray(rawTargetModel) ? (rawTargetModel[0] || defaultGeminiModel) : rawTargetModel;
       if (!targetModel) {
-        throw new Error("Tidak ada model Google Gemini yang terdaftar atau dikonfigurasi.");
+        throw new Error("No registered or configured Google Gemini model was found.");
       }
       const cleanModel = targetModel.replace(/^models\//, "");
       
@@ -265,7 +265,7 @@ export function registerAiRoutes(app: express.Express, db: any) {
             } catch (e) {}
           }
           if (!testModel) {
-            return res.json({ valid: false, error: 'Tidak ada model Google Gemini yang terdaftar atau aktif untuk divalidasi.' });
+            return res.json({ valid: false, error: 'No registered or active Google Gemini model was found to validate.' });
           }
 
           const ai = AIService.getInstance();

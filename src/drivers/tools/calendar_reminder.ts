@@ -1,6 +1,7 @@
 import { ToolModule } from '@shared/include/types';
 import { getDb } from '@/core/database.js';
 import { genId } from '@shared/core/idGen';
+import { injectCharacterName } from '../../core/kernel/characterName';
 
 const manifest = {
   "id": "calendar_reminder",
@@ -80,7 +81,7 @@ export const CalendarReminderTool: ToolModule = {
         `).run(
           id,
           `Reminder: ${title}`,
-          `Hei! Yui ingin mengingatkan Kakak tentang: "${title}"`,
+          injectCharacterName(`Hey! \${characterName} wants to remind you about: "${title}"`),
           nextRunTime,
           contextId,
           chatType,
@@ -89,7 +90,7 @@ export const CalendarReminderTool: ToolModule = {
 
         return {
           success: true,
-          message: `Pengingat berhasil dibuat dengan ID: ${id}`,
+          message: `Reminder created successfully with ID: ${id}`,
           reminder: {
             id,
             title,
@@ -125,9 +126,9 @@ export const CalendarReminderTool: ToolModule = {
 
         const info = db.prepare("DELETE FROM cron_tasks WHERE id = ?").run(reminderId);
         if (info.changes > 0) {
-          return { success: true, message: `Reminder ${reminderId} berhasil dihapus.` };
+          return { success: true, message: `Reminder ${reminderId} deleted successfully.` };
         } else {
-          return { success: false, error: `Reminder dengan ID '${reminderId}' tidak ditemukan.` };
+          return { success: false, error: `Reminder with ID '${reminderId}' not found.` };
         }
       }
 

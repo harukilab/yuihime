@@ -1,6 +1,7 @@
 import { CortexModule, ModuleType } from '@shared/include/types';
 import { PromptRegistry } from '../../core/PromptRegistry';
 import { YuiAGIDaemon } from './YuiAGIDaemon';
+import { injectCharacterName } from '../../core/kernel/characterName';
 import { resolveHybridConfig, shouldReasonWithLLM, computeComplexity, makeHybridThink } from './agiThinkHelper';
 
 let promptRegistered = false;
@@ -143,7 +144,7 @@ export async function runHighOrderMetacognition(input: string, state: any, conte
         try {
           const think = makeHybridThink(context.think, hybridCfg, complexity);
           llmCritique = await think(
-            `You are Yuihime's meta-cognition core. Audit the current reasoning loop state for logical contradictions, memory drift, or hallucination risk. Hallucination risk index: ${hallucinationRiskVal}%. Tool history length: ${(context.toolExecutionHistory || []).length}. Output a concise critique (max 4 sentences) of potential bias or inconsistency to correct before final response. No JSON.`
+            injectCharacterName(`You are \${characterName}'s meta-cognition core. Audit the current reasoning loop state for logical contradictions, memory drift, or hallucination risk. Hallucination risk index: ${hallucinationRiskVal}%. Tool history length: ${(context.toolExecutionHistory || []).length}. Output a concise critique (max 4 sentences) of potential bias or inconsistency to correct before final response. No JSON.`)
           );
           llmCritique = (llmCritique || "").trim().slice(0, 800);
           logs.push(`[META_COGNITION] LLM self-critique (hybrid) generated: "${llmCritique.substring(0, 60)}..."`);

@@ -5,6 +5,7 @@ import path from 'path';
 import fs from 'fs';
 import os from 'os';
 import { extractJsonObject } from '../../core/cortex/jsonExtract.js';
+import { injectCharacterName } from '../../core/kernel/characterName';
 import { getTzOffsetHours, formatLocalFullEn, formatLocalDateKey, tzLabel } from '../../core/utils/dualClock.js';
 import { createGoal } from '../../core/goalDecomposition.js';
 import { SettingsManager } from '../../core/kernel/settings.js';
@@ -401,7 +402,7 @@ function imgModelKeyboard(models: string[]): any {
     rows.push(row);
   }
   rows.push([
-    { text: '🧠 Yui Mode', callback_data: 'qt:img:yui' },
+    { text: '🧠 Yuihime Mode', callback_data: 'qt:img:yui' },
     { text: '🎲 Default', callback_data: 'qt:img:default' }
   ]);
   rows.push([
@@ -535,13 +536,13 @@ async function runImgYuiMode(
         ? `Available TensorArt models: ${availableModels.join(', ')}.\nPick the best one from this list.`
         : `Preferred fallback model: ${fallbackModel}.`;
       const instruction =
-        'You are Yui, an expert anime illustration director. Choose the best TensorArt diffusion model, width and height for the user request, and polish the prompt into a highly detailed TensorArt prompt. ' +
+        `You are ${injectCharacterName('${characterName}')}, an expert anime illustration director. Choose the best TensorArt diffusion model, width and height for the user request, and polish the prompt into a highly detailed TensorArt prompt. ` +
         `Also determine the image count: 1 by default, but 2-4 if the user explicitly asks for multiple photos (e.g. "3 foto", "2 photos"). ` +
         'Return ONLY valid JSON with keys: "toolName" (a TensorArt model id string), "width" (int), "height" (int), "count" (int, 1-4), "prompt" (detailed english prompt). ' +
         `${modelHint}\nUser request: ${prompt}`;
       const raw: any = await provider.generate(instruction, {
         config: tc.settings || {},
-        systemPrompt: 'You are Yui, image director. Output JSON only.'
+        systemPrompt: `You are ${injectCharacterName('${characterName}')}, image director. Output JSON only.`
       });
       const text = String(raw?.text ?? raw?.response ?? raw ?? '');
       const m = extractJsonObject(String(text));
@@ -588,7 +589,7 @@ async function runNewChat(tc: TgToolContext): Promise<TgReply> {
     }
 
     const transcript = msgs
-      .map(r => `${r.speaker === 'agent' ? 'Yui' : 'User'}: ${r.content.trim()}`)
+      .map(r => `${r.speaker === 'agent' ? injectCharacterName('${characterName}') : 'User'}: ${r.content.trim()}`)
       .join('\n')
       .slice(-16000);
 
@@ -598,7 +599,7 @@ async function runNewChat(tc: TgToolContext): Promise<TgReply> {
       const provider = SystemRegistry.getProvider(providerId);
       if (provider) {
         const instruction =
-          'You are Yui. Summarize the past conversation below into a concise recap (in Indonesian), ' +
+          `You are ${injectCharacterName('${characterName}')}. Summarize the past conversation below into a concise recap in the user's language, ` +
           'keeping the key topics, facts about the user, promises, preferences and emotional moments. ' +
           'Plain text only, 3-8 sentences, no markdown, no JSON.\n\nConversation:\n' + transcript;
         const raw: any = await provider.generate(instruction, {
@@ -624,7 +625,7 @@ async function runNewChat(tc: TgToolContext): Promise<TgReply> {
     const cleared = tx();
 
     return {
-      text: `🧹 New chat started!\n\nFrom ${msgs.length} previous messages that were summarized (${cleared} messages archived), Yui still remembers the gist:\n\n📝 ${finalSummary}\n\nLet's start a new topic~ 💖`
+      text: `🧹 New chat started!\n\nFrom ${msgs.length} previous messages that were summarized (${cleared} messages archived), ${injectCharacterName('${characterName}')} still remembers the gist:\n\n📝 ${finalSummary}\n\nLet's start a new topic~ 💖`
     };
   } catch (e: any) {
     console.warn('[TG_NEW_CHAT] Failed:', e?.message || e);
@@ -736,15 +737,15 @@ const TOOLS_HELP =
   '  /bash ls -lah\n' +
   '  /bash cat ~/.yuihime/debug/watchdog.log | tail -20\n\n' +
   '🎨 IMAGE GENERATE — TensorArt (auto-sent to chat):\n' +
-  '  /img <description> — show model picker + Yui Mode (inline)\n' +
+  '  /img <description> — show model picker + Yuihime Mode (inline)\n' +
   '  /img 512x768 anime girl, sunset — set dimensions\n' +
   '  /img model:anime_lab_wai_illustrious <description> — force model\n\n' +
   '📂 FILE — inspect & fetch (limited to ~/.yuihime + project):\n' +
   '  /ls [path] — list directory contents\n' +
   '  /cat <file> [head|tail] [N] — view file contents\n' +
   '  /get <file> — send file to this chat\n\n' +
-  'Yui Mode (🧠) = Yui picks model & dimensions automatically via LLM.\n' +
-  'Without Yui Mode, everything is processed directly by the daemon (no LLM).';
+  'Yuihime Mode (🧠) = Yuihime picks model & dimensions automatically via LLM.\n' +
+  'Without Yuihime Mode, everything is processed directly by the daemon (no LLM).';
 
 const TOOLS_BASH_HELP =
   '💻 BASH — run shell commands on the Yui server (sandbox + blacklist, admin)\n\n' +
@@ -764,9 +765,9 @@ const TOOLS_IMG_HELP =
   'Inline options:\n' +
   '  /img 512x768 <description> — set dimensions (default 1024x1024)\n' +
   '  /img model:<name> <description> — force a model directly\n\n' +
-  'Without a model, Yui shows the model picker keyboard (live list from TensorArt):\n' +
+  'Without a model, Yuihime shows the model picker keyboard (live list from TensorArt):\n' +
   '  • model button → generate immediately with that model\n' +
-  '  • 🧠 Yui Mode → Yui picks model & dimensions automatically via LLM\n' +
+  '  • 🧠 Yuihime Mode → Yuihime picks model & dimensions automatically via LLM\n' +
   '  • 🎲 Default → use the default model from settings\n\n' +
   'The result is auto-sent to this chat (~30-90s).';
 
@@ -1097,9 +1098,9 @@ function runCareAction(action: string, tc: TgToolContext): TgReply {
         food.qty -= 1;
         v.lastMeal = now;
         v.hunger = 0;
-        text = `🍽️ Yui eats "${food.name}" — hunger 0%! (${food.qty} left)`;
+        text = `🍽️ Yuihime eats "${food.name}" — hunger 0%! (${food.qty} left)`;
       } else {
-        text = '🍽️ Food inventory is empty — nothing to feed Yui.';
+        text = '🍽️ Food inventory is empty — nothing to feed Yuihime.';
       }
       break;
     }
@@ -1109,37 +1110,37 @@ function runCareAction(action: string, tc: TgToolContext): TgReply {
         drink.qty -= 1;
         v.lastDrink = now;
         v.thirst = 0;
-        text = `💧 Yui drinks "${drink.name}" — thirst 0%! (${drink.qty} left)`;
+        text = `💧 Yuihime drinks "${drink.name}" — thirst 0%! (${drink.qty} left)`;
       } else {
-        text = '💧 Drink inventory is empty — nothing for Yui to drink.';
+        text = '💧 Drink inventory is empty — nothing for Yuihime to drink.';
       }
       break;
     }
     case 'bath':
       v.lastBath = now;
       v.cleanliness = 100;
-      text = '🚿 Yui takes a bath — cleanliness 100%! Nyaaa~';
+      text = '🚿 Yuihime takes a bath — cleanliness 100%! Nyaaa~';
       break;
     case 'toilet':
       v.lastToilet = now;
       v.bladder = 0;
-      text = '🚽 Yui uses the bathroom — relieved (bladder 0%).';
+      text = '🚽 Yuihime uses the bathroom — relieved (bladder 0%).';
       break;
     case 'sleep':
       v.sleepState = 'asleep';
       v.asleepSince = now;
       v.sleepiness = 5;
-      text = '😴 Yui goes to sleep now. Good night~';
+      text = '😴 Yuihime goes to sleep now. Good night~';
       break;
     case 'play':
       v.lastPlay = now;
       v.playUrge = 0;
-      text = '🎾 Yui plays chase — play urge 0%!';
+      text = '🎾 Yuihime plays chase — play urge 0%!';
       break;
     case 'fish':
       v.lastFish = now;
       v.fishCraving = 0;
-      text = '🐟 Yui is given fish — craving satisfied (0%)!';
+      text = '🐟 Yuihime is given fish — craving satisfied (0%)!';
       break;
     case 'status':
     case '':
@@ -1553,7 +1554,7 @@ async function runCronCommand(args: string, tc: TgToolContext): Promise<TgReply>
   if (sub === 'run' || sub === 'trigger' || sub === 'fire') {
     const res = await cronApiFetch(`/api/cron/${encodeURIComponent(task.id)}/trigger`, { method: 'POST' });
     if (!res.ok) return { text: `⚠️ Trigger failed: ${res.data?.error || res.status}\n\nMake sure the task is enabled (/cron toggle ${task.id}).` };
-    return { text: `⏩ Triggered: ${task.name}\n\nYui will process the task now and report to this chat.` };
+    return { text: `⏩ Triggered: ${task.name}\n\nYuihime will process the task now and report to this chat.` };
   }
 
   if (sub === 'del' || sub === 'delete' || sub === 'rm' || sub === 'remove') {
@@ -1945,7 +1946,7 @@ export const tgQuickCommands: TgCommandDef[] = [
       }
       if (!prompt) {
         return {
-          text: `⚠️ Usage: /img [WxH] [model:<name>] [count:N] <description>\n\nExamples:\n  /img anime girl, sunset\n  /img 512x768 anime girl, sunset\n  /img model:anime_lab_wai_illustrious anime girl\n  /img count:3 anime girl — generate 3 photos\n\nWithout a model, Yui shows a model picker below.`
+          text: `⚠️ Usage: /img [WxH] [model:<name>] [count:N] <description>\n\nExamples:\n  /img anime girl, sunset\n  /img 512x768 anime girl, sunset\n  /img model:anime_lab_wai_illustrious anime girl\n  /img count:3 anime girl — generate 3 photos\n\nWithout a model, Yuihime shows a model picker below.`
         };
       }
       const cfg = tc.settings?.['generate_image'] || tc.settings?.tensorart || {};

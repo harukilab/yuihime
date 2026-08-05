@@ -124,7 +124,7 @@ export const L2DExpressionTranslatorModule: CortexModule = {
   metadata: {
     id: 'l2d-translator',
     name: 'L2D Expression Translator',
-    description: 'Secara otomatis menerjemahkan ucapan teks dari mini-LLM/local NLP menjadi gerakan & ekspresi Live2D ketika tag animasi kosong.',
+    description: 'Automatically translates text speech from the mini-LLM/local NLP into Live2D gestures & expressions when the animation tag is empty.',
     version: '1.0.0',
     type: ModuleType.CORTEX,
     phase: 'PHASE 4: EXPRESSION',
@@ -134,69 +134,69 @@ export const L2DExpressionTranslatorModule: CortexModule = {
       fields: {
         enableAutoTranslation: {
           type: 'boolean',
-          label: 'Aktifkan Penerjemah Ekspresi Otomatis',
+          label: 'Enable Automatic Expression Translator',
           default: true,
-          description: 'Secara otomatis menerjemahkan ucapan teks dari mini-LLM/local NLP menjadi gerakan & ekspresi Live2D ketika tag animasi kosong.'
+          description: 'Automatically translates text speech from the mini-LLM/local NLP into Live2D gestures & expressions when the animation tag is empty.'
         },
         smileKeywords: {
           type: 'textarea',
-          label: 'Kata Kunci Senyum (Smile)',
+          label: 'Smile Keywords',
           default: 'hehe, senang, cantik, gembira, terima kasih, makasih, lucu, imut, suka, bahagia, halo, hai, yey, gemas, ceria, bagus, mantap, keren',
-          description: 'Kata kunci (dipisahkan koma) untuk memicu ekspresi Senyum (Smile).'
+          description: 'Comma-separated keywords that trigger the Smile expression.'
         },
         laughKeywords: {
           type: 'textarea',
-          label: 'Kata Kunci Tertawa (Laugh)',
+          label: 'Laugh Keywords',
           default: 'wkwk, haha, hihi, hehehe, tawa, tertawa, lucu banget, kocak, gokil, kwkw',
-          description: 'Kata kunci (dipisahkan koma) untuk memicu gerakan Tertawa (Laugh).'
+          description: 'Comma-separated keywords that trigger the Laugh gesture.'
         },
         nodKeywords: {
           type: 'textarea',
-          label: 'Kata Kunci Angguk (Nod)',
+          label: 'Nod Keywords',
           default: 'ya, iya, betul, benar, setuju, tentu saja, paham, mengerti, siap, baiklah, okey, oke, ok, pastinya, semangat',
-          description: 'Kata kunci (dipisahkan koma) untuk memicu gerakan Mengangguk (Nod).'
+          description: 'Comma-separated keywords that trigger the Nod gesture.'
         },
         shakeKeywords: {
           type: 'textarea',
-          label: 'Kata Kunci Geleng (Shake)',
+          label: 'Shake Keywords',
           default: 'tidak, bukan, nggak, gajadi, jangan, salah, tidak tahu, belum, bingung, aneh, mustahil, enggan, tak tahu',
-          description: 'Kata kunci (dipisahkan koma) untuk memicu gerakan Menggeleng (Shake).'
+          description: 'Comma-separated keywords that trigger the Shake gesture.'
         },
         surpriseKeywords: {
           type: 'textarea',
-          label: 'Kata Kunci Kaget (Surprise)',
+          label: 'Surprise Keywords',
           default: 'hah, apa, eh, wah, kaget, terkejut, serius, wow, oh, astaga, waduh, lah',
-          description: 'Kata kunci (dipisahkan koma) untuk memicu gerakan Terkejut (Surprise).'
+          description: 'Comma-separated keywords that trigger the Surprise gesture.'
         },
         thinkKeywords: {
           type: 'textarea',
-          label: 'Kata Kunci Berpikir (Think)',
+          label: 'Think Keywords',
           default: 'hm, hmm, em, emm, pikir, mikir, analisis, tunggu, sebentar, kurasa, mungkin, bagaimana, entahlah, sepertinya, mengapa, kenapa',
-          description: 'Kata kunci (dipisahkan koma) untuk memicu gerakan Berpikir (Think).'
+          description: 'Comma-separated keywords that trigger the Think gesture.'
         },
         sadKeywords: {
           type: 'textarea',
-          label: 'Kata Kunci Sedih (Sad)',
+          label: 'Sad Keywords',
           default: 'sedih, nangis, hiks, kasihan, maaf, lemas, kecewa, sayang sekali, huft, sepi, kesepian, sunyi, sakit',
-          description: 'Kata kunci (dipisahkan koma) untuk memicu gerakan Sedih (Sad).'
+          description: 'Comma-separated keywords that trigger the Sad gesture.'
         },
         angryKeywords: {
           type: 'textarea',
-          label: 'Kata Kunci Marah (Angry)',
+          label: 'Angry Keywords',
           default: 'marah, kesal, benci, menyebalkan, ih, huh, sebal, tidak suka, bodoh, berisik, bising, menyebalkan',
-          description: 'Kata kunci (dipisahkan koma) untuk memicu gerakan Marah (Angry).'
+          description: 'Comma-separated keywords that trigger the Angry gesture.'
         },
         blushKeywords: {
           type: 'textarea',
-          label: 'Kata Kunci Malu (Blush)',
+          label: 'Blush Keywords',
           default: 'malu, pipi merah, uwu, salting, salah tingkah, aduh, deg-deg, terharu, terpuji, sayang, cinta',
-          description: 'Kata kunci (dipisahkan koma) untuk memicu gerakan Rona Merah (Blush).'
+          description: 'Comma-separated keywords that trigger the Blush expression.'
         },
         waveKeywords: {
           type: 'textarea',
-          label: 'Kata Kunci Lambai (Wave)',
+          label: 'Wave Keywords',
           default: 'halo, hai, welcome, selamat datang, dadah, sampai jumpa, bye, pagi, siang, sore, malam, assalamualaikum',
-          description: 'Kata kunci (dipisahkan koma) untuk memicu gerakan Melambai (Wave).'
+          description: 'Comma-separated keywords that trigger the Wave gesture.'
         }
       }
     }

@@ -14,7 +14,7 @@ import { PromptRegistry } from '../../core/PromptRegistry';
 
 const DEFAULT_SIMULATION_PROMPT = `
 [SYNAPTIC_SIMULATION_MODE]
-You are the Dreaming Core of Yuihime.
+You are the Dreaming Core of \${characterName}.
 You are processing a "What If" scenario based on a specific memory:
 
 PIVOT MEMORY: "\${pivotContent}" (From: \${pivotSpeaker})
@@ -27,7 +27,7 @@ TASK:
 FORMAT:
 <scenario>Description of alternate reality</scenario>
 <future>Fragment 1 | Fragment 2 | Fragment 3</future>
-<lesson>How should Yuihime adapt her behavior based on this alternate path?</lesson>
+<lesson>How should \${characterName} adapt her behavior based on this alternate path?</lesson>
 <strength>0 to 1 calculation of synaptic weight (impact)</strength>
 `.trim();
 

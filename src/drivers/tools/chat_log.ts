@@ -42,7 +42,7 @@ export const ChatLogTool: ToolModule = {
     try {
       const res = ChatSummaryEngine.getInstance().readDailyLog(date, { limit, tail });
       if (!res.exists) {
-        return { success: false, date: res.date, error: `Tidak ada log obrolan untuk tanggal ${res.date}.` };
+        return { success: false, date: res.date, error: `No chat log found for date ${res.date}.` };
       }
       return { success: true, date: res.date, count: res.lines.length, file: res.file, lines: res.lines };
     } catch (e: any) {

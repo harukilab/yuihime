@@ -54,7 +54,7 @@ export const DailySummaryTool: ToolModule = {
         });
         const data = await res.json();
         if (!data.success) {
-          return { success: false, action, date: targetDate, error: data.reason === 'no_log' ? `Tidak ada log obrolan untuk tanggal ${targetDate}.` : data.error || data.reason || 'Gagal membuat ringkasan harian.' };
+          return { success: false, action, date: targetDate, error: data.reason === 'no_log' ? `No chat log found for date ${targetDate}.` : data.error || data.reason || 'Failed to generate daily summary.' };
         }
         return { success: true, action, date: data.date, summary: data.summary };
       }
@@ -62,11 +62,11 @@ export const DailySummaryTool: ToolModule = {
       // read
       const res = await fetch(`${baseUrl}/api/cortex/chat-summary/daily?date=${encodeURIComponent(targetDate)}`);
       if (res.status === 404) {
-        return { success: false, action, date: targetDate, error: `Belum ada ringkasan harian untuk tanggal ${targetDate}. Gunakan action 'generate' untuk membuatnya.` };
+        return { success: false, action, date: targetDate, error: `No daily summary exists yet for date ${targetDate}. Use the 'generate' action to create one.` };
       }
       const data = await res.json();
       if (!data.success) {
-        return { success: false, action, date: targetDate, error: data.error || 'Gagal mengambil ringkasan harian.' };
+        return { success: false, action, date: targetDate, error: data.error || 'Failed to fetch daily summary.' };
       }
       return { success: true, action, date: data.date, summary: data.summary };
     } catch (e: any) {

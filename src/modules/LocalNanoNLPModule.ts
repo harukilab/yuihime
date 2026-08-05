@@ -3,6 +3,7 @@ import { CortexModule, ModuleType, AgentState } from '@shared/include/types';
 import { StorageService } from '@shared/drivers/storage';
 import { NanoBrain, DecisionRouter, EpisodicMemory, CognitiveFatigue, predictWithTemperature } from '../core/neural/Brain';
 import { getTzOffsetHours, localDateParts } from '../core/utils/dualClock.js';
+import { injectCharacterName } from '../core/kernel/characterName';
 
 interface MarkovModel {
   startWords: string[];
@@ -188,7 +189,7 @@ export const LocalNanoNLPModule: CortexModule = {
         logs: [
           ...(context.logs || []), 
           ...logs, 
-          `[DUAL_COGNITION] Respon luring Yuihime berhasil ditarik dari Memori Episodik${isAlternating ? ' dengan variasi emosional luring' : ''}.`
+          `[DUAL_COGNITION] Offline response successfully pulled from Episodic Memory${isAlternating ? ' with offline emotional variation' : ''}.`
         ]
       };
     }
@@ -245,11 +246,11 @@ export const LocalNanoNLPModule: CortexModule = {
         logs: [
           ...(context.logs || []), 
           ...logs, 
-          `[DUAL_COGNITION] Respon luring Yuihime berhasil diproduksi instan oleh System 1 Markov-Brain (Suhu: ${markovTemperature}).`
+          `[DUAL_COGNITION] Offline response instantly produced by System 1 Markov-Brain (Temperature: ${markovTemperature}).`
         ]
       };
     } else {
-      logs.push(`[DUAL_COGNITION] System 2 (Daya Nalar Sadar) Aktif. Bayes Router: [${bayesPath}] | Kompleksitas: ${cognitiveComplexity.toFixed(3)} >= 0.38${forcedSystem2ByFatigue ? ' [FORCED BY COGNITIVE FATIGUE]' : ''}.`);
+      logs.push(`[DUAL_COGNITION] System 2 (Conscious Reasoning) Active. Bayes Router: [${bayesPath}] | Complexity: ${cognitiveComplexity.toFixed(3)} >= 0.38${forcedSystem2ByFatigue ? ' [FORCED BY COGNITIVE FATIGUE]' : ''}.`);
       logs.push(`[LOCAL_NLP] Routing request online to Large Language Model gateway.`);
       context.smalltalkDetected = false;
       context.cognitiveSystem = 'System 2 (Deliberative LLM)';
@@ -748,7 +749,7 @@ async function generateLocalMarkovResponse(input: string, state: AgentState, tem
   if (!model || !model.startWords || model.startWords.length === 0) {
     const fallbackList = getSmartEmotionFallbacks(input);
     const randomSentence = fallbackList[Math.floor(Math.random() * fallbackList.length)];
-    return `<thought>\nInput terdeteksi obrolan santai/sapaan (Database kosong). Menggunakan balasan default Yui bermuatan emosi "${dominantEmotion}" seutuhnya offline.\n</thought>\n<final_answer>\n${randomSentence}\n</final_answer>`;
+    return `<thought>\nInput detected as casual chat/greeting (Database empty). Using default ${injectCharacterName('${characterName}')} reply full of "${dominantEmotion}" emotion, fully offline.\n</thought>\n<final_answer>\n${randomSentence}\n</final_answer>`;
   }
 
   try {
