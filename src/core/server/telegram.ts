@@ -181,6 +181,19 @@ function rememberPendingReaction(contextId: string, chatId: number, messageId: n
   }
 }
 
+// Manual retry support: when the whole LLM pool fails and Yui sends the offline
+// fallback message, remember the original user message per contextId so a tap on
+// the "Retry" button can re-run the ENTIRE previous process (same message).
+const fallbackRetryCache = new Map<string, { input: string; senderName: string; contextId: string; chatType: string; chatId: number; sourceMessageId: number }>();
+const FALLBACK_RETRY_MAX = 100;
+function rememberFallbackRetry(contextId: string, entry: { input: string; senderName: string; contextId: string; chatType: string; chatId: number; sourceMessageId: number }) {
+  fallbackRetryCache.set(contextId, entry);
+  if (fallbackRetryCache.size > FALLBACK_RETRY_MAX) {
+    const oldestKey = fallbackRetryCache.keys().next().value;
+    if (oldestKey !== undefined) fallbackRetryCache.delete(oldestKey);
+  }
+}
+
 // Emotional reaction is also triggered for replies sent through other paths (tool speak),
 // so the reaction doesn't depend on the main queue path.
 eventBus.on('TELEGRAM_REACTION', (data: any) => {
@@ -743,9 +756,26 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
               // is ALWAYS true because the queue already marked the same content
               // (markSent) — so ALL Telegram replies were silently dropped.
               // Therefore: send directly, then mark ONLY after successful delivery.
-              const dedup = GlobalOutputDeduplicator.getInstance();
-              const replyOpts: any = { reply_to_message_id: ctx.message.message_id };
-              try {
+               const dedup = GlobalOutputDeduplicator.getInstance();
+               const replyOpts: any = { reply_to_message_id: ctx.message.message_id };
+               // When the whole LLM pool failed (offline fallback message), attach a
+               // "Retry" button and remember the original user message so tapping it
+               // re-runs the ENTIRE previous process (same message, full pipeline).
+               if (meta?.fallbackTriggered) {
+                 replyOpts.reply_markup = {
+                   inline_keyboard: [[{ text: "🔄 Retry", callback_data: `yui_retry:${contextId}` }]]
+                 };
+                 rememberFallbackRetry(contextId, {
+                   input: userMessage,
+                   senderName,
+                   contextId,
+                   chatType,
+                   chatId: ctx.chat.id,
+                   sourceMessageId: ctx.message.message_id
+                 });
+                 console.log(`[TELEGRAM_RETRY] Offline fallback reply for ${senderName} (${contextId}) carries a Retry button.`);
+               }
+               try {
                 const sentAsFile = await withDeliveryTimeout(() => trySendFileAttachment(ctx, response, { contextId, channel: chatType }), 10000, 'file-attachment');
                 if (!sentAsFile) {
                   const sentMsg = await withDeliveryTimeout(() => ctx.reply(response, replyOpts), 15000, 'telegram-reply');
@@ -904,6 +934,47 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
             await ctx.editMessageText(`❌ Request ${pendingId} (${item.action} -> ${item.targetPath}) DENIED.`, { reply_markup: undefined });
           } catch (_) {}
         }
+        return;
+      }
+      // Manual retry button from an offline fallback message: re-run the ENTIRE
+      // previous process with the same original user message.
+      if (data && data.startsWith('yui_retry:')) {
+        await ctx.answerCbQuery('Retrying your previous message...').catch(() => {});
+        const retryContextId = data.slice('yui_retry:'.length);
+        const cached = retryContextId ? fallbackRetryCache.get(retryContextId) : null;
+        if (!cached) {
+          try {
+            await ctx.answerCbQuery('Retry session expired. Please send your message again.').catch(() => {});
+            await ctx.editMessageText('❌ Retry session expired. Please send your message again.', { reply_markup: undefined });
+          } catch (_) {}
+          return;
+        }
+        fallbackRetryCache.delete(retryContextId);
+        try { await ctx.editMessageText('🔄 Retrying your previous message...', { reply_markup: undefined }); } catch (_) {}
+        MultiChannelQueue.getInstance().addMessage(
+          cached.input,
+          cached.senderName,
+          cached.contextId,
+          cached.chatType,
+          async (retryResponse, retryMeta) => {
+            if (!retryResponse || !String(retryResponse).trim()) return;
+            try {
+              const retryReplyOpts: any = { reply_to_message_id: cached.sourceMessageId };
+              if (retryMeta?.fallbackTriggered) {
+                retryReplyOpts.reply_markup = {
+                  inline_keyboard: [[{ text: "🔄 Retry", callback_data: `yui_retry:${cached.contextId}` }]]
+                };
+                rememberFallbackRetry(cached.contextId, cached);
+              }
+              await ctx.telegram.sendMessage(cached.chatId, String(retryResponse), retryReplyOpts);
+              console.log(`[TELEGRAM_RETRY] Manual retry reply delivered to ${cached.senderName} (${cached.contextId}).`);
+            } catch (retrySendErr: any) {
+              console.error(`[TELEGRAM_RETRY_ERR] Manual retry delivery failed:`, retrySendErr?.message || retrySendErr);
+            }
+          },
+          undefined,
+          { chatId: String(cached.chatId), sourceMessageId: cached.sourceMessageId }
+        );
         return;
       }
       if (!data || !data.startsWith('qt:')) return;

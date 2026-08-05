@@ -846,9 +846,33 @@ export async function generateContent(
     }
   }
 
+  let cooldownRetrySucceeded = false;
   try {
     response = await runWithRetries();
   } catch (primaryErr: any) {
+    // Full-pool cooldown retry: when the ENTIRE key x model pool fails with a
+    // transient rate-limit/overload/network error (429/503/fetch failed), wait
+    // the server-suggested cooldown (or a safe default) and re-run the whole
+    // pool once more before giving up to the fallback chain. A short-lived 429
+    // that clears within seconds must not fire the offline message prematurely.
+    const errBody = primaryErr?.message || String(primaryErr);
+    const isTransient = /429|503|quota|rate limit|overloaded|unavailable|temporary|demand|fetch failed|econnreset|socket|timeout|abort/i.test(errBody);
+    if (isTransient) {
+      const retryMatch = errBody.match(/Please retry in ([0-9.]+)\s*s/i);
+      const cooldownMs = retryMatch && retryMatch[1]
+        ? (Math.ceil(parseFloat(retryMatch[1]) * 1000) + 1500)
+        : 15000;
+      console.log(`[SERVER_AI] All cognitive circuits failed transiently (${errBody.slice(0, 100)}). Cooling down ${Math.round(cooldownMs / 1000)}s then re-running the full pool once...`);
+      await new Promise(res => setTimeout(res, cooldownMs));
+      try {
+        response = await runWithRetries();
+        cooldownRetrySucceeded = true;
+        console.log(`[SERVER_AI] Full-pool cooldown retry succeeded.`);
+      } catch (retryErr: any) {
+        primaryErr = retryErr;
+      }
+    }
+    if (!cooldownRetrySucceeded) {
     const fallbackChain = geminiSettings.fallbackChain || [];
     if (fallbackChain && fallbackChain.length > 0) {
       console.log(`[SERVER_AI] All standard Gemini attempts failed. Entering user's custom fallbackChain cascade...`);
@@ -926,11 +950,12 @@ export async function generateContent(
            provider: usedProvider || 'gemini',
            error: primaryErr?.message || String(primaryErr)
          });
-       } catch (auditErr) {}
-       throw primaryErr;
-     }
-   }
-   let rawResponse = response;
+        } catch (auditErr) {}
+        throw primaryErr;
+      }
+    }
+    }
+    let rawResponse = response;
 
   try {
      LlmIoAuditor.recordLog({

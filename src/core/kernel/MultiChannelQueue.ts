@@ -62,6 +62,7 @@ export interface ReplyMeta {
   mood?: NeuralReplyResult['mood'];
   emotion?: NeuralReplyResult['emotion'];
   sentiment?: number;
+  fallbackTriggered?: boolean;
 }
 
 export interface QueueItem {
@@ -790,6 +791,7 @@ export class MultiChannelQueue {
         mood: processed.mood,
         emotion: processed.emotion,
         sentiment: processed.sentiment,
+        fallbackTriggered: processed.fallbackTriggered === true,
       } : undefined;
       
        // Await delivery so Telegram/Discord send completes before the next queue item,

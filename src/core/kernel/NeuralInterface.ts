@@ -21,6 +21,7 @@ export interface NeuralReplyResult {
   mood?: MoodState;
   emotion?: EmotionState;
   sentiment?: number;
+  fallbackTriggered?: boolean;
 }
 
 export class NeuralInterface {
@@ -777,6 +778,7 @@ export class NeuralInterface {
         mood: updatedMood,
         emotion: updatedEmotion,
         sentiment: updatedSentiment,
+        fallbackTriggered: result.fallbackTriggered === true,
       };
     }
 

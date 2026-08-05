@@ -1,6 +1,14 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.285] - 2026-08-05
+### fix: v4.285: Offline fallback kini punya tombol Retry + full-pool cooldown retry
+- generateSegment.ts: saat seluruh pool key x model gagal karena error transien (429/503/fetch timeout), tunggu cooldown server-suggested (default 15s) lalu re-run penuh satu kali sebelum menyerah
+- NeuralInterface.ts + MultiChannelQueue.ts: fallbackTriggered diteruskan ke ReplyMeta per pesan
+- telegram.ts: pesan offline membawa tombol Retry; tap tombol mengulang proses utuh (input sama, pipeline penuh) via fallbackRetryCache + handler callback yui_retry
+- Backup: core-kernel-ai-generateSegment.ts.pre-cooldown-retry.bak
+
+
 ## [4.284] - 2026-08-05
 ### fix: v4.284: Gemini pool pakai array model penuh (gemma-4 ikut dicoba)
 - cortexSettings.ts: model tidak lagi dipampat toSingleString (3 jalur) -> array penuh dari config.toml mengalir ke generateContent
