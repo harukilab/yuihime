@@ -1,6 +1,13 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.269] - 2026-08-05
+### Feature: Feature: Pool rotation + opencode-style pipeline (two-phase deadline)
+- generateSegment.ts (pool rotation): fast-skip model saat 503/429 — begitu satu model overload di key manapun pada cycle ini, sisa key untuk model itu di-skip (overloadedModelsThisCall) sehingga pool tidak membakar seluruh key terhadap model yang down. Stall timeout adaptif: attempt pertama (expected healthy) dapat PRIMARY_STALL_MS 90s, fallback attempt cukup FALLBACK_STALL_MS 30s agar rotasi key/model yang lambat tidak menghabiskan budget pipeline.
+- MultiChannelQueue.ts (two-phase deadline ala opencode): SOFT deadline queueTimeoutMs hanya menandai signal.shutdownRequested (tanpa abort) — pipeline tetap hidup; HARD deadline getProcessingTimeoutMs() (= pipeline + 60s) baru benar-benar abort + fallback agar antrean tak macet. Sebelumnya timeout tunggal langsung abort pada 150s/240s dan membunuh jawaban final di tengah jalan.
+- cortexThinkEngine.ts: loop kini membaca signal.shutdownRequested — saat soft deadline, iterasi berikutnya diubah menjadi graceful shutdown turn (tools disabled + MAX_STEPS_PROMPT + toolChoice none) sehingga model diberi kesempatan menyelesaikan jawaban final, mirroring opencode yang tidak pernah hard-cut jawaban di tengah.
+
+
 ## [4.268] - 2026-08-05
 ### Feature: 2 mekanisme opencode (Task tool paralel + direct session) diterapkan ke Yui
 - delegate.ts (TOOL BARU, id 'delegate'): spawn 1+ sub-agent session PARALEL via Promise.allSettled dalam satu panggilan tool; tiap task punya agentId (fallback auto-pick dari SubAgentRegistry) + prompt custom; hasil dikembalikan sebagai delegates[] (agentId, response, error, latencyMs) + summary agar loop induk membacanya sebagai tool observation. Konkuren dengan tool lain di turn yang sama via tool executor paralel.

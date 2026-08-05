@@ -428,13 +428,13 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
     // Final iteration doubles as the graceful shutdown turn (Kilo MAX_STEPS_PROMPT):
     // tools are disabled and the model is asked to summarize instead of being
     // hard-cut, so the loop always ends with a coherent response.
-    const isLastStep = iteration >= maxIterations;
-    
+    const shutdownRequested = (signal as any)?.shutdownRequested === true;
+    const isLastStep = iteration >= maxIterations || shutdownRequested;
+
     if (signal?.aborted) {
       logs.push(`[CORTEX] Abort signal detected in loop iteration ${iteration}. Terminating loop gracefully.`);
       throw new Error("COGNITIVE_LOOP_ABORTED: Request was aborted by the client.");
     }
-    
     if (taskId && CognitiveScheduler.getCurrentTask() !== taskId) {
       logs.push(`[CORTEX] Interrupt detected! Task ${taskId} is suspended because another task took priority.`);
       const snapshot = {
@@ -514,7 +514,11 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
     }
     if (isLastStep) {
       activeIterationInput += `\n\n${compileMaxStepsPrompt(settings)}`;
-      logs.push(`[CORTEX_LOOP] Iteration ${iteration} is the final shutdown turn (max ${maxIterations}). Tools disabled; model must summarize.`);
+      if (shutdownRequested) {
+        logs.push(`[CORTEX_LOOP] Iteration ${iteration} is the graceful shutdown turn (soft pipeline deadline requested). Tools disabled; model must summarize.`);
+      } else {
+        logs.push(`[CORTEX_LOOP] Iteration ${iteration} is the final shutdown turn (max ${maxIterations}). Tools disabled; model must summarize.`);
+      }
     }
 
     // Anchored compaction: when accumulated tool history threatens the context

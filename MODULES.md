@@ -151,3 +151,6 @@ Peta struktur direktori pasca-pemisahan Web UI ↔ Daemon (lihat UPDATE_LOG `[4.
 - `src/core/cortex/cortexThinkEngine.ts — nativeTurnBlocks, cross-call reload, compaction trim, toolChoice none; src/core/openaiTools.ts — historyBlocks; tools/tester/native_compaction_test.ts — test kompaksi native baru.`
 - `src/core/kernel/ai/generateSegment.ts — buildGeminiHistoryContents + config.history; src/drivers/ai-providers/GeminiProvider.ts — teruskan nativeTurnBlocks; src/core/kernel/ai/aiTypes.ts — AIConfig.history; src/core/cortex/cortexThinkEngine.ts — cabut gate gemini; tools/tester/native_gemini_test.ts — test baru.`
 - `src/drivers/tools/delegate.ts — Delegate Tool (opencode-style parallel sub-agent sessions): spawn 1+ sub-agent via Promise.allSettled, promptOverride direct session di SubAgentManager.ts.`
+- `src/core/kernel/ai/generateSegment.ts — Pool rotation: fast-skip model on 503 (overloadedModelsThisCall) + adaptive stall (90s primary / 30s fallback).`
+- `src/core/kernel/MultiChannelQueue.ts — Two-phase deadline ala opencode: soft queueTimeoutMs → signal.shutdownRequested (no abort), hard processing watchdog → force abort + fallback.`
+- `src/core/cortex/cortexThinkEngine.ts — Loop honors signal.shutdownRequested: next iteration becomes graceful shutdown turn (tools disabled + MAX_STEPS_PROMPT).`

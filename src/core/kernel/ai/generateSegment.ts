@@ -13,7 +13,10 @@ const keyPool = {
 };
 
 const OVERLOADED_KEY_TTL_MS = 5 * 60 * 1000;
-const RATE_LIMITED_KEY_TTL_MS = 15 * 60 * 1000;const persistentOverloadedKeys = new Map<string, number>();
+const RATE_LIMITED_KEY_TTL_MS = 15 * 60 * 1000;
+const PRIMARY_STALL_MS = 90_000; // first (expected-healthy) attempt gets the full header+body window
+const FALLBACK_STALL_MS = 30_000; // fallback attempts fail fast so rotation can't burn the pipeline budget
+const persistentOverloadedKeys = new Map<string, number>();
 const persistentRateLimitedKeys = new Map<string, number>();
 
 // Restore persisted busy-key state across restarts so known-bad keys (429/503/403)
@@ -354,9 +357,19 @@ export async function generateContent(
     for (const [k, expiry] of persistentRateLimitedKeys) {
       if (expiry <= now) persistentRateLimitedKeys.delete(k);
     }
+    // Per-call state: models confirmed overloaded (503) this cycle so we don't
+    // waste the remaining keys against a model that is down for everyone.
+    const overloadedModelsThisCall = new Set<string>();
     let lastError: any = null;
+    let attemptIndex = 0;
     for (const attempt of attemptsToTry) {
       if (!attempt.apiKey) continue;
+
+      // Fast-skip: once a model 503s on any key this cycle, it is down for the
+      // pool too — do not burn the remaining keys against it.
+      if (overloadedModelsThisCall.has(attempt.modelId)) {
+        continue;
+      }
 
       if (persistentRateLimitedKeys.has(attempt.apiKey)) {
         const hasOtherGoodKey = attemptsToTry.some(a => a.apiKey && a.apiKey !== attempt.apiKey && !persistentRateLimitedKeys.has(a.apiKey) && !persistentOverloadedKeys.has(a.apiKey));
@@ -504,7 +517,12 @@ export async function generateContent(
 
           // Stall timeout covering headers AND body (streaming/json) — body read
           // previously had no timeout and could hang the queue forever.
-          armStallTimeout(90000);
+          // The first attempt (expected healthy) gets the full window; fallback
+          // attempts fail fast so a hung fallback key/model cannot burn the
+          // whole pipeline budget on slow 503/429 probes.
+          const isFirstProbe = attemptIndex === 0;
+          attemptIndex++;
+          armStallTimeout(isFirstProbe ? PRIMARY_STALL_MS : FALLBACK_STALL_MS);
 
           const res = await fetch(finalTargetUrl, {
             method: 'POST',
@@ -739,6 +757,11 @@ export async function generateContent(
             console.warn(`[SERVER_AI] API Key ${attempt.apiKey.substring(0, 6)}... terus menerima overload (503). Menambah ke daftar kunci sibuk untuk dilewati oleh pool.`);
             persistentOverloadedKeys.set(attempt.apiKey, now + OVERLOADED_KEY_TTL_MS);
             persistBusyKeyState();
+            // A 503 is model-wide (not key-specific) — skip the rest of this
+            // model's keys for the remainder of the cycle.
+            if (errorBody.includes('503') || errorBody.toLowerCase().includes('overloaded') || errorBody.toLowerCase().includes('unavailable')) {
+              overloadedModelsThisCall.add(attempt.modelId);
+            }
           }
 
           // Force fail fast for quota/rate limits to jump immediately to the next fallback candidate/model instead of sleeping for 60 seconds

@@ -34,6 +34,12 @@ export const ToolExecutorModule: CortexModule = {
           default: 2,
           description: 'Number of times Yui can retry executing a tool after a transient (network/service) failure.'
         },
+        queueTimeoutMs: {
+          type: 'number',
+          label: 'Cognitive Pipeline Timeout (ms)',
+          default: 240000,
+          description: 'Hard cap for the whole cognitive pipeline (LLM + tool chain) before a message is aborted to keep channel I/O flowing. Raise it when multi-key pool rotation or long tool chains exceed the default 150s (e.g. 240000 = 4 minutes). Must be lower than the processing watchdog (auto-derived).'
+        },
         maxIterations: {
           type: 'number',
           label: 'Max Iterations (Safety Cap)',

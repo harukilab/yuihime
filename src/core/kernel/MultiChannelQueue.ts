@@ -99,8 +99,10 @@ export class MultiChannelQueue {
   private static readonly PROCESSING_TIMEOUT_MS = 200000;
 
   // Hard cap untuk seluruh pipeline kognitif (LLM + tool chain) agar jalur I/O pesan
-  // tidak pernah menunggu selamanya pada satu pesan yang macet.
-  private static readonly NEURAL_PIPELINE_TIMEOUT_MS = 150000;
+  // tidak pernah menunggu selamanya pada satu pesan yang macet. Default-naik ke 240s
+  // karena satu gateway.run saja bisa 50-120s saat pool multi-key menghadapi 503/429;
+  // dapat dioverride via settings 'tool-executor'.queueTimeoutMs.
+  private static readonly NEURAL_PIPELINE_TIMEOUT_MS = 240000;
   
   // Dynamic Background Worker Pool Configuration & Status Trackers
   private activeBgWorkers = 0;
@@ -542,7 +544,7 @@ export class MultiChannelQueue {
       console.log(`[QUEUE_BG_WORKER_THINK] [ID: ${pending.id}] Yui is pondering response for ${pending.sender_name}...`);
       const reply = await withHardTimeout(
         NeuralInterface.processNeuralInput(pending.input, pending.sender_name, pending.context_id, pending.chat_type),
-        MultiChannelQueue.NEURAL_PIPELINE_TIMEOUT_MS,
+        this.getPipelineTimeoutMs(),
         `[ID: ${pending.id}] Background cognitive pipeline`
       );
 
@@ -687,28 +689,48 @@ export class MultiChannelQueue {
   }
 
   /**
-   * Jalankan pipeline kognitif dengan hard timeout + AbortController.
-   * Saat timeout: abort sinyal LLM, kembali dengan fallback reply agar antrean
-   * tidak pernah macet menunggu satu pesan selamanya.
+   * Jalankan pipeline kognitif dengan dua-phase deadline (ala opencode):
+   *  1. SOFT deadline (`queueTimeoutMs`): request graceful shutdown turn via
+   *     `signal.shutdownRequested` — NO hard abort. The cortex loop turns the
+   *     next iteration into a shutdown turn (tools disabled, model must finish
+   *     the final answer), so a long pipeline still delivers a real reply
+   *     instead of being cut mid-speech.
+   *  2. HARD deadline (`getProcessingTimeoutMs()`): last-resort force abort +
+   *     fallback reply, so the queue can never wedge on one message forever.
    */
   private async thinkWithTimeout(input: string, senderName: string, contextId: string, chatType: string, taskId?: string): Promise<{ processed: NeuralReplyResult | null; timedOut: boolean }> {
     const controller = new AbortController();
-    const timeoutMs = MultiChannelQueue.NEURAL_PIPELINE_TIMEOUT_MS;
+    const softTimeoutMs = this.getPipelineTimeoutMs();
+    const hardTimeoutMs = this.getProcessingTimeoutMs();
 
     return await new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
+      let softTimer: ReturnType<typeof setTimeout> | null = null;
+      let hardTimer: ReturnType<typeof setTimeout> | null = null;
+      const cleanupTimers = () => {
+        if (softTimer) clearTimeout(softTimer);
+        if (hardTimer) clearTimeout(hardTimer);
+      };
+
+      // SOFT deadline: signal the loop to wrap up gracefully, keep the signal open.
+      softTimer = setTimeout(() => {
+        (controller.signal as any).shutdownRequested = true;
+        console.warn(`[QUEUE_PIPELINE_SOFT_TIMEOUT] Pipeline exceeded ${softTimeoutMs}ms for ${senderName}. Requesting graceful shutdown turn (no hard abort)...`);
+      }, softTimeoutMs);
+
+      // HARD deadline: only force-abort if the graceful turn also stalls.
+      hardTimer = setTimeout(() => {
         controller.abort();
-        console.warn(`[QUEUE_PIPELINE_TIMEOUT] Cognitive pipeline exceeded ${timeoutMs}ms for ${senderName}. Aborted to keep channel I/O flowing.`);
+        console.warn(`[QUEUE_PIPELINE_HARD_TIMEOUT] Pipeline exceeded ${hardTimeoutMs}ms for ${senderName}. Hard-aborted to keep channel I/O flowing.`);
         resolve({ processed: { text: PIPELINE_TIMEOUT_FALLBACK }, timedOut: true });
-      }, timeoutMs);
+      }, hardTimeoutMs);
 
       NeuralInterface.processNeuralInputWithMeta(input, senderName, contextId, chatType, false, taskId, controller.signal)
         .then((result) => {
-          clearTimeout(timer);
+          cleanupTimers();
           resolve({ processed: result, timedOut: false });
         })
         .catch((err: any) => {
-          clearTimeout(timer);
+          cleanupTimers();
           if (controller.signal.aborted) {
             console.warn(`[QUEUE_PIPELINE_ABORTED] Pipeline aborted for ${senderName}: ${err?.message || err}`);
             resolve({ processed: { text: PIPELINE_TIMEOUT_FALLBACK }, timedOut: true });
@@ -717,6 +739,22 @@ export class MultiChannelQueue {
           }
         });
     });
+  }
+
+  /** Pipeline timeout, configurable via settings 'tool-executor'.queueTimeoutMs (ms). */
+  private getPipelineTimeoutMs(): number {
+    try {
+      const settings = Kernel.getInstance().getSettings()?.getAll() || {};
+      const cfg = settings['tool-executor'] || {};
+      const v = Number(cfg.queueTimeoutMs);
+      if (Number.isFinite(v) && v > 0) return v;
+    } catch (_) {}
+    return MultiChannelQueue.NEURAL_PIPELINE_TIMEOUT_MS;
+  }
+
+  /** Processing watchdog, always > pipeline timeout so long chains are not cut mid-pipeline. */
+  private getProcessingTimeoutMs(): number {
+    return Math.max(this.getPipelineTimeoutMs() + 60000, MultiChannelQueue.PROCESSING_TIMEOUT_MS);
   }
 
   private async processNext() {
@@ -732,7 +770,7 @@ export class MultiChannelQueue {
         this.processingTimer = null;
         this.processNext();
       }
-    }, MultiChannelQueue.PROCESSING_TIMEOUT_MS);
+    }, this.getProcessingTimeoutMs());
 
     const item = this.queue.shift()!;
 
@@ -1213,7 +1251,7 @@ Unggkit topik nyata tersebut dari memori jika ingin, sapa dia dengan manis, atau
         this.processing = false;
         this.processingTimer = null;
       }
-    }, MultiChannelQueue.PROCESSING_TIMEOUT_MS);
+    }, this.getProcessingTimeoutMs());
 
     try {
       const reply = await withHardTimeout(
@@ -1225,7 +1263,7 @@ Unggkit topik nyata tersebut dari memori jika ingin, sapa dia dengan manis, atau
           false, // isProactive
           task.taskId // Pass the taskId to trigger resume!
         ),
-        MultiChannelQueue.NEURAL_PIPELINE_TIMEOUT_MS,
+        this.getPipelineTimeoutMs(),
         `[QUEUE_RESUME] Task ${task.taskId}`
       );
 
