@@ -46,6 +46,12 @@ export const ToolExecutorModule: CortexModule = {
           default: 5,
           description: 'How many extra turns the LLM may request via max_iterations_override in tool arguments, on top of the base cap.'
         },
+        nativeTransport: {
+          type: 'boolean',
+          label: 'Native Tool Transport (Kilo/opencode-style)',
+          default: false,
+          description: 'EXPERIMENTAL — off by default. Moves tool calling onto the provider native tool_calls channel with a durable message store, instead of JSON-in-prompt. Non-Gemini providers only; Gemini keeps the JSON fallback. Loop exit on plain-text reply (finish != tool-calls).'
+        },
         maxStepsPrompt: {
           type: 'textarea',
           label: 'Max Steps Prompt (shutdown turn directive)',

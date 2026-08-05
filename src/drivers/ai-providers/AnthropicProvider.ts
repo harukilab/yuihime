@@ -1,5 +1,5 @@
 import { ProviderModule, ModuleType } from '@shared/include/types';
-import { buildChatMessages, normalizeToolCallsToOpenAI, normalizeToolsForProvider } from '../../core/openaiTools';
+import { buildChatMessages, normalizeToolCallsToOpenAI, normalizeToolChoice, normalizeToolsForProvider } from '../../core/openaiTools';
 import { toSingleString } from '@/core/kernel/configNormalizer';
 import { AIService } from '../../core/kernel/ai.js';
 
@@ -71,6 +71,7 @@ export const AnthropicProvider: ProviderModule = {
 
     const messages = buildChatMessages('anthropic', {
       user: promptText,
+      historyBlocks: context.nativeTurnBlocks,
       assistantToolCalls: context.assistantToolCalls,
       toolMessages: context.toolMessages
     });
@@ -89,6 +90,8 @@ export const AnthropicProvider: ProviderModule = {
 
     if (providerTools) {
       requestBody.tools = providerTools;
+      const toolChoice = normalizeToolChoice(context.toolChoice, 'anthropic');
+      if (toolChoice) requestBody.tool_choice = toolChoice;
     }
 
     let data: any;

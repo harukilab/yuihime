@@ -8,4 +8,6 @@ export interface AIConfig {
   isJson?: boolean;
   attachments?: any[];
   tools?: any[];
+  toolConfig?: any;
+  history?: any[];
 }

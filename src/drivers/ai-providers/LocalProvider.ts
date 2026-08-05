@@ -1,5 +1,5 @@
 import { ProviderModule, ModuleType } from '@shared/include/types';
-import { buildChatMessages, normalizeToolCallsToOpenAI, normalizeToolsForProvider } from '../../core/openaiTools';
+import { buildChatMessages, normalizeToolCallsToOpenAI, normalizeToolChoice, normalizeToolsForProvider } from '../../core/openaiTools';
 import { toSingleString } from '@/core/kernel/configNormalizer';
 
 /**
@@ -49,6 +49,7 @@ export const LocalProvider: ProviderModule = {
       const messages = buildChatMessages('local', {
         system: systemInstruction,
         user: promptText,
+        historyBlocks: context.nativeTurnBlocks,
         assistantToolCalls: context.assistantToolCalls,
         toolMessages: context.toolMessages
       });
@@ -61,6 +62,8 @@ export const LocalProvider: ProviderModule = {
       );
       if (localTools) {
         payload.tools = localTools;
+        const toolChoice = normalizeToolChoice(context.toolChoice, 'local');
+        if (toolChoice) payload.tool_choice = toolChoice;
       }
 
       const controller = new AbortController();

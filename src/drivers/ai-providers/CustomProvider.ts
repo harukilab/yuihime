@@ -1,5 +1,5 @@
 import { ProviderModule, ModuleType } from '@shared/include/types';
-import { buildChatMessages, normalizeToolCallsToOpenAI, normalizeToolsForProvider } from '../../core/openaiTools';
+import { buildChatMessages, normalizeToolCallsToOpenAI, normalizeToolChoice, normalizeToolsForProvider } from '../../core/openaiTools';
 import { toSingleString } from '@/core/kernel/configNormalizer';
 import { AIService } from '../../core/kernel/ai.js';
 
@@ -180,6 +180,7 @@ export const CustomProvider: ProviderModule = {
       const messages = buildChatMessages('custom', {
         system: systemInstruction,
         user: promptText,
+        historyBlocks: context.nativeTurnBlocks,
         assistantToolCalls: context.assistantToolCalls,
         toolMessages: context.toolMessages
       });
@@ -197,7 +198,7 @@ export const CustomProvider: ProviderModule = {
       // Native OpenAI function calling: expose registered tools to the model.
       if (providerTools !== undefined) {
         payload.tools = normalizeToolsForProvider(context.tools || [], 'custom') || context.tools;
-        payload.tool_choice = 'auto';
+        payload.tool_choice = normalizeToolChoice(context.toolChoice, 'custom') ?? 'auto';
       }
 
       const endpointUrl = `${baseUrl}/chat/completions`;

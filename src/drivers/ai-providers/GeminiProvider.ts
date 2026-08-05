@@ -1,6 +1,7 @@
 import { ProviderModule, ModuleType } from '@shared/include/types';
 import { toSingleString } from '@/core/kernel/configNormalizer';
 import { AIService } from '../../core/kernel/ai.js';
+import { normalizeToolsForProvider, normalizeToolChoice } from '../../core/openaiTools';
 
 export const GeminiProvider: ProviderModule = {
   metadata: {
@@ -43,6 +44,12 @@ export const GeminiProvider: ProviderModule = {
           default: 32768,
           label: 'Max Output Tokens Limit',
           description: 'Specifies the maximum output response token limit. Standard: 32768.'
+        },
+        geminiNativeTools: {
+          type: 'boolean',
+          label: 'Native Function Calling (Gemini)',
+          default: false,
+          description: 'When enabled, Yui sends functionDeclarations + toolConfig to Gemini (Kilo-style) and surfaces native functionCall response parts back into the loop as canonical tool_calls. Default OFF: the main loop drives tools via JSON tool_calls in the prompt.'
         }
       }
     }
@@ -206,6 +213,23 @@ export const GeminiProvider: ProviderModule = {
         }
       }
 
+      // Kilo-style native function calling for Gemini. Attached whenever the
+      // native transport flag is active (the loop feeds `nativeTurnBlocks`
+      // history and consumes `functionCall` parts back), or when the legacy
+      // `geminiNativeTools` switch is on for one-shot standalone use.
+      // `functionDeclarations` + `toolConfig` are sent exactly like Kilo's
+      // gemini protocol (`AUTO`/`NONE`/`ANY` + allowedFunctionNames).
+      const nativeTransportOn = context.nativeTransportEnabled === true || overriddenConfig.geminiNativeTools === true;
+      const geminiTools = nativeTransportOn
+        ? (normalizeToolsForProvider(
+            Array.isArray(context.tools) && context.tools.length > 0 ? context.tools : [],
+            'gemini'
+          ) || undefined)
+        : undefined;
+      const geminiToolConfig = nativeTransportOn
+        ? (normalizeToolChoice(context.toolChoice, 'gemini') || undefined)
+        : undefined;
+
       if (typeof window === 'undefined') {
         const aiService = AIService.getInstance();
         return await aiService.generate(promptText, {
@@ -213,7 +237,10 @@ export const GeminiProvider: ProviderModule = {
           systemInstruction: systemInstructionText,
           ...overriddenConfig,
           attachments: context.attachments,
-          onChunk: context.onChunk
+          onChunk: context.onChunk,
+          tools: geminiTools,
+          toolConfig: geminiToolConfig,
+          history: context.nativeTurnBlocks
         });
       }
 
@@ -231,7 +258,10 @@ export const GeminiProvider: ProviderModule = {
               ...overriddenConfig,
               apiKey: overriddenConfig.apiKey || overriddenConfig.api_key || null,
               payloadBlueprint: blueprint,
-              attachments: context.attachments
+              attachments: context.attachments,
+              tools: geminiTools,
+              toolConfig: geminiToolConfig,
+              history: context.nativeTurnBlocks
             }
           })
         }

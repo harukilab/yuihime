@@ -22,6 +22,10 @@ export interface SubAgentRunOptions {
   senderName: string;
   state: any;
   parentContext: any;
+  /** Override the task prompt instead of using definition-systemPrompt + input (direct session mode). */
+  promptOverride?: string;
+  /** Override the system prompt instead of the definition's (direct session mode). */
+  systemPromptOverride?: string;
 }
 
 export interface SubAgentResult {

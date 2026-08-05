@@ -48,6 +48,16 @@ Decompose the request into 3-7 manageable sub-tasks. Output ONLY a valid JSON ob
 Do NOT wrap in markdown code blocks or include any text outside the JSON object.
     `);
 
+    this.register('cortex:native_function_calling', `
+[NATIVE FUNCTION CALLING MODE ACTIVE]:
+You call tools exclusively through the native function-calling channel (tool_calls / tool_use / functionCall parts) of the API. Never embed tool calls as JSON inside your spoken text, and never output a JSON envelope.
+- Call any tools you need first; wait for their results before deciding on a final reply.
+- When you are done and want to deliver your reply, either:
+  (a) call the "final_answer" tool with { "speech": "...", "animations": ["TALK","SMILE"], "mood_impact": {} } in its arguments, or
+  (b) output your reply as plain conversational text WITHOUT any tool call. Plain text without a tool call is treated as your final answer and ends the turn.
+- Keep every tool argument as valid JSON matching that tool's schema.
+    `);
+
     this.register('cortex:json_enforcement', `
 [CRITICAL DIRECTIVE - RESPONSE FORMAT: JSON_OBJECT]:
 Strictly output ONLY valid JSON. No markdown formatting. No preamble or post-script text. Failure to follow this format will result in a processing error.

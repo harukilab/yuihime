@@ -402,6 +402,16 @@ export async function setupSchema(db: any) {
         createdAt INTEGER DEFAULT (strftime('%s', 'now')),
         updatedAt INTEGER DEFAULT (strftime('%s', 'now'))
       )
+    `,
+    native_messages: `
+      CREATE TABLE IF NOT EXISTS native_messages (
+        session_id TEXT NOT NULL,
+        seq INTEGER NOT NULL,
+        role TEXT NOT NULL,
+        parts TEXT NOT NULL,
+        created_at INTEGER DEFAULT (strftime('%s', 'now')),
+        PRIMARY KEY (session_id, seq)
+      );
     `
   };
 

@@ -70,5 +70,21 @@
 - **Always update `UPDATE_LOG.md` via `python3 tools/update_log.py` on every change.** This is not optional.
 - `MODULES.md`: update when adding or changing modules.
 
+## Backup SOP (wajib sebelum edit file utama)
+- **Backup selalu ke `/tmp/opencode/yuihime-backup/`** sebelum mengedit file inti (server.ts, cortexThinkEngine.ts, database.ts, openaiTools.ts, generateSegment.ts, provider drivers, PromptRegistry.ts, dst.).
+- Konvensi nama: `<dir>-<file>.pre-<tema>.bak` (mis. `core-cortex-cortexThinkEngine.ts.pre-native-ph3.bak`, `core-PromptRegistry.ts.pre-native-ph3.bak`).
+- Backup mencerminkan state SEBELUM perubahan pada fase/edisi tersebut — bukan snapshot terbaru.
+- Setelah edit selesai & diverifikasi (lint/build/test), backup lama boleh diganti backup baru untuk fase berikutnya. Jangan pernah menghapus backup fase terdahulu tanpa persetujuan user.
+- Sebelum tiap fase lanjutan: `ls /tmp/opencode/yuihime-backup/` untuk memastikan backup file target yang akan diubah sudah ada.
+
+## Watchdog & Daemon Ops
+- **`tools/yui-watchdog.sh`** — supervisor lokal (non-PM2 default): probe `/api/health` tiap `YUIHIME_WATCHDOG_INTERVAL` (default 10s), restart daemon saat hang/crash, anti crash-loop via `YUIHIME_WATCHDOG_RESTART_MAX` (default 4) dalam window `YUIHIME_WATCHDOG_RESTART_WINDOW` (600s). Subcommand: `start [dev|prod] [--pm2|--no-pm2]`, `restart`, `stop`, `status`, `log`.
+- **PM2-aware**: dengan `--pm2` / `YUIHIME_PM2=1`, daemon dikelola `tools/yui-pm2.sh` (app `yuihime`); watchdog hanya probe health → `pm2 restart yuihime`. Tanpa PM2: 1 proses daemon + watchdog + `yui-debug.sh`.
+- **`tools/yui-daemon.sh`** — twin terminal dari perintah bot `/daemon`: `start|stop|restart|status|logs [N]|rebuild`. `restart` memakai `tools/yui-watchdog.sh restart` (stop watchdog → stop daemon → start ulang).
+- **`scripts/boot.sh`** — boot hook (Termux:Boot/UserLAnd/cron @reboot), delay `YUIHIME_BOOT_DELAY` (default 10s), log ke `~/.yuihime/debug/boot.log`.
+- Artefak runtime: `~/.yuihime/debug/` — `current.meta` (baris 1 = daemon PID, baris 2 = mode, baris 3 = port), `watchdog.pid`, `watchdog.log` (dirotasi ke `.old` bila >1MB), `current.log` (yui-debug.sh).
+- Konfigurasi via env: `YUIHIME_WATCHDOG_INTERVAL/MAX_TIME/FAILURES/BOOT/RESTART_MAX/RESTART_WINDOW`, `YUIHIME_DAEMON_PORT` (default 3000), `YUIHIME_SYSTEM_ROOT` (default `$HOME/.yuihime`).
+- Saat memodifikasi logika graceful shutdown / signal handling (EADDRINUSE, SIGINT/SIGTERM), pastikan daemon tidak meninggalkan proses mengambang — watchdog hanya auto-restart, tidak membersihkan port yang tertahan.
+
 ## Versioning
 - `Major.Minor` in `package.json` and `UPDATE_LOG.md`. Minor for daily bugfix; major for architecture refactor (reset minor to 0).

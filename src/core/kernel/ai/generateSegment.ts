@@ -4,6 +4,7 @@ import { toKeyArray, toSingleString } from '../configNormalizer.js';
 import { SystemRegistry } from '@shared/core/registry';
 import { LlmIoAuditor } from '../../server/llmAuditor.js';
 import { loadKeyPoolState, saveKeyPoolState, pruneExpiryMap } from '../keyPoolStateStore.js';
+import { normalizeToolCallsToOpenAI } from '../../openaiTools.js';
 
 const keyPool = {
   configure: (_providerId: string, _config: any, _settings: any) => {},
@@ -12,9 +13,7 @@ const keyPool = {
 };
 
 const OVERLOADED_KEY_TTL_MS = 5 * 60 * 1000;
-const RATE_LIMITED_KEY_TTL_MS = 15 * 60 * 1000;
-
-const persistentOverloadedKeys = new Map<string, number>();
+const RATE_LIMITED_KEY_TTL_MS = 15 * 60 * 1000;const persistentOverloadedKeys = new Map<string, number>();
 const persistentRateLimitedKeys = new Map<string, number>();
 
 // Restore persisted busy-key state across restarts so known-bad keys (429/503/403)
@@ -77,6 +76,80 @@ function summarizeAiError(error: any): string {
     }
   } catch {}
   return raw.split('\n')[0].slice(0, 240);
+}
+
+/**
+ * Coerce a provider-specific `arguments` value into a plain object for the
+ * Gemini `functionCall.args` field. Canonical native blocks may carry either an
+ * already-parsed object (Anthropic/Gemini) or a JSON string (OpenAI-compatible).
+ */
+function coerceArgsForGemini(args: any): any {
+  if (typeof args === 'string') {
+    try {
+      const parsed = JSON.parse(args);
+      return (parsed && typeof parsed === 'object') ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+  return (typeof args === 'object' && args !== null) ? args : {};
+}
+
+/**
+ * Parse the canonical tool output envelope (`{ success, data, error, metadata }`
+ * JSON string) back into an object for the Gemini `functionResponse.response`
+ * field. Falls back to `{ result: content }` for non-JSON payloads.
+ */
+function parseToolResponseContent(content: any): any {
+  if (typeof content === 'string') {
+    try {
+      const parsed = JSON.parse(content);
+      return (parsed && typeof parsed === 'object') ? parsed : { result: content };
+    } catch {
+      return { result: content };
+    }
+  }
+  return (typeof content === 'object' && content !== null) ? content : { result: '' };
+}
+
+/**
+ * Translate canonical `[assistant(tool_calls), ...role:"tool"]` turn blocks
+ * (the Phase 5 interleaved history produced by the loop) into Gemini `contents`
+ * parts: a `role:"model"` content with `functionCall` parts immediately followed
+ * by a `role:"user"` content with `functionResponse` parts — the alternation the
+ * Gemini API requires for multi-turn native function calling.
+ */
+export function buildGeminiHistoryContents(history: any): any[] {
+  if (!Array.isArray(history) || history.length === 0) return [];
+  const contents: any[] = [];
+  for (const block of history) {
+    if (!Array.isArray(block)) continue;
+    const assistantMsg = block.find((m: any) => m && m.role === 'assistant');
+    const toolRows = block.filter((m: any) => m && m.role === 'tool');
+    if (assistantMsg && Array.isArray(assistantMsg.tool_calls) && assistantMsg.tool_calls.length > 0) {
+      contents.push({
+        role: 'model',
+        parts: assistantMsg.tool_calls.map((c: any) => ({
+          functionCall: {
+            name: c.function?.name || c.name,
+            args: coerceArgsForGemini(c.function?.arguments)
+          }
+        }))
+      });
+    }
+    if (toolRows.length > 0) {
+      contents.push({
+        role: 'user',
+        parts: toolRows.map((m: any) => ({
+          functionResponse: {
+            name: m.name,
+            response: parseToolResponseContent(m.content)
+          }
+        }))
+      });
+    }
+  }
+  return contents;
 }
 
 export async function generateContent(
@@ -347,7 +420,13 @@ export async function generateContent(
           }
 
           let systemInstructionText = config.systemInstruction;
-          
+
+          // Phase 6: prepend the native multi-turn tool history (functionCall /
+          // functionResponse contents) so Gemini sees prior tool rounds exactly
+          // like OpenAI/Anthropic receive their interleaved blocks. Empty when
+          // no history is supplied, keeping the single-turn path byte-identical.
+          const historyContents = buildGeminiHistoryContents(config.history);
+
           let contentsArray: any[] = [];
           const partsToUse: any[] = [{ text: activePrompt }];
           
@@ -372,10 +451,10 @@ export async function generateContent(
               ? `[SYSTEM INSTRUCTION & PERSONALITY]\n${systemInstructionText}\n\n[USER INPUT]\n${activePrompt}`
               : activePrompt;
             partsToUse[0] = { text: promptWithSystem };
-            contentsArray = [{ role: 'user', parts: partsToUse }];
+            contentsArray = [...historyContents, { role: 'user', parts: partsToUse }];
             systemInstructionText = undefined; // clear out systemInstruction to prevent API mismatch/ignore
           } else {
-            contentsArray = [{ role: 'user', parts: partsToUse }];
+            contentsArray = [...historyContents, { role: 'user', parts: partsToUse }];
           }
 
           const requestBody: any = {
@@ -385,6 +464,10 @@ export async function generateContent(
 
           if (config.tools) {
             requestBody.tools = config.tools;
+          }
+
+          if (config.toolConfig) {
+            requestBody.toolConfig = config.toolConfig;
           }
 
           if (systemInstructionText) {
@@ -450,6 +533,7 @@ export async function generateContent(
             let inString = false;
             let escapeNext = false;
             let lastParsedIndex = 0;
+            const geminiFunctionCalls: any[] = [];
 
             for await (const rawChunk of reader as any) {
               // Reset stall timer on every chunk: active streams survive, stalled ones die.
@@ -494,6 +578,8 @@ export async function generateContent(
                           for (const part of parts) {
                             if (part.text) {
                               partText += part.text;
+                            } else if (part.functionCall) {
+                              geminiFunctionCalls.push(part.functionCall);
                             }
                           }
                           if (partText) {
@@ -559,6 +645,8 @@ export async function generateContent(
                           for (const part of parts) {
                             if (part.text) {
                               partText += part.text;
+                            } else if (part.functionCall) {
+                              geminiFunctionCalls.push(part.functionCall);
                             }
                           }
                           if (partText) {
@@ -583,11 +671,24 @@ export async function generateContent(
             
             console.log(`[SERVER_AI] Sirkuit kognitif streaming sukses dengan ${attempt.label}.`);
             clearStallTimeout();
+            // Native Gemini function calling: if the model emitted functionCall
+            // parts and no text, surface them as the canonical tool_calls envelope
+            // so the cortex loop consumes them exactly like OpenAI/Anthropic.
+            if (geminiFunctionCalls.length > 0 && !fullText) {
+              return JSON.stringify({ tool_calls: normalizeToolCallsToOpenAI({ parts: geminiFunctionCalls.map((fc: any) => ({ functionCall: fc })) }, 'gemini') });
+            }
             return fullText;
           } else {
             const resJson: any = await res.json();
             clearStallTimeout();
             const parts = resJson.candidates?.[0]?.content?.parts || [];
+            const geminiFunctionCalls: any[] = [];
+            for (const p of parts) {
+              if (p && p.functionCall) geminiFunctionCalls.push(p);
+            }
+            if (geminiFunctionCalls.length > 0) {
+              return JSON.stringify({ tool_calls: normalizeToolCallsToOpenAI({ parts: geminiFunctionCalls }, 'gemini') });
+            }
             let text = '';
             const mainPart = parts.find((p: any) => p.text && !p.thought);
             if (mainPart) {

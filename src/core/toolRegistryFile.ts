@@ -1,10 +1,10 @@
 import fs from 'fs';
 import path from 'path';
-import os from 'os';
 import { SystemRegistry } from '@shared/core/registry';
+import { resolveDataDir } from './systemPaths.js';
 
 export function getAvailableToolsFile(): string {
-  return path.join(os.homedir(), '.yuihime', 'data', 'available_tools.json');
+  return path.join(resolveDataDir(), 'available_tools.json');
 }
 
 export function writeAvailableToolsFile(): { count: number; filePath: string } {

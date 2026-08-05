@@ -128,6 +128,33 @@ export class SubAgentManager {
       ? `[FACING VIEWER]: ${scopedContext.viewerIdentity.perceivedName} (Trust: ${scopedContext.viewerIdentity.trust || 50}%, Affection: ${scopedContext.viewerIdentity.affection || 50}%)\n[VIEWER FACTS]: ${(scopedContext.viewerIdentity.importantFacts || []).slice(0, 5).join('; ')}`
       : '[FACING VIEWER]: Unknown Viewer';
 
+    if (options.promptOverride) {
+      // Direct-session mode: a single-shot sub-agent invocation with a fully
+      // caller-authored prompt (opencode "direct session" analogue). Scoped
+      // context is still attached so the fresh LLM call has grounding.
+      const systemPrompt = options.systemPromptOverride || definition.systemPrompt;
+      return `${systemPrompt}
+
+[SUB-AGENT DIRECT SESSION]
+You are operating as a specialized sub-agent: ${definition.name}
+Your capabilities: ${definition.capabilities.join(', ')}
+
+${identityContext}
+
+[RELEVANT MEMORIES]
+${memorySummary}
+
+[PARENT CONTEXT]
+Channel: ${options.chatType}
+Sender: ${options.senderName}
+
+[TASK]
+${options.promptOverride}
+
+[INSTRUCTION]
+Process the task above using your specialized capabilities. Output a concise, actionable result. Do not break the fourth wall.`;
+    }
+
     return `${definition.systemPrompt}
 
 [SUB-AGENT CONTEXT]

@@ -136,3 +136,18 @@ Peta struktur direktori pasca-pemisahan Web UI ↔ Daemon (lihat UPDATE_LOG `[4.
 - `core/kernel/ai/generateSegment.ts`
 - `core/cortex/cortexThinkEngine.ts`
 - `core/cortex/cortexThinkEngine.ts`
+- `prompt-manager`
+- `prompt-manager`
+- `tester`
+- `PromptManager`
+- `Tooling`
+- `GeminiProvider`
+- `migration`
+- `migration`
+- `migration`
+- `migration`
+- `src/core/cortex/nativeTransport.ts — Durable native message store (Kilo/opencode-style): loadNativeMessages / appendNativeMessages / clearNativeMessages / getNativeMessageCount on table native_messages.`
+- `src/core/cortex/cortexThinkEngine.ts — Phase 4 gating prompt JSON + skip ValidationMiddleware di native; src/modules/ToolExecutorModule.ts — configSchema nativeTransport.`
+- `src/core/cortex/cortexThinkEngine.ts — nativeTurnBlocks, cross-call reload, compaction trim, toolChoice none; src/core/openaiTools.ts — historyBlocks; tools/tester/native_compaction_test.ts — test kompaksi native baru.`
+- `src/core/kernel/ai/generateSegment.ts — buildGeminiHistoryContents + config.history; src/drivers/ai-providers/GeminiProvider.ts — teruskan nativeTurnBlocks; src/core/kernel/ai/aiTypes.ts — AIConfig.history; src/core/cortex/cortexThinkEngine.ts — cabut gate gemini; tools/tester/native_gemini_test.ts — test baru.`
+- `src/drivers/tools/delegate.ts — Delegate Tool (opencode-style parallel sub-agent sessions): spawn 1+ sub-agent via Promise.allSettled, promptOverride direct session di SubAgentManager.ts.`

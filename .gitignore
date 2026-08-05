@@ -13,6 +13,9 @@ coverage/
 # Ignore local runtime data directory (generated/synced at runtime)
 .yuihime
 
+# Addons live externally in ~/.yuihime/addons (YUIHIME_ADDONS_PATH), not in the repo
+addons/
+
 # Ignore generated build manifest (artifact, not source of truth)
 src/share/prompts/build-info.json
 /build-info.json

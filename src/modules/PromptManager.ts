@@ -125,19 +125,34 @@ function sanitizeSystemPromptForJsonMode(sysPrompt: string): string {
   if (!sysPrompt) return '';
   let sanitized = sysPrompt;
 
-  // Replace XML animation/mood/tone instruction sections with JSON equivalents
+  // STEP 1 - Line-based XML tag removal (JSON mode). Regex spanning across lines
+  // is unsafe here: backticked prose literals like `<animations>` (section 2.2/3.3)
+  // lack a nearby closing tag, so `[\s\S]*?</animations>` anchors on those literals
+  // and swallows entire unrelated sections (ENVIRONMENT, FORMAT DIALOGUE EXAMPLES...).
+  // A real tag always sits on its own line and starts the line, so drop only those.
+  sanitized = sanitized
+    .split('\n')
+    .map((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) return line;
+      if (/^(<animations>|<mood_impact>|<tone>)/.test(trimmed) && !trimmed.includes('`')) {
+        return '';
+      }
+      return line;
+    })
+    .join('\n');
+
+  // STEP 2 - Rewrite XML-oriented instruction sections with JSON equivalents.
+  // These are anchored on their headers and bounded by the NEXT header lookahead,
+  // so they never over-consume unrelated content.
   const replacements: [RegExp, string][] = [
     [
       /## 2\. AVATAR EXPRESSION & ANIMATIONS[\s\S]*?(?=## 3\.|## 4\.|$)/i,
-      '## 2. AVATAR EXPRESSION & ANIMATIONS\nYou express emotions through the JSON keys `animations` and `mood_impact` in your response. Do NOT use XML tags like `<animations>` or `<mood_impact>`.\n'
+      '## 2. AVATAR EXPRESSION & ANIMATIONS\nYou express emotions through the JSON keys `animations` and `mood_impact` in your response. Do NOT use XML tags like animations or mood_impact.\n'
     ],
     [
       /## 3\. RESPONSE FORMAT & DELIVERY SPECIFICATIONS[\s\S]*?(?=## 4\.|## 5\.|$)/i,
       '## 3. RESPONSE FORMAT & DELIVERY SPECIFICATIONS\nOutput a single JSON object. Use JSON keys only. No XML tags.\n'
-    ],
-    [
-      /Place the following optional tags at the absolute outer level[\s\S]*?tool_calls[\s\S]*?standard OpenAI `tool_calls` schema format\./i,
-      'Place animations and mood_impact in their respective JSON keys at the root of the response object. Use the `tool_calls` array in JSON format only.'
     ],
     [
       /- \*\*Supported Animation Codes\*\*:[\s\S]*?Alternative Indonesian Keywords[\s\S]*?\(automatically mapped\):[\s\S]*?$/im,
@@ -148,24 +163,8 @@ function sanitizeSystemPromptForJsonMode(sysPrompt: string): string {
       ''
     ],
     [
-      /<animations>[\s\S]*?<\/animations>/gi,
-      ''
-    ],
-    [
-      /<mood_impact>[\s\S]*?<\/mood_impact>/gi,
-      ''
-    ],
-    [
-      /<mood_impact>[\s\S]*?$/gi,
-      ''
-    ],
-    [
-      /<tone>[\s\S]*?<\/tone>/gi,
-      ''
-    ],
-    [
-      /<tone>[\s\S]*?$/gi,
-      ''
+      /Place the following optional tags at the absolute outer level[\s\S]*?tool_calls[\s\S]*?standard OpenAI `tool_calls` schema format\./i,
+      'Place animations and mood_impact in their respective JSON keys at the root of the response object. Use the `tool_calls` array in JSON format only.'
     ],
     [
       /You \*\*MUST\*\* express all emotions[\s\S]*?at the bottom of your response\./i,
@@ -182,6 +181,17 @@ function sanitizeSystemPromptForJsonMode(sysPrompt: string): string {
   ];
 
   for (const [pattern, replacement] of replacements) {
+    sanitized = sanitized.replace(pattern, replacement);
+  }
+
+  // STEP 3 - Fallback: catch an unclosed trailing <mood_impact>/<tone> tag at the end
+  // of the document. The negative lookbehind prevents anchoring on backticked prose
+  // literals like `<mood_impact>` (a real tag is never preceded by a backtick).
+  const fallbacks: [RegExp, string][] = [
+    [/(?<!`)<mood_impact>[\s\S]*?$/gi, ''],
+    [/(?<!`)<tone>[\s\S]*?$/gi, '']
+  ];
+  for (const [pattern, replacement] of fallbacks) {
     sanitized = sanitized.replace(pattern, replacement);
   }
 
@@ -240,6 +250,23 @@ export const PromptManagerModule: CortexModule = {
             { value: 'tiny', label: 'Tiny - Direct Response & Ultra-Short Prompting (Tiny LLMs: <1.5B)' }
           ],
           description: 'Optimizes cognitive circuit parameters, conversation history size, prompt layout, JSON schema, and core data sent to the LLM based on parameter size to reduce latency and prevent cognitive timeouts.'
+        },
+        activeTools: {
+          type: 'textarea',
+          label: 'Active Tools (comma-separated tool ids)',
+          default: '',
+          description: 'Whitelist of native tools sent to the LLM via the API tools array (Kilo-style session scoping). Empty = fall back to the llmSizePreset default subset. Examples: "speak, websearch, read, write".'
+        },
+        toolChoice: {
+          type: 'select',
+          label: 'Tool Calling Mode',
+          default: 'auto',
+          options: [
+            { value: 'auto', label: 'Auto - let the model decide when to call tools' },
+            { value: 'required', label: 'Required - force at least one tool call per turn' },
+            { value: 'none', label: 'None - disable tool calling' }
+          ],
+          description: 'Controls the native tool_choice sent to the provider (Kilo-style tool choice). Applies on top of activeTools.'
         }
       }
     }
@@ -259,6 +286,7 @@ export const PromptManagerModule: CortexModule = {
     const worldLore = config.worldLore || registry.get('core:lore');
     const characterName = registry.get('core:character_name') || resolveCharacterName(charLore);
     const resolvedSysPrompt = (sysPrompt || '').replace(/\$\{characterName\}/g, characterName);
+    const sanitizedSysPrompt = sanitizeSystemPromptForJsonMode(resolvedSysPrompt);
 
     // Update registry with current config state for consistency
     registry.register('core:system_prompt', resolvedSysPrompt, true);
@@ -364,19 +392,40 @@ export const PromptManagerModule: CortexModule = {
       tools = SystemRegistry.getTools();
     }
 
+    // Kilo-style tool scoping: compute the whitelist of tool ids exposed to the
+    // LLM and forward it to the gateway so the API `tools` array (and thus the
+    // native schema payload) stays proportional to the model preset. Explicit
+    // `context.allowedTools` wins, then the `activeTools` setting, then the
+    // per-preset default subset.
+    const ACTIVE_TOOL_DEFAULTS: Record<string, string[]> = {
+      tiny: ['speak', 'get_current_time', 'calculator', 'websearch', 'question'],
+      lite: ['speak', 'get_current_time', 'calculator', 'websearch', 'webfetch', 'bash', 'read', 'write', 'glob', 'grep', 'todowrite', 'generate_image', 'set_emotion', 'view_logs'],
+      medium: ['speak', 'status_update', 'get_current_time', 'calculator', 'websearch', 'webfetch', 'search_chat', 'chat_log', 'daily_summary', 'bash', 'read', 'write', 'edit', 'apply_patch', 'glob', 'grep', 'file_manager', 'download_file', 'send_file', 'todowrite', 'set_emotion', 'generate_image', 'view_logs', 'question', 'manage_bgproc', 'scheduler', 'update_user_profile'],
+      standard: []
+    };
+    const preset = (config.llmSizePreset as string) || 'standard';
+    let allowedTools: string[] = [];
+    if (Array.isArray(context.allowedTools) && context.allowedTools.length > 0) {
+      allowedTools = context.allowedTools;
+    } else if (typeof config.activeTools === 'string' && config.activeTools.trim()) {
+      allowedTools = config.activeTools.split(',').map((s: string) => s.trim()).filter(Boolean);
+    } else if (ACTIVE_TOOL_DEFAULTS[preset]) {
+      allowedTools = ACTIVE_TOOL_DEFAULTS[preset];
+    }
+    if (allowedTools.length > 0) {
+      context.allowedTools = allowedTools;
+    }
+    if (typeof context.toolChoice !== 'string' && config.toolChoice) {
+      context.toolChoice = config.toolChoice;
+    }
+
     let toolsList = "";
-    if (tools.length > 0) {
-      const hasNativeTools = Array.isArray(context.tools) && context.tools.length > 0;
-      if (hasNativeTools) {
-        toolsList = "Native tool calling is active. Tool schemas are provided via the standard API tools array. Use the standard `tool_calls` JSON format with `id`, `type: \"function\"`, and `function: { name, arguments }` structure.\n";
-      } else {
-        for (const t of tools) {
-          toolsList += `- **${t.metadata.id}**: ${t.metadata.description}\n`;
-          if (t.metadata.parameters) {
-            toolsList += `  - Parameter Schema: \`\`\`json\n${JSON.stringify(t.metadata.parameters, null, 2)}\n\`\`\`\n`;
-          }
-        }
-      }
+    // Native tool calling mirrors the provider gateway (ProviderGatewayModule):
+    // the gateway always attaches the full `tools` array to the API request
+    // unless `disableTools` is set, so tool schemas must NOT be duplicated as
+    // prompt text. Keep only a short header (Kilo-style), saving ~10K tokens.
+    if (tools.length > 0 && !context.disableTools) {
+      toolsList = "Native tool calling is active. Tool schemas are provided via the standard API tools array. Use the standard `tool_calls` JSON format with `id`, `type: \"function\"`, and `function: { name, arguments }` structure.\n";
     } else {
       toolsList = "No external system tools are currently available.";
     }
@@ -734,6 +783,12 @@ Before responding or calling any tools, you MUST check the folder \`user_data/so
 </environment_details>
 
 **CRITICAL FORMAT RESOLUTION NOTICE:** The base system prompt below may reference XML tags like <animations>, <mood_impact>, or <tone>. Those XML instructions are PERMANENTLY DISABLED in this session's JSON mode. You MUST use the JSON keys 'animations' and 'mood_impact' only. Do NOT emit any XML tags in your response. Output EXACTLY ONE valid JSON object.
+
+${sanitizedSysPrompt ? `
+<base_system_prompt>
+${sanitizedSysPrompt}
+</base_system_prompt>
+` : ''}
 
 ${activeUserContext}
 

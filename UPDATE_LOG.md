@@ -1,6 +1,119 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.268] - 2026-08-05
+### Feature: 2 mekanisme opencode (Task tool paralel + direct session) diterapkan ke Yui
+- delegate.ts (TOOL BARU, id 'delegate'): spawn 1+ sub-agent session PARALEL via Promise.allSettled dalam satu panggilan tool; tiap task punya agentId (fallback auto-pick dari SubAgentRegistry) + prompt custom; hasil dikembalikan sebagai delegates[] (agentId, response, error, latencyMs) + summary agar loop induk membacanya sebagai tool observation. Konkuren dengan tool lain di turn yang sama via tool executor paralel.
+- SubAgentManager.buildPrompt: dukung promptOverride + systemPromptOverride (direct session mode — one-shot dengan prompt milik caller, tetap diberi grounding scoped context: memories, viewer identity, channel). SubAgentRunOptions diperluas.
+- RegistryInitializer: DelegateTool didaftarkan ke SystemRegistry (import statis).
+- Verifikasi: delegate_test.ts BARU 10/10 PASS (3 task paralel + direct session promptOverride + tool terdaftar); lint + build OK.
+- Chore: folder repo addons/ dihapus (git rm) + .gitignore 'addons/' — addon kini external di ~/.yuihime/addons (YUIHIME_ADDONS_PATH); kode onboarding sudah guard existsSync (onboarding.ts:680).
+
+
+## [4.268] - 2026-08-05
+### Fix: Jawaban final (tool speak) tak lagi hilang saat pipeline timeout / abort signal
+- cortexThinkEngine.ts: tool delivery (speak/final_answer/status_update) dikecualikan dari race abortPromise — sebelumnya saat pipeline >150s (QUEUE_PIPELINE_TIMEOUT) atau client disconnect, signal.aborted membuat tool speak ditolak 'Tool execution aborted: client connection closed' sebelum execute() sempat dipanggil, jadi jawaban final nyangkut dan user tidak menerima apa-apa (fallback malah di-skip GLOBAL_DEDUP). Kini delivery tool selalu dieksekusi agar jawaban konklusif tetap terkirim.
+- Verifikasi: native_loop_test 13/13 PASS, native_gemini_test 22 PASS (dengan env scratch YUIHIME_*); kegagalan native_compaction (3) pre-existing di baseline stash, bukan dari edit ini.
+
+
+## [4.268] - 2026-08-05
+### Feature: Phase 6: native multi-turn penuh untuk Gemini (functionCall/functionResponse contents, flag default off)
+- generateSegment.ts: export buildGeminiHistoryContents — blok kanonik [assistant(tool_calls), ...role:tool] diubah jadi contents Gemini (role:model functionCall segera diikuti role:user functionResponse); coerceArgsForGemini (JSON-string args -> object), parseToolResponseContent (envelope tool di-parse balik, fallback {result}), blok malformed di-skip. Tanpa history, jalur single-turn byte-identik.
+- generateContent kini menerima config.history (AIConfig baru) dan meng-prepend historyContents ke contents sebelum user turn saat ini — Gemini mendapat konteks tool multi-round lintas iterasi.
+- GeminiProvider.generate meneruskan context.nativeTurnBlocks sebagai history di server (aiService.generate) dan browser (/api/ai/generate) path. Pemanggilan sudah mengembalikan envelope kanonik {tool_calls:[...]} untuk functionCall parts sejak Phase 1, jadi readNativeToolCalls(...,'gemini') langsung bekerja.
+- cortexThinkEngine.ts: cabut 3 gate !== 'gemini' — usesJsonPrompt (= !nativeTransportEnabled), iterationUsesNative (= nativeTransportEnabled), responseUsesNative (= iterationUsesNative). Gemini kini native channel penuh saat flag aktif: skip JSON block + json_enforcement + ValidationMiddleware + [SYSTEM_OBSERVATION] fold; toolChoice 'none' di last step via functionCallingConfig.
+- Keputusan: default-on tetap DITUNDA — nativeTransport default false; Rollback §8 berlaku. Phase 6 menutup gap Gemini; sisa pekerjaan = validasi provider API nyata.
+- Verifikasi: native_gemini_test.ts BARU (14 unit buildGeminiHistoryContents + 11 loop end-to-end provider gemini — tool dieksekusi, native_messages persisted, turn 2 menerima 1 blok interleaved, konversi loop -> [model,user]); regresi: native_loop 13/13, native_compaction 6/6, native_tool_calls 9/9, native_transport 18/18; lint + build OK.
+
+
+## [4.267] - 2026-08-05
+### Feature: Phase 5: step semantics + native compaction + interleaved history (Kilo/opencode parity, flag default off)
+- openaiTools.ts: buildChatMessages menerima historyBlocks (array blok kanonik [assistant(tool_calls), ...role:tool] per round) dan meng-interleave per blok — fix bug laten penggabungan semua assistant blocks sebelum semua tool rows (invalid multi-turn untuk OpenAI-compatible). Jalur legacy flat tetap utuh.
+- cortexThinkEngine.ts: loopContext.nativeTurnBlocks (1 blok kanonik per round tool call) diappend saat persist native; pada think baru, history durable native_messages direkonstruksi jadi nativeTurnBlocks sehingga provider menerima konteks multi-turn lintas pesan user (cross-call reload).
+- cortexThinkEngine.ts: native compaction — hanya saat didCompact (postCompactPairs < preCompactPairs) head blok di-drop dari nativeTurnBlocks dan store native_messages di-rewrite (clear + append) agar reload memuat konteks terkompaksi; guard mencegah spurious wipe di iterasi pertama think yang me-reload history.
+- cortexThinkEngine.ts: loopContext.toolChoice = isLastStep ? 'none' : undefined di step terakhir — model dipaksa menjawab plain text (Kilo parity), melengkapi disableTools + compileMaxStepsPrompt.
+- 5 provider driver (OpenAI/Custom/OpenRouter/Anthropic/Local) meneruskan context.nativeTurnBlocks ke buildChatMessages.
+- Keputusan: default-on DITUNDA — nativeTransport tetap default false; parity penuh lolos suite namun belum diverifikasi terhadap provider API nyata. Rollback §8 tetap berlaku (flag false = JSON mode).
+- Verifikasi: native_loop_test (13/13, termasuk reload think kedua + interleaving + anthropic alternation + legacy fallback), native_compaction_test BARU (6/6, store 12 rows -> 9), native_tool_calls (9/9), native_transport (18/18); lint + build OK; prompt_assembler tidak regresi (2 FAIL pre-existing baseline).
+
+
+## [4.266] - 2026-08-05
+### Change: Phase 4: carrier final_answer + kontrak §4.5 (native parity, flag default off)
+- cortexThinkEngine.ts: usesJsonPrompt = !(nativeTransportEnabled && activeProviderId !== 'gemini') — 'Format Respons Khusus' + cortex:json_enforcement di-skip total untuk provider native-capable (prompt Kilo-style bersih); activeProviderId dinaikkan ke setup sebelum blok prompt.
+- cortexThinkEngine.ts: responseUsesNative dihitung sebelum validasi dan dipakai melewati ValidationMiddleware.validate(rawResultStr) di channel native — envelope tool_calls / plain text tidak lagi memicu [SCHEMA_ERROR] noise; argumen carrier final_answer tetap divalidasi via schema tool (APIService.validateSchema) saat eksekusi.
+- ToolExecutorModule.configSchema: field boolean nativeTransport (label 'Native Tool Transport (Kilo/opencode-style)', default false) — UI auto-render tanpa hardcode.
+- Keputusan desain: directive native tetap diappend setelah json_enforcement bila flag nyala agar fallback Gemini tetap pegang JSON tanpa konflik.
+- Verifikasi: native_loop_test (8/8), native_tool_calls (9/9), native_transport (18/18) hijau; prompt_assembler tidak regresi (baseline repo 5 FAIL di env sama); npm run lint + npm run build OK.
+
+
+## [4.265] - 2026-08-05
+### Feature: Phase 3: native tool transport main loop (Kilo/opencode-style, flag default off)
+- cortexThinkEngine.ts: iterationUsesNative (flag && provider != gemini) skips [SYSTEM_OBSERVATION], first-pass JSON directive, sets isJson:false, drops response_format per iteration.
+- cortexThinkEngine.ts: per-iteration native detection via readNativeToolCalls — tool_calls consumed into parsedPayload (speech/animations/mood_impact empty); plain-text reply sets processedResponse + break (finish != tool-calls => stop, Kilo/opencode parity).
+- PromptRegistry.ts: new cortex:native_function_calling template (call via native channel; final = final_answer tool args {speech, animations, mood_impact} OR plain text); appended after json_enforcement when flag on.
+- Gemini (generateSegment) keeps JSON fallback while flag on because it lacks native multi-turn history; native directive applied only to native-capable providers per iteration.
+- New tools/tester/native_loop_test.ts (8/8 PASS): full pipeline with mock gateway emitting OpenAI-native tool_calls then plain-text final; proves detection, execution, loop break, and native_messages persistence [assistant(tool_calls), role:tool].
+- AGENTS.md: add Backup SOP (mandatory /tmp/opencode/yuihime-backup/ before core edits) + Watchdog & Daemon Ops sections.
+
+
+## [4.264] - 2026-08-05
+### Feature: Phase 2: durable native message store (Kilo/opencode-style)
+- New table native_messages(session_id, seq, role, parts) PK(session_id, seq) added via setupSchema (CREATE TABLE IF NOT EXISTS, safe migration)
+- New src/core/cortex/nativeTransport.ts: loadNativeMessages (ordered, corrupt-row safe), appendNativeMessages (atomic tx, seq continuation), clearNativeMessages, getNativeMessageCount
+- cortexThinkEngine.ts wired behind flag nativeTransport (tool-executor.nativeTransport || settings.nativeTransport, default off): loads persisted history at loop start into loopContext.nativeHistory, persists canonical [assistant(tool_calls), role:tool] pairs after every executed tool turn
+- Add tools/tester/native_transport.test.ts (18/18 PASS): roundtrip, seq order, session isolation, reopen durability, corrupt row skip, clear, guards
+
+
+## [4.263] - 2026-08-05
+### Feature: Phase 1: native tool_calls reading (Kilo-style) per provider
+- Add readNativeToolCalls(rawResult, providerId) helper in openaiTools.ts: single entry point to read canonical tool_calls envelope or raw provider message (tool_calls/tool_use/functionCall) -> normalized array or null
+- generateSegment.ts (Gemini): surface native functionCall parts from streaming + non-streaming responses as canonical {tool_calls} envelope; no longer throws Invalid response schema on functionCall-only responses
+- GeminiProvider geminiNativeTools description updated: functionCall parts are now surfaced back into the loop
+- Add tools/tester/native_tool_calls.test.ts (9/9 PASS): envelope parsing, gemini/anthropic branches, plain-text -> null
+
+
+## [4.262] - 2026-08-05
+### Docs: Native transport design: full-parity variant + module contract
+- NATIVE_TOOL_TRANSPORT_MIGRATION.md updated to full-parity (Kilo/opencode-style): drop root JSON schema, carrier via final_answer tool args + provider reasoning field
+- New section 4.5 module preservation contract: immediateResult shape, memories, LlmIoAuditor, eventBus, stateMachine, PHASE 4 rawResult synthesis, iterationsHistory must stay identical; EmotionEngine/MoodAnalysisModule confirmed independent of parsedPayload
+
+
+## [4.261] - 2026-08-05
+### Docs: Native tool transport migration design
+- Add NATIVE_TOOL_TRANSPORT_MIGRATION.md: phased roadmap (5 phases) to move Yui loop from JSON-in-prompt to Kilo/opencode-style native tool messages
+- Design only; no code changes. Hybrid state v4.260 (native tools array + scoping + toolChoice, JSON output) documented as baseline
+
+
+## [4.260] - 2026-08-05
+### feat: Gemini native function calling (Kilo-style) behind geminiNativeTools flag
+- Wires Kilo's Gemini protocol mapping into YuiHime: normalizeToolsForProvider('gemini') produces { functionDeclarations: [{name, description, parameters}] } and normalizeToolChoice('gemini') produces functionCallingConfig { AUTO/NONE/ANY, allowedFunctionNames } — identical to packages/llm/src/protocols/gemini.ts. GeminiProvider now passes tools + toolConfig through AIService.generate (and the /api/ai/generate route) into the generateContent requestBody; AIConfig extended with toolConfig and generateSegment forwards requestBody.toolConfig. Gated behind a new geminiNativeTools boolean setting (default false) because the main loop drives tools via JSON tool_calls in the prompt and native functionCall response parts are not yet surfaced back into the loop. Verified: lint + build OK, gemini decl shape matches Kilo exactly.
+
+
+## [4.259] - 2026-08-05
+### feat: Kilo-style tooling: session-scoped native tools + tool_choice, drop text tool listing
+- Mirrors Kilo-Org/kilocode packages/core/src/tool behavior (excluding per-tool permission gating): (1) buildOpenAITools(allowedTools) filters the native API tools array by an explicit whitelist, wired through ProviderGatewayModule via context.allowedTools, so small presets send only a lean subset (tiny=5, lite=14, medium=27, standard=all 36). (2) New normalizeToolChoice() maps 'auto'/'none'/'required'/'any'/tool-id/{type,name} into provider-native tool_choice (OpenAI passthrough, Anthropic {type}, Gemini functionCallingConfig) wired into OpenAI/Custom/OpenRouter/Anthropic/Local providers; PromptManager exposes activeTools (textarea) + toolChoice (select) configSchema and forwards both to the gateway. (3) buildOpenAITools now passes through metadata.outputSchema when present. PromptManager header stays native (no text listing). Verified: 36 tools -> 3 filtered; tool_choice per provider; prompt_assembler 14/14 PASS; npm run build OK.
+
+
+## [4.258] - 2026-08-05
+### feat: PromptManager: native tool calling only (Kilo-style) - drop redundant text tool listing from system prompt
+- PromptManager no longer writes the full 42-tool text listing + JSON schema (~10.6K tokens) into the system prompt. Tool schemas are already attached to every provider request by ProviderGatewayModule via buildOpenAITools() (native API tools array), mirroring Kilo-Org/kilocode where tools live only in LLMRequest.tools. The prompt now emits a short native-tooling header, gated by the same condition as the gateway (!context.disableTools). Measured on identical demo context with DeepSeek V3 tokenizer: assembled prompt drops 26,559 -> 16,624 tokens (-9,935, -37.4%). prompt_assembler.test.ts 14/14 PASS; npm run lint clean.
+
+
+## [4.257] - 2026-08-05
+### feat: Test tooling: prompt assembler + DeepSeek V3 token analyzer in tools/tester
+- prompt_assembler.test.ts runs PromptManagerModule.run with mocked state/context, validates 14 assertions (base_system_prompt injection, XML sanitize integrity, sections 4-5 preserved), and writes assembledSystemPrompt to tools/tester/output/assembled_prompt.txt. analyze_prompt_tokens.py loads the official DeepSeek V3 tokenizer (tools/tester/dsv3_tokenizer) and prints token totals plus per-section breakdown. Measured: assembled prompt = ~18.8K tokens, system_capabilities_and_tools = 63.8%.
+
+
+## [4.256] - 2026-08-05
+### fix: PromptManager: fix sanitizeSystemPromptForJsonMode regex corruption + inject base system prompt
+- sanitizeSystemPromptForJsonMode previously used cross-line XML strip regexes (<animations>...</animations>, <mood_impact>...$, <tone>...$) that anchored on backticked prose literals (section 2.2/3.3) and silently deleted sections 4 (ENVIRONMENT) and 5 (FORMAT DIALOGUE EXAMPLES). Replaced with line-based whole-tag removal + header-anchored section rewrites + lookbehind-guarded unclosed-tag fallback. system_prompt.md now fully reaches the LLM inside <base_system_prompt>.
+
+
+## [4.255] - 2026-08-04
+### fix: PromptManager: inject sanitized base system prompt (system_prompt.md) into assembledSystemPrompt
+- system_prompt.md was loaded & registered but never injected into systemContext after refactor — base personality instructions never reached the LLM. Now sanitized via sanitizeSystemPromptForJsonMode() (XML->JSON keys) and inserted as <base_system_prompt> block.
+
+
 ## [4.254] - 2026-08-04
 ### Change: Loop-agent adoption: max-steps shutdown turn, anchored compaction, transient-only retry, tool name hygiene
 - MAX_STEPS_PROMPT + SUMMARY_TEMPLATE registered in PromptRegistry; compileMaxStepsPrompt injects shutdown directive when iteration === maxIterations; final turn disables tools via ProviderGatewayModule disableTools

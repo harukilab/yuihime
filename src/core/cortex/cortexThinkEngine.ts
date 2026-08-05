@@ -26,7 +26,7 @@ import { eventBus } from '@shared/core/kernel/event-bus';
 import { stateMachine } from '../kernel/state-machine';
 import { CognitiveScheduler } from '../kernel/CognitiveScheduler';
 import { normalizeToolCall } from './toolNormalizer';
-import { buildToolResultMessages } from '../openaiTools';
+import { buildToolResultMessages, readNativeToolCalls } from '../openaiTools';
 import { StreamExtractor } from './streamExtractors';
 import { toSingleString } from '@/core/kernel/configNormalizer';
 import { stripCodeFences, isolateBraceBlock, liftNestedProperties } from './jsonRepairer';
@@ -35,6 +35,7 @@ import { extractBestJsonObject, extractJsonObject } from './jsonExtract';
 import { makeToolCall } from './cortexThinkEngineUtils';
 import { compileMaxStepsPrompt, isDeliveryTool, isTransientToolError, classifyToolExecutionError } from './loopGuards.js';
 import { maybeCompactContext } from './contextCompactor.js';
+import { loadNativeMessages, appendNativeMessages, clearNativeMessages } from './nativeTransport.js';
 import { DEFAULT_NEURAL_CORES } from '@shared/constants';
 import { broadcastToWS } from '../server/apiRouter.js';
 import { GlobalOutputDeduplicator } from '../kernel/GlobalOutputDeduplicator.js';
@@ -338,6 +339,50 @@ export async function executeCortexThink(
   loopContext.compactionTurns = [];
   loopContext.compactionCheckpoint = undefined;
   loopContext.compactionSummary = undefined;
+  // Native transport (Kilo/opencode-style): durable message parts per session,
+  // loaded on loop start and appended after every executed tool turn. Off by
+  // default — JSON-in-prompt transport remains the active path unless the flag
+  // is enabled.
+  const nativeTransportEnabled = settings['tool-executor']?.nativeTransport === true || settings.nativeTransport === true;
+  const nativeSessionId = contextId || 'web_default';
+  loopContext.nativeTurnBlocks = [];
+  // Expose the flag to providers: Gemini attaches functionDeclarations whenever
+  // native transport is active (no separate geminiNativeTools toggle needed).
+  loopContext.nativeTransportEnabled = nativeTransportEnabled;
+  if (nativeTransportEnabled) {
+    loopContext.nativeHistory = loadNativeMessages(nativeSessionId);
+    loopContext.nativeSessionId = nativeSessionId;
+    logs.push(`[CORTEX] Native transport enabled. Loaded ${loopContext.nativeHistory.length} persisted native message(s).`);
+
+    // Phase 5: rebuild the interleaved per-turn history from the durable store
+    // so a fresh think call feeds the provider the full multi-turn native
+    // context (assistant tool_calls immediately followed by role:"tool" rows),
+    // not just the current prompt. Groups tool rows under the preceding
+    // assistant(tool_calls) row, mirroring the canonical block shape.
+    const blocks: any[][] = [];
+    let currentBlock: any[] | null = null;
+    for (const m of loopContext.nativeHistory) {
+      if (m && m.role === 'assistant' && Array.isArray(m.tool_calls) && m.tool_calls.length > 0) {
+        currentBlock = [{ role: 'assistant', content: null, tool_calls: m.tool_calls }];
+        blocks.push(currentBlock);
+      } else if (m && m.role === 'tool' && currentBlock) {
+        currentBlock.push(m);
+      } else {
+        currentBlock = null;
+      }
+    }
+    loopContext.nativeTurnBlocks = blocks;
+    if (blocks.length > 0) {
+      logs.push(`[CORTEX] Rebuilt ${blocks.length} interleaved native turn block(s) from persisted history.`);
+    }
+  }
+
+  // Native transport spans every provider (OpenAI-compatible, Anthropic, and
+  // Gemini): Gemini's generateContent now converts the interleaved turn blocks
+  // into functionCall/functionResponse contents, so it no longer needs the
+  // JSON-in-prompt path when the flag is on.
+  const activeProviderId = settings.provider || 'gemini';
+  const usesJsonPrompt = !nativeTransportEnabled;
 
   if (!state.systemHealth) {
     state.systemHealth = { latency: 0, successRate: 1.0, tasksCompleted: 0 };
@@ -346,7 +391,7 @@ export async function executeCortexThink(
     state.systemHealth.consecutive_formatting_errors = 0;
   }
 
-  if (loopContext.assembledSystemPrompt) {
+  if (usesJsonPrompt && loopContext.assembledSystemPrompt) {
       loopContext.assembledSystemPrompt = loopContext.assembledSystemPrompt.replace(
         /## Format Respons Khusus[\s\S]*?(?=## Eksekusi Tugas|$)/i,
         `## Response Format (JSON MODE ACTIVE):
@@ -359,6 +404,15 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
       const jsonEnforcementDirective = PromptRegistry.getInstance().compile('cortex:json_enforcement', {});
       loopContext.assembledSystemPrompt += "\n\n" + jsonEnforcementDirective;
     }
+
+  // Native transport (Kilo/opencode-style): when the flag is on for a native-
+  // capable provider, the JSON-mode block above is skipped entirely (clean,
+  // directive-free system prompt) and this native function-calling directive is
+  // appended instead. Gemini (or nativeTransport off) keeps json_enforcement.
+  if (nativeTransportEnabled) {
+    const nativeDirective = PromptRegistry.getInstance().compile('cortex:native_function_calling', {});
+    loopContext.assembledSystemPrompt = (loopContext.assembledSystemPrompt || "") + "\n\n" + nativeDirective;
+  }
 
   let toolsToCall: any[] = snapshot ? (snapshot.toolsToExecute || []) : [];
   let processedResponse = "";
@@ -432,7 +486,14 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
     }
     // --- END AREA 2 ---
 
-    if (iteration > 1 && toolExecutionHistory.length > 0) {
+    // Native transport spans every provider when the flag is on: the loop
+    // consumes tool calls from the provider's native channel (OpenAI tool_calls,
+    // Anthropic tool_use, Gemini functionCall) instead of JSON-in-prompt.
+    const iterationUsesNative = nativeTransportEnabled;
+    const providerSpecificConfig = settings[activeProviderId] || {};
+    const targetModelId = toSingleString(providerSpecificConfig.model) || 'gemini-3.5-flash';
+
+    if (!iterationUsesNative && iteration > 1 && toolExecutionHistory.length > 0) {
       const lastExecuted = toolExecutionHistory[toolExecutionHistory.length - 1];
       if (lastExecuted && lastExecuted.results) {
         loopInput = input + `\n\n[SYSTEM_OBSERVATION]: Tool execution results from the previous step:\n${JSON.stringify(lastExecuted.results)}`;
@@ -443,16 +504,12 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
       ...settings,
       [settings.provider]: {
         ...(settings[settings.provider] || {}),
-        isJson: true
+        isJson: iterationUsesNative ? false : true
       }
     };
 
-    const activeProviderId = settings.provider || 'gemini';
-    const providerSpecificConfig = settings[activeProviderId] || {};
-    const targetModelId = toSingleString(providerSpecificConfig.model) || 'gemini-3.5-flash';
-
     let activeIterationInput = loopInput;
-    if (iteration === 1) {
+    if (iteration === 1 && !iterationUsesNative) {
       activeIterationInput += "\n\n[CRITICAL PRE-PROCESSING DIRECTIVE (FIRST PASS)]: You are strictly prohibited from writing conversational/speech text if you are calling tools. If you populate the \"tool_calls\" array with tool calls (e.g., search_web, read_url, bash, etc.), you MUST keep the \"speech\" field entirely empty (\"\") in this iteration! Your conversational response will be formulated in the subsequent pass once tools have executed. Only if you are not calling any tools should you output speech. Output valid JSON matching the schema.";
     }
     if (isLastStep) {
@@ -463,6 +520,7 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
     // Anchored compaction: when accumulated tool history threatens the context
     // window, summarize the earlier turns, keep the recent tail verbatim, and
     // prepend a <conversation-checkpoint> block (non-blocking on failure).
+    const preCompactPairs = Array.isArray(loopContext.compactionTurns) ? loopContext.compactionTurns.length : 0;
     try {
       activeIterationInput = await maybeCompactContext({
         loopContext,
@@ -474,6 +532,51 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
       });
     } catch (compactErr: any) {
       logs.push(`[COMPACTION] Non-blocking compaction error: ${compactErr?.message || compactErr}`);
+    }
+    const postCompactPairs = Array.isArray(loopContext.compactionTurns) ? loopContext.compactionTurns.length : preCompactPairs;
+    const didCompact = postCompactPairs < preCompactPairs;
+
+    // Phase 5: only when the anchored compactor actually trimmed the in-loop
+    // history do we keep the durable native store (nativeTurnBlocks + persisted
+    // native_messages) consistent: drop the summarized head blocks so a future
+    // turn / resume reloads the compacted context instead of the full one.
+    // Guarded by `didCompact` — a fresh think loads persisted history into
+    // nativeTurnBlocks while compactionTurns starts empty, so without this guard
+    // the first iteration would spuriously wipe the reloaded history.
+    if (nativeTransportEnabled && didCompact) {
+      const turnBlocks = Array.isArray(loopContext.nativeTurnBlocks) ? loopContext.nativeTurnBlocks : [];
+      if (turnBlocks.length > 0) {
+        // Drop oldest whole blocks until the remaining tool rows fit the kept
+        // recent tail (never below one block; parallel calls may exceed by a
+        // few rows, which is safe — the store keeps a superset, never a gap).
+        let keptCalls = turnBlocks.reduce((acc: number, b: any[]) => acc + b.filter((m: any) => m.role === 'tool').length, 0);
+        let drop = 0;
+        while (drop < turnBlocks.length - 1) {
+          const blockCalls = turnBlocks[drop].filter((m: any) => m.role === 'tool').length;
+          if (keptCalls - blockCalls <= postCompactPairs) break;
+          keptCalls -= blockCalls;
+          drop++;
+        }
+        const keptBlocks = turnBlocks.slice(drop);
+        loopContext.nativeTurnBlocks = keptBlocks;
+        const seedUser =
+          (Array.isArray(loopContext.nativeHistory) && loopContext.nativeHistory.find((m: any) => m && m.role === 'user')) ||
+          { role: 'user', content: input };
+        const rebuilt: any[] = [seedUser];
+        for (const block of keptBlocks) {
+          for (const msg of block) {
+            rebuilt.push(msg);
+          }
+        }
+        loopContext.nativeHistory = rebuilt;
+        try {
+          clearNativeMessages(nativeSessionId);
+          appendNativeMessages(nativeSessionId, rebuilt);
+        } catch (rewriteErr: any) {
+          logs.push(`[COMPACTION] Native store rewrite failed (non-blocking): ${rewriteErr?.message || rewriteErr}`);
+        }
+        logs.push(`[COMPACTION] Trimmed persisted native_messages to ${rebuilt.length} row(s) (kept ${keptBlocks.length} recent turn block(s)).`);
+      }
     }
 
     const requestPayloadBlueprint: PayloadBlueprint = {
@@ -491,9 +594,11 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
       temperature: providerSpecificConfig.temperature ?? 0.7,
       top_p: providerSpecificConfig.topP ?? 0.95,
       max_tokens: providerSpecificConfig.maxOutputTokens || 65536,
-      response_format: {
-        type: 'json_object'
-      }
+      ...(iterationUsesNative ? {} : {
+        response_format: {
+          type: 'json_object'
+        }
+      })
     };
 
     loopContext.payloadBlueprint = requestPayloadBlueprint;
@@ -520,6 +625,10 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
       console.log("[DEBUG_TRACE] calling gateway.run now");
       const gwT0 = Date.now();
       loopContext.disableTools = isLastStep;
+      // Phase 5 (Kilo parity): on the final agent step force tool_choice 'none'
+      // so the model MUST answer with plain text (complements compileMaxStepsPrompt
+      // and the tool stripping via disableTools). Undefined otherwise = provider default.
+      loopContext.toolChoice = isLastStep ? 'none' : undefined;
       loopContext = await gateway.run(activeIterationInput, state, { 
         ...loopContext, 
         config: loopSettings, 
@@ -534,13 +643,45 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
     logs.push(`[CORTEX_LOOP] Iteration ${iteration} Gateway routed via: ${loopContext.activeProvider || 'unknown'}`);
 
     const rawResultStr = (loopContext.rawResult || "").trim();
-    const validation = ValidationMiddleware.validate(rawResultStr);
-    if (!validation.success) {
-      logs.push(`[CORTEX_LOOP] [SCHEMA_ERROR] Output failed strict validation: ${validation.errors.join(' | ')}`);
+
+    // Native transport: consume the model output from the provider's native
+    // tool channel. readNativeToolCalls returns the canonical array when the
+    // model emitted tool_calls / tool_use / functionCall, or null when the reply
+    // is plain text — in which case it is the final answer and the loop exits
+    // (Kilo/opencode: finish != "tool-calls" => stop).
+    const responseUsesNative = iterationUsesNative;
+
+    // Phase 4: the legacy root-JSON schema validation only applies to the JSON
+    // transport. In the native channel the raw output is an API envelope or
+    // plain text, so skip it to avoid [SCHEMA_ERROR] noise and validate the
+    // carrier tool args (`final_answer`) via the tool's own schema instead.
+    if (!responseUsesNative) {
+      const validation = ValidationMiddleware.validate(rawResultStr);
+      if (!validation.success) {
+        logs.push(`[CORTEX_LOOP] [SCHEMA_ERROR] Output failed strict validation: ${validation.errors.join(' | ')}`);
+      }
     }
 
     let parsedPayload: any = null;
     let parseError: string | null = null;
+
+    if (responseUsesNative) {
+      const nativeCalls = readNativeToolCalls(rawResultStr, loopContext.activeProvider || 'openai');
+      if (Array.isArray(nativeCalls) && nativeCalls.length > 0) {
+        parsedPayload = {
+          thought: loopContext.thought || "",
+          speech: "",
+          animations: [],
+          mood_impact: {},
+          tool_calls: nativeCalls
+        };
+        logs.push(`[CORTEX_NATIVE] Detected ${nativeCalls.length} native tool call(s) from '${loopContext.activeProvider || 'unknown'}' and consuming them via the tool channel.`);
+      } else if (rawResultStr.trim().length > 0) {
+        processedResponse = rawResultStr;
+        logs.push(`[CORTEX_NATIVE] No native tool calls; captured plain-text final reply (${rawResultStr.length} chars).`);
+        break;
+      }
+    }
 
     const cleanJsonStr = APIService.cleanAIOutput(rawResultStr);
 
@@ -782,14 +923,14 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
 
     logs.push("[PHASE 3+] Verifying Neural Integrity...");
     const verifier = SystemRegistry.getModule<CortexModule>('neural-verifier');
-    if (verifier) {
+    if (verifier && !iterationUsesNative) {
       loopContext = await verifier.run(loopContext.rawResult || "", state, loopContext);
       if (loopContext.verifierStatus === 'corrected') logs.push("[KERNEL] Verifier performed structural repair.");
     }
 
     logs.push("[PHASE 4] Hub Active: Parallel Streamer Synchronization...");
     const streamer = SystemRegistry.getModule<CortexModule>('parallel-streamer');
-    if (streamer) {
+    if (streamer && !iterationUsesNative) {
        loopContext = await streamer.run(loopContext.rawResult || "", state, loopContext);
        logs.push("[CORTEX_LOOP] Neural signals converged at Parallel Hub.");
     } else {
@@ -1060,19 +1201,28 @@ if (typeof parsedArgs === 'string') {
               tc.args = stripped;
             }
 
-            if (signal?.aborted) {
+            const currentToolName = tc.name || tc.tool || '';
+            // Delivery tools carry the final reply to the user (speak / final_answer /
+            // status_update). They must survive an abort signal (pipeline timeout or
+            // client disconnect) so the user never loses Yui's conclusive response —
+            // otherwise the answer silently dies inside the tool executor.
+            const isDeliveryTool = ['speak', 'final_answer', 'status_update'].includes(currentToolName);
+
+            if (signal?.aborted && !isDeliveryTool) {
               throw new Error("Tool execution aborted: client connection closed");
             }
 
             let abortListener: (() => void) | null = null;
-            const abortPromise = new Promise((_, reject) => {
-              if (signal?.aborted) {
-                reject(new Error("Tool execution aborted: client connection closed"));
-                return;
-              }
-              abortListener = () => reject(new Error("Tool execution aborted: client connection closed"));
-              signal?.addEventListener("abort", abortListener);
-            });
+            const abortPromise = isDeliveryTool
+              ? new Promise<never>(() => {})
+              : new Promise((_, reject) => {
+                  if (signal?.aborted) {
+                    reject(new Error("Tool execution aborted: client connection closed"));
+                    return;
+                  }
+                  abortListener = () => reject(new Error("Tool execution aborted: client connection closed"));
+                  signal?.addEventListener("abort", abortListener);
+                });
 
             const toolExecutorConfig = settings['tool-executor'] || {};
             const generalTimeoutMs = toolExecutorConfig.timeoutMs !== undefined ? Number(toolExecutorConfig.timeoutMs) : 60000;
@@ -1243,6 +1393,33 @@ if (typeof parsedArgs === 'string') {
           loopContext.compactionTurns.push({ call: newAssistantToolCalls[i], toolMessage: newToolMessages[i] });
         }
         logs.push(`[CORTEX] Built ${newToolMessages.length} native tool result message(s) for provider '${activeProviderId}'.`);
+        // Persist the canonical [assistant(tool_calls), role:"tool" ...] pair so a
+        // future turn / resume can reload the native conversation from the store.
+        if (nativeTransportEnabled) {
+          try {
+            const persistBatch: any[] = [
+              { role: 'assistant', content: null, tool_calls: newAssistantToolCalls },
+              ...newToolMessages.map((m: any) => ({
+                role: 'tool',
+                tool_call_id: m.tool_call_id,
+                name: m.name,
+                content: m.content
+              }))
+            ];
+            loopContext.nativeHistory = [...(Array.isArray(loopContext.nativeHistory) ? loopContext.nativeHistory : []), ...persistBatch];
+            appendNativeMessages(nativeSessionId, persistBatch);
+            logs.push(`[CORTEX] Persisted ${persistBatch.length} native message(s) for session '${nativeSessionId}'.`);
+            // Phase 5: append the canonical interleaved turn block (assistant
+            // tool_calls immediately followed by role:"tool" rows) so the next
+            // iteration feeds the provider correctly-ordered multi-turn history.
+            loopContext.nativeTurnBlocks = [
+              ...(Array.isArray(loopContext.nativeTurnBlocks) ? loopContext.nativeTurnBlocks : []),
+              persistBatch
+            ];
+          } catch (nativeErr: any) {
+            logs.push(`[CORTEX] Warning: Failed to persist native messages: ${nativeErr?.message || nativeErr}`);
+          }
+        }
       } catch (tmErr: any) {
         logs.push(`[CORTEX] Warning: Failed to build native tool result messages: ${tmErr.message || tmErr}`);
       }

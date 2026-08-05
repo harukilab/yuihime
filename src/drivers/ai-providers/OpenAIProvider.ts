@@ -1,5 +1,5 @@
 import { ProviderModule, ModuleType } from '@shared/include/types';
-import { buildChatMessages, normalizeToolCallsToOpenAI, normalizeToolsForProvider } from '../../core/openaiTools';
+import { buildChatMessages, normalizeToolCallsToOpenAI, normalizeToolChoice, normalizeToolsForProvider } from '../../core/openaiTools';
 import { toSingleString } from '@/core/kernel/configNormalizer';
 import { AIService } from '../../core/kernel/ai.js';
 
@@ -181,6 +181,7 @@ export const OpenAIProvider: ProviderModule = {
       const messages = buildChatMessages('openai', {
         system: systemInstruction,
         user: promptText,
+        historyBlocks: context.nativeTurnBlocks,
         assistantToolCalls: context.assistantToolCalls,
         toolMessages: context.toolMessages
       });
@@ -205,7 +206,7 @@ export const OpenAIProvider: ProviderModule = {
       // endpoint accepts the incoming `role: "tool"` messages.
       if (providerTools !== undefined) {
         payload.tools = normalizeToolsForProvider(context.tools || [], 'openai') || context.tools;
-        payload.tool_choice = 'auto';
+        payload.tool_choice = normalizeToolChoice(context.toolChoice, 'openai') ?? 'auto';
       }
 
       const endpointUrl = `${baseUrl}/chat/completions`;

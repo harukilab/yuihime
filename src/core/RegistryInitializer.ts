@@ -33,6 +33,7 @@ import { SubAgentDelegationModule } from '../modules/SubAgentDelegationModule.js
 import { YuiVisionModule } from '../modules/YuiVisionModule.js';
 import { L2DExpressionTranslatorModule } from '../modules/L2DExpressionTranslator.js';
 import { SendFinalReplyTool, SendStatusUpdateTool } from '../modules/LiveStatusToolsModule.js';
+import { DelegateTool } from '../drivers/tools/delegate.js';
 
 import { YUIAGICoreModule } from '../modules/agi/YUIAGICoreModule.js';
 import { WeatherNewsEmpathyModule } from '../modules/agi/WeatherNewsEmpathyModule.js';
@@ -483,7 +484,8 @@ export function initializeCortexModules(): Promise<void> {
         DiaryTool,
         QuestionTool, ApplyPatchTool,
         GrepTool, TodoWriteTool, SkillTool,
-        SendFinalReplyTool, SendStatusUpdateTool
+        SendFinalReplyTool, SendStatusUpdateTool,
+        DelegateTool
       ];
 
       allStaticModules.forEach(m => SystemRegistry.register(m));
