@@ -992,7 +992,7 @@ function careMenuKeyboard() {
     inline_keyboard: [
       [{ text: '🍽️ Feed', callback_data: 'qt:care:eat' }, { text: '💧 Drink', callback_data: 'qt:care:drink' }, { text: '🚿 Bath', callback_data: 'qt:care:bath' }],
       [{ text: '🚽 Toilet', callback_data: 'qt:care:toilet' }, { text: '😴 Sleep', callback_data: 'qt:care:sleep' }, { text: '🎾 Play', callback_data: 'qt:care:play' }],
-      [{ text: '🐟 Fish', callback_data: 'qt:care:fish' }, { text: '📊 Status', callback_data: 'qt:care:status' }],
+      [{ text: '🐟 Fish', callback_data: 'qt:care:fish' }, { text: '🎒 Inventory', callback_data: 'qt:care:inventory' }, { text: '📊 Status', callback_data: 'qt:care:status' }],
       [{ text: '« Menu', callback_data: 'qt:menu' }]
     ]
   };
@@ -1056,8 +1056,37 @@ function runCareAction(action: string, tc: TgToolContext): TgReply {
     case 'status':
     case '':
       return { text: yuiStatusText(tc) };
+    case 'inventory':
+    case 'inv':
+    case 'bag': {
+      const fmtItem = (it: any) => {
+        const emoji = it.emoji || '·';
+        const name = it.name || it.id || '?';
+        const jp = it.jp ? ` (${it.jp})` : '';
+        const qty = Number(it.qty || 0);
+        return `${emoji} ${name}${jp} — ${qty > 0 ? `x${qty}` : '0'}`;
+      };
+      const foods = (inv.foods || []).map(fmtItem);
+      const drinks = (inv.drinks || []).map(fmtItem);
+      const items = (inv.items || []).map(fmtItem);
+      const sections = [
+        '🎒 YUI INVENTORY',
+        '',
+        '🍖 FOODS',
+        ...(foods.length ? foods : ['(none)']),
+        '',
+        '🥤 DRINKS',
+        ...(drinks.length ? drinks : ['(none)']),
+        '',
+        '🎒 ITEMS',
+        ...(items.length ? items : ['(none)'])
+      ];
+      const total = (inv.foods || []).concat(inv.drinks || []).concat(inv.items || []).reduce((s, it) => s + Number(it.qty || 0), 0);
+      sections.push('', `Total items: ${total}`);
+      return { text: sections.join('\n') };
+    }
     default:
-      return { text: `⚠️ Unknown action: "${action}".\n\nUsage: /care <eat|drink|bath|toilet|sleep|play|fish>` };
+      return { text: `⚠️ Unknown action: "${action}".\n\nUsage: /care <eat|drink|bath|toilet|sleep|play|fish|inventory>` };
   }
   sh.lifeVitals = v;
   sh.lifeInventory = inv;
@@ -1563,8 +1592,8 @@ export const tgQuickCommands: TgCommandDef[] = [
   {
     name: 'care',
     aliases: ['rawat', 'pelihara'],
-    description: 'Take care of Yuihime (feed/drink/bath/sleep/play) — or open the care menu',
-    usage: '/care [eat|drink|bath|toilet|sleep|play|fish]',
+    description: 'Take care of Yuihime (feed/drink/bath/sleep/play/inventory) — or open the care menu',
+    usage: '/care [eat|drink|bath|toilet|sleep|play|fish|inventory]',
     handler: async (tc, args) => {
       const a = args.trim();
       if (!a) {

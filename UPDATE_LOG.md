@@ -1,6 +1,11 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.274] - 2026-08-05
+### Feature: Menu Care: tombol & tampilan Inventory di Telegram
+- careMenuKeyboard: tombol 🎒 Inventory (antara Fish dan Status); runCareAction case inventory/inv/bag merender isi lifeInventory (foods/drinks/items lengkap dengan qty, nama JP, emoji, dan total item); didukung juga lewat /care inventory
+
+
 ## [4.273] - 2026-08-05
 ### Feature: Inline menu TG lengkap (Cron) + tool ask_choice (AI kirim tombol pilihan di Telegram)
 - Cron masuk inline keyboard: tombol ⏰ Cron di main menu (admin); cronMenuKeyboard() dengan List/Add/Help/Back; qt:cron:list menampilkan semua task + tombol per-task ▶️ Run / 🟢 On/⏹️ Off / 🗑️ Del (callback qt:cron:run|toggle|del:<idx>), hasil mutasi langsung di-render ulang
