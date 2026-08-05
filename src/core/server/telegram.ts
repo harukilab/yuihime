@@ -194,6 +194,19 @@ function rememberFallbackRetry(contextId: string, entry: { input: string; sender
   }
 }
 
+// Secret /retry support: always remember the last real user message per
+// contextId so the hidden "retry" command can manually re-run the ENTIRE
+// previous process (regenerate Yui's last reply) at any time.
+const lastMessageCache = new Map<string, { input: string; senderName: string; contextId: string; chatType: string; chatId: number; sourceMessageId: number }>();
+const LAST_MESSAGE_MAX = 100;
+function rememberLastMessage(contextId: string, entry: { input: string; senderName: string; contextId: string; chatType: string; chatId: number; sourceMessageId: number }) {
+  lastMessageCache.set(contextId, entry);
+  if (lastMessageCache.size > LAST_MESSAGE_MAX) {
+    const oldestKey = lastMessageCache.keys().next().value;
+    if (oldestKey !== undefined) lastMessageCache.delete(oldestKey);
+  }
+}
+
 // Emotional reaction is also triggered for replies sent through other paths (tool speak),
 // so the reaction doesn't depend on the main queue path.
 eventBus.on('TELEGRAM_REACTION', (data: any) => {
@@ -503,6 +516,56 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
     scheduleCleanup(activeTelegramBot, ctx, sent, false);
   });
 
+  // ── SECRET COMMAND: /retry ──────────────────────────────────────────────
+  // Hidden on purpose — it is NOT part of any common command list / help menu.
+  // When called manually, it re-runs the ENTIRE previous process (same last
+  // user message through the full pipeline) to regenerate Yui's last reply.
+  bot.command("retry", async (ctx) => {
+    const isGroup = ctx.chat.type !== 'private';
+    const contextId = isGroup
+      ? `tg_${ctx.chat.id}|usr_${ctx.from.id}`
+      : `tg_${ctx.chat.id}`;
+    const cached = lastMessageCache.get(contextId);
+    if (!cached) {
+      maybeDeleteUserCommand(ctx);
+      const sent = await ctx.reply("Nothing to retry yet in this conversation. Send a message first.");
+      scheduleCleanup(activeTelegramBot, ctx, sent, false);
+      return;
+    }
+    maybeDeleteUserCommand(ctx);
+    const sent = await ctx.reply("🔄 Retrying your previous message...");
+    scheduleCleanup(activeTelegramBot, ctx, sent, false);
+    MultiChannelQueue.getInstance().addMessage(
+      cached.input,
+      cached.senderName,
+      cached.contextId,
+      cached.chatType,
+      async (retryResponse, retryMeta) => {
+        if (!retryResponse || !String(retryResponse).trim()) return;
+        try {
+          const retryReplyOpts: any = { reply_to_message_id: cached.sourceMessageId };
+          if (retryMeta?.fallbackTriggered) {
+            retryReplyOpts.reply_markup = {
+              inline_keyboard: [[{ text: "🔄 Retry", callback_data: `yui_retry:${cached.contextId}` }]]
+            };
+            rememberFallbackRetry(cached.contextId, cached);
+          }
+          const sentMsg = await ctx.telegram.sendMessage(cached.chatId, String(retryResponse), retryReplyOpts);
+          if (sentMsg?.message_id) {
+            recordOutboundMessage(sentMsg.message_id, cached.contextId, cached.chatType, String(retryResponse));
+          }
+          console.log(`[TELEGRAM_RETRY] Manual /retry reply delivered to ${cached.senderName} (${cached.contextId}).`);
+        } catch (retrySendErr: any) {
+          console.error(`[TELEGRAM_RETRY_ERR] Manual /retry delivery failed:`, retrySendErr?.message || retrySendErr);
+        }
+      },
+      async (retryErr: any) => {
+        console.error(`[TELEGRAM_RETRY_ERR] Manual /retry processing failed:`, retryErr?.message || retryErr);
+      },
+      { chatId: String(cached.chatId), sourceMessageId: cached.sourceMessageId }
+    );
+  });
+
   bot.on("message", async (ctx) => {
     const currentSettings = Kernel.getInstance().getSettings().getAll();
     
@@ -742,6 +805,19 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
        if (tgUpdateId && isTelegramUpdateProcessed(tgUpdateId)) {
          console.log(`[TELEGRAM_DEDUP] Update ${tgUpdateId} already processed (post-restart re-delivery). Skipping.`);
          return;
+       }
+
+       // Secret /retry support: remember the last real user message so the hidden
+       // "retry" command can manually re-run the entire previous process anytime.
+       if (!rawInput.trim().startsWith('/')) {
+         rememberLastMessage(contextId, {
+           input: userMessage,
+           senderName,
+           contextId,
+           chatType,
+           chatId: ctx.chat.id,
+           sourceMessageId: ctx.message.message_id
+         });
        }
 
        MultiChannelQueue.getInstance().addMessage(

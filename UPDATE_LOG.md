@@ -1,6 +1,13 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.286] - 2026-08-05
+### feature: v4.286: Perintah rahasia /retry (manual re-proses jawaban Yui)
+- telegram.ts: cache pesan terakhir per contextId (lastMessageCache) — pesan user non-command selalu diingat
+- Perintah tersembunyi /retry (tidak tampil di menu/help mana pun): ketika dipanggil manual, langsung mengulang proses penuh dari pesan terakhir (pipeline utuh) untuk regenerasi jawaban Yui
+- Balasan hasil retry dikirim ke pesan asli user (reply_to); bila pool gagal lagi, tombol Retry tetap muncul
+
+
 ## [4.285] - 2026-08-05
 ### fix: v4.285: Offline fallback kini punya tombol Retry + full-pool cooldown retry
 - generateSegment.ts: saat seluruh pool key x model gagal karena error transien (429/503/fetch timeout), tunggu cooldown server-suggested (default 15s) lalu re-run penuh satu kali sebelum menyerah
