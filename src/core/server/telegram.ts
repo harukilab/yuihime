@@ -28,6 +28,44 @@ async function withDeliveryTimeout<T>(fn: () => Promise<T>, timeoutMs: number, l
 
 let db: any = null;
 
+// ── Chat cleaning (auto-delete: user "/" commands + bot replies after TTL) ──
+const pendingDeletes = new Set<NodeJS.Timeout>();
+
+function cleanTgSettings() {
+  try {
+    const s = Kernel.getInstance().getSettings().getAll();
+    const qt = s?.['telegram_quick_tools'] || {};
+    return { enabled: qt?.cleanChat !== false, ttlSec: Number(qt?.cleanTtlSec) || 300 };
+  } catch {
+    return { enabled: true, ttlSec: 300 };
+  }
+}
+
+function scheduleAutoDelete(bot: any, chatId: number | string, messageId: number, ttlSec: number) {
+  if (!bot?.telegram || !chatId || !messageId || !ttlSec || ttlSec <= 0) return;
+  const timer = setTimeout(() => {
+    pendingDeletes.delete(timer);
+    bot.telegram.deleteMessage(chatId, messageId).catch(() => {});
+  }, ttlSec * 1000);
+  pendingDeletes.add(timer);
+  timer.unref?.();
+}
+
+function maybeDeleteUserCommand(ctx: any) {
+  const { enabled } = cleanTgSettings();
+  if (!enabled || !ctx?.message?.message_id) return;
+  try {
+    ctx.deleteMessage().catch(() => {});
+  } catch (_) {}
+}
+
+function scheduleCleanup(bot: any, ctx: any, sent: any, hasKeyboard: boolean) {
+  if (hasKeyboard) return; // menus stay until manual ✖️ Close
+  const { enabled, ttlSec } = cleanTgSettings();
+  if (!enabled || !bot || !ctx?.chat?.id || !sent?.message_id) return;
+  scheduleAutoDelete(bot, ctx.chat.id, sent.message_id, ttlSec);
+}
+
 // --- Persistent crash-recovery dedup (lintas restart) ---
 // Telegram mengirim ulang batch update yang belum dikonfirmasi offset ketika daemon
 // restart. update_id yang sudah SELESAI diproses dicatat di tabel telegram_update_ids
@@ -374,54 +412,82 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
   bot.command("pair", async (ctx) => {
     const args = ctx.message.text.split(/\s+/);
     if (args.length < 2) {
-      return ctx.reply("Silakan sertakan kode OTP 6-digit. Contoh: /pair 482103");
+      maybeDeleteUserCommand(ctx);
+      const sent = await ctx.reply("Silakan sertakan kode OTP 6-digit. Contoh: /pair 482103");
+      scheduleCleanup(activeTelegramBot, ctx, sent, false);
+      return;
     }
+    maybeDeleteUserCommand(ctx);
     await handlePairingCode(ctx, args[1].trim());
   });
 
   bot.command("approve", async (ctx) => {
     const args = ctx.message.text.split(/\s+/);
     if (args.length < 2) {
-      return ctx.reply("Silakan sertakan ID permintaan. Contoh: /approve A8F2D1");
+      maybeDeleteUserCommand(ctx);
+      const sent = await ctx.reply("Silakan sertakan ID permintaan. Contoh: /approve A8F2D1");
+      scheduleCleanup(activeTelegramBot, ctx, sent, false);
+      return;
     }
     const id = args[1].trim().toUpperCase();
     const list = globalThis.pendingConfirmations || [];
     const item = list.find(i => i.id === id);
     if (!item) {
-      return ctx.reply(`❌ Permintaan konfirmasi dengan ID "${id}" tidak ditemukan.`);
+      maybeDeleteUserCommand(ctx);
+      const sent = await ctx.reply(`❌ Permintaan konfirmasi dengan ID "${id}" tidak ditemukan.`);
+      scheduleCleanup(activeTelegramBot, ctx, sent, false);
+      return;
     }
     item.status = 'approved';
-    return ctx.reply(`✅ Permintaan ${id} (${item.action} -> ${item.targetPath}) BERHASIL DISETUJUI.`);
+    maybeDeleteUserCommand(ctx);
+    const sent = await ctx.reply(`✅ Permintaan ${id} (${item.action} -> ${item.targetPath}) BERHASIL DISETUJUI.`);
+    scheduleCleanup(activeTelegramBot, ctx, sent, false);
   });
 
   bot.command("always", async (ctx) => {
     const args = ctx.message.text.split(/\s+/);
     if (args.length < 2) {
-      return ctx.reply("Silakan sertakan ID permintaan. Contoh: /always A8F2D1");
+      maybeDeleteUserCommand(ctx);
+      const sent = await ctx.reply("Silakan sertakan ID permintaan. Contoh: /always A8F2D1");
+      scheduleCleanup(activeTelegramBot, ctx, sent, false);
+      return;
     }
     const id = args[1].trim().toUpperCase();
     const list = globalThis.pendingConfirmations || [];
     const item = list.find(i => i.id === id);
     if (!item) {
-      return ctx.reply(`❌ Permintaan konfirmasi dengan ID "${id}" tidak ditemukan.`);
+      maybeDeleteUserCommand(ctx);
+      const sent = await ctx.reply(`❌ Permintaan konfirmasi dengan ID "${id}" tidak ditemukan.`);
+      scheduleCleanup(activeTelegramBot, ctx, sent, false);
+      return;
     }
     item.status = 'always';
-    return ctx.reply(`✅ Permintaan ${id} BERHASIL DISETUJUI. Mode "Always Acc" diaktifkan untuk sesi ini.`);
+    maybeDeleteUserCommand(ctx);
+    const sent = await ctx.reply(`✅ Permintaan ${id} BERHASIL DISETUJUI. Mode "Always Acc" diaktifkan untuk sesi ini.`);
+    scheduleCleanup(activeTelegramBot, ctx, sent, false);
   });
 
   bot.command("deny", async (ctx) => {
     const args = ctx.message.text.split(/\s+/);
     if (args.length < 2) {
-      return ctx.reply("Silakan sertakan ID permintaan. Contoh: /deny A8F2D1");
+      maybeDeleteUserCommand(ctx);
+      const sent = await ctx.reply("Silakan sertakan ID permintaan. Contoh: /deny A8F2D1");
+      scheduleCleanup(activeTelegramBot, ctx, sent, false);
+      return;
     }
     const id = args[1].trim().toUpperCase();
     const list = globalThis.pendingConfirmations || [];
     const item = list.find(i => i.id === id);
     if (!item) {
-      return ctx.reply(`❌ Permintaan konfirmasi dengan ID "${id}" tidak ditemukan.`);
+      maybeDeleteUserCommand(ctx);
+      const sent = await ctx.reply(`❌ Permintaan konfirmasi dengan ID "${id}" tidak ditemukan.`);
+      scheduleCleanup(activeTelegramBot, ctx, sent, false);
+      return;
     }
     item.status = 'denied';
-    return ctx.reply(`❌ Permintaan ${id} (${item.action} -> ${item.targetPath}) BERHASIL DITOLAK.`);
+    maybeDeleteUserCommand(ctx);
+    const sent = await ctx.reply(`❌ Permintaan ${id} (${item.action} -> ${item.targetPath}) BERHASIL DITOLAK.`);
+    scheduleCleanup(activeTelegramBot, ctx, sent, false);
   });
 
   bot.on("message", async (ctx) => {
@@ -492,9 +558,11 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
           startedAt: Date.now()
         });
         if (quickResult.handled) {
+          maybeDeleteUserCommand(ctx);
           if (quickResult.reply?.text) {
             try {
-              await ctx.reply(quickResult.reply.text, { reply_markup: quickResult.reply.keyboard });
+              const sent = await ctx.reply(quickResult.reply.text, { reply_markup: quickResult.reply.keyboard });
+              scheduleCleanup(activeTelegramBot, ctx, sent, !!quickResult.reply.keyboard);
             } catch (sendErr: any) {
               console.warn("[TELEGRAM_QUICK_TOOLS] Failed to send quick command reply:", sendErr?.message || sendErr);
             }
@@ -668,46 +736,44 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
          senderName,
          contextId,
          chatType,
-          async (response, meta) => {
+           async (response, meta) => {
             if (response && String(response).trim()) {
+              // NOTE: dedup terhadap GlobalOutputDeduplicator sudah dijalankan oleh
+              // MultiChannelQueue tepat sebelum memanggil callback ini. Re-check di
+              // sini SELALU true karena queue sudah menandai konten yang sama
+              // (markSent) — akibatnya SEMUA balasan Telegram ter-drop diam-diam.
+              // Maka: kirim langsung, lalu tandai HANYA setelah delivery sukses.
               const dedup = GlobalOutputDeduplicator.getInstance();
-              if (dedup.isDuplicate(response, contextId)) {
-                console.log(`[GLOBAL_DEDUP] Skipping duplicate Telegram reply for ${senderName} (${contextId}).`);
-                // Balasan sudah dikirim langsung (mis. via tool speak). Tetap picu reaksi emosi.
-                if (currentSettings['telegram_bridge']?.autoAcknowledge !== false) {
-                  void trySetTelegramReaction(ctx.chat.id, ctx.message.message_id, emojiForReplyMeta(meta, currentSettings), ctx.telegram);
+              const replyOpts: any = { reply_to_message_id: ctx.message.message_id };
+              try {
+                const sentAsFile = await withDeliveryTimeout(() => trySendFileAttachment(ctx, response, { contextId, channel: chatType }), 10000, 'file-attachment');
+                if (!sentAsFile) {
+                  const sentMsg = await withDeliveryTimeout(() => ctx.reply(response, replyOpts), 15000, 'telegram-reply');
+                  if (sentMsg?.message_id) {
+                    recordOutboundMessage(sentMsg.message_id, contextId, chatType, String(response));
+                  }
                 }
-              } else {
                 dedup.markSent(response, contextId);
-                const replyOpts: any = { reply_to_message_id: ctx.message.message_id };
+                console.log(`[TELEGRAM_DELIVERY] Reply sent to ${senderName} (${contextId}), len=${String(response).length}`);
+                // Tandai update SELESAI diproses (dedup lintas restart) HANYA setelah delivery sukses.
+                recordTelegramUpdateProcessed(tgUpdateId, ctx.chat.id, ctx.message.message_id);
+              } catch (sendErr: any) {
+                console.error(`[TELEGRAM_DELIVERY_ERR] Failed to send reply to ${senderName}:`, sendErr?.message || sendErr);
                 try {
-                  const sentAsFile = await withDeliveryTimeout(() => trySendFileAttachment(ctx, response, { contextId, channel: chatType }), 10000, 'file-attachment');
-                  if (!sentAsFile) {
-                    const sentMsg = await withDeliveryTimeout(() => ctx.reply(response, replyOpts), 15000, 'telegram-reply');
-                    if (sentMsg?.message_id) {
-                      recordOutboundMessage(sentMsg.message_id, contextId, chatType, String(response));
-                    }
+                  const sentMsg2 = await withDeliveryTimeout(() => ctx.reply(String(response).slice(0, 3500), replyOpts), 10000, 'telegram-reply-retry');
+                  if (sentMsg2?.message_id) {
+                    recordOutboundMessage(sentMsg2.message_id, contextId, chatType, String(response));
+                    recordTelegramUpdateProcessed(tgUpdateId, ctx.chat.id, ctx.message.message_id);
+                    dedup.markSent(response, contextId);
                   }
-                  console.log(`[TELEGRAM_DELIVERY] Reply sent to ${senderName} (${contextId}), len=${String(response).length}`);
-                  // Tandai update SELESAI diproses (dedup lintas restart) HANYA setelah delivery sukses.
-                  recordTelegramUpdateProcessed(tgUpdateId, ctx.chat.id, ctx.message.message_id);
-                } catch (sendErr: any) {
-                  console.error(`[TELEGRAM_DELIVERY_ERR] Failed to send reply to ${senderName}:`, sendErr?.message || sendErr);
-                  try {
-                    const sentMsg2 = await withDeliveryTimeout(() => ctx.reply(String(response).slice(0, 3500), replyOpts), 10000, 'telegram-reply-retry');
-                    if (sentMsg2?.message_id) {
-                      recordOutboundMessage(sentMsg2.message_id, contextId, chatType, String(response));
-                      recordTelegramUpdateProcessed(tgUpdateId, ctx.chat.id, ctx.message.message_id);
-                    }
-                  } catch (retryErr: any) {
-                    console.error(`[TELEGRAM_DELIVERY_ERR] Retry also failed:`, retryErr?.message || retryErr);
-                  }
+                } catch (retryErr: any) {
+                  console.error(`[TELEGRAM_DELIVERY_ERR] Retry also failed:`, retryErr?.message || retryErr);
                 }
+              }
 
-                // Reaksi emoji dipilih berdasarkan emosi/mood balasan Yui (fallback random)
-                if (currentSettings['telegram_bridge']?.autoAcknowledge !== false) {
-                  void trySetTelegramReaction(ctx.chat.id, ctx.message.message_id, emojiForReplyMeta(meta, currentSettings), ctx.telegram);
-                }
+              // Reaksi emoji dipilih berdasarkan emosi/mood balasan Yui (fallback random)
+              if (currentSettings['telegram_bridge']?.autoAcknowledge !== false) {
+                void trySetTelegramReaction(ctx.chat.id, ctx.message.message_id, emojiForReplyMeta(meta, currentSettings), ctx.telegram);
               }
 
              // Broadcast Yui's response to the connected WebClients

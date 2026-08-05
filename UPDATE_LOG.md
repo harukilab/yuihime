@@ -1,6 +1,13 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.280] - 2026-08-05
+### Fix: Fix Yui berhenti menjawab: dedup double-check drop semua balasan Telegram + streaming parser kehilangan teks
+- ROOT BUG: GlobalOutputDeduplicator di-check dua kali — MultiChannelQueue menandai (markSent) reply SEBELUM memanggil onReply, lalu handler onReply telegram mengecek isDuplicate lagi yang selalu true -> SEMUA balasan Telegram di-drop diam-diam (log [GLOBAL_DEDUP] Skipping duplicate Telegram reply, 0x TELEGRAM_DELIVERY). Regression dari 58e6db5.
+- Fix: hapus re-check redundan di telegram.ts onReply; kirim langsung lalu markSent HANYA setelah delivery sukses; MultiChannelQueue.markSent dipindah ke setelah onReply berhasil (konten yang gagal terkirim tidak meracuni window dedup 5 menit)
+- Fix akar kedua: streaming parser generateSegment.ts kehilangan teks saat fragmen JSON terbelah antar chunk SSE (rawResult length=0 walau stream sukses 21.8s -> memicu retry + failsafe). Tambah regex fallback ekstraksi semua part "text": "..." berurutan saat fullText kosong
+
+
 ## [4.279] - 2026-08-05
 ### Feature: Yui bisa baca inventory (termasuk items) + hapus custom item (/invdel & tombol 🗑️)
 - LifeSimulationModule.buildInventoryText kini menyertakan seksi ITEMS — custom item (lifeInventory.items) terlihat di direktif LLM tiap turn, jadi Yui tahu isi inventory-nya (sebelumnya hanya foods+drinks)

@@ -831,11 +831,17 @@ export class MultiChannelQueue {
               });
             } catch (_) {}
           } else {
-            dedup.markSent(reply ?? "", item.contextId);
-            await Promise.resolve(item.onReply(reply ?? "", replyMeta)).catch((deliveryErr: any) => {
+            try {
+              await Promise.resolve(item.onReply(reply ?? "", replyMeta));
+              // Tandai HANYA setelah delivery benar-benar sukses. Konten yang gagal
+              // terkirim tidak boleh meracuni window dedup (mencegah balasan retry
+              // yang identik di-drop). Guard anti-double-send tetap aman karena
+              // row pending sudah ditandai 'processing' sebelum dispatch.
+              dedup.markSent(reply ?? "", item.contextId);
+            } catch (deliveryErr: any) {
               console.error(`[QUEUE_DELIVERY_ERR] Failed to deliver reply to ${item.senderName}:`, deliveryErr?.message || deliveryErr);
               if (item.onError) item.onError(deliveryErr);
-            });
+            }
           }
         }
 

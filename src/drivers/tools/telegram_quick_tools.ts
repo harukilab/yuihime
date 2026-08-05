@@ -35,6 +35,18 @@ const manifest = {
         "label": "Use PM2 (optional)",
         "description": "DEFAULT is no PM2 (watchdog + yui-debug.sh, single-process daemon). When enabled, YuiHime runs as a PM2 daemon via tools/yui-pm2.sh — the local watchdog is skipped.",
         "default": false
+      },
+      "cleanChat": {
+        "type": "boolean",
+        "label": "Clean chat (auto-delete)",
+        "description": "Delete the user's '/' command messages after handling and auto-delete bot replies after the TTL below. Inline menu messages are kept until closed manually (✖️ Close).",
+        "default": true
+      },
+      "cleanTtlSec": {
+        "type": "number",
+        "label": "Auto-delete TTL (seconds)",
+        "description": "Seconds before a bot quick-command reply is auto-deleted (default 300 = 5 minutes).",
+        "default": 300
       }
     }
   },

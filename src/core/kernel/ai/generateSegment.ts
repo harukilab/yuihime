@@ -686,7 +686,28 @@ export async function generateContent(
                 lastParsedIndex++;
               }
             }
-            
+
+            // Fallback recovery: parser brace-based bisa kehilangan teks bila
+            // fragmen JSON terbelah di antara chunk SSE (rawResult jadi kosong
+            // walau stream sukses — memicu retry + dedup skip). Jika tidak ada
+            // teks terkumpul, ekstrak semua part `"text": "..."` berurutan.
+            if (!fullText && accumulated) {
+              const textPartRe = /"text"\s*:\s*"((?:[^"\\]|\\.)*)"/g;
+              let tm: RegExpExecArray | null;
+              let recoveredText = "";
+              while ((tm = textPartRe.exec(accumulated)) !== null) {
+                recoveredText += tm[1]
+                  .replace(/\\n/g, "\n")
+                  .replace(/\\t/g, "\t")
+                  .replace(/\\r/g, "\r")
+                  .replace(/\\"/g, '"')
+                  .replace(/\\\\/g, "\\");
+              }
+              if (recoveredText) {
+                fullText = recoveredText;
+              }
+            }
+
             console.log(`[SERVER_AI] Sirkuit kognitif streaming sukses dengan ${attempt.label}.`);
             clearStallTimeout();
             // Native Gemini function calling: if the model emitted functionCall
