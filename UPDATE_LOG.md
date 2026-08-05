@@ -1,6 +1,11 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.277] - 2026-08-05
+### Fix: Perbaiki tombol ➕ inventory (Unknown action: invadd)
+- case switch 'invadd' hanya cocok string persis, sedangkan callback dikirim sebagai 'invadd:drinks:0' (prefix) sehingga jatuh ke default error. Dipindah ke pengecekan a.startsWith('invadd:') sebelum switch — tombol ➕ per item sekarang menambah qty dan me-render ulang inventory dengan benar
+
+
 ## [4.276] - 2026-08-05
 ### Feature: Status care: label kondisi + indikator 🟢/🟡/🔴 agar arah stat tidak membingungkan
 - yuiStatusText kini menampilkan kondisi per stat (hunger: Kenyang/Lapar/Lapar Parah; thirst: Segar/Haus/Haus Parah; cleanliness: Bersih/Sedikit Kotor/Perlu Mandi; bladder: Aman/Kebelet/Kebelet Banget; sleepiness: Segar/Ngantuk/Kurang Tidur; energy: Cukup/Lelah/Kehabisan) + indikator warna 🔴=butuh perawatan, 🟡=waspada, 🟢=aman — meski arah stat terbalik (rendah bagus vs tinggi bagus), langsung terbaca tanpa harus menafsirkan angka

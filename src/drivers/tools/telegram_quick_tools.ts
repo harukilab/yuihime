@@ -1040,6 +1040,22 @@ function runCareAction(action: string, tc: TgToolContext): TgReply {
   const a = String(action || '').toLowerCase();
   const now = Date.now();
   let text = '';
+
+  if (a.startsWith('invadd:')) {
+    const [, type, idxStr] = a.split(':');
+    const list = (inv[type] || []);
+    const item = list[Number(idxStr)];
+    if (!item) {
+      return { text: '⚠️ Item not found.', keyboard: careMenuKeyboard() };
+    }
+    item.qty = Number(item.qty || 0) + 1;
+    sh.lifeVitals = v;
+    sh.lifeInventory = inv;
+    db.prepare('UPDATE agent_state SET systemHealth = ? WHERE id = 1').run(JSON.stringify(sh));
+    const view = careInventoryView(inv);
+    return { text: `➕ Added +1 ${item.emoji || ''} ${item.name || item.id}.\n\n${view.text}`, keyboard: view.keyboard };
+  }
+
   switch (a) {
     case 'eat':
     case 'feed': {
@@ -1099,20 +1115,6 @@ function runCareAction(action: string, tc: TgToolContext): TgReply {
     case 'inv':
     case 'bag':
       return careInventoryView(inv);
-    case 'invadd': {
-      const [, type, idxStr] = action.split(':');
-      const list = (inv[type] || []);
-      const item = list[Number(idxStr)];
-      if (!item) {
-        return { text: '⚠️ Item not found.', keyboard: careMenuKeyboard() };
-      }
-      item.qty = Number(item.qty || 0) + 1;
-      sh.lifeVitals = v;
-      sh.lifeInventory = inv;
-      db.prepare('UPDATE agent_state SET systemHealth = ? WHERE id = 1').run(JSON.stringify(sh));
-      const view = careInventoryView(inv);
-      return { text: `➕ Added +1 ${item.emoji || ''} ${item.name || item.id}.\n\n${view.text}`, keyboard: view.keyboard };
-    }
     default:
       return { text: `⚠️ Unknown action: "${action}".\n\nUsage: /care <eat|drink|bath|toilet|sleep|play|fish|inventory>` };
   }
