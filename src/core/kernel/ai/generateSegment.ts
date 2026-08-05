@@ -198,7 +198,7 @@ export async function generateContent(
    const rawModel = config.model || geminiSettings.model || defaultGeminiModel;
    const model = Array.isArray(rawModel) ? (rawModel[0] || defaultGeminiModel) : rawModel;
    if (!model) {
-     throw new Error('Sirkuit kognitif gagal berdenyut: Silakan pilih model kognitif di panel Settings atau aktifkan Model di tab Providers.');
+     throw new Error('Cognitive circuit failed to pulse: Please choose a cognitive model in the Settings panel or enable a Model in the Providers tab.');
    }
    const fallbackApiKey = geminiSettings.fallbackApiKey;
    
@@ -236,7 +236,7 @@ export async function generateContent(
     const primaryKey = toSingleString(config.apiKey) || settings.getApiKey();
     const fallbackKey = fallbackApiKey;
 
-    // Kumpulkan seluruh API Key unik dalam urutan prioritas
+    // Collect all unique API Keys in priority order
     const allKeys: string[] = [];
     const addKeys = (raw: any) => {
       if (!raw) return;
@@ -259,7 +259,7 @@ export async function generateContent(
       addKeys(systemEnvKey);
     }
 
-    // Kumpulkan seluruh model cadangan dalam urutan prioritas
+    // Collect all backup models in priority order
     const allModels: string[] = [];
     const addModels = (raw: string | undefined | null) => {
       if (!raw) return;
@@ -303,7 +303,7 @@ export async function generateContent(
     addModels(geminiSettings.resilienceModels);
     addModels(geminiSettings.fallbackModelsPool);
 
-    // Dynamic model pool failover (ikuti provider model pool & dynamic settings)
+    // Dynamic model pool failover (follow provider model pool & dynamic settings)
     if (Array.isArray(geminiSettings.models)) {
       for (const m of geminiSettings.models) {
         if (typeof m === 'string') addModels(m);
@@ -329,15 +329,15 @@ export async function generateContent(
        }
      } catch (e) {}
 
-    // Prioritas sirkuit kognitif yang akan dicoba
+    // Cognitive circuits priority to try
     const attemptsToTry: Array<{ apiKey: string; modelId: string; label: string }> = [];
 
     for (const modelId of allModels) {
       for (let i = 0; i < allKeys.length; i++) {
         const key = allKeys[i];
         let keyLabel = `Key #${i + 1}`;
-        if (key === primaryKey) keyLabel = 'Key Utama';
-        else if (key === fallbackKey) keyLabel = 'Key Cadangan';
+        if (key === primaryKey) keyLabel = 'Primary Key';
+        else if (key === fallbackKey) keyLabel = 'Backup Key';
         else if (key === systemEnvKey) keyLabel = 'System Env Key';
         else keyLabel = `Pool Key #${i - 1}`;
 
@@ -398,11 +398,11 @@ export async function generateContent(
                 const cooldownSec = parseFloat(retryMatch[1]);
                 if (!isNaN(cooldownSec)) {
                   backoffMs = Math.ceil(cooldownSec * 1000) + 1500; // sleep cooldown + 1.5s security buffer
-                  // console.warn(`[SERVER_AI] Mengaplikasikan penundaan kognitif cerdas (API rate limit 429) sebesar ${backoffMs}ms sebelum retry #${retryCount}...`);
+                  // console.warn(`[SERVER_AI] Applying smart cognitive delay (API rate limit 429) of ${backoffMs}ms before retry #${retryCount}...`);
                 }
               } else if (lastErrBody.includes('503') || lastErrBody.toLowerCase().includes('overloaded') || lastErrBody.toLowerCase().includes('unavailable')) {
                 backoffMs = Math.pow(2, retryCount) * 3000; // 6s, 12s backoff for 503 overloaded
-                console.warn(`[SERVER_AI] Google API mendeteksi overload (503). Menjadwalkan pending sebesar ${backoffMs}ms sebelum retry #${retryCount}...`);
+                console.warn(`[SERVER_AI] Google API detected overload (503). Scheduling pending of ${backoffMs}ms before retry #${retryCount}...`);
               }
             }
 
@@ -410,7 +410,7 @@ export async function generateContent(
             await sleep(backoffMs);
           }
 
-          console.log(`[SERVER_AI] Mencoba sirkuit kognitif: ${attempt.label} (Percobaan #${retryCount + 1})...`);
+          console.log(`[SERVER_AI] Trying cognitive circuit: ${attempt.label} (Attempt #${retryCount + 1})...`);
           
           const finalBaseUrl = (geminiSettings.baseUrl || geminiSettings.endpoint || 'https://generativelanguage.googleapis.com').replace(/\/$/, '');
           const apiVersion = geminiSettings.apiVersion || 'v1beta';
@@ -687,10 +687,10 @@ export async function generateContent(
               }
             }
 
-            // Fallback recovery: parser brace-based bisa kehilangan teks bila
-            // fragmen JSON terbelah di antara chunk SSE (rawResult jadi kosong
-            // walau stream sukses — memicu retry + dedup skip). Jika tidak ada
-            // teks terkumpul, ekstrak semua part `"text": "..."` berurutan.
+            // Fallback recovery: the brace-based parser can lose text when
+            // JSON fragments split across SSE chunks (rawResult ends up empty
+            // even though the stream succeeded — triggering retry + dedup skip).
+            // If there is no collected text, extract all `"text": "..."` parts in sequence.
             if (!fullText && accumulated) {
               const textPartRe = /"text"\s*:\s*"((?:[^"\\]|\\.)*)"/g;
               let tm: RegExpExecArray | null;
@@ -708,7 +708,7 @@ export async function generateContent(
               }
             }
 
-            console.log(`[SERVER_AI] Sirkuit kognitif streaming sukses dengan ${attempt.label}.`);
+            console.log(`[SERVER_AI] Cognitive circuit streaming succeeded with ${attempt.label}.`);
             clearStallTimeout();
             // Native Gemini function calling: if the model emitted functionCall
             // parts and no text, surface them as the canonical tool_calls envelope
@@ -739,13 +739,13 @@ export async function generateContent(
               throw new Error(`Invalid response schema from Gemini API: ${JSON.stringify(resJson)}`);
             }
             
-            console.log(`[SERVER_AI] Sirkuit kognitif berdenyut sukses (NATIVE FETCH) dengan ${attempt.label}.`);
+            console.log(`[SERVER_AI] Cognitive circuit pulsation succeeded (NATIVE FETCH) with ${attempt.label}.`);
             return text;
           }
         } catch (error: any) {
           lastError = error;
           const errorBody = error.message || String(error);
-          // console.error(`[SERVER_AI] Sirkuit ${attempt.label} gagal pada Percobaan #${retryCount + 1}:`, summarizeAiError(error));
+          // console.error(`[SERVER_AI] Circuit ${attempt.label} failed on Attempt #${retryCount + 1}:`, summarizeAiError(error));
           
           const isQuotaOrRateLimit = errorBody.includes('429') || 
                                      errorBody.toLowerCase().includes('quota') || 
@@ -775,7 +775,7 @@ export async function generateContent(
 
           // If API is overloaded (503/unavailable), register key so pool can skip it after exhausting retries
           if (isRetriable && !isQuotaOrRateLimit && retryCount === maxRetriesPerAttempt - 1) {
-            console.warn(`[SERVER_AI] API Key ${attempt.apiKey.substring(0, 6)}... terus menerima overload (503). Menambah ke daftar kunci sibuk untuk dilewati oleh pool.`);
+            console.warn(`[SERVER_AI] API Key ${attempt.apiKey.substring(0, 6)}... keeps receiving overload (503). Adding to the busy-keys list to be skipped by the pool.`);
             persistentOverloadedKeys.set(attempt.apiKey, now + OVERLOADED_KEY_TTL_MS);
             persistBusyKeyState();
             // A 503 is model-wide (not key-specific) — skip the rest of this
@@ -794,19 +794,19 @@ export async function generateContent(
     }
 
     if (attemptsToTry.length === 0) {
-      throw new Error("Semua sirkuit kognitif dan jalur cadangan AI gagal: Tidak ada API Key yang dikonfigurasi untuk Gemini. Silakan isi API Key Anda di panel Settings (tab Providers atau tab System) di antarmuka web Yuihime, atau setel variabel lingkungan GEMINI_API_KEY di berkas .env / config.toml Anda!");
+      throw new Error("All cognitive circuits and AI fallback paths failed: No API Key is configured for Gemini. Please fill in your API Key in the Settings panel (Providers or System tab) in Yuihime's web interface, or set the GEMINI_API_KEY environment variable in your .env / config.toml file!");
     }
 
     if (lastError) {
       const errMsg = lastError.message || String(lastError);
       if (errMsg.includes('429') || errMsg.toLowerCase().includes('quota') || errMsg.toLowerCase().includes('rate limit')) {
         const retryMatch = errMsg.match(/Please retry in ([0-9.]+)\s*s/i);
-        const retryInfo = retryMatch ? ` (silakan coba lagi dalam ${Math.ceil(parseFloat(retryMatch[1]))} detik)` : '';
-        throw new Error(`Google Gemini API Quota/Rate Limit Terlampaui (429)${retryInfo}. Semua sirkuit cadangan telah dicoba. Silakan periksa API Key atau tambahkan Provider cadangan di Settings.`);
+        const retryInfo = retryMatch ? ` (please try again in ${Math.ceil(parseFloat(retryMatch[1]))} seconds)` : '';
+        throw new Error(`Google Gemini API Quota/Rate Limit Exceeded (429)${retryInfo}. All fallback circuits have been tried. Please check your API Key or add a fallback Provider in Settings.`);
       }
     }
 
-    throw lastError || new Error("Semua sirkuit kognitif dan jalur cadangan AI gagal.");
+    throw lastError || new Error("All cognitive circuits and AI fallback paths failed.");
   };
 
   let response: string;

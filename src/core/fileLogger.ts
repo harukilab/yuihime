@@ -3,8 +3,8 @@ import path from 'path';
 import os from 'os';
 import { expandHomePath } from './systemPaths.js';
 
-const RETENTION_DAYS = 7; // Sama seperti chat_logs: rotasi & retensi per tanggal
-const CLEANUP_INTERVAL_MS = 3600_000; // Cleanup maksimal sekali per jam
+const RETENTION_DAYS = 7; // Same as chat_logs: rotation & retention per date
+const CLEANUP_INTERVAL_MS = 3600_000; // Cleanup at most once per hour
 
 const DEFAULT_LOG_DIR = path.join(expandHomePath(process.env.YUIHIME_SYSTEM_ROOT || path.join(os.homedir(), '.yuihime')), 'logs');
 
@@ -30,8 +30,8 @@ function isDateKey(s: string): boolean {
 }
 
 /**
- * Rotasi harian: jika file aktif ditulis pada tanggal sebelumnya,
- * arsipkan menjadi <category>.<YYYY-MM-DD>.log lalu mulai file baru.
+ * Daily rotation: if the active file was written on a previous date,
+ * archive it as <category>.<YYYY-MM-DD>.log then start a new file.
  */
 function rotateIfDateChanged(category: string, baseDir?: string) {
   const dir = baseDir || DEFAULT_LOG_DIR;
@@ -44,7 +44,7 @@ function rotateIfDateChanged(category: string, baseDir?: string) {
     if (fileDate === today) return;
     const dest = path.join(dir, `${category}.${fileDate}.log`);
     if (existsSync(dest)) {
-      // Arsip tanggal yang sama sudah ada — gabungkan agar tidak ada data yang hilang.
+      // An archive for the same date already exists — merge so no data is lost.
       try {
         const current = readFileSync(p, 'utf8');
         appendFileSync(dest, current, 'utf8');
@@ -61,8 +61,8 @@ function rotateIfDateChanged(category: string, baseDir?: string) {
 const lastCleanup = new Map<string, number>();
 
 /**
- * Hapus arsip log (<category>.<YYYY-MM-DD>.log dan <category>.log.<ts>.rot)
- * yang lebih tua dari RETENTION_DAYS. Dibatasi maksimal sekali per jam per direktori.
+ * Remove log archives (<category>.<YYYY-MM-DD>.log and <category>.log.<ts>.rot)
+ * older than RETENTION_DAYS. Throttled to at most once per hour per directory.
  */
 export function cleanupLogs(category?: string, baseDir?: string, force?: boolean): void {
   const dir = baseDir || DEFAULT_LOG_DIR;
@@ -77,8 +77,8 @@ export function cleanupLogs(category?: string, baseDir?: string, force?: boolean
     for (const file of files) {
       const isActive = category ? file === `${category}.log` : file.endsWith('.log') && !file.includes('.');
       if (category && !file.startsWith(`${category}.`)) continue;
-      if (isActive) continue; // file aktif, bukan arsip
-      // Pola arsip harian: <category>.<YYYY-MM-DD>.log
+      if (isActive) continue; // active file, not an archive
+      // Daily archive pattern: <category>.<YYYY-MM-DD>.log
       const m = file.match(/^(.+?)\.(\d{4}-\d{2}-\d{2})\.log$/);
       if (m) {
         const fileTs = new Date(`${m[2]}T00:00:00`).getTime();
@@ -87,7 +87,7 @@ export function cleanupLogs(category?: string, baseDir?: string, force?: boolean
         }
         continue;
       }
-      // Pola .rot: <category>.log.<ts>.rot
+      // .rot pattern: <category>.log.<ts>.rot
       const r = file.match(/^.+?\.log\.(\d+)\.rot$/);
       if (r) {
         const ts = Number(r[1]);
@@ -124,8 +124,8 @@ export function readLogLines(category: string, opts?: { limit?: number; tail?: b
 
     let lines: string[] = [];
 
-    // Gabungkan arsip harian (tertua → terbaru, lalu file aktif terakhir)
-    // agar hari sebelumnya tetap terlihat.
+    // Merge the daily archives (oldest → newest, then the active file last)
+    // so the previous days remain visible.
     if (opts?.includeArchives && existsSync(dir)) {
       const files = readdirSync(dir)
         .filter(f => {

@@ -1,13 +1,13 @@
 import { CortexModule, ModuleType, Identity } from '@shared/include/types';
 
 /**
- * MODULE: Sistem Resonansi Memori Sosial (Multi-User Social Brain Engine)
+ * MODULE: Social Memory Resonance System (Multi-User Social Brain Engine)
  * 
- * Modul tingkat lanjut ini bertindak sebagai otak sosial tunggal Yuihime. 
- * Modul ini memindai data seluruh penonton di database batin (`allIdentities`), 
- * menyaring pola kesamaan minat (shared habits/topics), mengelompokkan mereka 
- * ke dalam lingkaran sosial aktif, dan menyajikan gambaran resonansi multilateral 
- * untuk melesatkan kemampuan pengenalan multi-user Yuihime ke level layaknya manusia asli.
+ * This advanced module acts as Yuihime's single social brain. 
+ * It scans all viewers' data in the inner database (`allIdentities`), 
+ * filters out shared interest patterns (shared habits/topics), groups them 
+ * into active social circles, and presents a multilateral resonance picture 
+ * to boost Yuihime's multi-user recognition capability to the level of a real human.
  */
 export const MemoryResonanceModule: CortexModule = {
   metadata: {
@@ -195,7 +195,7 @@ export const MemoryResonanceModule: CortexModule = {
     // Inject organically into system prompt context
     const updatedGroundedKnowledge = (context.groundedKnowledge || "") + "\n" + resonanceBlock;
 
-    logs.push(`[RESONANCE] Successfully mapped ${chosenResonances.length} multilateral social nodes into synaptic batin.`);
+    logs.push(`[RESONANCE] Successfully mapped ${chosenResonances.length} multilateral social nodes into the inner synaptic network.`);
 
     return {
       ...context,

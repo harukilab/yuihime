@@ -1,9 +1,9 @@
 /**
  * userModel.ts
  *
- * Persisten User Model per-persona (server-only). Menyimpan preferensi,
- * topik favorit/tidak disukai, bahasa pilihan, dan statistik interaksi per
- * contextId agar bisa dibaca semua modul dan UI.
+ * Persistent per-persona User Model (server-only). Stores preferences,
+ * favorite/disliked topics, preferred language, and per-contextId interaction
+ * statistics so all modules and the UI can read them.
  */
 
 import { getDb } from './database.js';
@@ -111,7 +111,7 @@ export function saveUserModel(model: UserModel): void {
 }
 
 /**
- * Deteksi bahasa sederhana: JP (aksara kanji/kana) > ID (kata umum) > EN.
+ * Simple language detection: JP (kanji/kana script) > ID (common words) > EN.
  */
 export function detectLanguage(text: string): string {
   const t = String(text || '');
@@ -137,7 +137,7 @@ function mergeFreqList(existing: string[], newTopics: string[], maxLen = 10): st
 }
 
 /**
- * Update model user untuk satu interaksi (dipanggil module per cycle).
+ * Update the user model for a single interaction (called by the module each cycle).
  */
 export function updateUserModelInteraction(contextId: string, userName: string, input: string, sentiment?: number): UserModel {
   const existing = getUserModel(contextId);

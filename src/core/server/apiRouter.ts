@@ -120,7 +120,7 @@ export const broadcastToWS = (payload: any) => {
         client.send(wsChunk);
       }
     } catch (err) {
-      console.warn(`[WS_GATEWAY] Gagal mengirim ke client WS:`, err);
+      console.warn(`[WS_GATEWAY] Failed to send to WS client:`, err);
     }
   });
 
@@ -131,7 +131,7 @@ export const broadcastToWS = (payload: any) => {
         c.res.write(sseChunk);
       }
     } catch (err) {
-      console.warn(`[STREAM_GATEWAY] Gagal mengirim paket ke overlay ${c.id}:`, err);
+      console.warn(`[STREAM_GATEWAY] Failed to send packet to overlay ${c.id}:`, err);
     }
   });
 };
@@ -633,22 +633,22 @@ export const verifySandboxPath = async (targetPath: string, action?: string, con
   }
 
   // SMART FUZZY FILE-SENSING FALLBACK UTILITY:
-  // Jika file tidak ditemukan pada resolvedPath, tapi merupakan operasi baca/tulis/hapus/modifikasi,
-  // dan file tersebut fisik ada di dalam dynamicSandboxRoot (/user_data) dengan nama yang sama,
-  // lakukan auto-redirection secara mulus untuk mencegah kegagalan kognitif LLM.
+  // If the file is not found at resolvedPath, but the operation is a read/write/delete/modify,
+  // and the file physically exists inside dynamicSandboxRoot (/user_data) with the same name,
+  // perform smooth auto-redirection to prevent LLM cognitive failure.
   const isReadOrUpdate = !action || action === 'read' || action === 'write' || action === 'delete' || action === 'move' || action === 'copy';
   if (isReadOrUpdate && !existsSync(resolvedPath)) {
     const baseName = path.basename(targetPath);
     if (baseName && baseName.includes('.') && baseName !== '.' && baseName !== '..') {
       const fuzzyMatch = fuzzyFindFile(dynamicSandboxRoot, baseName);
       if (fuzzyMatch && existsSync(fuzzyMatch)) {
-        console.log(`[FUZZY_SENSE] Jalur tidak ditemukan: "${targetPath}". Auto-redirection ke file fisik: "${fuzzyMatch}"`);
+        console.log(`[FUZZY_SENSE] Path not found: "${targetPath}". Auto-redirecting to physical file: "${fuzzyMatch}"`);
         resolvedPath = fuzzyMatch;
       }
     }
   }
 
-  // Verifikasi Symlink escape bypass (kecuali full YOLO atau half YOLO)
+  // Verify Symlink escape bypass (except in full YOLO or half YOLO)
   if (yoloMode !== 'full' && yoloMode !== 'half') {
     try {
       if (existsSync(resolvedPath)) {
@@ -698,7 +698,7 @@ export function registerAPIRoutes(app: express.Express, db: any) {
   registerStorageRoutes(app, db);
   console.log("[SERVER_ROUTE_INIT] Registering sandbox routes...");
 
-  // ── Closed-loop Feedback API (dipakai Web UI / tool eksternal) ──
+  // ── Closed-loop Feedback API (used by Web UI / external tool) ──
   app.post("/api/feedback", async (req, res) => {
     try {
       const body = req.body || {};

@@ -1,14 +1,14 @@
 import { CortexModule, ModuleType } from '@shared/include/types';
 
 /**
- * MODULE: Matriks Heuristik Rapport & Evaluasi Sentimen (Cognitive Rapport & Heuristics Matrix)
+ * MODULE: Rapport Heuristics & Sentiment Evaluation Matrix (Cognitive Rapport & Heuristics Matrix)
  * 
- * Modul tingkat lanjut ke-5 sebagai pilar pelengkap arsitektur:
- * Menganalisis kalimat masukan pengguna secara kuantitatif berbasis klasifikasi sentimen linguistik
- * hibrida (Pujian, Hinaan, Empati, Candaan Romantis/Goda).
+ * The 5th advanced module as a complementary architectural pillar:
+ * Quantitatively analyzes the user's input sentences based on hybrid linguistic sentiment
+ * classification (Praise, Insult, Empathy, Romantic Tease/Flirt).
  * 
- * Modul ini secara matematis mengkalkulasi bobot perubahan (Delta) untuk emosi batiniah,
- * serta menyalurkan pembaruan Trust, Affection, dan Reputation spesifik ke dalam data batin penonton.
+ * This module mathematically calculates the change weight (Delta) for inner emotions,
+ * and channels Trust, Affection, and Reputation updates into the viewer's inner data.
  */
 export const CognitiveHeuristicsModule: CortexModule = {
   metadata: {
@@ -141,7 +141,7 @@ export const CognitiveHeuristicsModule: CortexModule = {
 
     logs.push(`[HEURISTICS] Matched category [${messageType}]. Calculated raw sentiment: ${sentimentScore.toFixed(2)}`);
 
-    // Incase the active viewer identity exists in the batin database, we update values!
+    // In case the active viewer identity exists in the inner database, we update values!
     let targetIdentityUpdate = null;
     if (context.viewerIdentity) {
       const activeId = context.viewerIdentity;

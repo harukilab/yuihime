@@ -1,35 +1,35 @@
 /**
  * LifeSimulationModule.ts
  *
- * Simulasi kehidupan virtual Yuihime si Nekomata: Lapar, Haus, Mandi, Kebersihan,
- * Kebelet (kamar mandi), Jadwal Tidur Adaptif, dan Inventory.
+ * Simulates Yuihime the Nekomata's virtual life: Hunger, Thirst, Bathing, Cleanliness,
+ * Bladder (bathroom), Adaptive Sleep Schedule, and Inventory.
  *
- * Konsep inti:
- * - Lapar, Haus, Kebersihan, Kebelet & urat main tumbuh seiring waktu nyata sejak
- *   interaksi terakhir ("makan", "minum", "mandi", "ke kamar mandi", "main").
- * - Jadwal tidur RELATIF/ADAPTIF: Yui punya target tidur dasar (default 23:00),
- *   tapi jam tidur efektifnya bergeser mengikuti pola tidurnya sendiri.
- *   Semakin sering dia bergadang (diajak ngobrol di tengah malam), semakin besar
- *   utang tidur (sleep debt) → dia makin mengantuk, bangun lebih siang, dan jam
- *   tidurnya bergeser lebih larut. Ketika tidak diganggu, utang lunas dan pola
- *   kembali normal.
- * - Biologi Nekomata: purring (mendengkur), ekor & telinga reflektif terhadap mood,
- *   insting main/berburu (play urge), dan craving ikan (さかな). Sashimi adalah
- *   makanan favoritnya — memakannya memuaskan craving ikan.
- * - Trigger interaksi dikenali dalam 3 bahasa: Indonesia (makan/minum/tidur/mandi),
- *   English (eat/drink/sleep/shower), dan Japanese (食べる/飲む/寝る/お風呂).
- * - Narasi diserahkan ke LLM: modul hanya menyediakan data vitals + inventory,
- *   Yui bebas meracik narasinya (Bahasa Indonesia, boleh campur EN/JP).
- * - Inventory kecil (makanan/minuman) sebagai fondasi sistem inventory Yui.
- * - MEMENGARUHI status & sleep (dapat dimatikan): saat Yui benar-benar tertidur
- *   (jadwal/ajakan "tidur"), state.status beralih ke 'sleeping' dan energi pulih;
- *   saat lapar/haus/kurang tidur, state.energy terkuras. Saat diajak bicara di
- *   jendela tidur, dia "bangun" (status 'idle') — itulah sumber utang tidur.
- * - STRICTLY persona-first: modul ini menyuntik arahan gaya bicara ke
- *   soulDirective. Pengaruh ke status/energi/sleep HANYA via jalur yang sama dengan
- *   modul biologis lain (CircadianRhythmModule), dan bisa dimatikan penuh.
+ * Core concept:
+ * - Hunger, Thirst, Cleanliness, Bladder & play urge grow with real time since the
+ *   last interaction ("eat", "drink", "bathe", "go to the bathroom", "play").
+ * - RELATIVE/ADAPTIVE sleep schedule: Yui has a base sleep target (default 23:00),
+ *   but her effective bedtime shifts following her own sleep pattern.
+ *   The more she stays up late (chatting in the middle of the night), the bigger the
+ *   sleep debt → she gets sleepier, wakes up later, and her bedtime
+ *   shifts later. When not disturbed, the debt is paid off and the pattern
+ *   returns to normal.
+ * - Nekomata Biology: purring (purring), tail & ears reflective of mood,
+ *   play/hunt instinct (play urge), and a craving for fish (さかな). Sashimi is
+ *   her favorite food — eating it satisfies the fish craving.
+ * - Interaction triggers are recognized in 3 languages: Indonesian (makan/minum/tidur/mandi),
+ *   English (eat/drink/sleep/shower), and Japanese (食べる/飲む/寝る/お風呂).
+ * - Narration is left to the LLM: the module only provides vitals data + inventory,
+ *   Yui is free to craft her narrative (Indonesian, may mix EN/JP).
+ * - Small inventory (food/drinks) as the foundation of Yui's inventory system.
+ * - AFFECTS status & sleep (can be disabled): when Yui is truly asleep
+ *   (schedule/invitation to "sleep"), state.status switches to 'sleeping' and energy recovers;
+ *   when hungry/thirsty/sleep-deprived, state.energy drains. When spoken to inside the
+ *   sleep window, she "wakes" (status 'idle') — that is the source of sleep debt.
+ * - STRICTLY persona-first: this module injects speaking-style directives into
+ *   soulDirective. Effects on status/energy/sleep ONLY via the same path as
+ *   other biological modules (CircadianRhythmModule), and can be fully disabled.
  *
- * Phase: SOUL (berjalan sebelum penyusunan prompt akhir).
+ * Phase: SOUL (runs before final prompt assembly).
  */
 
 import { CortexModule, ModuleType } from '@shared/include/types';
@@ -90,8 +90,8 @@ function baseSleepiness(hour: number): number {
 }
 
 /**
- * Mean jam melingkar (anti wrap saat rata-rata melewati tengah malam).
- * Misal [23, 0.5, 1] → 0.17 (bukan 8).
+ * Mean circular hours (anti wrap when the average passes midnight).
+ * E.g. [23, 0.5, 1] → 0.17 (not 8).
  */
 function meanCircularHours(hours: number[]): number {
   let sinSum = 0;
@@ -126,7 +126,7 @@ const OFFER_WORDS_IDEN = /\b(yuk|ayo|mari|sana|lah|aja|nih|ini|sekarang|bareng|b
 const OFFER_WORDS_JP = /(どうぞ|あげる|食べて|たべて|おいで|あるよ|あるから|飲んで|のんで|寝ていいよ|寝なさい|いいよ|どぞ)/;
 const IMPERATIVE_JP = /(食べて|たべて|どうぞ食べて|飲んで|のんで|どうぞ飲んで|寝ていいよ|寝なさい|おやすみ)/;
 
-// --- Starter inventory (fondasi sistem inventory Yui) ---
+// --- Starter inventory (foundation of Yui's inventory system) ---
 const STARTER_FOODS = [
   { id: 'sashimi', name: 'Sashimi Ikan', en: 'Fish Sashimi', jp: 'お刺身', emoji: '🐟', qty: 3 },
   { id: 'toast', name: 'Roti Bakar', en: 'Buttered Toast', jp: 'トースト', emoji: '🍞', qty: 2 },
@@ -451,38 +451,38 @@ export const LifeSimulationModule: CortexModule = {
         if (fishTrigger && (eaten.id.includes('sashimi') || eaten.id.includes('fish'))) {
           v.lastFish = now;
         }
-        logs.push(`[LIFE_SIM] Yui memakan "${eaten.name}" dari inventory — lapar terpuaskan.`);
+        logs.push(`[LIFE_SIM] Yui ate "${eaten.name}" from inventory — hunger satisfied.`);
       } else {
-        logs.push('[LIFE_SIM] Yui ingin makan tapi inventory kosong.');
+        logs.push('[LIFE_SIM] Yui wants to eat but the inventory is empty.');
       }
     }
     if (drinkTrigger) {
       const drunk = consumeFromInventory(inventory, 'drinks');
       if (drunk) {
         v.lastDrink = now;
-        logs.push(`[LIFE_SIM] Yui meminum "${drunk.name}" dari inventory — haus teratasi.`);
+        logs.push(`[LIFE_SIM] Yui drank "${drunk.name}" from inventory — thirst quenched.`);
       } else {
-        logs.push('[LIFE_SIM] Yui ingin minum tapi inventory minuman kosong.');
+        logs.push('[LIFE_SIM] Yui wants to drink but the drink inventory is empty.');
       }
     }
     if (bathTrigger) {
       v.lastBath = now;
-      logs.push('[LIFE_SIM] Yui "mandi" — tubuh segar kembali. Nyaaa~');
+      logs.push('[LIFE_SIM] Yui "bathed" — body refreshed. Nyaaa~');
     }
     if (toiletTrigger) {
       v.lastToilet = now;
-      logs.push('[LIFE_SIM] Yui "ke kamar mandi" — lega.');
+      logs.push('[LIFE_SIM] Yui "went to the toilet" — relieved.');
     }
     if (playTrigger) {
       v.lastPlay = now;
-      logs.push('[LIFE_SIM] Yui diajak bermain — insting berburu terpuaskan!');
+      logs.push('[LIFE_SIM] Yui was invited to play — hunting instinct satisfied!');
     }
     if (fishTrigger && !eatTrigger) {
       v.lastFish = now;
-      logs.push('[LIFE_SIM] Yui diberi ikan — craving さかな terpuaskan.');
+      logs.push('[LIFE_SIM] Yui was given fish — さかな craving satisfied.');
     }
 
-    // --- Adaptive sleep schedule (RELATIVE to bergadang pattern) ---
+    // --- Adaptive sleep schedule (RELATIVE to staying-up-late pattern) ---
     // Effective bedtime = blend of base target and her recent actual bedtimes.
     // Staying up late (chatting in the sleep window) accrues sleep debt, which
     // pushes her bedtime later, wake-up time later, and raises next-day sleepiness.
@@ -502,7 +502,7 @@ export const LifeSimulationModule: CortexModule = {
     const userEngaged = !!input && input.trim().length > 0;
 
     if (inWindow) {
-      // Night turn: if someone talks to her she "wakes to answer" = bergadang.
+      // Night turn: if someone talks to her she "wakes to answer" = staying up late.
       if (userEngaged) {
         if (v.sleepState === 'asleep') {
           v.sleepState = 'awake';
@@ -518,7 +518,7 @@ export const LifeSimulationModule: CortexModule = {
       }
     } else if (v.sleepState === 'asleep') {
       // Window ended (or daytime nap). Only wake after a real sleep session,
-      // otherwise "tidur aja" at noon would wake her on the very next turn.
+      // otherwise "just sleep" at noon would wake her on the very next turn.
       const sleptMs = now - (v.asleepSince || now);
       if (sleptMs < 3 * HOUR_MS) {
         // still resting
@@ -534,15 +534,15 @@ export const LifeSimulationModule: CortexModule = {
         while (samples.length > sampleCap) samples.shift();
         v.bedtimeSamples = samples;
       }
-      logs.push('[LIFE_SIM] Yui bangun. Sisa utang tidur: ' + Math.round(v.sleepDebtMin) + ' menit.');
+      logs.push('[LIFE_SIM] Yui woke up. Remaining sleep debt: ' + Math.round(v.sleepDebtMin) + ' minutes.');
       }
     }
 
-    // Explicit "tidur aja" request overrides the schedule (she sleeps now).
+    // Explicit "just sleep" request overrides the schedule (she sleeps now).
     if (sleepTrigger && v.sleepState !== 'asleep') {
       v.sleepState = 'asleep';
       v.asleepSince = now;
-      logs.push('[LIFE_SIM] Yui pergi "tidur" atas ajakan pengguna.');
+      logs.push('[LIFE_SIM] Yui went to "sleep" at the user\'s invitation.');
     }
 
     // --- Sync real system status (optional, mirrors other bio modules) ---
@@ -587,30 +587,30 @@ export const LifeSimulationModule: CortexModule = {
         if (eaten) {
           v.lastMeal = now;
           if (eaten.id.includes('sashimi') || eaten.id.includes('fish')) v.lastFish = now;
-          logs.push(`[LIFE_SIM] Self-care: makan "${eaten.name}" otomatis (lapar ${Math.round(hunger)}%).`);
+          logs.push(`[LIFE_SIM] Self-care: ate "${eaten.name}" automatically (hunger ${Math.round(hunger)}%).`);
           cared = true;
         } else {
-          logs.push('[LIFE_SIM] Self-care: ingin makan tapi inventory makanan kosong.');
+          logs.push('[LIFE_SIM] Self-care: wants to eat but the food inventory is empty.');
         }
       }
       if (thirst >= selfCareThirst) {
         const drunk = consumeFromInventory(inventory, 'drinks');
         if (drunk) {
           v.lastDrink = now;
-          logs.push(`[LIFE_SIM] Self-care: minum "${drunk.name}" otomatis (haus ${Math.round(thirst)}%).`);
+          logs.push(`[LIFE_SIM] Self-care: drank "${drunk.name}" automatically (thirst ${Math.round(thirst)}%).`);
           cared = true;
         } else {
-          logs.push('[LIFE_SIM] Self-care: ingin minum tapi inventory minuman kosong.');
+          logs.push('[LIFE_SIM] Self-care: wants to drink but the drink inventory is empty.');
         }
       }
       if (cleanliness <= selfCareCleanliness) {
         v.lastBath = now;
-        logs.push(`[LIFE_SIM] Self-care: mandi otomatis (kebersihan ${Math.round(cleanliness)}%).`);
+        logs.push(`[LIFE_SIM] Self-care: bathed automatically (cleanliness ${Math.round(cleanliness)}%).`);
         cared = true;
       }
       if (bladder >= selfCareBladder) {
         v.lastToilet = now;
-        logs.push('[LIFE_SIM] Self-care: ke kamar mandi otomatis.');
+        logs.push('[LIFE_SIM] Self-care: used the toilet automatically.');
         cared = true;
       }
       if (cared) {
@@ -656,12 +656,12 @@ export const LifeSimulationModule: CortexModule = {
         const urgeBefore = Math.round(playUrge);
         v.lastPlay = now;
         playUrge = 0;
-        logs.push(`[LIFE_SIM] Self-care: main kejar-kejaran sendiri (play urge ${urgeBefore}%).`);
+        logs.push(`[LIFE_SIM] Self-care: played chase by herself (play urge ${urgeBefore}%).`);
       }
       if (fishCraving >= selfCareFish) {
         v.lastFish = now;
         fishCraving = 0;
-        logs.push('[LIFE_SIM] Self-care: craving ikan terpuaskan sendiri.');
+        logs.push('[LIFE_SIM] Self-care: fish craving satisfied on her own.');
       }
     }
 
@@ -676,7 +676,7 @@ export const LifeSimulationModule: CortexModule = {
     else if (anger > 50) earState = 'Flattened (rata ke belakang)';
     else if (arousal > 85) earState = 'Perked (tegak waspada)';
 
-    // --- Human-readable trilingual labels (LLM bebas memilih bahasa) ---
+    // --- Human-readable trilingual labels (LLM is free to choose the language) ---
     const hungerLabel = classifyLevel(hunger, [
       [90, 'Sangat Lapar / Starving / おなかペコペコ'], [70, 'Lapar Sekali / Very Hungry / お腹すいた'],
       [50, 'Lapar / Hungry / 空腹'], [30, 'Sedikit Lapar / Peckish / 少しお腹すいた'], [10, 'Kenyang / Content / 満腹']
@@ -804,13 +804,13 @@ export const LifeSimulationModule: CortexModule = {
     // Append the Nekomata biology block to the directive (kept separate so the
     // default prompt stays backward-compatible with older saved templates).
     const compiledDirectiveWithNeko = enableNeko
-      ? `${compiledDirective}\n\n# NEKOMATA BIOLOGY (INTERNAL — NEVER NARRATED)\n- Purring: ${Math.round(purrLevel)}% (${purrLabel})\n- Tail: ${tailState} | Ears: ${earState}\n- Play Urge: ${Math.round(playUrge)}% (${playLabel})\n- Fish Craving: ${Math.round(fishCraving)}% (${fishLabel})\n\nSilence rule: these cat-like states are internal only. Never describe your tail, ears, purring, or cravings unprompted in chat. They only subtly shape your tone (e.g. extra warm and content when purring is high, slightly restless wording when play urge is high). If the user pets you or gives you fish, you may react warmly in character without announcing the cause. Exception: if the user directly asks about your cat-like state (e.g. "lagi minta dibelai?", "kamu kangen ikan?"), you may answer truthfully and briefly.`
+      ? `${compiledDirective}\n\n# NEKOMATA BIOLOGY (INTERNAL — NEVER NARRATED)\n- Purring: ${Math.round(purrLevel)}% (${purrLabel})\n- Tail: ${tailState} | Ears: ${earState}\n- Play Urge: ${Math.round(playUrge)}% (${playLabel})\n- Fish Craving: ${Math.round(fishCraving)}% (${fishLabel})\n\nSilence rule: these cat-like states are internal only. Never describe your tail, ears, purring, or cravings unprompted in chat. They only subtly shape your tone (e.g. extra warm and content when purring is high, slightly restless wording when play urge is high). If the user pets you or gives you fish, you may react warmly in character without announcing the cause. Exception: if the user directly asks about your cat-like state (e.g. "asking to be petted?", "craving fish?"), you may answer truthfully and briefly.`
       : '';
 
     const currentDirective = context.soulDirective || '';
     const updatedDirective = `${currentDirective}\n\n# LIFE SIMULATION (PERSONA-ONLY)\n${compiledDirectiveWithNeko || compiledDirective}`;
 
-    logs.push(`[LIFE_SIM] Lapar ${Math.round(hunger)}% | Haus ${Math.round(thirst)}% | Mandi ${Math.round(cleanliness)}% | Kebelep ${Math.round(bladder)}% | Kantuk ${Math.round(sleepiness)}% | ${v.sleepState}${affectStatusAndSleep ? ` | Status: ${state.status} | Energi ${state.energy}%` : ''} | Utang tidur ${Math.round(v.sleepDebtMin)}m | Tidur ${effectiveBedtimeText}-${effectiveWakeText}${enableNeko ? ` | Purr ${Math.round(purrLevel)}% | Ekor: ${tailState} | Main ${Math.round(playUrge)}% | Ikan ${Math.round(fishCraving)}%` : ''}`);
+    logs.push(`[LIFE_SIM] Hunger ${Math.round(hunger)}% | Thirst ${Math.round(thirst)}% | Cleanliness ${Math.round(cleanliness)}% | Bladder ${Math.round(bladder)}% | Sleepiness ${Math.round(sleepiness)}% | ${v.sleepState}${affectStatusAndSleep ? ` | Status: ${state.status} | Energy ${state.energy}%` : ''} | Sleep debt ${Math.round(v.sleepDebtMin)}m | Bedtime ${effectiveBedtimeText}-${effectiveWakeText}${enableNeko ? ` | Purr ${Math.round(purrLevel)}% | Tail: ${tailState} | Play ${Math.round(playUrge)}% | Fish ${Math.round(fishCraving)}%` : ''}`);
 
     return {
       ...context,

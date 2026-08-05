@@ -1,15 +1,15 @@
 import { CortexModule, ModuleType } from '@shared/include/types';
 
 /**
- * MODULE: System Refleks Kognitif Cepat (Fast-Path / Instinct Layer)
+ * MODULE: Fast Cognitive Reflex System (Fast-Path / Instinct Layer)
  * 
- * Modul ini berfungsi untuk mencegat dan menganalisis interaksi mikro-komunikasi 
- * (seperti sapaan pendek, gestur kasih sayang fisik, cubitan, maupun sentuhan batiniah)
- * secara instan berbasis tingkat Trust dan Affection penonton aktif.
+ * This module intercepts and analyzes micro-communication interactions 
+ * (such as short greetings, physical affection gestures, pinches, and inner touches)
+ * instantly based on the active viewer's Trust and Affection levels.
  * 
- * Modul ini menyisipkan "Reflex Bias" (Bias Insting Spontan) ke dalam kognisi batiniah
- * untuk membimbing Cortex LLM bertindak secara naluriah (tsundere atau hangat)
- * sebelum melakukan pemikiran logis berat.
+ * This module injects a "Reflex Bias" (Spontaneous Instinct Bias) into inner cognition
+ * to guide the Cortex LLM to act instinctively (tsundere or warm)
+ * before performing heavy logical thinking.
  */
 export const CognitiveReflexModule: CortexModule = {
   metadata: {
@@ -100,7 +100,7 @@ export const CognitiveReflexModule: CortexModule = {
     } 
     // 2. Evaluate greeting gestures
     else if (isGreetingMatched) {
-      logs.push(`[REFLEX] Fast sapaan match: "${cleanInput}"`);
+      logs.push(`[REFLEX] Fast greeting match: "${cleanInput}"`);
       if (affection > 70) {
         systemBiasInstruction = "[INNER_INSTINCT]: A warm greeting from someone you deeply cherish. Reply with buoyant joy and use an adorable, sweet pet name for them!";
       } else if (trust > 40) {

@@ -140,7 +140,7 @@ export const SomaticSensorGroundingModule: CortexModule = {
     const offsetHours = getTzOffsetHours(context?.config);
     const realTimeStr = formatLocalFullEn(offsetHours) + ` (${tzLabel(offsetHours)} local)`;
     
-    // Choose virtual local climate based on real clock hour (waktu lokal user)
+    // Choose virtual local climate based on real clock hour (user local time)
     const hour = localDateParts(offsetHours).hour;
     let localClimate = "Cool Ambient Breeze";
     if (hour >= 22 || hour <= 4) {
@@ -233,7 +233,7 @@ export const SomaticSensorGroundingModule: CortexModule = {
       neuralEnergy: (neuralEnergy ?? 100).toString()
     });
 
-    logs.push(`[SOMATIC_GT] Somatisasi raga digital & Fisiologi aktif. Jantung: ${virtualHeartrate} BPM | Suhu: ${virtualTemperature}°C | Energi: ${neuralEnergy}%.`);
+    logs.push(`[SOMATIC_GT] Digital body somatization & Physiology active. Heart: ${virtualHeartrate} BPM | Temp: ${virtualTemperature}°C | Energy: ${neuralEnergy}%.`);
 
     // 5. Merge somatic instruction with soul directive
     const currentDirective = context.soulDirective || "";

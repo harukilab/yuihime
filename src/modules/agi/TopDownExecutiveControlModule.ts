@@ -147,7 +147,7 @@ export const TopDownExecutiveControlModule: CortexModule = {
       activeGoal
     });
 
-    logs.push(`[TOP_DOWN_EXECUTIVE] Atensi terarah berhasil dikunci pada mode: "${focusMode}" dengan persistensi: ${goalPct}%.`);
+    logs.push(`[TOP_DOWN_EXECUTIVE] Directed attention locked onto mode: "${focusMode}" with persistence: ${goalPct}%.`);
 
     // Merge strategic executive guides with current soul-level parameters
     const currentDirective = context.soulDirective || "";

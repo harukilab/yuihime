@@ -34,13 +34,13 @@ export function PendingQueueManager() {
       setLoading(true);
       setErrorMsg(null);
       const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("Timeout: server tidak merespon dalam 15 detik.")), 15000)
+        setTimeout(() => reject(new Error("Timeout: server did not respond within 15 seconds.")), 15000)
       );
       const data = await Promise.race([StorageService.getPendingMessages(), timeoutPromise]);
       setMessages(data || []);
     } catch (err: any) {
-      console.error("Gagal memuat antrean tertunda:", err);
-      setErrorMsg(err?.message || "Gagal sinkronisasi data antrean dari pangkalan data.");
+      console.error("Failed to load pending queue:", err);
+      setErrorMsg(err?.message || "Failed to sync queue data from the database.");
       setMessages([]);
     } finally {
       setLoading(false);
@@ -52,18 +52,18 @@ export function PendingQueueManager() {
   }, []);
 
   const handleClearQueue = async () => {
-    if (!window.confirm("Apakah Anda yakin ingin menghapus seluruh antrean pesan tertunda?")) return;
+    if (!window.confirm("Are you sure you want to clear the entire pending message queue?")) return;
     try {
       setActiveActionId("clear");
       const success = await StorageService.clearPendingQueue();
       if (success) {
-        setSuccessMsg("Seluruh antrean pesan tertunda berhasil dibersihkan.");
+        setSuccessMsg("The entire pending message queue was cleared successfully.");
         setMessages([]);
       } else {
-        setErrorMsg("Gagal membersihkan antrean.");
+        setErrorMsg("Failed to clear the queue.");
       }
     } catch (e: any) {
-      setErrorMsg(e.message || "Terjadi kesalahan.");
+      setErrorMsg(e.message || "An error occurred.");
     } finally {
       setActiveActionId(null);
     }
@@ -76,14 +76,14 @@ export function PendingQueueManager() {
       setErrorMsg(null);
       const success = await StorageService.retryPendingQueue();
       if (success) {
-        setSuccessMsg("Proses pengiriman ulang asinkron seluruh antrean telah dipicu di latar belakang.");
+        setSuccessMsg("Asynchronous resend of the entire queue has been triggered in the background.");
         // Give the background worker some time to run then refresh
         setTimeout(fetchQueue, 3000);
       } else {
-        setErrorMsg("Gagal memicu pengiriman ulang antrean.");
+        setErrorMsg("Failed to trigger queue resend.");
       }
     } catch (e: any) {
-      setErrorMsg(e.message || "Terjadi kesalahan pengiriman.");
+      setErrorMsg(e.message || "A sending error occurred.");
     } finally {
       setRetryingAll(false);
     }
@@ -95,12 +95,12 @@ export function PendingQueueManager() {
       const success = await StorageService.deletePendingMessage(id);
       if (success) {
         setMessages(prev => prev.filter(m => m.id !== id));
-        setSuccessMsg("Pesan berhasil dihapus dari antrean.");
+        setSuccessMsg("Message removed from the queue successfully.");
       } else {
-        setErrorMsg("Gagal menghapus pesan dari antrean.");
+        setErrorMsg("Failed to remove message from the queue.");
       }
     } catch (e: any) {
-      setErrorMsg(e.message || "Terjadi kesalahan.");
+      setErrorMsg(e.message || "An error occurred.");
     } finally {
       setActiveActionId(null);
     }
@@ -113,14 +113,14 @@ export function PendingQueueManager() {
       setErrorMsg(null);
       const success = await StorageService.retrySinglePendingMessage(id);
       if (success) {
-        setSuccessMsg("Pesan berhasil diproses kognisi batin Yuihime dan dikirim kembali!");
+        setSuccessMsg("Message was processed by Yuihime's inner cognition and sent back successfully!");
         // Refresh queue
         fetchQueue();
       } else {
-        setErrorMsg("Modul kognisi gagal atau respons kosong. Periksa internet atau API key Anda.");
+        setErrorMsg("Cognition module failed or returned an empty response. Check your internet or API key.");
       }
     } catch (e: any) {
-      setErrorMsg(e.message || "Koreksi gagal, LLM Gateway masih offline.");
+      setErrorMsg(e.message || "Correction failed, LLM Gateway is still offline.");
     } finally {
       setActiveActionId(null);
     }
@@ -184,7 +184,7 @@ export function PendingQueueManager() {
                 onClick={handleClearQueue}
                 disabled={activeActionId === "clear"}
                 className="p-2 bg-rose-500/10 hover:bg-rose-500/20 disabled:opacity-50 text-rose-400 rounded-xl text-xs font-bold transition-all active:scale-95 flex items-center gap-1.5 cursor-pointer border border-rose-500/10"
-                title="Hapus Semua Antrean"
+                title="Clear All Queue"
               >
                 {activeActionId === "clear" ? (
                   <Loader2 size={13} className="animate-spin" />
@@ -200,7 +200,7 @@ export function PendingQueueManager() {
                 onClick={handleRetryAll}
                 disabled={retryingAll}
                 className="p-2 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all active:scale-95 flex items-center gap-1.5 cursor-pointer shadow-md"
-                title="Kirim Ulang Seluruh Antrean"
+                title="Resend Entire Queue"
               >
                 {retryingAll ? (
                   <Loader2 size={13} className="animate-spin" />
@@ -218,14 +218,14 @@ export function PendingQueueManager() {
       {loading ? (
         <div className="flex flex-col items-center justify-center py-16 text-zinc-500">
           <Loader2 size={24} className="animate-spin text-cyan-400 mb-2" />
-          <p className="text-xs font-mono">Sinkronisasi antrean dari database...</p>
+          <p className="text-xs font-mono">Syncing queue from database...</p>
         </div>
       ) : messages.length === 0 ? (
         <div className="text-center py-12 border border-dashed border-white/5 rounded-2xl bg-[#0a0a0f]/20">
           <CheckCircle2 size={32} className="mx-auto text-emerald-500/40 mb-3" />
-          <p className="text-xs font-bold text-zinc-400">Tidak Ada Antrean Tertunda!</p>
+          <p className="text-xs font-bold text-zinc-400">No Pending Queue!</p>
           <p className="text-[11px] text-zinc-600 mt-1 max-w-sm mx-auto">
-            Semua pesan luring atau error kognisi telah dikirimkan, dibubarkan, atau diproses lengkap oleh batin Yuihime.
+            All offline messages or cognition errors have been delivered, discarded, or fully processed by Yuihime's inner self.
           </p>
         </div>
       ) : (
@@ -271,7 +271,7 @@ export function PendingQueueManager() {
                     onClick={() => handleDeleteItem(msg.id)}
                     disabled={isDeleting || isSingleRetrying}
                     className="p-2 hover:bg-rose-500/10 text-zinc-500 hover:text-rose-400 rounded-xl transition-all active:scale-95 disabled:opacity-50 cursor-pointer border border-transparent hover:border-rose-500/10"
-                    title="Hapus manual dari antrean"
+                    title="Manually remove from queue"
                   >
                     {isDeleting ? (
                       <Loader2 size={14} className="animate-spin" />
@@ -286,7 +286,7 @@ export function PendingQueueManager() {
                     onClick={() => handleRetrySingle(msg.id)}
                     disabled={isDeleting || isSingleRetrying}
                     className="px-3 py-1.5 bg-cyan-950/40 hover:bg-cyan-900 border border-cyan-500/20 text-cyan-400 rounded-xl text-xs font-bold transition-all active:scale-95 disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
-                    title="Coba proses ulang pesan ini sekarang"
+                    title="Try reprocessing this message now"
                   >
                     {isSingleRetrying ? (
                       <Loader2 size={12} className="animate-spin" />
@@ -304,7 +304,7 @@ export function PendingQueueManager() {
 
       <div className="text-[10px] text-zinc-500 mt-2 flex items-center gap-1.5 border-t border-white/5 pt-2 font-mono">
         <AlertCircle size={11} />
-        <span>Sistem akan mencoba mengirim ulang secara otomatis setiap 30 detik asalkan koneksi saraf batiniah LLM online kembali.</span>
+        <span>The system will automatically retry sending every 30 seconds once the inner LLM neural connection is back online.</span>
       </div>
 
     </div>

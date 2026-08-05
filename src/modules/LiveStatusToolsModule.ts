@@ -90,14 +90,14 @@ export const SendStatusUpdateTool: ToolModule = {
 
         if (timeoutId) clearTimeout(timeoutId);
       } catch (fetchErr: any) {
-        console.warn("[LiveStatus] Gagal mengirim status update ke stream events (bypassed):", fetchErr.message);
+        console.warn("[LiveStatus] Failed to send status update to stream events (bypassed):", fetchErr.message);
       }
 
       markDeduplicated(dedupKey);
 
       return { status: "success", info: `Status update sent: ${args.message}`, senderName };
     } catch (err: any) {
-      console.error("[LiveStatus] Gagal mengeksekusi status update:", err.message);
+      console.error("[LiveStatus] Failed to execute status update:", err.message);
       return { status: "error", message: err.message };
     }
   }
@@ -172,7 +172,7 @@ export const SendFinalReplyTool: ToolModule = {
 
         if (timeoutId) clearTimeout(timeoutId);
       } catch (fetchErr: any) {
-        console.warn("[LiveStatus] Gagal mengirim final reply ke stream events (bypassed):", fetchErr.message);
+        console.warn("[LiveStatus] Failed to send final reply to stream events (bypassed):", fetchErr.message);
       }
 
       let sentDirectly = false;
@@ -185,7 +185,7 @@ export const SendFinalReplyTool: ToolModule = {
             sentDirectly = true;
           }
         } catch (tgErr: any) {
-          console.warn("[LiveStatus] Gagal mengirim speak ke Telegram:", tgErr.message);
+          console.warn("[LiveStatus] Failed to send speak to Telegram:", tgErr.message);
         }
       } else if (contextId.startsWith("dc_")) {
         try {
@@ -199,7 +199,7 @@ export const SendFinalReplyTool: ToolModule = {
             }
           }
         } catch (dcErr: any) {
-          console.warn("[LiveStatus] Gagal mengirim speak ke Discord:", dcErr.message);
+          console.warn("[LiveStatus] Failed to send speak to Discord:", dcErr.message);
         }
       }
 
@@ -217,7 +217,7 @@ export const SendFinalReplyTool: ToolModule = {
         sentDirectly
       };
     } catch (err: any) {
-      console.error("[LiveStatus] Gagal mengeksekusi final reply:", err.message);
+      console.error("[LiveStatus] Failed to execute final reply:", err.message);
       return { status: "error", message: err.message };
     }
   }

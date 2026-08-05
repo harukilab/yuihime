@@ -30,7 +30,7 @@ export class CognitiveScheduler {
   }
 
   /**
-   * Menyimpan snapshot tugas batin berjalan saat terinterupsi oleh input baru dari user
+   * Saves the running inner task snapshot when interrupted by new user input
    */
   public static suspendTask(taskId: string, snapshot: TaskSnapshot) {
     this.activeTaskStore.set(taskId, snapshot);
@@ -39,7 +39,7 @@ export class CognitiveScheduler {
   }
 
   /**
-   * Mengambil kembali snapshot tugas ketika jalur prioritas utama kembali senggang
+   * Retrieves the task snapshot back once the main priority path is idle again
    */
   public static resumeTask(taskId: string): TaskSnapshot | null {
     if (this.activeTaskStore.has(taskId)) {
@@ -50,7 +50,7 @@ export class CognitiveScheduler {
   }
 
   /**
-   * Mendapatkan daftar semua tugas yang sedang ditangguhkan
+   * Gets the list of all currently suspended tasks
    */
   public static getSuspendedTasks(): TaskSnapshot[] {
     const list: TaskSnapshot[] = [];

@@ -1,15 +1,15 @@
 /**
- * Module utilitas enkripsi profil YuiHime.
- * Mengamankan biodata pengguna saat disimpan atau dimuat demi privasi multi-channel yang terlindungi.
+ * YuiHime profile encryption utility module.
+ * Secures user biodata when saved or loaded for protected multi-channel privacy.
  */
 
 const ENCRYPTION_KEY = "YuiHimeSecureCoreKey-2026-v5";
 
 /**
- * Mengenkripsi biodata pengguna dan sesi ID menjadi format String bersandi kriptografi terlindungi (Symmetric XOR Encrypted).
+ * Encrypts user biodata and session ID into a protected cryptographic string format (Symmetric XOR Encrypted).
  *
- * @param data Objek berisi biodata pengguna dan sesi ID
- * @returns Berkas teks dengan header segel batin khas Yuihime.
+ * @param data Object containing user biodata and session ID
+ * @returns Text file with Yuihime's signature inner seal header.
  */
 export function encryptProfile(data: any): string {
   const jsonStr = JSON.stringify({
@@ -27,18 +27,18 @@ export function encryptProfile(data: any): string {
     cipher += String.fromCharCode(encryptedChar);
   }
 
-  // Melakukan konversi biner aman ke base64
+  // Perform safe binary-to-base64 conversion
   const b64 = btoa(unescape(encodeURIComponent(cipher)));
   
-  // Bungkus dalam baris preambule otentikasi agar terlihat futuristik dan profesional
+  // Wrap in an authentication preamble line so it looks futuristic and professional
   return `-----BEGIN YUIHIME SECURE PROFILE CRYPT-----\n${b64}\n-----END YUIHIME SECURE PROFILE CRYPT-----`;
 }
 
 /**
- * Mendekripsi string bersandi kembali menjadi objek biodata asli penanda sesi.
+ * Decrypts the encoded string back into the original session-marked biodata object.
  *
- * @param pem Kunci teks terenkripsi berporos header Yuihime
- * @returns Objek biodata asli / throws error apabila gagal verifikasi.
+ * @param pem Encrypted text key anchored to the Yuihime header
+ * @returns Original biodata object / throws an error if verification fails.
  */
 export function decryptProfile(pem: string): any {
   const cleanPem = pem
@@ -47,7 +47,7 @@ export function decryptProfile(pem: string): any {
     .replace(/\s/g, "");
 
   if (!cleanPem) {
-    throw new Error("Berkas profil tidak berisi data sandi.");
+    throw new Error("Profile file contains no encrypted data.");
   }
 
   const cipher = decodeURIComponent(escape(atob(cleanPem)));
@@ -62,9 +62,9 @@ export function decryptProfile(pem: string): any {
 
   const parsed = JSON.parse(jsonStr);
   
-  // Verifikasi tanda tangan digital batin Yuihime
+  // Verify Yuihime's inner digital signature
   if (parsed.signature !== "YUIHIME_SECURE_LATTICE_V1") {
-    throw new Error("Tanda tangan dekripsi salah. Berkas ini bukan berkas identitas Yuihime yang valid!");
+    throw new Error("Decryption signature mismatch. This file is not a valid Yuihime identity file!");
   }
 
   return parsed;

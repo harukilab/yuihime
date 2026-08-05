@@ -1,9 +1,9 @@
 /**
  * CircadianRhythmModule.ts
  * 
- * Sinkronisasi Siklus Hidup Nyata (Circadian Rhythm & Ambient Awareness).
- * Menyesuaikan hormon emosi, tingkat energi, dan sikap batin Yuihime secara periodik
- * menyesuaikan waktu lokal riil (Local Time Clock).
+ * Real Life Cycle Synchronization (Circadian Rhythm & Ambient Awareness).
+ * Periodically adjusts Yuihime's emotional hormones, energy levels, and inner attitude
+ * according to the real local time (Local Time Clock).
  * 
  * Phase: SOUL
  * Part of the "Plug-and-Play" architecture.
@@ -27,7 +27,7 @@ CIRCADIAN BIOLOGICAL ADAPTATION GUIDELINES:
 3. Show fatigue or gentle sleepiness (e.g. cute text yawns or warm complaints of being sleepy) if cognitive energy is low (\${cognitiveEnergy}%) or drowsiness is high.
 `.trim();
 
-// Daftarkan template ke PromptRegistry
+// Register the template in PromptRegistry
 PromptRegistry.getInstance().register('circadian:biological_influence', DEFAULT_CIRCADIAN_PROMPT);
 
 export const CircadianRhythmModule: CortexModule = {

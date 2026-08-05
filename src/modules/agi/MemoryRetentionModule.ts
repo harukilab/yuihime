@@ -1,12 +1,12 @@
 /**
  * MemoryRetentionModule.ts
  *
- * Spaced-repetition proactive recollection (Stage D): pada tiap siklus,
- * menggugah memori penting yang berisiko dilupakan (recall probability
- * Ebbinghaus rendah) untuk user saat ini, lalu menyuntikkan sebagai
- * ingatan spontan ke soulDirective agar Yui mengingatnya secara natural.
+ * Spaced-repetition proactive recollection (Stage D): each cycle,
+ * resurfaces important memories at risk of being forgotten (low Ebbinghaus
+ * recall probability) for the current user, then injects them as
+ * spontaneous recollections into the soulDirective so Yui remembers them naturally.
  *
- * Phase: SOUL (order 21, sebelum user-model & emotional-routing).
+ * Phase: SOUL (order 21, before user-model & emotional-routing).
  */
 
 import { CortexModule, ModuleType, AgentState } from '@shared/include/types';
@@ -90,7 +90,7 @@ export const MemoryRetentionModule: CortexModule = {
       if (inject) {
         const lines = rows.map((m: any) => {
           const ago = Math.round((Date.now() - (m.timestamp || Date.now())) / (24 * 60 * 60 * 1000));
-          return `- [${ago}d lalu] ${String(m.content || '').slice(0, 240)}`;
+          return `- [${ago}d ago] ${String(m.content || '').slice(0, 240)}`;
         });
         const note = [
           '',
@@ -105,10 +105,10 @@ export const MemoryRetentionModule: CortexModule = {
         };
       }
 
-      logs.push(`[MEMORY_RETENTION] Gugah ${rows.length} memori berisiko lupa (P<${riskThreshold}).`);
+      logs.push(`[MEMORY_RETENTION] Resurfaced ${rows.length} memories at risk of forgetting (P<${riskThreshold}).`);
       return nextContext;
     } catch (err: any) {
-      logs.push(`[MEMORY_RETENTION] Gagal recollection: ${err?.message || err}`);
+      logs.push(`[MEMORY_RETENTION] Failed recollection: ${err?.message || err}`);
       return { ...context, logs };
     }
   }

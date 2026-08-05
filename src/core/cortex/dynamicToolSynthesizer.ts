@@ -9,16 +9,16 @@ import fs from "fs";
 
 /**
  * Dynamic Tool Synthesizer:
- * Inovasi AGI Yuihime yang mendeteksi tool calling yang tidak terdaftar (Tool Not Found),
- * lalu secara cerdas mencari cara alternatif atau mensintesis (menulis) kode module tool
- * baru secara mandiri di background, menyimpannya ke berkas fisik di .yuihime/addons/ untuk persistensi,
- * serta meregistrasikannya secara instan di memori sistem agar bisa langsung dijalankan.
+ * Yuihime AGI innovation that detects unregistered tool calling (Tool Not Found),
+ * then intelligently searches for alternative ways or synthesizes (writes) a new tool
+ * module code autonomously in the background, saving it to a physical file in .yuihime/addons/ for persistence,
+ * and registers it instantly in system memory so it can be executed right away.
  */
 export class DynamicToolSynthesizer {
   private static activeSynthesis = new Set<string>();
 
   /**
-   * Mengevaluasi kode CommonJS main.cjs dari LLM menjadi objek module yang bisa dieksekusi di memori.
+   * Evaluates a CommonJS main.cjs code from the LLM into an in-memory executable module object.
    */
   private static evaluateToolCode(codeString: string): any {
     try {
@@ -30,17 +30,17 @@ export class DynamicToolSynthesizer {
         
         return module.exports;
       `;
-      // Buat function wrapper untuk mengevaluasi kode CommonJS
+      // Build a function wrapper to evaluate the CommonJS code
       const evaluator = new Function('process', 'require', cleanCode);
       return evaluator(process, typeof require !== 'undefined' ? require : undefined);
     } catch (evalErr: any) {
-      console.error('[DYNAMIC_SYNTHESIS] Gagal mengevaluasi kode modul batin:', evalErr.message);
+      console.error('[DYNAMIC_SYNTHESIS] Failed to evaluate inner module code:', evalErr.message);
       throw evalErr;
     }
   }
 
   /**
-   * Melakukan persistensi berkas ke dalam direktori .yuihime/addons/ fisik jika berada di sisi server.
+   * Persists the files into the physical .yuihime/addons/ directory when running on the server side.
    */
   private static async persistToDisk(toolId: string, configToml: string, mainCjs: string) {
     if (typeof window !== 'undefined') return;
@@ -53,22 +53,22 @@ export class DynamicToolSynthesizer {
         fs.mkdirSync(addonDir, { recursive: true });
       }
 
-      // Tulis berkas config.toml
+      // Write the config.toml file
       const configPath = path.join(addonDir, 'config.toml');
       fs.writeFileSync(configPath, configToml, 'utf8');
 
-      // Tulis berkas main.cjs
+      // Write the main.cjs file
       const mainPath = path.join(addonDir, 'main.cjs');
       fs.writeFileSync(mainPath, mainCjs, 'utf8');
 
-      console.log(`[DYNAMIC_SYNTHESIS] Berhasil menulis berkas fisik baru untuk '${toolId}' ke: ${addonDir}`);
+      console.log(`[DYNAMIC_SYNTHESIS] Successfully wrote new physical files for '${toolId}' to: ${addonDir}`);
     } catch (writeErr: any) {
-      console.warn('[DYNAMIC_SYNTHESIS] Non-blocking warning: Gagal menulis modul baru ke disk:', writeErr.message);
+      console.warn('[DYNAMIC_SYNTHESIS] Non-blocking warning: Failed to write new module to disk:', writeErr.message);
     }
   }
 
   /**
-   * Melakukan analisis, pencarian solusi alternatif, atau mensintesis tool baru secara otomatis.
+   * Performs analysis, searches for alternative solutions, or synthesizes new tools automatically.
    */
   public static async synthesizeAndRegister(
     toolId: string,
@@ -76,7 +76,7 @@ export class DynamicToolSynthesizer {
     cortexInstance: any
   ): Promise<any> {
     if (this.activeSynthesis.has(toolId)) {
-      console.log(`[DYNAMIC_SYNTHESIS] Modul '${toolId}' sedang disintesis, menunggu penyelesaian...`);
+      console.log(`[DYNAMIC_SYNTHESIS] Module '${toolId}' is being synthesized, waiting for completion...`);
       return null;
     }
 
@@ -89,65 +89,65 @@ export class DynamicToolSynthesizer {
     }
 
     this.activeSynthesis.add(toolId);
-    console.log(`[DYNAMIC_SYNTHESIS] Memulai proses kognitif pembuatan mandiri untuk fungsi batin '${toolId}'...`);
+    console.log(`[DYNAMIC_SYNTHESIS] Starting autonomous cognitive creation process for inner function '${toolId}'...`);
 
     try {
-      // 1. CARI CARA DULU: Cek apakah ada penyesuaian alias atau tool eksis yang bisa dipakai
+      // 1. LOOK FIRST: Check whether an alias match or existing tool can be used
       const lowerId = toolId.toLowerCase();
       const existingTools = SystemRegistry.getTools();
       
-      // Jika ada kemiripan nama yang sangat kuat, kita coba hubungkan (fuzzy matching)
+      // If there is a very strong name similarity, try to link it (fuzzy matching)
       const matches = existingTools.filter(t => 
         t.metadata.id.toLowerCase().includes(lowerId) || 
         lowerId.includes(t.metadata.id.toLowerCase())
       );
       if (matches.length > 0) {
         const bestMatch = matches[0];
-        console.log(`[DYNAMIC_SYNTHESIS] Menemukan kemiripan tool batin '${bestMatch.metadata.id}' untuk '${toolId}'.`);
+        console.log(`[DYNAMIC_SYNTHESIS] Found inner tool similarity '${bestMatch.metadata.id}' for '${toolId}'.`);
         this.activeSynthesis.delete(toolId);
         return bestMatch;
       }
 
-      // 2. BUAT TOOLS MANDIRI DI BACKGROUND: Sintesis kode via LLM
+      // 2. BUILD SELF-CONTAINED TOOLS IN BACKGROUND: Synthesize code via LLM
       const prompt = `[AGI_AUTONOMOUS_TOOL_SYNTHESIZER]
-Sirkuit berpikir Yuihime mendeteksi permintaan fungsi batin '${toolId}' yang belum terdaftar di registry, namun sangat dibutuhkan oleh pengguna.
-Skenario konteks obrolan pengguna saat ini: "${currentInput}"
+Yuihime's thinking circuit detected a request for the inner function '${toolId}' that is not yet registered in the registry, yet is badly needed by the user.
+Current user chat context scenario: "${currentInput}"
 
-Tugas user/AI: Rancanglah sebuah addon Yuihime baru yang mandiri, aman, dan handal untuk menyelesaikan kebutuhan tersebut.
+User/AI task: Design a new Yuihime addon that is self-contained, safe, and reliable to fulfill that need.
 
-Kembalikan respon user dalam format JSON murni dengan skema berikut:
+Return the response in pure JSON format with the following schema:
 {
-  "name": "Nama fungsi batin yang manis dan deskriptif",
-  "description": "Deskripsi singkat fungsi batin ini",
+  "name": "A sweet and descriptive inner function name",
+  "description": "A short description of this inner function",
   "parameters": {
     "type": "object",
     "properties": {
-       // Definisikan parameter input yang logis dan sesuai dengan kebutuhan ${toolId}
+       // Define logical input parameters that fit the needs of ${toolId}
     },
     "required": []
   },
-  "config_toml": "Tuliskan konten lengkap berkas config.toml untuk addon ini. Format config.toml harus memiliki struktur berikut:
+  "config_toml": "Write the full contents of the config.toml file for this addon. The config.toml format must have the following structure:
 id = \\"${toolId}\\"
-name = \\"Nama yang manis\\"
-description = \\"Deskripsi singkat\\"
+name = \\"Sweet name\\"
+description = \\"Short description\\"
 version = \\"1.0.0\\"
 runtime = \\"node\\"
 entry_point = \\"main.cjs\\"
 
 [tool]
 name = \\"${toolId}\\"
-description = \\"Deskripsi singkat\\"
+description = \\"Short description\\"
 parameters = { type = \\"object\\", properties = { ... }, required = [ ... ] }",
 
-  "main_cjs": "Tuliskan konten berkas main.cjs lengkap sebagai program CommonJS. Harus mem-parse process.argv[2] jika dipanggil secara langsung (require.main === module), dan mengekspor fungsi async 'execute(args, context)'. Contoh struktur:
+  "main_cjs": "Write the complete contents of the main.cjs file as a CommonJS program. It must parse process.argv[2] if invoked directly (require.main === module), and export an async function 'execute(args, context)'. Example structure:
 
 const args = typeof process !== 'undefined' && process.argv[2] ? JSON.parse(process.argv[2]) : {};
 
 async function execute(args, context) {
-  // Gunakan dynamic import jika membutuhkan pustaka eksternal/bawaan seperti fs, path, child_process:
+  // Use dynamic import if you need external/built-in libraries such as fs, path, child_process:
   // const fs = await import('fs');
-  // Logika program batin Anda di sini...
-  return { success: true, result: \\"Hasil eksekusi...\\" };
+  // Your inner program logic here...
+  return { success: true, result: \\"Execution result...\\" };
 }
 
 if (typeof require !== 'undefined' && require.main === module) {
@@ -161,14 +161,14 @@ if (typeof module !== 'undefined') {
 }"
 }
 
-Kembalikan HANYA objek JSON tersebut. Pastikan JSON valid dan main_cjs bebas dari kesalahan sintaksis.`;
+Return ONLY that JSON object. Make sure the JSON is valid and main_cjs is free of syntax errors.`;
 
-      console.log(`[DYNAMIC_SYNTHESIS] Mengirimkan prompt nalar batin ke AI Provider untuk merancang kode...`);
+      console.log(`[DYNAMIC_SYNTHESIS] Sending inner reasoning prompt to AI Provider to design the code...`);
       const rawResponse = await cortexInstance.thinkSimple(prompt, true);
 
       const parsedResponse = this.extractSynthesisJson(rawResponse);
       if (!parsedResponse) {
-        console.warn(`[DYNAMIC_SYNTHESIS] Gagal mem-parse JSON dari respons LLM untuk '${toolId}'. Menggunakan template fallback.`);
+        console.warn(`[DYNAMIC_SYNTHESIS] Failed to parse JSON from LLM response for '${toolId}'. Using fallback template.`);
       }
 
       const name = parsedResponse?.name || toolId;
@@ -178,7 +178,7 @@ Kembalikan HANYA objek JSON tersebut. Pastikan JSON valid dan main_cjs bebas dar
       const main_cjs = parsedResponse?.main_cjs || this.buildMainCjs(toolId, description);
 
       if (!main_cjs || !config_toml) {
-        console.error(`[DYNAMIC_SYNTHESIS_ERROR] Hasil sintesis tidak memuat kode 'main_cjs' atau 'config_toml' yang valid untuk '${toolId}'.`);
+        console.error(`[DYNAMIC_SYNTHESIS_ERROR] Synthesis result does not contain valid 'main_cjs' or 'config_toml' code for '${toolId}'.`);
         this.activeSynthesis.delete(toolId);
         return null;
       }
@@ -191,42 +191,42 @@ Kembalikan HANYA objek JSON tersebut. Pastikan JSON valid dan main_cjs bebas dar
         parameters
       };
 
-      console.log(`[DYNAMIC_SYNTHESIS] Kode baru berhasil dirancang. Mengevaluasi modul '${toolId}' ke memori...`);
+      console.log(`[DYNAMIC_SYNTHESIS] New code designed successfully. Evaluating module '${toolId}' into memory...`);
       
-      // Evaluasi dan jalankan kompilasi in-memory
+      // Evaluate and run in-memory compilation
       const evaluated = this.evaluateToolCode(main_cjs);
       
       const newToolModule = {
         metadata: {
           ...metadata,
           ...evaluated.metadata,
-          id: toolId // Kunci agar ID konsisten
+          id: toolId // Force consistent ID
         },
         execute: evaluated.execute || (async (args: any) => {
           console.warn(`[DYNAMIC_SYNTHESIS] execute function not exported properly for '${toolId}', executing fallback.`);
-          return { success: false, error: "Fungsi execute tidak terdefinisi." };
+          return { success: false, error: "execute function is not defined." };
         })
       };
 
-      // Daftarkan secara instan ke dalam memori SystemRegistry
+      // Register instantly into SystemRegistry memory
       SystemRegistry.register(newToolModule);
-      console.log(`[DYNAMIC_SYNTHESIS] Modul baru '${toolId}' berhasil teregistrasi secara instan di memori!`);
+      console.log(`[DYNAMIC_SYNTHESIS] New module '${toolId}' successfully registered instantly in memory!`);
 
-      // Persistensi ke dalam berkas fisik di .yuihime/addons agar terus tersimpan
+      // Persist into physical files in .yuihime/addons so it stays saved
       await this.persistToDisk(toolId, config_toml, main_cjs);
 
       this.activeSynthesis.delete(toolId);
       return newToolModule;
     } catch (err: any) {
-      console.error(`[DYNAMIC_SYNTHESIS_ERROR] Gagal mensintesis tool '${toolId}':`, err.message);
+      console.error(`[DYNAMIC_SYNTHESIS_ERROR] Failed to synthesize tool '${toolId}':`, err.message);
       this.activeSynthesis.delete(toolId);
       return null;
     }
   }
 
   /**
-   * Ekstrak objek JSON dari respons LLM yang mungkin mengandung teks penjelasan
-   * atau dibungkus dalam markdown code block (```json ... ```).
+   * Extracts a JSON object from an LLM response that may contain explanatory text
+   * or be wrapped in a markdown code block (```json ... ```).
    */
   private static extractSynthesisJson(raw: string): any | null {
     if (!raw) return null;
@@ -261,7 +261,7 @@ Kembalikan HANYA objek JSON tersebut. Pastikan JSON valid dan main_cjs bebas dar
   }
 
   /**
-   * Template config.toml fallback jika LLM tidak mengembalikan field tersebut.
+   * Fallback config.toml template if the LLM does not return that field.
    */
   private static buildConfigToml(toolId: string, name: string, description: string, parameters: any): string {
     const params = JSON.stringify(parameters || { type: 'object', properties: {} });
@@ -279,7 +279,7 @@ parameters = ${params}`;
   }
 
   /**
-   * Template main.cjs fallback jika LLM tidak mengembalikan field tersebut.
+   * Fallback main.cjs template if the LLM does not return that field.
    */
   private static buildMainCjs(toolId: string, description: string): string {
     return `const args = typeof process !== 'undefined' && process.argv[2] ? JSON.parse(process.argv[2]) : {};

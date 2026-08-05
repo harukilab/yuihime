@@ -43,7 +43,7 @@ export const GiftiaRelationSection: React.FC<GiftiaRelationSectionProps> = ({
             probabilisticTriggerChance: Number(spConfig.probabilisticTriggerChance || 0.10)
           });
         })
-        .catch((err) => console.warn('[GIFTIA_RELATION] Gagal memuat setelan otonom Yui:', err));
+        .catch((err) => console.warn("[GIFTIA_RELATION] Failed to load Yui's autonomous settings:", err));
     }
   }, [initialSpontaneousConfig]);
 
@@ -85,10 +85,10 @@ export const GiftiaRelationSection: React.FC<GiftiaRelationSectionProps> = ({
   const affection = Math.round(state?.relation?.affection ?? 50);
 
   const getRelationStatus = () => {
-    if (trust > 75 && affection > 45) return { title: '💖 Sweetheart (Gadis Kesayangan)', desc: 'Tingkat kepercayaan & kehangatan batin sangat tinggi. Yuihime manja, jujur, terbuka, dan sangat protektif terhadapmu.' };
-    if (affection > 45) return { title: '🤝 Dekat (Kawan Akrab)', desc: 'Sudah saling mengenal dengan hangat. Berkomunikasi secara luwes dan ceria.' };
-    if (trust < 35) return { title: '🔒 Stranger (Asing)', desc: 'Yuihime masih menjaga jarak dengan sikap sedikit waspada dan lebih formal.' };
-    return { title: '😐 Netral', desc: 'Hubungan stabil standar AGI. Terus berbincang hangat untuk mempererat kedekatan batin.' };
+    if (trust > 75 && affection > 45) return { title: '💖 Sweetheart (Darling Girl)', desc: 'Trust and inner warmth are very high. Yuihime is pampering, honest, open, and very protective of you.' };
+    if (affection > 45) return { title: '🤝 Close (Good Friend)', desc: 'You already know each other warmly. Communication flows flexibly and cheerfully.' };
+    if (trust < 35) return { title: '🔒 Stranger', desc: 'Yuihime still keeps her distance with a slightly wary, more formal attitude.' };
+    return { title: '😐 Neutral', desc: 'Standard stable AGI relationship. Keep chatting warmly to deepen the inner bond.' };
   };
 
   const relationInfo = getRelationStatus();
@@ -185,7 +185,7 @@ export const GiftiaRelationSection: React.FC<GiftiaRelationSectionProps> = ({
         </div>
       </div>
 
-      {/* 2. ANALISIS PENJIWAAN AGI SOUL PADA SIKAP YUIHIME */}
+      {/* 2. AGI SOUL PERSONA ANALYSIS ON YUIHIME'S ATTITUDE */}
       <div className="bg-[#100e17]/80 border border-purple-500/15 p-6 rounded-3xl space-y-4 text-left relative overflow-hidden">
         <div className="flex items-center gap-2.5 pb-3 border-b border-purple-500/10">
           <div className="p-2 rounded-xl bg-purple-500/15 border border-purple-500/20 text-purple-400">
@@ -193,7 +193,7 @@ export const GiftiaRelationSection: React.FC<GiftiaRelationSectionProps> = ({
           </div>
           <div>
             <span className="text-[9px] uppercase font-mono font-extrabold text-purple-400 tracking-wider">CORTEX & SOUL INTEGRATION VERIFICATION</span>
-            <h4 className="text-sm font-bold text-white">Analisis Pengaruh AGI Soul Terhadap Sikap Yuihime</h4>
+            <h4 className="text-sm font-bold text-white">Analysis of AGI Soul's Influence on Yuihime's Attitude</h4>
           </div>
         </div>
 
@@ -201,58 +201,58 @@ export const GiftiaRelationSection: React.FC<GiftiaRelationSectionProps> = ({
           <div className="bg-purple-950/20 border border-purple-500/10 p-4 rounded-2xl space-y-2">
             <div className="flex items-center gap-2 text-purple-300 font-bold font-mono">
               <Sparkles size={14} className="text-amber-400" />
-              <span>Modulasi Prompt System (`soulDirective`)</span>
+              <span>System Prompt Modulation (`soulDirective`)</span>
             </div>
             <p className="text-zinc-300 leading-relaxed text-[11px]">
-              <strong className="text-purple-300">Status: AKTIF & TERSINKRON.</strong> AGI Soul secara kontinu menyuntikkan instruksi emosional, neuro-transmiter (dopamin, oksitosin), serta batas batas karsa langsung ke dalam prompt pembentuk respon Yuihime.
+              <strong className="text-purple-300">Status: ACTIVE & SYNCED.</strong> The AGI Soul continuously injects emotional instructions, neuro-transmitters (dopamine, oxytocin), and drive boundaries directly into the prompt that shapes Yuihime's responses.
             </p>
           </div>
 
           <div className="bg-purple-950/20 border border-purple-500/10 p-4 rounded-2xl space-y-2">
             <div className="flex items-center gap-2 text-purple-300 font-bold font-mono">
               <Flame size={14} className="text-rose-400" />
-              <span>Dinamika SoulDrift & Virtues/Sins</span>
+              <span>Dynamics of SoulDrift & Virtues/Sins</span>
             </div>
             <p className="text-zinc-300 leading-relaxed text-[11px]">
-              <strong className="text-purple-300">Status: AKTIF.</strong> Nilai Empati, Rasa Ingin Tahu, Kesabaran, serta Irritation & Pride berubah secara organik seiring nada obrolanmu dengan Yui.
+              <strong className="text-purple-300">Status: ACTIVE.</strong> Empathy, Curiosity, Patience, as well as Irritation & Pride values change organically along with the tone of your chats with Yui.
             </p>
           </div>
 
           <div className="bg-purple-950/20 border border-purple-500/10 p-4 rounded-2xl space-y-2">
             <div className="flex items-center gap-2 text-purple-300 font-bold font-mono">
               <ShieldCheck size={14} className="text-emerald-400" />
-              <span>Monolog Subconscious Batin</span>
+              <span>Inner Subconscious Monolog</span>
             </div>
             <p className="text-zinc-300 leading-relaxed text-[11px]">
-              <strong className="text-purple-300">Status: TERSINKRONISASI.</strong> Yui merumuskan aliran kesadaran rahasia berdasarkan tingkat rindu (`loneliness`) dan afeksi sebelum memberikan balasan lisan.
+              <strong className="text-purple-300">Status: SYNCHRONIZED.</strong> Yui formulates a secret stream of consciousness based on the level of longing (`loneliness`) and affection before giving a verbal reply.
             </p>
           </div>
 
           <div className="bg-purple-950/20 border border-purple-500/10 p-4 rounded-2xl space-y-2">
             <div className="flex items-center gap-2 text-purple-300 font-bold font-mono">
               <Zap size={14} className="text-cyan-400" />
-              <span>Inisiatif Otonom Spontan</span>
+              <span>Spontaneous Autonomous Initiative</span>
             </div>
             <p className="text-zinc-300 leading-relaxed text-[11px]">
-              <strong className="text-purple-300">Status: AKTIF BERJALAN.</strong> Saat suasana hening, AGI Soul menghitung kalkulasi rasa rindu untuk meluncurkan pesan menyapa secara spontan.
+              <strong className="text-purple-300">Status: RUNNING.</strong> During silence, the AGI Soul computes a longing calculation to spontaneously launch a greeting message.
             </p>
           </div>
         </div>
       </div>
 
-      {/* 3. SETELAN PESAN SPONTAN/ISENG */}
+      {/* 3. SPONTANEOUS/PLAYFUL MESSAGE SETTINGS */}
       <div className="bg-[#110f18]/80 border border-rose-500/15 p-6 rounded-3xl space-y-5 text-left">
         <div className="flex items-center gap-2 pb-3 border-b border-rose-500/10">
           <div className="p-1 px-2.5 rounded-lg bg-rose-500/15 text-rose-400 font-mono text-[10px] font-bold">GIFTIA OS CONFIG</div>
-          <h4 className="text-xs font-bold text-white uppercase tracking-wider">Setelan Pesan Spontan (Giftia Core)</h4>
+          <h4 className="text-xs font-bold text-white uppercase tracking-wider">Spontaneous Message Settings (Giftia Core)</h4>
         </div>
         
         {/* Switch Toggle */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="space-y-1 text-left">
-            <span className="text-xs font-bold text-rose-300">Aktifkan Pesan Iseng Spontan</span>
+            <span className="text-xs font-bold text-rose-300">Enable Spontaneous Playful Messages</span>
             <p className="text-[11px] text-zinc-400 leading-relaxed max-w-lg">
-              Yuihime secara otonom meletupkan pesan iseng batin saat mendeteksi keheningan livestream obrolan.
+              Yuihime autonomously bursts out playful inner messages when she detects silence in the chat livestream.
             </p>
           </div>
           
@@ -277,21 +277,21 @@ export const GiftiaRelationSection: React.FC<GiftiaRelationSectionProps> = ({
             {/* Probabilities Trigger Chance */}
             <div className="space-y-3 text-left">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-rose-300">Persentase Kemunculan (Probabilitas)</span>
+                <span className="text-xs font-bold text-rose-300">Appearance Percentage (Probability)</span>
                 <span className="text-xs font-mono font-bold text-rose-400">
-                  {localSpontaneousConfig.probabilisticTriggerChance === 0 ? "Off (Mati)" : `${Math.round(localSpontaneousConfig.probabilisticTriggerChance * 100)}%`}
+                  {localSpontaneousConfig.probabilisticTriggerChance === 0 ? "Off" : `${Math.round(localSpontaneousConfig.probabilisticTriggerChance * 100)}%`}
                 </span>
               </div>
-              <p className="text-[11px] text-zinc-400">Peluang Yuihime berinisiatif memunculkan chat otonom saat mendeteksi keheningan.</p>
+              <p className="text-[11px] text-zinc-400">Chance that Yuihime takes the initiative to spawn an autonomous chat when she detects silence.</p>
               
               <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2">
                 {[
-                  { label: 'Off / Mati', val: 0.0, desc: '0%' },
-                  { label: 'Sangat Jarang', val: 0.05, desc: '5%' },
-                  { label: 'Jarang', val: 0.10, desc: '10%' },
-                  { label: 'Wajar', val: 0.25, desc: '25%' },
-                  { label: 'Sedang', val: 0.50, desc: '50%' },
-                  { label: 'Sering', val: 0.75, desc: '75%' },
+                  { label: 'Off', val: 0.0, desc: '0%' },
+                  { label: 'Very Rare', val: 0.05, desc: '5%' },
+                  { label: 'Rare', val: 0.10, desc: '10%' },
+                  { label: 'Reasonable', val: 0.25, desc: '25%' },
+                  { label: 'Medium', val: 0.50, desc: '50%' },
+                  { label: 'Often', val: 0.75, desc: '75%' },
                   { label: 'Instant', val: 1.0, desc: '100%' },
                 ].map((prob) => {
                   const isActive = localSpontaneousConfig.probabilisticTriggerChance === prob.val;
@@ -331,26 +331,26 @@ export const GiftiaRelationSection: React.FC<GiftiaRelationSectionProps> = ({
                 <span className="text-xs font-bold text-rose-300">Durasi Jeda Minimum (Cooldown Core)</span>
                 <span className="text-xs font-mono font-bold text-amber-400">
                   {localSpontaneousConfig.cooldownInterval >= 3600 
-                    ? `${localSpontaneousConfig.cooldownInterval / 3600} Jam` 
-                    : `${localSpontaneousConfig.cooldownInterval / 60} Menit`}
+                    ? `${localSpontaneousConfig.cooldownInterval / 3600} Hours` 
+                    : `${localSpontaneousConfig.cooldownInterval / 60} Minutes`}
                 </span>
               </div>
               <p className="text-[11px] text-zinc-400 leading-relaxed">
-                Menjamin jarak waktu minimum agar Yuihime tidak mengirim pesan terlalu sering. 
-                Sangat disarankan memakai jeda berjam-jam (misal: 1 Jam s/d 12 Jam) karena server diaktifkan 24 jam non-stop agar tetap natural dan ramah kuota.
+                Guarantees a minimum time gap so Yuihime does not send messages too frequently. 
+                It is highly recommended to use multi-hour intervals (e.g., 1 Hour to 12 Hours) because the server runs 24/7 non-stop to stay natural and quota-friendly.
               </p>
 
               <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-2">
                 {[
-                  { label: 'Off / Mati', cd: 999999, desc: 'Diobrak', forceOff: true },
-                  { label: '5 Menit', cd: 300, desc: 'Responsif' },
-                  { label: '15 Menit', cd: 900, desc: 'Normal' },
-                  { label: '30 Menit', cd: 1800, desc: 'Sopan' },
-                  { label: '1 Jam', cd: 3600, desc: 'Tenang' },
-                  { label: '3 Jam', cd: 10800, desc: 'Rileks' },
-                  { label: '6 Jam', cd: 21600, desc: 'Sangat Jarang' },
-                  { label: '12 Jam', cd: 43200, desc: 'Minimalis' },
-                  { label: '24 Jam', cd: 86400, desc: 'Satu Hari' },
+                  { label: 'Off', cd: 999999, desc: 'Bruised', forceOff: true },
+                  { label: '5 Minutes', cd: 300, desc: 'Responsive' },
+                  { label: '15 Minutes', cd: 900, desc: 'Normal' },
+                  { label: '30 Minutes', cd: 1800, desc: 'Polite' },
+                  { label: '1 Hour', cd: 3600, desc: 'Calm' },
+                  { label: '3 Hours', cd: 10800, desc: 'Relaxed' },
+                  { label: '6 Hours', cd: 21600, desc: 'Very Rare' },
+                  { label: '12 Hours', cd: 43200, desc: 'Minimalist' },
+                  { label: '24 Hours', cd: 86400, desc: 'One Day' },
                 ].map((dur) => {
                   const isCurrentOff = !localSpontaneousConfig.enableSpontaneousSpam;
                   const isActive = dur.forceOff 

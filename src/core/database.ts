@@ -48,19 +48,19 @@ export function initializeDatabase() {
     mkdirSync(dbDir, { recursive: true });
   }
 
-  // Bersihkan stale WAL/SHM dari crash sebelumnya agar SQLite start fresh
-  // (aman walau journal mode DELETE — tidak ada file tsb yang dibuat)
+  // Clean stale WAL/SHM from a previous crash so SQLite starts fresh
+  // (safe even with journal mode DELETE — no such files are created)
   try { if (existsSync(dbPath + '-wal')) unlinkSync(dbPath + '-wal'); } catch {}
   try { if (existsSync(dbPath + '-shm')) unlinkSync(dbPath + '-shm'); } catch {}
 
   try {
     const db = new Database(dbPath, { timeout: 15000 });
-    // Journal DELETE (rollback journal) — WAL + proot (UserLAnd) terbukti memicu
-    // korupsi page-cache in-memory yang membuat SQLite loop tanpa henti (event loop beku).
+    // Journal DELETE (rollback journal) — WAL + proot (UserLAnd) proved to trigger
+    // in-memory page-cache corruption that makes SQLite loop endlessly (frozen event loop).
     db.pragma('journal_mode = DELETE');
     db.pragma('busy_timeout = 15000');
     db.pragma('synchronous = NORMAL');
-    db.pragma('cache_size = -64000'); // batasi page cache (64MB) agar tidak membengkak tak terkendali
+    db.pragma('cache_size = -64000'); // limit page cache (64MB) to avoid unbounded growth
     cachedDb = db;
     return db;
   } catch (error) {
@@ -110,8 +110,8 @@ export async function retryDbOperation<T>(operation: () => T, label = 'DB operat
 }
 
 /**
- * Synchronous wrapper untuk retryDbOperation
- * Gunakan untuk db.prepare().run() calls yang perlu retry
+ * Synchronous wrapper for retryDbOperation
+ * Use it for db.prepare().run() calls that need retry
  */
 export function withDbRetry<T>(
   operation: () => T,
@@ -423,14 +423,14 @@ export async function setupSchema(db: any) {
     }
   }
 
-  // Migrasi kolom spaced-repetition untuk DB lama yang sudah punya tabel memories
+  // Migrate spaced-repetition columns for legacy DBs that already have a memories table
   try {
     const memCols = db.prepare("PRAGMA table_info(memories)").all() as any[];
     const colNames = new Set(memCols.map((c: any) => c.name));
     if (!colNames.has('retrievalCount')) db.exec('ALTER TABLE memories ADD COLUMN retrievalCount INTEGER DEFAULT 0');
     if (!colNames.has('lastRetrievedAt')) db.exec('ALTER TABLE memories ADD COLUMN lastRetrievedAt INTEGER DEFAULT 0');
   } catch (e: any) {
-    console.warn('[SCHEMA] Migrasi spaced-repetition memories dilewati:', e?.message || e);
+    console.warn('[SCHEMA] Spaced-repetition memories migration skipped:', e?.message || e);
   }
 
 
@@ -676,13 +676,13 @@ export async function setupSchema(db: any) {
 }
 
 /**
- * Menggali seluruh pengenal platform unik dari sebuah identitas kognitif
- * guna membandingkan kedekatan identitas multiplatform secara presisi.
+ * Digs out every unique platform identifier from a cognitive identity
+ * to compare cross-platform identity closeness precisely.
  */
 function getStandardizedIdentifiers(iden: any): Set<string> {
   const ids = new Set<string>();
   
-  // 1. Ekstrak dari id fisik
+  // 1. Extract from physical id
   if (iden.id) {
     const cleanId = iden.id.trim().toLowerCase();
     ids.add(cleanId);
@@ -694,7 +694,7 @@ function getStandardizedIdentifiers(iden: any): Set<string> {
     }
   }
 
-  // 2. Ekstrak dari source dan sourceId
+  // 2. Extract from source and sourceId
   if (iden.sourceId) {
     const rawSrcId = iden.sourceId.trim().toLowerCase();
     ids.add(rawSrcId);
@@ -709,7 +709,7 @@ function getStandardizedIdentifiers(iden: any): Set<string> {
     }
   }
 
-  // 3. Ekstrak dari daftar linkedAccounts
+  // 3. Extract from the linkedAccounts list
   let accounts: string[] = [];
   try {
     accounts = iden.linkedAccounts ? JSON.parse(iden.linkedAccounts) : [];
@@ -737,8 +737,8 @@ function getStandardizedIdentifiers(iden: any): Set<string> {
 }
 
 /**
- * Menggabungkan identitas duplikat di database agar Yui tidak menganggap
- * akun Telegram dan sesi Web sebagai dua orang berbeda, melainkan satu kesatuan.
+ * Merges duplicate identities in the database so Yui does not treat
+ * a Telegram account and a Web session as two different people, but as one entity.
  */
 export function deduplicateAndMergeIdentities(db: any, targetIdentityId: string) {
   try {
@@ -769,25 +769,25 @@ export function deduplicateAndMergeIdentities(db: any, targetIdentityId: string)
       mainHabits = [];
     }
 
-    // Set pengecualian pencocokan untuk pengenal generik/lokal agar tidak memicu salah gabung
+    // Matching exclusion set for generic/local identifiers to avoid false merges
     const genericIdentifiers = new Set([
       "", "local", "web", "web_local", "anonymous", "local_user", "localuser", 
       "anonymous_user", "local:local", "web:local", "web_local:local", "api"
     ]);
 
-    // Ekstrak token pengenal unik terstandarisasi untuk identitas target utama
+    // Extract standardized unique identifier tokens for the main target identity
     const mainTokens = getStandardizedIdentifiers(main);
 
-    // Cari seluruh identitas lain selain id ini
+    // Find all other identities apart from this id
     const allIdentities = db.prepare("SELECT * FROM identities WHERE id != ?").all(targetIdentityId) as any[];
     const duplicatesToMerge: any[] = [];
 
     for (const iden of allIdentities) {
-      // Ekstrak token pengenal unik terstandarisasi untuk identitas pembanding
+      // Extract standardized unique identifier tokens for the comparison identity
       const idenTokens = getStandardizedIdentifiers(iden);
       let hasOverlappingAccount = false;
 
-      // Periksa apakah terdapat pengenal tepercaya milik kedua akun yang saling beririsan
+      // Check whether both accounts share any trusted overlapping identifier
       for (const token of idenTokens) {
         if (!genericIdentifiers.has(token) && mainTokens.has(token)) {
           hasOverlappingAccount = true;
@@ -830,10 +830,10 @@ export function deduplicateAndMergeIdentities(db: any, targetIdentityId: string)
     for (const dup of duplicatesToMerge) {
       const { iden, accounts } = dup;
 
-      // Gabung akun tertaut
+      // Merge linked accounts
       mergedAccounts = [...mergedAccounts, ...accounts];
 
-      // Gabung fakta penting batin
+      // Merge important inner facts
       try {
         const dupFacts = iden.importantFacts ? JSON.parse(iden.importantFacts) : [];
         if (Array.isArray(dupFacts)) {
@@ -841,7 +841,7 @@ export function deduplicateAndMergeIdentities(db: any, targetIdentityId: string)
         }
       } catch {}
 
-      // Gabung rutinitas/habits
+      // Merge routines/habits
       try {
         const dupHabits = iden.habits ? JSON.parse(iden.habits) : [];
         if (Array.isArray(dupHabits)) {
@@ -849,19 +849,19 @@ export function deduplicateAndMergeIdentities(db: any, targetIdentityId: string)
         }
       } catch {}
 
-      // Ambil level status relasi tertinggi/maksimum
+      // Take the highest/maximum relationship status level
       if (iden.trust !== undefined && iden.trust > maxTrust) maxTrust = iden.trust;
       if (iden.affection !== undefined && iden.affection > maxAffection) maxAffection = iden.affection;
       if (iden.reputation !== undefined && iden.reputation > maxReputation) maxReputation = iden.reputation;
       if (iden.lastInteraction && iden.lastInteraction > lastInteraction) lastInteraction = iden.lastInteraction;
     }
 
-    // Sanitasi dan hilangkan duplikasi pada nilai array pengenal
+    // Sanitize and remove duplication on identifier array values
     mergedAccounts = Array.from(new Set(mergedAccounts.map(a => a.trim()))).filter(Boolean);
     mergedFacts = Array.from(new Set(mergedFacts.map(f => f.trim()))).filter(Boolean);
     mergedHabits = Array.from(new Set(mergedHabits.map(h => h.trim()))).filter(Boolean);
 
-    // Update profil utama dengan batin yang tergabung
+    // Update the main profile with the merged inner data
     db.prepare(`
       UPDATE identities 
       SET linkedAccounts = ?, importantFacts = ?, habits = ?, trust = ?, affection = ?, reputation = ?, lastInteraction = ?
@@ -877,14 +877,14 @@ export function deduplicateAndMergeIdentities(db: any, targetIdentityId: string)
       targetIdentityId
     );
 
-    // Hapus entri identitas asal yang telah dilebur agar UI tetap ramping
+    // Delete the source identity entries that were merged to keep the UI lean
     const deleteStmt = db.prepare(`DELETE FROM identities WHERE id = ?`);
     for (const dup of duplicatesToMerge) {
       deleteStmt.run(dup.iden.id);
       console.log(`[MERGE_IDENTITIES] Successfully integrated and liquidated duplicate identity ID: ${dup.iden.id}`);
     }
 
-    // Hubungkan ulang context_id di telegram_users milik identitas lama ke identitas utama
+    // Re-link context_id in telegram_users belonging to the old identity to the main identity
     const updateTgStmt = db.prepare("UPDATE telegram_users SET context = ? WHERE context = ?");
     for (const dup of duplicatesToMerge) {
       updateTgStmt.run(`linked_identity:${targetIdentityId}`, `linked_identity:${dup.iden.id}`);

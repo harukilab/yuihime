@@ -502,7 +502,7 @@ async function runImgGenerate(prompt: string, model: string, width: number, heig
       const d = envelope.data || {};
       const n = d.imageUrls?.length || d.metadata?.count || 1;
       return {
-        text: `✅ Image generated!\n\n📝 Prompt: ${prompt}\n🖼️ ${d.localPaths?.length ? `${d.localPaths.filter(Boolean).length} foto disimpan` : (d.localPath ? `Saved: ${d.localPath}` : 'Not saved — link already sent')}${n > 1 ? ` (${n} total)` : ''}\n🛠️ Model: ${d.toolName || model} | 📐 ${d.metadata?.width || width}x${d.metadata?.height || height}`
+        text: `✅ Image generated!\n\n📝 Prompt: ${prompt}\n🖼️ ${d.localPaths?.length ? `${d.localPaths.filter(Boolean).length} photos saved` : (d.localPath ? `Saved: ${d.localPath}` : 'Not saved — link already sent')}${n > 1 ? ` (${n} total)` : ''}\n🛠️ Model: ${d.toolName || model} | 📐 ${d.metadata?.width || width}x${d.metadata?.height || height}`
       };
     }
     const err = envelope.error || {};
@@ -624,7 +624,7 @@ async function runNewChat(tc: TgToolContext): Promise<TgReply> {
     const cleared = tx();
 
     return {
-      text: `🧹 Chat baru dimulai!\n\nDari ${msgs.length} pesan sebelumnya yang diringkas (${cleared} pesan diarsipkan), Yui tetap mengingat intinya:\n\n📝 ${finalSummary}\n\nYuk mulai topik baru~ 💖`
+      text: `🧹 New chat started!\n\nFrom ${msgs.length} previous messages that were summarized (${cleared} messages archived), Yui still remembers the gist:\n\n📝 ${finalSummary}\n\nLet's start a new topic~ 💖`
     };
   } catch (e: any) {
     console.warn('[TG_NEW_CHAT] Failed:', e?.message || e);
@@ -996,12 +996,12 @@ function yuiStatusText(tc?: TgToolContext): string {
     lines.push(
       ``,
       `🧬 LIFE SIMULATION`,
-      `🍽️  Hunger       ${val(life.hunger)}%  ${bar(life.hunger)} ${markBad(life.hunger, 70, 40)} ${txtBad(life.hunger, 'Lapar Parah', 'Lapar', 'Kenyang')}`,
-      `💧  Thirst       ${val(life.thirst)}%  ${bar(life.thirst)} ${markBad(life.thirst, 70, 40)} ${txtBad(life.thirst, 'Haus Parah', 'Haus', 'Segar')}`,
-      `🚿  Cleanliness  ${val(life.cleanliness)}%  ${bar(life.cleanliness)} ${markGood(life.cleanliness, 40, 70)} ${txtGood(life.cleanliness, 'Perlu Mandi', 'Sedikit Kotor', 'Bersih')}`,
-      `🚽  Bladder      ${val(life.bladder)}%  ${bar(life.bladder)} ${markBad(life.bladder, 70, 40)} ${txtBad(life.bladder, 'Kebelet Banget', 'Kebelet', 'Aman')}`,
-      `😴  Sleepiness   ${val(life.sleepiness)}%  ${bar(life.sleepiness)} ${markBad(life.sleepiness, 70, 40)} ${txtBad(life.sleepiness, 'Kurang Tidur', 'Ngantuk', 'Segar')}`,
-      `🔋  Energy       ${val(life.energy)}%  ${bar(life.energy)} ${markGood(life.energy, 30, 60)} ${txtGood(life.energy, 'Kehabisan', 'Lelah', 'Cukup')}`,
+      `🍽️  Hunger       ${val(life.hunger)}%  ${bar(life.hunger)} ${markBad(life.hunger, 70, 40)} ${txtBad(life.hunger, 'Starving', 'Hungry', 'Full')}`,
+      `💧  Thirst       ${val(life.thirst)}%  ${bar(life.thirst)} ${markBad(life.thirst, 70, 40)} ${txtBad(life.thirst, 'Very Thirsty', 'Thirsty', 'Fresh')}`,
+      `🚿  Cleanliness  ${val(life.cleanliness)}%  ${bar(life.cleanliness)} ${markGood(life.cleanliness, 40, 70)} ${txtGood(life.cleanliness, 'Needs Bath', 'Slightly Dirty', 'Clean')}`,
+      `🚽  Bladder      ${val(life.bladder)}%  ${bar(life.bladder)} ${markBad(life.bladder, 70, 40)} ${txtBad(life.bladder, 'Urgent', 'Need To Go', 'Safe')}`,
+      `😴  Sleepiness   ${val(life.sleepiness)}%  ${bar(life.sleepiness)} ${markBad(life.sleepiness, 70, 40)} ${txtBad(life.sleepiness, 'Sleep Deprived', 'Drowsy', 'Fresh')}`,
+      `🔋  Energy       ${val(life.energy)}%  ${bar(life.energy)} ${markGood(life.energy, 30, 60)} ${txtGood(life.energy, 'Exhausted', 'Tired', 'Sufficient')}`,
       `🛏️  Sleep        ${life.sleepState === 'asleep' ? '😴 Asleep' : '🙂 Awake'} (${val(life.effectiveBedtime)}–${val(life.effectiveWake)})`
     );
     if (life.playUrge !== undefined || life.fishCraving !== undefined) {
@@ -2176,7 +2176,7 @@ export async function handleTgCallback(data: string, tc: TgToolContext): Promise
       const list = models.length ? models : [cfg.defaultToolName || IMG_FALLBACK_MODEL];
       return {
         action: 'edit',
-        text: `🔄 Model list refreshed (${list.length} models).\n\n🎨 Prompt ready:\n\n"${job.prompt}"\n\n📐 ${job.width}x${job.height}${job.count > 1 ? `\n\n🖼️ Jumlah: ${job.count} foto` : ''}\n\nPick a model below to generate (result auto-sent to chat):`,
+        text: `🔄 Model list refreshed (${list.length} models).\n\n🎨 Prompt ready:\n\n"${job.prompt}"\n\n📐 ${job.width}x${job.height}${job.count > 1 ? `\n\n🖼️ Count: ${job.count} photos` : ''}\n\nPick a model below to generate (result auto-sent to chat):`,
         keyboard: imgModelKeyboard(list)
       };
     }

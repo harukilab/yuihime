@@ -572,7 +572,7 @@ export function useAppEffects(
       if (s.sleepModeEnabled && timeSinceLastInput > (s.sleepModeTimeout * 1000)) {
         if (s.state.status !== 'sleeping' && !s.isThinking) {
           console.log("[SYSTEM] Entering Sleep Mode...");
-          chat.addLog('agent', `[SYSTEM] Yuihime memasuki mode tidur (Sleep Mode) untuk menghemat energi kognisi. Semua aktivitas kognitif latar belakang (LLM) ditangguhkan sampai ada pesan baru dari pengguna atau alarm pengingat berbunyi.`);
+          chat.addLog('agent', `[SYSTEM] Yuihime is entering Sleep Mode to conserve cognitive energy. All background cognitive (LLM) activity is suspended until a new message from the user arrives or a reminder alarm rings.`);
           s.setState((prev: any) => ({ ...prev, status: 'sleeping' }));
           try {
             await StorageService.saveAgentState({ status: 'sleeping' });
@@ -585,7 +585,7 @@ export function useAppEffects(
 
       if (s.state.status === 'sleeping' && timeSinceLastInput <= (s.sleepModeTimeout * 1000)) {
         console.log("[SYSTEM] Waking up from Sleep Mode...");
-        chat.addLog('agent', `[SYSTEM] Yuihime terbangun kembali dari mode tidur!`);
+        chat.addLog('agent', `[SYSTEM] Yuihime has woken up from Sleep Mode!`);
         s.setState((prev: any) => ({ ...prev, status: 'idle' }));
         try {
           await StorageService.saveAgentState({ status: 'idle' });
@@ -960,7 +960,7 @@ export function useAppEffects(
       const processSignal = async () => {
         const wasSleeping = s.state.status === 'sleeping';
         if (wasSleeping) {
-          chat.addLog('agent', `[SYSTEM] Alarm pengingat atau sinyal sistem mendeteksi pemicu aktif. Membangunkan Yuihime dari kognisi mode tidur...`);
+          chat.addLog('agent', `[SYSTEM] A reminder alarm or system signal detected an active trigger. Waking Yuihime from sleep-mode cognition...`);
         }
         try {
           s.setIsThinking(true);
@@ -968,7 +968,7 @@ export function useAppEffects(
           s.setState((prev: any) => ({ ...prev, status: 'learning' }));
           const currentActivePersona = s.NEURAL_CORES.find((c: any) => c.id === s.state.activePersonaId);
 
-          const promptWithDirection = `${nextSignal} (Bicaralah dalam kepribadian asli Yuihime yang tsundere/imut secara langsung kepada Pengguna!)`;
+          const promptWithDirection = `${nextSignal} (Speak in Yuihime's original tsundere/cute personality directly to the User!)`;
 
           const result = await CortexApi.think({
             input: promptWithDirection,

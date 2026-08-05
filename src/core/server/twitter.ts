@@ -20,7 +20,7 @@ export async function initializeTwitter(activeDb?: any, force = false) {
 
   if (!apiKey || !isEnabled) {
     if (activeTwitterInterval) {
-      console.log("[TWITTER] Twitter Neural Link dinonaktifkan atau API Key kosong. Menghentikan Twitter Daemon...");
+      console.log("[TWITTER] Twitter Neural Link disabled or API Key empty. Stopping Twitter Daemon...");
       clearInterval(activeTwitterInterval);
       activeTwitterInterval = null;
       activeTwitterToken = null;
@@ -37,12 +37,12 @@ export async function initializeTwitter(activeDb?: any, force = false) {
   }
 
   activeTwitterToken = apiKey;
-  console.log("[TWITTER] Memulai Twitter (X) Neural Link daemon...");
+  console.log("[TWITTER] Starting Twitter (X) Neural Link daemon...");
 
   // Twitter polling simulation or webhook sync helper
   activeTwitterInterval = setInterval(async () => {
     try {
-      console.log("[TWITTER] Memeriksa mention atau utas (thread) baru di Twitter...");
+      console.log("[TWITTER] Checking for new mentions or threads on Twitter...");
       // For standard Twitter, it can poll mentions or process direct messages under user credentials.
       // Since Twitter api v2 is heavily gatekept, we log a status here and let the developer replace with custom twitter clients if desired.
     } catch (e: any) {

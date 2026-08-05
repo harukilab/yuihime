@@ -1,6 +1,9 @@
 # Agent Instructions — YuiHime
 
-# Gunakan 3 bahasa en,id,jp dalam prompt modul, jntul log dan intruksi pakai en, 
+# ⚠️ Language Policy (PALING PENTING — baca dulu sebelum menulis apa pun)
+- **UI, code, log, prompt**: gunakan **EN** (English). **Comment (komentar) kode** dan **console.log / log message** juga **wajib EN**.
+- Bahasa **ID** (Indonesia) HANYA untuk **UPDATE_LOG.md** — di luar itu semua pakai EN.
+- **Yui mendukung EN / JP / ID** — dominan **EN** (lebih banyak EN). Balasan Yui mengikuti bahasa user: EN default, ID/JP bila user berbicara ID/JP.
 
 ## Structure
 - `server.ts` = daemon entrypoint (Express + WS). UI is served alongside unless `--no-ui`.
@@ -59,7 +62,7 @@
 - **LLM Centralization**: all AI generation must pass through `ProviderGatewayModule`. Modules must use `context.think`, not direct provider `generate` calls.
 - **StandardizedProcessor** is exported as `NeuralProcessor` from `src/core/kernel/processor.ts`.
 - **English internal prompts**: all system instructions and correction keywords are in English.
-- **Agent replies to user**: Bahasa Indonesia.
+- **Agent replies to user**: follow the user's language — Yui supports **EN / JP / ID**, mostly **EN**; default EN, switch to ID/JP when the user speaks ID/JP. ID is allowed only in UPDATE_LOG.md.
 - **No dynamic imports for agent definitions**: `src/core/agents/definitions/*.ts` must use static `import` statements in `RegistryInitializer.ts`. Dynamic `import()` with `fast-glob` glob patterns causes `ERR_MODULE_NOT_FOUND` in `dist/server.cjs` because esbuild bundles the logic inline but runtime glob resolution looks for raw `.ts` files outside `dist/`.
 - **No dynamic imports for database.js**: `src/core/database.ts` must use static `import` statements. Dynamic `import()` with relative paths like `../../database.js` causes `ERR_MODULE_NOT_FOUND` in `dist/server.cjs` because Node.js resolves the path relative to the bundled CJS output directory instead of the source tree.
 - **No dynamic imports for Node.js builtins in Vite context**: In files consumed by Vite (browser build), dynamic `await import('fs')`, `await import('path')`, or `await import('module')` trigger rollup warnings about "dynamic import will not move module into another chunk". Use static imports (`import fs from 'fs'`, etc.) and rely on `serverModuleStubPlugin` in `web/vite.config.ts` to provide browser stubs.

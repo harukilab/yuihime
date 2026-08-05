@@ -66,10 +66,10 @@ function scheduleCleanup(bot: any, ctx: any, sent: any, hasKeyboard: boolean) {
   scheduleAutoDelete(bot, ctx.chat.id, sent.message_id, ttlSec);
 }
 
-// --- Persistent crash-recovery dedup (lintas restart) ---
-// Telegram mengirim ulang batch update yang belum dikonfirmasi offset ketika daemon
-// restart. update_id yang sudah SELESAI diproses dicatat di tabel telegram_update_ids
-// agar tidak diproses/ dibalas dua kali setelah restart.
+// --- Persistent crash-recovery dedup (across restart) ---
+// Telegram resends unacknowledged offset update batches when the daemon restarts.
+// update_id already fully processed is recorded in the telegram_update_ids table
+// so it isn't processed/replied twice after restart.
 function isTelegramUpdateProcessed(updateId: number | undefined): boolean {
   if (!updateId || !db) return false;
   try {
@@ -113,8 +113,8 @@ function pickRandomReaction(settings: any): string {
 }
 
 /**
- * Pilih reaksi emoji berdasarkan mood/emotion balasan Yui (meta dari NeuralInterface).
- * Fallback ke acak bila meta tidak tersedia.
+ * Choose an emoji reaction based on Yui's reply mood/emotion (meta from NeuralInterface).
+ * Fallback to random when meta is unavailable.
  */
 function emojiForReplyMeta(meta?: any, settings?: any): string {
   const pick = (pool: string[]) => pool[Math.floor(Math.random() * pool.length)];
@@ -143,7 +143,7 @@ function emojiForReplyMeta(meta?: any, settings?: any): string {
 }
 
 /**
- * Set reaksi emoji pada pesan user. Retry sekali dengan ❤️ bila emoji ditolak API.
+ * Set emoji reaction on user message. Retry once with ❤️ when the emoji is rejected by the API.
  */
 async function trySetTelegramReaction(chatId: number | string, messageId: number, emoji: string, botApi: any): Promise<void> {
   try {
@@ -162,15 +162,15 @@ async function trySetTelegramReaction(chatId: number | string, messageId: number
   }
 }
 
-// Reaksi emoji cepat yang dipicu segera saat pesan masuk (sebelum pipeline diproses),
-// agar pengguna langsung melihat aktivitas Yui dan tidak mengira bot membeku.
+// Quick emoji reaction triggered immediately when a message arrives (before the pipeline processes it),
+// so the user immediately sees Yui's activity and doesn't think the bot is frozen.
 function immediateAckReaction(botApi: any, chatId: number | string, messageId: number, settings: any): void {
   const emoji = pickRandomReaction(settings);
   void trySetTelegramReaction(chatId, messageId, emoji, botApi);
 }
 
-// Cache reaksi target (chatId + messageId) per contextId agar reaksi tetap bisa
-// dipicu saat balasan dikirim langsung via tool speak (jalur dedup-skip).
+// Cache reaction target (chatId + messageId) per contextId so the reaction can still
+// be triggered when the reply is sent directly via tool speak (dedup-skip path).
 const pendingReactions = new Map<string, { chatId: number; messageId: number }>();
 const PENDING_REACTIONS_MAX = 200;
 function rememberPendingReaction(contextId: string, chatId: number, messageId: number) {
@@ -181,8 +181,8 @@ function rememberPendingReaction(contextId: string, chatId: number, messageId: n
   }
 }
 
-// Reaksi emosi juga dipicu untuk balasan yang dikirim lewat jalur lain (tool speak),
-// sehingga reaksi tidak bergantung pada jalur antrean utama.
+// Emotional reaction is also triggered for replies sent through other paths (tool speak),
+// so the reaction doesn't depend on the main queue path.
 eventBus.on('TELEGRAM_REACTION', (data: any) => {
   const { contextId, mood, emotion, sentiment } = data || {};
   const target = contextId ? pendingReactions.get(contextId) : null;
@@ -217,7 +217,7 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
 
   if (!botToken || !isEnabled) {
     if (activeTelegramBot) {
-      console.log("[TELEGRAM] Bot dinonaktifkan atau Token kosong. Menghentikan Bot Daemon aktif...");
+      console.log("[TELEGRAM] Bot disabled or Token empty. Stopping active Bot Daemon...");
       try {
         activeTelegramBot.stop("SIGINT");
       } catch (e) {}
@@ -228,18 +228,18 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
     if (!botToken) {
       console.warn("[KERNEL] Telegram Bot Token not found in config.toml or UI settings. Bot disabled.");
     } else {
-      console.log("[KERNEL] Telegram Bot dinonaktifkan melalui konfigurasi tombol.");
+      console.log("[KERNEL] Telegram Bot disabled via configuration toggle.");
     }
     return;
   }
 
-  // Jika bot sudah berjalan dengan token yang tepat, tidak perlu inisialisasi ulang
+  // If the bot is already running with the correct token, no re-init is needed
   if (activeTelegramBot && activeTelegramToken === botToken && !force) {
     console.log("[TELEGRAM] Bot Daemon already running with the same token.");
     return;
   }
 
-  // Jika ada bot lama, hentikan dulu
+  // If there is an old bot running, stop it first
   if (activeTelegramBot) {
     console.log("[TELEGRAM] Reconfiguring or detecting Bot Token change. Stopping previous instance...");
     try {
@@ -261,7 +261,7 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
     responseTimeout: readTimeout
   };
   if (customApiRoot && customApiRoot.trim() !== "") {
-    console.log(`[TELEGRAM] Menggunakan custom API Root URL: ${customApiRoot}`);
+    console.log(`[TELEGRAM] Using custom API Root URL: ${customApiRoot}`);
     botOptions.telegram = {
       apiRoot: customApiRoot.trim()
     };
@@ -272,7 +272,7 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
   botOptions.telegram = botOptions.telegram || {};
   botOptions.telegram.agent = ipv4Agent;
   if (proxyUrl && proxyUrl.trim() !== "") {
-    console.log(`[TELEGRAM] Menggunakan proxy: ${proxyUrl}`);
+    console.log(`[TELEGRAM] Using proxy: ${proxyUrl}`);
     const proxyAgent = (globalThis as any).process?.env?.HTTPS_PROXY || proxyUrl;
     botOptions.telegram.agent = proxyAgent;
   }
@@ -284,7 +284,7 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
   // Helper to handle OTP pairing securely with constant-time comparison
   async function handlePairingCode(ctx: any, code: string) {
     if (!/^\d{6}$/.test(code)) {
-      return ctx.reply("❌ Format kode salah. Kode OTP harus berupa 6 digit angka.");
+      return ctx.reply("❌ Wrong code format. The OTP code must be a 6-digit number.");
     }
 
     try {
@@ -310,7 +310,7 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
       }
 
       if (!matchedRow) {
-        return ctx.reply("❌ Kode OTP tidak valid atau telah kedaluwarsa. Silakan menghasilkan kode baru di Web UI.");
+        return ctx.reply("❌ The OTP code is invalid or has expired. Please generate a new code in the Web UI.");
       }
 
       if (matchedRow.expires_at < Date.now()) {
@@ -318,12 +318,12 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
           db.prepare("DELETE FROM pairing_codes WHERE code = ?").run(matchedRow.code),
           'telegram-delete-expired-pairing-code'
         );
-        return ctx.reply("❌ Kode OTP ini telah kedaluwarsa. Silakan menghasilkan kode baru di Web UI.");
+        return ctx.reply("❌ This OTP code has expired. Please generate a new code in the Web UI.");
       }
 
       const identity = db.prepare("SELECT * FROM identities WHERE id = ?").get(matchedRow.identity_id);
       if (!identity) {
-        return ctx.reply("❌ Identitas Web asal tidak ditemukan dalam sistem.");
+        return ctx.reply("❌ The source Web identity was not found in the system.");
       }
 
       const senderName = ctx.from.first_name || 'Anonymous';
@@ -361,7 +361,7 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
         'telegram-update-identity-accounts'
       );
 
-      // Gabungkan profil duplikat (seperti akun chat mandiri vs akun web)
+      // Merge duplicate profiles (e.g., standalone chat account vs web account)
       try {
         deduplicateAndMergeIdentities(db, identity.id);
       } catch (mergeErr) {
@@ -386,17 +386,17 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
           VALUES (?, 'system', ?, 0.9, 'System', ?, ?)
         `).run(
           memoryId,
-          `[SYSTEM_LINK]: Pengguna Telegram ${senderName} (tg_id: ${ctx.from.id}) berhasil dipasangkan dengan identitas Web: ${identity.perceivedName}.`,
+          `[SYSTEM_LINK]: Telegram user ${senderName} (tg_id: ${ctx.from.id}) successfully paired with Web identity: ${identity.perceivedName}.`,
           `tg_${ctx.chat.id}`,
           Date.now()
         ),
         'telegram-insert-system-memory'
       );
 
-      return ctx.reply(`✨ Kognisi Terhubung! Hubungan lintas-platform berhasil dikaitkan.\n\nAkun Telegram kamu (${senderName}) sekarang terhubung dengan sesi Web (${identity.perceivedName}). Yuihime is now aware of your cross-platform presence.`);
+      return ctx.reply(`✨ Cognition Connected! Cross-platform link successfully established.\n\nYour Telegram account (${senderName}) is now linked with the Web session (${identity.perceivedName}). Yuihime is now aware of your cross-platform presence.`);
     } catch (err: any) {
       console.error("[TELEGRAM_PAIR] Failed to link account:", err);
-      return ctx.reply("❌ Terjadi kesalahan internal saat memproses penyandingan.");
+      return ctx.reply("❌ Internal error occurred while processing the pairing.");
     }
   }
 
@@ -413,7 +413,7 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
     const args = ctx.message.text.split(/\s+/);
     if (args.length < 2) {
       maybeDeleteUserCommand(ctx);
-      const sent = await ctx.reply("Silakan sertakan kode OTP 6-digit. Contoh: /pair 482103");
+      const sent = await ctx.reply("Please include a 6-digit OTP code. Example: /pair 482103");
       scheduleCleanup(activeTelegramBot, ctx, sent, false);
       return;
     }
@@ -425,7 +425,7 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
     const args = ctx.message.text.split(/\s+/);
     if (args.length < 2) {
       maybeDeleteUserCommand(ctx);
-      const sent = await ctx.reply("Silakan sertakan ID permintaan. Contoh: /approve A8F2D1");
+      const sent = await ctx.reply("Please include a request ID. Example: /approve A8F2D1");
       scheduleCleanup(activeTelegramBot, ctx, sent, false);
       return;
     }
@@ -434,13 +434,13 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
     const item = list.find(i => i.id === id);
     if (!item) {
       maybeDeleteUserCommand(ctx);
-      const sent = await ctx.reply(`❌ Permintaan konfirmasi dengan ID "${id}" tidak ditemukan.`);
+      const sent = await ctx.reply(`❌ Confirmation request with ID "${id}" not found.`);
       scheduleCleanup(activeTelegramBot, ctx, sent, false);
       return;
     }
     item.status = 'approved';
     maybeDeleteUserCommand(ctx);
-    const sent = await ctx.reply(`✅ Permintaan ${id} (${item.action} -> ${item.targetPath}) BERHASIL DISETUJUI.`);
+    const sent = await ctx.reply(`✅ Request ${id} (${item.action} -> ${item.targetPath}) APPROVED SUCCESSFULLY.`);
     scheduleCleanup(activeTelegramBot, ctx, sent, false);
   });
 
@@ -448,7 +448,7 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
     const args = ctx.message.text.split(/\s+/);
     if (args.length < 2) {
       maybeDeleteUserCommand(ctx);
-      const sent = await ctx.reply("Silakan sertakan ID permintaan. Contoh: /always A8F2D1");
+      const sent = await ctx.reply("Please include a request ID. Example: /always A8F2D1");
       scheduleCleanup(activeTelegramBot, ctx, sent, false);
       return;
     }
@@ -457,13 +457,13 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
     const item = list.find(i => i.id === id);
     if (!item) {
       maybeDeleteUserCommand(ctx);
-      const sent = await ctx.reply(`❌ Permintaan konfirmasi dengan ID "${id}" tidak ditemukan.`);
+      const sent = await ctx.reply(`❌ Confirmation request with ID "${id}" not found.`);
       scheduleCleanup(activeTelegramBot, ctx, sent, false);
       return;
     }
     item.status = 'always';
     maybeDeleteUserCommand(ctx);
-    const sent = await ctx.reply(`✅ Permintaan ${id} BERHASIL DISETUJUI. Mode "Always Acc" diaktifkan untuk sesi ini.`);
+      const sent = await ctx.reply(`✅ Request ${id} APPROVED SUCCESSFULLY. "Always Acc" mode enabled for this session.`);
     scheduleCleanup(activeTelegramBot, ctx, sent, false);
   });
 
@@ -471,7 +471,7 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
     const args = ctx.message.text.split(/\s+/);
     if (args.length < 2) {
       maybeDeleteUserCommand(ctx);
-      const sent = await ctx.reply("Silakan sertakan ID permintaan. Contoh: /deny A8F2D1");
+      const sent = await ctx.reply("Please include a request ID. Example: /deny A8F2D1");
       scheduleCleanup(activeTelegramBot, ctx, sent, false);
       return;
     }
@@ -480,13 +480,13 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
     const item = list.find(i => i.id === id);
     if (!item) {
       maybeDeleteUserCommand(ctx);
-      const sent = await ctx.reply(`❌ Permintaan konfirmasi dengan ID "${id}" tidak ditemukan.`);
+      const sent = await ctx.reply(`❌ Confirmation request with ID "${id}" not found.`);
       scheduleCleanup(activeTelegramBot, ctx, sent, false);
       return;
     }
     item.status = 'denied';
     maybeDeleteUserCommand(ctx);
-    const sent = await ctx.reply(`❌ Permintaan ${id} (${item.action} -> ${item.targetPath}) BERHASIL DITOLAK.`);
+    const sent = await ctx.reply(`❌ Request ${id} (${item.action} -> ${item.targetPath}) DENIED SUCCESSFULLY.`);
     scheduleCleanup(activeTelegramBot, ctx, sent, false);
   });
 
@@ -519,13 +519,13 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
           if (item) {
             if (isAcc) {
               item.status = 'approved';
-              return ctx.reply(`✅ Permintaan ${foundId} (${item.action} -> ${item.targetPath}) BERHASIL DISETUJUI.`);
+              return ctx.reply(`✅ Request ${foundId} (${item.action} -> ${item.targetPath}) APPROVED SUCCESSFULLY.`);
             } else if (isAlways) {
               item.status = 'always';
-              return ctx.reply(`✅ Permintaan ${foundId} BERHASIL DISETUJUI. Mode "Always Acc" diaktifkan.`);
+              return ctx.reply(`✅ Request ${foundId} APPROVED SUCCESSFULLY. "Always Acc" mode enabled.`);
             } else if (isDeny) {
               item.status = 'denied';
-              return ctx.reply(`❌ Permintaan ${foundId} (${item.action} -> ${item.targetPath}) BERHASIL DITOLAK.`);
+              return ctx.reply(`❌ Request ${foundId} (${item.action} -> ${item.targetPath}) DENIED SUCCESSFULLY.`);
             }
           }
         }
@@ -546,7 +546,7 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
     const tgUserId = ctx.from.id;
     const senderName = ctx.from.first_name || 'Anonymous';
 
-    // ── Telegram Quick Toolkit: perintah "/" yang diproses langsung tanpa LLM ──
+    // ── Telegram Quick Toolkit: "/" commands processed directly without LLM ──
     if (rawInput.trim().startsWith('/')) {
       const quickSettings = Kernel.getInstance().getSettings().getAll();
       if (quickSettings['telegram_quick_tools']?.enabled !== false) {
@@ -667,7 +667,7 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
 
     if (!userMessage.trim()) return;
 
-    // Immediate acknowledgment if enabled — typing indicator only, reaksi emoji dipicu saat balasan dikirim
+    // Immediate acknowledgment if enabled — typing indicator only, emoji reaction triggered when the reply is sent
     if (currentSettings['telegram_bridge']?.autoAcknowledge !== false) {
       ctx.sendChatAction('typing').catch(() => {});
     }
@@ -685,9 +685,9 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
         : `tg_${ctx.chat.id}`;
       const chatType = `Telegram (${isGroup ? 'Group: ' + chatTitle : 'Private'})`;
 
-      console.log(`[TELEGRAM] Pesan masuk dari ${senderName} (${contextId}): ${rawInput.substring(0, 200)}`);
+      console.log(`[TELEGRAM] Incoming message from ${senderName} (${contextId}): ${rawInput.substring(0, 200)}`);
 
-      // FILTER UNTUK GROUP CHAT: Hanya merespons jika di-mention (@username), membalas pesan bot, atau merupakan chat privat.
+      // GROUP CHAT FILTER: Only respond when mentioned (@username), replying to the bot's message, or a private chat.
       if (isGroup) {
         const botInfo = ctx.botInfo;
         const botUsername = botInfo?.username ? botInfo.username.toLowerCase() : "";
@@ -697,13 +697,13 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
         const isReplyToBot = (ctx.message as any).reply_to_message?.from?.id === ctx.botInfo?.id;
         
         if (!isMentioned && !isReplyToBot) {
-          // Abaikan pesan jika tidak memicu bot di grup
+          // Ignore the message if it doesn't trigger the bot in the group
           console.log(`[TELEGRAM_GROUP] Ignoring message from group "${chatTitle}" — not tagged/mentioned.`);
           return;
         }
       }
 
-      // Reaksi emoji langsung saat pesan masuk (fire-and-forget) agar tidak terlihat beku
+      // Immediate emoji reaction on incoming message (fire-and-forget) so it doesn't look frozen
       if (currentSettings['telegram_bridge']?.autoAcknowledge !== false) {
         immediateAckReaction(ctx.telegram, ctx.chat.id, ctx.message.message_id, currentSettings);
       }
@@ -719,12 +719,12 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
         }
       });
 
-       // Simpan target reaksi (chatId + messageId) agar event TELEGRAM_REACTION
-       // dari jalur speak-langsung (dedup-skip) tetap tahu kemana harus bereaksi.
+       // Store the reaction target (chatId + messageId) so the TELEGRAM_REACTION event
+       // from the speak-direct (dedup-skip) path still knows where to react.
        rememberPendingReaction(contextId, ctx.chat.id, ctx.message.message_id);
 
-       // Persistent dedup: update yang sudah tuntas diproses sebelum crash tidak
-       // boleh diproses ulang saat Telegram mengirim ulang batch setelah restart.
+       // Persistent dedup: updates fully processed before a crash must not be
+       // reprocessed when Telegram resends the batch after restart.
        const tgUpdateId = ctx.update?.update_id;
        if (tgUpdateId && isTelegramUpdateProcessed(tgUpdateId)) {
          console.log(`[TELEGRAM_DEDUP] Update ${tgUpdateId} already processed (post-restart re-delivery). Skipping.`);
@@ -738,11 +738,11 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
          chatType,
            async (response, meta) => {
             if (response && String(response).trim()) {
-              // NOTE: dedup terhadap GlobalOutputDeduplicator sudah dijalankan oleh
-              // MultiChannelQueue tepat sebelum memanggil callback ini. Re-check di
-              // sini SELALU true karena queue sudah menandai konten yang sama
-              // (markSent) — akibatnya SEMUA balasan Telegram ter-drop diam-diam.
-              // Maka: kirim langsung, lalu tandai HANYA setelah delivery sukses.
+              // NOTE: dedup against GlobalOutputDeduplicator is already run by
+              // MultiChannelQueue right before calling this callback. A re-check here
+              // is ALWAYS true because the queue already marked the same content
+              // (markSent) — so ALL Telegram replies were silently dropped.
+              // Therefore: send directly, then mark ONLY after successful delivery.
               const dedup = GlobalOutputDeduplicator.getInstance();
               const replyOpts: any = { reply_to_message_id: ctx.message.message_id };
               try {
@@ -755,7 +755,7 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
                 }
                 dedup.markSent(response, contextId);
                 console.log(`[TELEGRAM_DELIVERY] Reply sent to ${senderName} (${contextId}), len=${String(response).length}`);
-                // Tandai update SELESAI diproses (dedup lintas restart) HANYA setelah delivery sukses.
+                // Mark the update as fully processed (cross-restart dedup) ONLY after successful delivery.
                 recordTelegramUpdateProcessed(tgUpdateId, ctx.chat.id, ctx.message.message_id);
               } catch (sendErr: any) {
                 console.error(`[TELEGRAM_DELIVERY_ERR] Failed to send reply to ${senderName}:`, sendErr?.message || sendErr);
@@ -771,7 +771,7 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
                 }
               }
 
-              // Reaksi emoji dipilih berdasarkan emosi/mood balasan Yui (fallback random)
+              // Emoji reaction chosen based on Yui's reply emotion/mood (fallback random)
               if (currentSettings['telegram_bridge']?.autoAcknowledge !== false) {
                 void trySetTelegramReaction(ctx.chat.id, ctx.message.message_id, emojiForReplyMeta(meta, currentSettings), ctx.telegram);
               }
@@ -808,7 +808,7 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
           try {
             if (err.code !== 403 && err.code !== 400) {
               const dedup = GlobalOutputDeduplicator.getInstance();
-              const errorMsg = "[SYSTEM ERROR] Sinkronisasi neural terganggu dalam antrean.";
+              const errorMsg = "[SYSTEM ERROR] Neural synchronization was interrupted in the queue.";
               if (!dedup.isDuplicate(errorMsg, contextId)) {
                 dedup.markSent(errorMsg, contextId);
                 await ctx.reply(errorMsg);
@@ -840,7 +840,7 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
     }
   });
 
-  // ── Closed-loop Feedback: tangkap reaksi user pada pesan Yui (Telegram) ──
+  // ── Closed-loop Feedback: capture user reactions to Yui's messages (Telegram) ──
   bot.on('message_reaction', (ctx) => {
     try {
       const mr: any = ctx.update?.message_reaction || {};
@@ -849,7 +849,7 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
       if (!messageId || !userId) return;
 
       const outbound = lookupOutboundMessage(messageId);
-      if (!outbound) return; // bukan pesan keluar Yui yang terekam
+      if (!outbound) return; // not Yui's outgoing message being recorded
 
       const oldEmojis = new Set((mr.old_reaction || []).map((r: any) => r.emoji).filter(Boolean));
       const newEmojis = (mr.new_reaction || []).map((r: any) => r.emoji).filter(Boolean);
@@ -885,23 +885,23 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
         const list = globalThis.pendingConfirmations || [];
         const item = list.find(i => i.id === pendingId && i.status === 'pending');
         if (!item) {
-          try { await ctx.editMessageText('❌ Konfirmasi sudah tidak aktif / tidak ditemukan.'); } catch (_) {}
+          try { await ctx.editMessageText('❌ Confirmation is no longer active / not found.'); } catch (_) {}
           return;
         }
         if (decision === 'approve') {
           item.status = 'approved';
           try {
-            await ctx.editMessageText(`✅ Permintaan ${pendingId} (${item.action} -> ${item.targetPath}) DISETUJUI.`, { reply_markup: undefined });
+            await ctx.editMessageText(`✅ Request ${pendingId} (${item.action} -> ${item.targetPath}) APPROVED.`, { reply_markup: undefined });
           } catch (_) {}
         } else if (decision === 'always') {
           item.status = 'always';
           try {
-            await ctx.editMessageText(`🔁 Permintaan ${pendingId} DISETUJUI SELALU untuk sesi ini.`, { reply_markup: undefined });
+            await ctx.editMessageText(`🔁 Request ${pendingId} APPROVED ALWAYS for this session.`, { reply_markup: undefined });
           } catch (_) {}
         } else if (decision === 'deny') {
           item.status = 'denied';
           try {
-            await ctx.editMessageText(`❌ Permintaan ${pendingId} (${item.action} -> ${item.targetPath}) DITOLAK.`, { reply_markup: undefined });
+            await ctx.editMessageText(`❌ Request ${pendingId} (${item.action} -> ${item.targetPath}) DENIED.`, { reply_markup: undefined });
           } catch (_) {}
         }
         return;
@@ -981,11 +981,11 @@ async function trySendFileAttachment(ctx: any, responseText: string, outboundCtx
    }
 
   const launchBot = async (retryCount = 0) => {
-    if (activeTelegramBot !== bot) return; // Instansi sudah digantikan
+    if (activeTelegramBot !== bot) return; // Instance already replaced
     try {
       console.log(`[TELEGRAM] Attempting launch (Retry: ${retryCount}, dropPending: ${dropPending})...`);
       
-      // Hapus webhook aktif yang mungkin tertinggal untuk menghindari 409 Conflict secara tuntas!
+      // Remove leftover active webhook to fully avoid 409 Conflict!
       try {
         await bot.telegram.deleteWebhook({ drop_pending_updates: retryCount > 0 || dropPending });
         console.log("[TELEGRAM] Webhook successfully cleared before launch.");
@@ -1054,7 +1054,7 @@ async function trySendFileAttachment(ctx: any, responseText: string, outboundCtx
     }
   };
 
-  // Tentukan apakah kita harus menggunakan mode webhook atau long polling berdasarkan environment Cloud Run
+  // Determine whether to use webhook or long polling mode based on the Cloud Run environment
   const wsUrl = settings['connectionWebsocketUrl'] || '';
   let externalUrl = '';
   if (wsUrl.startsWith('wss://')) {
@@ -1067,27 +1067,27 @@ async function trySendFileAttachment(ctx: any, responseText: string, outboundCtx
   // We must map 'ais-dev-' subdomains to public 'ais-pre-' subdomains so that Telegram can post webhooks successfully.
   if (externalUrl.includes('ais-dev-')) {
     externalUrl = externalUrl.replace('ais-dev-', 'ais-pre-');
-    console.log(`[TELEGRAM] Mengonversi URL Dev ke URL Publik (Shared) agar terbebas dari halangan OAuth 302: ${externalUrl}`);
+    console.log(`[TELEGRAM] Converting Dev URL to Public (Shared) URL to escape OAuth 302 obstacles: ${externalUrl}`);
   }
 
-  // Jika berjalan di server publik Cloud Run, webhook jauh lebih handal (mencegah container disuspensi)
+  // If running on a public Cloud Run server, webhook is far more reliable (prevents container suspension)
   let isWebhookDesired = !!externalUrl && 
                        externalUrl.startsWith('https://') &&
                        !externalUrl.includes('localhost') && 
                        !externalUrl.includes('127.0.0.1') && 
                        !externalUrl.includes('ais-dev-');
 
-  // Lakukan pre-flight check asinkron untuk memastikan domain publik (pre-release) benar-benar terjangkau dan aktif
+  // Run an async pre-flight check to ensure the public (pre-release) domain is truly reachable and active
   const checkWebhookAndLaunch = async () => {
     if (isWebhookDesired) {
       try {
-        console.log(`[TELEGRAM] Menjalankan pre-flight check untuk: ${externalUrl}/api/health`);
+        console.log(`[TELEGRAM] Running pre-flight check for: ${externalUrl}/api/health`);
         const signal = (typeof AbortSignal !== 'undefined' && 'timeout' in AbortSignal) 
           ? (AbortSignal as any).timeout(3500) 
           : undefined;
         const checkRes = await fetch(`${externalUrl}/api/health`, { method: 'GET', signal });
         if (checkRes.status !== 200) {
-          console.warn(`[TELEGRAM] Domain publik terpantau belum aktif (Status: ${checkRes.status}). Mengurungkan Webhook, menggunakan Long Polling.`);
+          console.warn(`[TELEGRAM] Public domain not yet detected as active (Status: ${checkRes.status}). Reverting Webhook, using Long Polling.`);
           isWebhookDesired = false;
         }
       } catch (e: any) {
@@ -1097,7 +1097,7 @@ async function trySendFileAttachment(ctx: any, responseText: string, outboundCtx
     }
 
     if (isWebhookDesired) {
-      console.log(`[TELEGRAM] Mengonfigurasi mode Webhook untuk efisiensi server Cloud Run: ${externalUrl} (dropPending: ${dropPending})`);
+      console.log(`[TELEGRAM] Configuring Webhook mode for Cloud Run server efficiency: ${externalUrl} (dropPending: ${dropPending})`);
       const webhookUrl = `${externalUrl}/api/telegram-webhook`;
       try {
         await bot.telegram.setWebhook(webhookUrl, { drop_pending_updates: dropPending });
@@ -1107,7 +1107,7 @@ async function trySendFileAttachment(ctx: any, responseText: string, outboundCtx
         await launchBot();
       }
     } else {
-      console.log("[TELEGRAM] Menggunakan mode default Long Polling demi keandalan lingkungan dev/sandbox.");
+      console.log("[TELEGRAM] Using default Long Polling mode for dev/sandbox environment reliability.");
       await launchBot();
     }
   };
@@ -1117,11 +1117,11 @@ async function trySendFileAttachment(ctx: any, responseText: string, outboundCtx
   const shutDown = (sig: string) => {
     try {
       if (activeTelegramBot === bot) {
-        console.log(`[TELEGRAM] Menghentikan Bot Daemon sebelum proses keluar (${sig})...`);
+        console.log(`[TELEGRAM] Stopping Bot Daemon before process exit (${sig})...`);
         bot.stop(sig);
       }
     } catch (e: any) {
-      console.warn(`[TELEGRAM] Catatan: Gagal menghentikan Bot secara aman saat proses keluar: ${e.message || e}`);
+      console.warn(`[TELEGRAM] Note: Failed to stop Bot safely during process exit: ${e.message || e}`);
     }
   };
   process.once('SIGINT', () => shutDown('SIGINT'));

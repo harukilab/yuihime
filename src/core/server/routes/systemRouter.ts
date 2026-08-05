@@ -213,10 +213,10 @@ export function registerSystemRoutes(app: express.Express, db: any) {
   app.post("/api/telegram/restart", async (req, res) => {
     try {
        await initializeBot(db, true);
-      res.json({ success: true, message: "Bot Telegram berhasil dimuat ulang dan dijalankan kembali secara batiniah!" });
+      res.json({ success: true, message: "Telegram Bot reloaded and restarted successfully!" });
     } catch (err: any) {
       console.error("[API_TELEGRAM_RESTART] Failed to reload bot:", err);
-      res.status(500).json({ error: err.message || "Gagal memuat ulang Bot Telegram" });
+      res.status(500).json({ error: err.message || "Failed to reload Telegram Bot" });
     }
   });
 
@@ -435,7 +435,7 @@ export function registerSystemRoutes(app: express.Express, db: any) {
       console.log("[BACKUP] System snapshot fully packaged and sent to consumer.");
     } catch (err: any) {
       console.error("[BACKUP_ERROR] Full backup packaging failed:", err);
-      res.status(500).json({ error: err.message || "Gagal mengemas berkas cadangan (backup) batin." });
+      res.status(500).json({ error: err.message || "Failed to package the inner backup archive." });
     }
   });
 
@@ -487,7 +487,7 @@ export function registerSystemRoutes(app: express.Express, db: any) {
       if (!foundConfigPath || !foundDbPath) {
         rmSync(tempExtractDir, { recursive: true, force: true });
         return res.status(400).json({ 
-          error: "Berkas cadangan tidak valid: wajib memuat berkas 'config.toml' dan 'yuihime.db' di dalam arsip cadangan." 
+          error: "Invalid backup archive: it must contain the 'config.toml' and 'yuihime.db' files inside the backup archive." 
         });
       }
 
@@ -600,10 +600,10 @@ export function registerSystemRoutes(app: express.Express, db: any) {
       }
       
       broadcastToWS({ type: "restore_success" });
-      res.json({ success: true, message: "Seluruh berkas data emosi, batin, dan kepribadian Yuihime berhasil dipulihkan seutuhnya!" });
+      res.json({ success: true, message: "All of Yuihime's emotion, inner, and personality data files were fully restored!" });
     } catch (err: any) {
       console.error("[RESTORE_ERROR] Active system recovery failed:", err);
-      res.status(500).json({ error: err.message || "Gagal memulihkan sistem dari berkas cadangan." });
+      res.status(500).json({ error: err.message || "Failed to restore the system from the backup archive." });
     }
   });
 
@@ -625,7 +625,7 @@ export function registerSystemRoutes(app: express.Express, db: any) {
     
     let final_context_id = context_id || 'live_stream';
     let final_chat_type = chat_type || 'Live Chat';
-    const final_sender_name = sender_name || 'Penonton';
+    const final_sender_name = sender_name || 'Viewer';
 
     // Auto-resolve Telegram context if target chat type is Telegram but context is live_stream or generic
     if (final_chat_type.toLowerCase().includes('telegram') && (final_context_id === 'live_stream' || !final_context_id.startsWith('tg_'))) {
@@ -747,7 +747,7 @@ export function registerSystemRoutes(app: express.Express, db: any) {
     const tasks = cron.getTasks();
     const task = tasks.find(t => t.id === id);
     if (!task) {
-      return res.status(404).json({ error: "Sinyal aktivitas tidak ditemukan di CronModule." });
+      return res.status(404).json({ error: "Activity signal not found in CronModule." });
     }
     
     try {
@@ -756,9 +756,9 @@ export function registerSystemRoutes(app: express.Express, db: any) {
       task.action().catch(e => {
         console.error(`[CRON] Manual execution of task ${task.name} failed:`, e);
       });
-      res.json({ success: true, message: `Tugas ${task.name} berhasil dipicu.` });
+      res.json({ success: true, message: `Task ${task.name} triggered successfully.` });
     } catch (err: any) {
-      res.status(500).json({ error: err.message || "Gagal memicu tugas kognisi." });
+      res.status(500).json({ error: err.message || "Failed to trigger cognition task." });
     }
   });
 
@@ -800,7 +800,7 @@ export function registerSystemRoutes(app: express.Express, db: any) {
       queue.dispatchPendingMessages().catch(err => {
         console.error("[QUEUE_MANUAL_DISPATCH_ERR]:", err);
       });
-      res.json({ success: true, message: "Picu ulang pengiriman antrean tertunda luring diaktifkan." });
+      res.json({ success: true, message: "Offline pending queue resend triggered." });
     } catch (e: any) {
       console.error("[SERVER] Failed to dispatch pending queue manually:", e.message);
       res.status(500).json({ error: e.message });
@@ -812,10 +812,10 @@ export function registerSystemRoutes(app: express.Express, db: any) {
       const { id } = req.params;
       const pending = db.prepare("SELECT * FROM pending_messages WHERE id = ?").get(id) as any;
       if (!pending) {
-        return res.status(404).json({ error: "Pesan tertunda tidak ditemukan." });
+        return res.status(404).json({ error: "Pending message not found." });
       }
 
-      console.log(`[API_MANUAL_RETRY] Manual trigger retry untuk ${pending.sender_name} - ${pending.id}`);
+      console.log(`[API_MANUAL_RETRY] Manual trigger retry for ${pending.sender_name} - ${pending.id}`);
       
       const reply = await NeuralInterface.processNeuralInput(pending.input, pending.sender_name, pending.context_id, pending.chat_type);
       if (reply && reply.trim()) {
@@ -825,7 +825,7 @@ export function registerSystemRoutes(app: express.Express, db: any) {
           try {
             const activeTelegramBot = (globalThis as any).activeTelegramBot;
             if (activeTelegramBot) {
-              const delayedReply = `[BALASAN TERTUNDA] @${pending.sender_name}, ini balasan Yui untuk pesanmu sebelumnya: "${pending.input.substring(0, 25)}${pending.input.length > 25 ? '...' : ''}" \n\n${reply}`;
+              const delayedReply = `[DELAYED REPLY] @${pending.sender_name}, here is Yui's reply to your earlier message: "${pending.input.substring(0, 25)}${pending.input.length > 25 ? '...' : ''}" \n\n${reply}`;
               if (dedup.isDuplicate(delayedReply, pending.context_id)) {
                 console.log(`[GLOBAL_DEDUP] Skipping duplicate delayed Telegram retry for ${pending.sender_name} (${pending.context_id}).`);
               } else {
@@ -833,13 +833,13 @@ export function registerSystemRoutes(app: express.Express, db: any) {
                 await activeTelegramBot.telegram.sendMessage(chatId, delayedReply);
               }
             } else {
-              console.warn("[API_MANUAL_RETRY] Bot Telegram offline, memori tersimpan di database.");
+              console.warn("[API_MANUAL_RETRY] Bot Telegram offline, memory stored in database.");
             }
           } catch (tgErr) {
             console.error("[API_MANUAL_RETRY] Failed to send Telegram message:", tgErr);
           }
         } else {
-          const delayedReply = `[BALASAN TERTUNDA] @${pending.sender_name}: ${reply}`;
+          const delayedReply = `[DELAYED REPLY] @${pending.sender_name}: ${reply}`;
           if (dedup.isDuplicate(delayedReply, pending.context_id)) {
             console.log(`[GLOBAL_DEDUP] Skipping duplicate delayed local retry for ${pending.sender_name} (${pending.context_id}).`);
           } else {
@@ -851,9 +851,9 @@ export function registerSystemRoutes(app: express.Express, db: any) {
           }
         }
         db.prepare("DELETE FROM pending_messages WHERE id = ?").run(id);
-        res.json({ success: true, message: "Pesan sukses diproses batiniah Yui!" });
+        res.json({ success: true, message: "Message successfully processed by Yui's inner self!" });
       } else {
-        res.status(500).json({ error: "Gagal memproses kognisi, respons kosong." });
+        res.status(500).json({ error: "Failed to process cognition, empty response." });
       }
     } catch (e: any) {
       console.error("[SERVER] Failed to retry single message:", e.message);

@@ -1,12 +1,12 @@
 /**
  * afterActionReview.ts
  *
- * After-action review loop (Stage E): setiap tindakan Yui (balasan, tool call)
- * dicatat sebagai "action review"; saat feedback nyata masuk, hasilnya
- * dievaluasi dan pelajaran jangka panjang disimpan. Pelajaran yang sudah
- * ter-resolve disuntikkan ke prompt agar perilaku berikutnya lebih baik.
+ * After-action review loop (Stage E): each Yui action (reply, tool call)
+ * is recorded as an "action review"; when real feedback arrives, the result
+ * is evaluated and long-term lessons are stored. Resolved lessons are injected
+ * into the prompt so subsequent behavior improves.
  *
- * Hanya boleh dipakai di sisi Node (daemon).
+ * Only allowed on the Node (daemon) side.
  */
 
 import { getDb } from './database.js';
@@ -70,7 +70,7 @@ function parseRow(row: any): ReviewRow | null {
 }
 
 /**
- * Catat sebuah tindakan sebagai action review (outcome default awaiting-feedback).
+ * Record an action as an action review (default outcome awaiting-feedback).
  */
 export function createActionReview(messageId: string | number, actionType: string, contextId: string, summary: string): boolean {
   if (!messageId) return false;
@@ -89,14 +89,14 @@ export function createActionReview(messageId: string | number, actionType: strin
     );
     return true;
   } catch (err: any) {
-    console.warn('[ACTION_REVIEW] Gagal membuat review:', err?.message || err);
+    console.warn('[ACTION_REVIEW] Failed to create review:', err?.message || err);
     return false;
   }
 }
 
 /**
- * Resolve review untuk sebuah pesan keluar berdasarkan feedback nyata.
- * Reward +1 -> lesson positif; -1 -> lesson negatif.
+ * Resolve the review for an outgoing message based on real feedback.
+ * Reward +1 -> positive lesson; -1 -> negative lesson.
  */
 export function resolveReviewByMessage(messageId: string | number, reward: number, topics: string[]): boolean {
   if (!messageId) return false;
@@ -113,13 +113,13 @@ export function resolveReviewByMessage(messageId: string | number, reward: numbe
     stmts(db).resolve.run(lesson, Math.max(-1, Math.min(1, reward)), Date.now(), String(messageId));
     return true;
   } catch (err: any) {
-    console.warn('[ACTION_REVIEW] Gagal resolve review:', err?.message || err);
+    console.warn('[ACTION_REVIEW] Failed to resolve review:', err?.message || err);
     return false;
   }
 }
 
 /**
- * Catat pelajaran dari kegagalan tool (self-review tanpa feedback user).
+ * Record a lesson from a tool failure (self-review without user feedback).
  */
 export function createToolFailureReview(contextId: string, toolName: string, error: string): boolean {
   try {
@@ -129,7 +129,7 @@ export function createToolFailureReview(contextId: string, toolName: string, err
     stmts(db).insert.run(id, 'tool-call', contextId || 'web_default', `Tool ${toolName} failed`, 'resolved', lesson, 0, Date.now(), Date.now());
     return true;
   } catch (err: any) {
-    console.warn('[ACTION_REVIEW] Gagal catat tool-failure:', err?.message || err);
+    console.warn('[ACTION_REVIEW] Failed to record tool-failure:', err?.message || err);
     return false;
   }
 }
@@ -139,7 +139,7 @@ export function getResolvedLessons(limit = 5): ReviewRow[] {
     const db = getDb();
     return (stmts(db).resolved.all(limit) as any[]).map(parseRow).filter(Boolean) as ReviewRow[];
   } catch (err: any) {
-    console.warn('[ACTION_REVIEW] Gagal ambil lessons:', err?.message || err);
+    console.warn('[ACTION_REVIEW] Failed to get lessons:', err?.message || err);
     return [];
   }
 }
@@ -149,7 +149,7 @@ export function listRecentReviews(limit = 20): ReviewRow[] {
     const db = getDb();
     return (stmts(db).recent.all(limit) as any[]).map(parseRow).filter(Boolean) as ReviewRow[];
   } catch (err: any) {
-    console.warn('[ACTION_REVIEW] Gagal list reviews:', err?.message || err);
+    console.warn('[ACTION_REVIEW] Failed to list reviews:', err?.message || err);
     return [];
   }
 }

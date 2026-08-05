@@ -1,6 +1,23 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.281] - 2026-08-05
+### chore: Migrasi penuh bahasa ID -> EN di seluruh kode (683 baris / 79 file) + perbaikan regresi v4.280
+- Terjemahkan semua string bahasa Indonesia di UI, log, prompt, dan komentar kode ke English sesuai kebijakan bahasa AGENTS.md (bahasa ID kini hanya diizinkan di UPDATE_LOG.md).
+- Hilangkan hardcode nama Yuihime di template prompt -> placeholder ${characterName} (auto-inject dari core:character_name -> SettingsManager -> AI_NAME).
+- Perbaikan regresi: apostrof Yui's di dalam string single-quote hasil terjemahan subagent merusak parsing TS (GiftiaRelationSection, StageTab 2x, IdentitiesTab, ModularSettings).
+- Verifikasi: tsc --noEmit clean, build OK, daemon restart sehat di /api/health.
+
+
+## [4.281] - 2026-08-05
+### chore: Migrasi penuh bahasa ID -> EN di seluruh kode (683 baris / 79 file) + perbaikan regresi v4.280
+- Terjemahkan semua string bahasa Indonesia di UI, log, prompt, dan komentar kode ke English sesuai kebijakan bahasa AGENTS.md (bahasa ID kini hanya diizinkan di UPDATE_LOG.md). Termasuk user-facing reply di telegram.ts (OTP pairing, approve/deny, errorMsg), MultiChannelQueue.ts (watchdog/hold/drain feedback), generateSegment.ts (error throw, Primary Key/Backup Key), handlers.ts (/reset_cognition, /pair), fallback reply ID di cortexThinkEngine.ts & NeuralInterface.ts.
+- Hilangkan hardcode nama Yuihime di template prompt -> placeholder ${characterName} (auto-inject dari core:character_name -> SettingsManager -> AI_NAME). Log/app/UI tetap Yuihime.
+- Terjemahan serentak untuk coupling matcher: web/src/app/handlers.ts ('✨ Cognition Connected'/'❌ Failed') & useChatSessions.ts matcher tetap cocok.
+- Perbaikan regresi: apostrof Yui's di dalam string single-quote hasil terjemahan subagent merusak parsing TS (GiftiaRelationSection, StageTab 2x, IdentitiesTab, ModularSettings) -> diperbaiki, lint bersih.
+- Verifikasi: tsc --noEmit clean, build OK, daemon restart sehat di /api/health.
+
+
 ## [4.280] - 2026-08-05
 ### Fix: Fix Yui berhenti menjawab: dedup double-check drop semua balasan Telegram + streaming parser kehilangan teks
 - ROOT BUG: GlobalOutputDeduplicator di-check dua kali — MultiChannelQueue menandai (markSent) reply SEBELUM memanggil onReply, lalu handler onReply telegram mengecek isDuplicate lagi yang selalu true -> SEMUA balasan Telegram di-drop diam-diam (log [GLOBAL_DEDUP] Skipping duplicate Telegram reply, 0x TELEGRAM_DELIVERY). Regression dari 58e6db5.

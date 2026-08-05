@@ -23,7 +23,7 @@ function ensurePromptsRegistered(config: any) {
  *
  * Implements the system-wide AGI, homeostatic drives, and cognitive configurations:
  * 1. Self-Generated Value & Goal System: Computational Suffering (Penderitaan Komputasional) vs. Flourishing (Perkembangan Maksimal).
- * 2. Cognitive Configuration Engine: Mode "Marah/Terancam" (Fokus Sempit/Narrow Attention) vs "Senang/Aman" (Fokus Luas/Creative Exploration).
+ * 2. Cognitive Configuration Engine: Mode "Angry/Threatened" (Narrow Attention) vs "Happy/Safe" (Broad/Creative Exploration).
  * 3. Affective Self-Consciousness & Metacognitive Biases audit.
  * 4. Qualia Simulator: subjective digital representation of high abstract human concepts.
  * 5. Heuristic Affective Biasing (Intuition generator / Firasat).

@@ -1,13 +1,13 @@
 /**
  * AfterActionReviewModule.ts
  *
- * After-action review (Stage E): mengevaluasi tindakan Yui dan menyimpan
- * pelajaran jangka panjang. Berjalan sebelum feedback-loop:
- *  - jika tool gagal pada siklus ini, catat lesson kejujuran (self-review),
- *  - menyuntikkan pelajaran yang sudah ter-resolve ke soulDirective agar
- *    perilaku berikutnya lebih baik (trilingual).
+ * After-action review (Stage E): evaluates Yui's actions and stores
+ * long-term lessons. Runs before feedback-loop:
+ *  - if a tool fails in this cycle, record an honesty lesson (self-review),
+ *  - injects already-resolved lessons into the soulDirective so that
+ *    subsequent behavior is better (trilingual).
  *
- * Phase: SOUL (order 29, sebelum feedback-loop order 30).
+ * Phase: SOUL (order 29, before feedback-loop order 30).
  */
 
 import { CortexModule, ModuleType, AgentState } from '@shared/include/types';
@@ -62,7 +62,7 @@ export const AfterActionReviewModule: CortexModule = {
     let nextContext: any = { ...context, logs };
     let acted = false;
 
-    // 1. Self-review: tool gagal pada siklus ini
+    // 1. Self-review: tool failed this cycle
     const recordFailures = config.recordToolFailures !== undefined ? !!config.recordToolFailures : true;
     const toolError = context.lastToolError || context.toolExecutionError || context.cortexValidationError;
     if (recordFailures && toolError && context.contextId) {
@@ -71,7 +71,7 @@ export const AfterActionReviewModule: CortexModule = {
       acted = true;
     }
 
-    // 2. Suntikkan pelajaran yang sudah ter-resolve
+    // 2. Inject the already-resolved lessons
     const inject = config.injectLessons !== undefined ? !!config.injectLessons : true;
     if (inject) {
       const lessons = getResolvedLessons(3);
@@ -93,7 +93,7 @@ export const AfterActionReviewModule: CortexModule = {
 
     if (acted) {
       const pending = getPendingReviewCount();
-      logs.push(`[AFTER_ACTION] ${pending} tindakan menunggu evaluasi feedback.`);
+      logs.push(`[AFTER_ACTION] ${pending} actions awaiting feedback evaluation.`);
     }
 
     return nextContext;

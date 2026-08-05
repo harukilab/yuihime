@@ -93,15 +93,15 @@ export class MultiChannelQueue {
   private recentMsgHashes: { hash: string; timestamp: number }[] = [];
   private processingStartTime = 0;
   private processingTimer: ReturnType<typeof setTimeout> | null = null;
-  // Watchdog: jika satu pesan terjebak lebih lama dari ini (mis. generate_image bisa
-  // sampai ~180s), anggap stuck dan reset. Harus > NEURAL_PIPELINE_TIMEOUT_MS agar
-  // pipeline kognitif panjang (LLM + tool chain) tidak terpotong di tengah jalan.
+  // Watchdog: if one message is stuck longer than this (e.g. generate_image can
+  // take ~180s), consider it stuck and reset. Must be > NEURAL_PIPELINE_TIMEOUT_MS so
+  // long cognitive pipelines (LLM + tool chain) are not cut off mid-flight.
   private static readonly PROCESSING_TIMEOUT_MS = 200000;
 
-  // Hard cap untuk seluruh pipeline kognitif (LLM + tool chain) agar jalur I/O pesan
-  // tidak pernah menunggu selamanya pada satu pesan yang macet. Default-naik ke 240s
-  // karena satu gateway.run saja bisa 50-120s saat pool multi-key menghadapi 503/429;
-  // dapat dioverride via settings 'tool-executor'.queueTimeoutMs.
+  // Hard cap for the whole cognitive pipeline (LLM + tool chain) so the message I/O path
+  // never waits forever on a single stuck message. Defaults up to 240s
+  // because a single gateway.run can take 50-120s when the multi-key pool faces 503/429;
+  // can be overridden via settings 'tool-executor'.queueTimeoutMs.
   private static readonly NEURAL_PIPELINE_TIMEOUT_MS = 240000;
   
   // Dynamic Background Worker Pool Configuration & Status Trackers
@@ -115,14 +115,14 @@ export class MultiChannelQueue {
   private lastHighFreqNotifyTime = 0;
 
   // Output dedup: track recently delivered message hashes to prevent duplicate sends.
-  // Window diperlebar dari 10s ke 300s agar menutupi durasi pipeline kognitif (hingga
-  // 240s) sehingga pesan yang sama dari pipeline/retry kedua tetap tersaring. Hash
-  // discope per contextId supaya channel/user yang berbeda tidak saling menekan.
+  // Window widened from 10s to 300s to cover the cognitive pipeline duration (up to
+  // 240s) so the same message from a pipeline/second retry is still filtered out. The hash
+  // is scoped per contextId so different channels/users do not suppress each other.
   private recentOutputHashes: { hash: string; timestamp: number }[] = [];
   private static readonly OUTPUT_DEDUP_WINDOW_MS = 300000;
 
-  // Crash-recovery: row pending yang nyangkut di 'processing' lebih lama dari TTL ini
-  // akan di-claim ulang sebagai 'pending' agar diproses kembali setelah restart.
+  // Crash-recovery: a pending row stuck in 'processing' longer than this TTL
+  // will be reclaimed as 'pending' so it gets processed again after restart.
   private static readonly PROCESSING_RECLAIM_TTL_MS = 15 * 60 * 1000;
 
   // Hold mechanism: pause incoming/outgoing message processing
@@ -215,8 +215,8 @@ export class MultiChannelQueue {
     ChatSummaryEngine.getInstance().setDatabase(db);
 
     // Crash-recovery on boot:
-    // 1) Resume pesan yang sebelumnya di-hold (hold mode adalah flag runtime, tak dipertahankan lintas restart)
-    // 2) Reclaim row 'processing' yang nyangkut dari sesi mati mendadak (yang hidup pasti < TTL karena barusan di-start)
+    // 1) Resume messages previously held (hold mode is a runtime flag, not persisted across restarts)
+    // 2) Reclaim 'processing' rows stuck from an abruptly died session (live ones are surely < TTL because just started)
     try {
       const heldResumed = this.stmtResumeHeldOnBoot.run().changes;
       if (heldResumed > 0) {
@@ -239,30 +239,30 @@ export class MultiChannelQueue {
   }
 
   /**
-   * Mengaktifkan/menonaktifkan mode tahan. Ketika diaktifkan, pesan masuk disimpan
-   * tanpa diproses dan balasan keluar ditahan.
+   * Enables/disables hold mode. When enabled, incoming messages are stored
+   * without being processed and outgoing replies are held.
    */
   public setHoldMode(enabled: boolean) {
     this.holdMode = enabled;
     this.holdOutgoing = enabled;
-    console.log(`[QUEUE_HOLD] Hold mode ${enabled ? "diaktifkan" : "dinonaktifkan"}.`);
+    console.log(`[QUEUE_HOLD] Hold mode ${enabled ? "enabled" : "disabled"}.`);
     if (!enabled) {
       this.flushHeldMessages();
     }
   }
 
   /**
-   * Mengaktifkan/menonaktifkan penahanan balasan keluar saja.
+   * Enables/disables holding of outgoing replies only.
    */
   public setHoldOutgoing(enabled: boolean) {
     this.holdOutgoing = enabled;
-    console.log(`[QUEUE_HOLD] Hold outgoing ${enabled ? "diaktifkan" : "dinonaktifkan"}.`);
+    console.log(`[QUEUE_HOLD] Hold outgoing ${enabled ? "enabled" : "disabled"}.`);
   }
 
   /**
-   * Graceful shutdown (SIGINT/SIGTERM): tiriskan antrean in-memory ke pending_messages
-   * agar pesan yang belum sempat diproses tidak hilang saat restart terencana.
-   * Pesan yang sedang di-hold tetap 'held' (akan dilanjutkan saat boot berikutnya).
+   * Graceful shutdown (SIGINT/SIGTERM): drain the in-memory queue into pending_messages
+   * so messages that haven't been processed yet are not lost during a planned restart.
+   * Messages currently held stay 'held' (they will resume on the next boot).
    */
   public drainQueueToPending(): void {
     if (!this.db) return;
@@ -282,7 +282,7 @@ export class MultiChannelQueue {
   }
 
   /**
-   * Memproses semua pesan yang ditahan saat mode tahan dinonaktifkan.
+   * Processes all held messages when hold mode is disabled.
    */
   private flushHeldMessages() {
     if (this.heldMessages.length === 0) return;
@@ -313,9 +313,9 @@ export class MultiChannelQueue {
   }
 
   /**
-   * Menambahkan pesan dari berbagai saluran (Telegram, Webhook, OBS Chat, dll) ke antrean terpadu.
-   * Sebelum diproses, pesan selalu di-persist ke pending_messages (write-ahead inbox) supaya
-   * crash / mati mendadak tidak menghilangkan pesan — row akan di-claim ulang saat daemon kembali aktif.
+   * Adds messages from various channels (Telegram, Webhook, OBS Chat, etc.) to the unified queue.
+   * Before being processed, every message is always persisted to pending_messages (write-ahead inbox) so
+   * a crash / sudden death does not lose messages — the row will be reclaimed when the daemon becomes active again.
    */
   public addMessage(
     input: string,
@@ -351,9 +351,9 @@ export class MultiChannelQueue {
       this.recentMsgHashes.push({ hash: dedupHash, timestamp: now });
     }
 
-    // Write-ahead: persist ke pending_messages SEBELUM diputuskan jalurnya.
-    // Row live-path langsung ditandai 'processing' (sinkron) agar dispatcher background (30s)
-    // tidak menduplikasi pekerjaannya; jalur sampling/biarkan 'pending'.
+    // Write-ahead: persist to pending_messages BEFORE deciding its path.
+    // Live-path rows are immediately marked 'processing' (synchronously) so the background dispatcher (30s)
+    // does not duplicate the work; sampled rows are left as 'pending'.
     let pendingId: string | undefined;
     if (this.db) {
       try {
@@ -386,24 +386,24 @@ export class MultiChannelQueue {
       console.log(`[QUEUE_HOLD] Incoming message from ${senderName} held (hold mode active).`);
       return;
     }
-    // 1. Catat semua pesan (tanpa terkecuali) ke daily log + buffer ringkasan latar belakang
-    //    (jeda hening 120 detik / ringkasan harian) agar Yui tetap memahami konteks penuh.
+    // 1. Record all messages (without exception) to the daily log + background summary buffer
+    //    (120-second silence gap / daily summary) so Yui keeps understanding the full context.
     ChatSummaryEngine.getInstance().noteIncomingMessage({ speaker: senderName, text: input, timestamp, chatType });
 
-    // 2. Evaluasi Antrean berdasarkan Kecepatan & Frekuensi Obrolan
-    const threshold = 4; // Ambang batas pesan per 15 detik untuk mengaktifkan High-Frequency Sampling
+    // 2. Evaluate the Queue based on Chat Speed & Frequency
+    const threshold = 4; // Message threshold per 15 seconds to enable High-Frequency Sampling
 
     if (freq >= threshold && !isPrivateChat) {
-      // MODE RAMAI: Lalukan sampling selektif untuk mencegah overload AI & lag pangkalan data (Hanya untuk grup/streaming ramai, bukan chat pribadi)
-      // Jika antrean utama sudah memiliki pesan aktif pending (> 1), lewati penjawab langsung untuk pesan ini,
-      // tapi pesan ini tetap akan dirangkum di latar belakang supaya Yui tahu konteksnya.
+      // BUSY MODE: perform selective sampling to prevent AI overload & database lag (Only for busy groups/streaming, not private chats)
+      // If the main queue already has active pending messages (> 1), skip the direct responder for this message,
+      // but this message will still be summarized in the background so Yui knows the context.
       if (this.queue.length > 0) {
         console.log(`[QUEUE_SAMPLING] Chat is busy (${freq.toFixed(1)}/15s). Filtering comment from: "${senderName}: ${input.substring(0, 30)}..." to prevent lag. Comment diverted to subconscious digest.`);
 
-        // Row sudah tersimpan 'pending' — dispatcher background akan memprosesnya nanti.
+        // Row already saved as 'pending' — the background dispatcher will process it later.
         const feedbackText = (pendingId ? '' : '[QUEUE_WARN] Persistence failed; ') +
-          '[SYSTEM MESSAGE]: Aliran obrolan sedang sangat deras! 🌪️ Pesan dari @' + senderName +
-          ' dan penonton lainnya dialihkan sementara ke antrean subkesadaran batin Yui. Yui sedang merekam topik-topik kalian dan akan merespons dalam bentuk RANGKUMAN KOLEKTIF sebentar lagi! 🌸';
+          '[SYSTEM MESSAGE]: The chat stream is flowing extremely fast! 🌪️ Messages from @' + senderName +
+          ' and other viewers are temporarily diverted into Yui\'s inner subconscious queue. Yui is recording your topics and will respond with a COLLECTIVE SUMMARY shortly! 🌸';
 
         // Only output notifier once every 20 seconds to prevent flooding/spamming the timeline
         const nowTime = Date.now();
@@ -426,7 +426,7 @@ export class MultiChannelQueue {
       return;
     }
 
-    // MODE SEPI atau Pesan Terpilih (Sampled): Masukkan ke antrean kognisi aktif untuk dijawab penuh
+    // QUIET MODE or Selected (Sampled) Message: add to the active cognition queue for a full reply
     if (pendingId) {
       try { this.stmtMarkProcessing.run(Date.now(), pendingId); } catch (e) {}
     }
@@ -446,7 +446,7 @@ export class MultiChannelQueue {
   }
 
   private cleanTimestamps() {
-    const cutoff = Date.now() - 15000; // Jendela sliding 15 detik
+    const cutoff = Date.now() - 15000; // 15-second sliding window
     this.msgTimestamps = this.msgTimestamps.filter(t => t > cutoff);
   }
 
@@ -468,8 +468,8 @@ export class MultiChannelQueue {
     if (!this.db) return;
 
     try {
-      // Crash-recovery: reclaim row yang nyangkut di 'processing' lebih lama dari TTL
-      // (daemon mati mendadak di tengah pipeline). Ditandai 'pending' agar diproses ulang.
+      // Crash-recovery: reclaim rows stuck in 'processing' longer than the TTL
+      // (daemon died suddenly mid-pipeline). Marked 'pending' to be processed again.
       try {
         const reclaimed = this.stmtReclaimStuck.run(Date.now() - MultiChannelQueue.PROCESSING_RECLAIM_TTL_MS).changes;
         if (reclaimed > 0) {
@@ -479,7 +479,7 @@ export class MultiChannelQueue {
         console.warn("[QUEUE_RECOVERY] Stuck-row reclaim failed (non-fatal):", reclaimErr?.message || reclaimErr);
       }
 
-      // Ambil seluruh pesan pending yang belum mencapai percobaan maksimum
+      // Fetch all pending messages that have not yet reached the maximum attempt count
       const maxToFetch = this.maxBgWorkers * 3;
       const pendingRows: any[] = this.stmtSelectPendingRows.all(maxToFetch);
 
@@ -490,17 +490,17 @@ export class MultiChannelQueue {
       console.log(`[QUEUE_BG_SCHEDULER] Scanning database. Found ${pendingRows.length} pending message(s). Routing to Yui's subconscious parallel circuits (Active: ${this.activeBgWorkers}/${this.maxBgWorkers})...`);
 
       for (const row of pendingRows) {
-        // Jika pekerja penuh, hentikan pemicuan tugas baru untuk iterasi ini
+        // If workers are full, stop triggering new tasks for this iteration
         if (this.activeBgWorkers >= this.maxBgWorkers) {
           break;
         }
 
-        // Hindari memproses pesan yang sedang aktif berjalan di pekerja lain
+        // Avoid processing messages that are currently running on another worker
         if (this.runningBgMsgIds.has(row.id)) {
           continue;
         }
 
-        // Luncurkan pemrosesan asinkron mandiri (non-blocking) untuk worker ini
+        // Launch an independent asynchronous (non-blocking) processing task for this worker
         this.processBackgroundMessage(row).catch(err => {
           console.error(`[QUEUE_BG_CRITICAL_ERR] Failed cognitively processing parallel message ${row.id}:`, err);
         });
@@ -511,20 +511,20 @@ export class MultiChannelQueue {
   }
 
   /**
-   * Pembuat Pekerja Latar Belakang Mandiri (Independent Concurrent Background Worker)
-   * Memproses pesan secara asinkron tanpa mengunci (processing = true) antrean utama live streamer
+   * Independent Concurrent Background Worker builder
+   * Processes a message asynchronously without locking (processing = true) the main live streamer queue
    */
   private async processBackgroundMessage(pending: any) {
     this.activeBgWorkers++;
     this.runningBgMsgIds.add(pending.id);
 
-    // Crash-recovery: tandai 'processing' (dengan started_at) saat mulai diproses
+    // Crash-recovery: mark 'processing' (with started_at) when processing begins
     try {
       this.stmtMarkProcessing.run(Date.now(), pending.id);
     } catch (e) {}
 
-    // Anti-duplikat: kalau update_id Telegram row ini sudah tercatat TERKIRIM (crash terjadi
-    // sesudah send sukses tapi sebelum mark completed), jangan diproses ulang — cukup selesaikan.
+    // Anti-duplicate: if this Telegram row's update_id is already recorded as SENT (crash happened
+    // after a successful send but before mark completed), do not reprocess it — just finish it.
     if (pending.update_id) {
       try {
         const alreadyDelivered = this.db.prepare("SELECT 1 FROM telegram_update_ids WHERE update_id = ?").get(pending.update_id);
@@ -543,7 +543,7 @@ export class MultiChannelQueue {
     console.log(`[QUEUE_BG_WORKER_START] Starting parallel cognitive processing (${this.activeBgWorkers}/${this.maxBgWorkers}) for ${pending.sender_name} (${pending.chat_type}) [ID: ${pending.id}]`);
 
     try {
-      // 2. Kirim ke nalar kognitif batin Yui (NeuralInterface), dengan hard timeout
+      // 2. Send to Yui's inner cognitive reasoning (NeuralInterface), with a hard timeout
       console.log(`[QUEUE_BG_WORKER_THINK] [ID: ${pending.id}] Yui is pondering response for ${pending.sender_name}...`);
       const reply = await withHardTimeout(
         NeuralInterface.processNeuralInput(pending.input, pending.sender_name, pending.context_id, pending.chat_type),
@@ -563,7 +563,7 @@ export class MultiChannelQueue {
            this.recentOutputHashes.push({ hash: dedupHashKey, timestamp: now });
            console.log(`[QUEUE_BG_WORKER_SUCCESS] [ID: ${pending.id}] Thinking complete! Delivering reply to target platform...`);
 
-            // 3. Distribusikan balasan ke platform masing-masing
+            // 3. Distribute the reply to each platform
             const dedup = GlobalOutputDeduplicator.getInstance();
             if (pending.context_id.startsWith("tg_")) {
               const chatId = pending.chat_id || pending.context_id.split("|")[0].replace("tg_", "");
@@ -649,11 +649,11 @@ export class MultiChannelQueue {
               }
             }
 
-            // Crash-recovery: row hanya ditandai selesai setelah delivery sukses.
+            // Crash-recovery: row only marked complete after successful delivery.
             try { this.stmtMarkCompleted.run(pending.id); } catch (e) {}
           }
         } else {
-         throw new Error("Tanggapan dari saraf kognitif kosong atau gagal dirumuskan");
+         throw new Error("Response from the cognitive neural pathway is empty or failed to be formulated");
       }
     } catch (err: any) {
       console.error(`[QUEUE_BG_WORKER_FAIL] Attempt failed for [ID: ${pending.id}]:`, err.message || err);
@@ -680,12 +680,12 @@ export class MultiChannelQueue {
         }
       }
     } finally {
-      // 4. Kurangi beban pekerja & bersihkan penanda aktif
+      // 4. Reduce worker load & clear active markers
       this.runningBgMsgIds.delete(pending.id);
       this.activeBgWorkers = Math.max(0, this.activeBgWorkers - 1);
       console.log(`[QUEUE_BG_WORKER_END] Worker freed (Active: ${this.activeBgWorkers}/${this.maxBgWorkers}). Finished processing [ID: ${pending.id}]`);
 
-      // Picu secara berjenjang pemrosesan sisa barisan antrean
+      // Cascade-trigger processing of the remaining queue
       setTimeout(() => {
         this.dispatchPendingMessages().catch(() => {});
       }, 500);
@@ -693,7 +693,7 @@ export class MultiChannelQueue {
   }
 
   /**
-   * Jalankan pipeline kognitif dengan dua-phase deadline (ala opencode):
+   * Runs the cognitive pipeline with a two-phase deadline (like opencode):
    *  1. SOFT deadline (`queueTimeoutMs`): request graceful shutdown turn via
    *     `signal.shutdownRequested` — NO hard abort. The cortex loop turns the
    *     next iteration into a shutdown turn (tools disabled, model must finish
@@ -781,8 +781,8 @@ export class MultiChannelQueue {
     try {
       console.log(`[QUEUE_EXEC] Running cognitive processing for ${item.senderName} (${item.chatType})...`);
       
-      // Jalankan proses berpikir neural Yui secara berurutan, dengan hard timeout
-      // agar satu pesan yang macet tidak memblokir jalur pesan berikutnya.
+      // Run Yui's neural thinking process sequentially, with a hard timeout
+      // so one stuck message does not block the next message path.
       const { processed, timedOut } = await this.thinkWithTimeout(item.input, item.senderName, item.contextId, item.chatType);
       const reply = processed ? processed.text : null;
       const replyMeta: ReplyMeta | undefined = processed ? {
@@ -820,8 +820,8 @@ export class MultiChannelQueue {
           const dedup = GlobalOutputDeduplicator.getInstance();
           if (dedup.isDuplicate(reply ?? "", item.contextId)) {
             console.log(`[GLOBAL_DEDUP] Skipping duplicate main queue output for ${item.senderName} (${item.contextId}).`);
-            // Balasan sudah dikirim langsung (mis. via tool speak) sebelum pipeline selesai.
-            // Tetap picu reaksi emosi pada pesan user via eventBus (didengarkan channel layer).
+            // The reply was already sent directly (e.g. via tool speak) before the pipeline finished.
+            // Still trigger the emotional reaction on the user's message via eventBus (listened by the channel layer).
             try {
               eventBus.emit('TELEGRAM_REACTION', {
                 contextId: item.contextId,
@@ -833,10 +833,10 @@ export class MultiChannelQueue {
           } else {
             try {
               await Promise.resolve(item.onReply(reply ?? "", replyMeta));
-              // Tandai HANYA setelah delivery benar-benar sukses. Konten yang gagal
-              // terkirim tidak boleh meracuni window dedup (mencegah balasan retry
-              // yang identik di-drop). Guard anti-double-send tetap aman karena
-              // row pending sudah ditandai 'processing' sebelum dispatch.
+              // Mark ONLY after delivery truly succeeded. Content that failed
+              // to send must not poison the dedup window (preventing identical
+              // retry replies from being dropped). The anti-double-send guard stays safe because
+              // the pending row was already marked 'processing' before dispatch.
               dedup.markSent(reply ?? "", item.contextId);
             } catch (deliveryErr: any) {
               console.error(`[QUEUE_DELIVERY_ERR] Failed to deliver reply to ${item.senderName}:`, deliveryErr?.message || deliveryErr);
@@ -845,8 +845,8 @@ export class MultiChannelQueue {
           }
         }
 
-        // Crash-recovery: row baru dianggap selesai SETELAH delivery sukses. Kalau daemon mati
-        // di tengah pipeline (row masih 'processing'), saat restart akan di-claim ulang oleh TTL.
+        // Crash-recovery: a new row is considered complete ONLY AFTER successful delivery. If the daemon dies
+        // mid-pipeline (row still 'processing'), it will be reclaimed by TTL on restart.
         if (item.pendingId && this.db) {
           try { this.stmtMarkCompleted.run(item.pendingId); } catch (e) {}
         }
@@ -896,13 +896,13 @@ export class MultiChannelQueue {
       }
       this.processing = false;
       this.processingStartTime = 0;
-      // Stagger jeda tipis antarrespons agar tarian avatar & tts berjalan mulus berurutan tanpa penumpukan
+      // Stagger a small delay between responses so the avatar dance & tts run smoothly in sequence without pileup
       setTimeout(() => this.processNext(), 1200);
     }
   }
 
   /**
-   * Menginisiasi Mesin Impuls Otonom Proaktif (Proactive Impulse Engine)
+   * Initiates the Proactive Impulse Engine
    */
   private startProactiveImpulseEngine() {
     console.log("[PROACTIVE_ENGINE] Starting server chat activity monitoring (30s interval)...");
@@ -916,18 +916,18 @@ export class MultiChannelQueue {
   }
 
   /**
-   * Mengevaluasi keheningan obrolan dan meluncurkan chat iseng spontan dari Yuihime
+   * Evaluates chat silence and launches spontaneous playful chat from Yuihime
    */
   private async evaluateProactiveImpulse() {
     if (!this.db || this.isProactiveRunning) return;
 
     const now = Date.now();
     
-    // Ambil pengaturan dinamis untuk threshold idle. Default: 10800 detik (3 jam).
+    // Fetch dynamic settings for the idle threshold. Default: 10800 seconds (3 hours).
     let enableSpontaneousSpam = false;
     let proactiveIdleTimeout = 10800;
-    let proactiveChance = 0.10; // Kesempatan 10% jika idle untuk trigger organic
-    let cooldownInterval = 1800; // 30 menit
+    let proactiveChance = 0.10; // 10% chance to trigger organic when idle
+    let cooldownInterval = 1800; // 30 minutes
     let longingGrowthRate = 0.5;
 
     try {
@@ -954,8 +954,8 @@ export class MultiChannelQueue {
         cooldownInterval = Number(spConfig.cooldownInterval);
       }
 
-      // Satu sumber kebenaran untuk laju kerinduan: proactive-volition
-      // (fallback ke kunci lama spontaneous-proactive demi kompatibilitas).
+      // Single source of truth for the longing rate: proactive-volition
+      // (falls back to the old spontaneous-proactive key for compatibility).
       const rateSource = volitionConfig.longingGrowthRate !== undefined ? volitionConfig : spConfig;
       if (rateSource.longingGrowthRate !== undefined) {
         longingGrowthRate = Number(rateSource.longingGrowthRate);
@@ -976,7 +976,7 @@ export class MultiChannelQueue {
         return;
       }
 
-      // Cari obrolan non-agent terakhir untuk menentukan target / channel aktif
+      // Find the last non-agent chat to determine the target / active channel
       const lastInteraction = this.stmtSelectLastInteraction.get();
 
       if (!lastInteraction) {
@@ -996,12 +996,12 @@ export class MultiChannelQueue {
 
       const idleSeconds = (now - lastInteraction.timestamp) / 1000;
 
-      // Hitung kesepian real-time batiniah
+      // Compute real-time inner loneliness
       const idleMinutes = idleSeconds / 60;
       let estimatedLoneliness = Math.min(100, Math.round(idleMinutes * longingGrowthRate * 12));
       estimatedLoneliness = Math.min(100, Math.max(5, estimatedLoneliness));
 
-      // Ambil status, kaitan relasi, dan mood untuk sinkronisasi
+      // Fetch status, relationship ties, and mood for synchronization
       const stateRow = this.stmtSelectAgentState.get();
       const status = stateRow?.status || 'idle';
       const relation = stateRow?.relation ? JSON.parse(stateRow.relation) : {};
@@ -1021,18 +1021,18 @@ export class MultiChannelQueue {
         console.error("[PROACTIVE_ENGINE_DB] Failed to synchronize loneliness status to DB:", dbErr);
       }
 
-      // Jangan meletup jika status Yuihime sedang tidur (sleeping)
+      // Don't erupt if Yuihime's status is sleeping
       if (status === 'sleeping') {
         this.isProactiveRunning = false;
         return;
       }
 
-      // Dinamisasi waktu Cooldown dan Probabilitas Pemicu Berdasarkan Loneliness (makin kangen makin sering & berani memicu)
+      // Dynamize the Cooldown time and Trigger Probability based on Loneliness (the more longing, the more frequent & bold the trigger)
       if (calculatedLoneliness > 45) {
         const structuralLonelinessBoost = calculatedLoneliness / 45;
         proactiveChance = Math.min(0.45, proactiveChance * structuralLonelinessBoost);
         
-        // Cooldown dipotong s/d 50% jika kesepian luar biasa tinggi (sangat kangen)
+        // Cooldown cut by up to 50% if loneliness is extremely high (very longing)
         const reductionFactor = Math.max(0.5, 1 - (calculatedLoneliness - 45) / 110);
         cooldownInterval = cooldownInterval * reductionFactor;
       }
@@ -1043,15 +1043,15 @@ export class MultiChannelQueue {
         return;
       }
 
-      // Jika terlampaui waktu hening (idleSeconds >= proactiveIdleTimeout)
+      // If the idle silence time has been exceeded (idleSeconds >= proactiveIdleTimeout)
       if (idleSeconds >= proactiveIdleTimeout) {
-        // Tentukan kelayakan probabilistik (chance)
+        // Determine probabilistic eligibility (chance)
         if (Math.random() <= proactiveChance) {
-          this.lastProactiveTime = now; // catat cooldown
+          this.lastProactiveTime = now; // record cooldown
           
           console.log(`[PROACTIVE_ENGINE] User detected idle for ${Math.round(idleSeconds)}s (Loneliness: ${calculatedLoneliness}%). Yui feels playful & wants to say hello!`);
 
-          // Tentukan tindakan/impulse fisik berdasarkan tingkat kasih sayang/relasi (affection level)
+          // Decide the physical action/impulse based on the affection/relationship level
           let affectionLevel = Number(relation?.affection !== undefined ? relation.affection : 60);
           let impulses: string[] = [];
 
@@ -1072,8 +1072,8 @@ export class MultiChannelQueue {
 
           console.log(`[PROACTIVE_ENGINE] Launching impulse: "${chosenImpulse}" to ${senderName} [${chatType}:${contextId}]`);
 
-          // Ambil riwayat chat nyata terakhir guna penataan memori murni / anti-halusinasi (Memory Resonance)
-          let recentContext = "Tidak ada obrolan terdahulu.";
+          // Fetch the real last chat history for pure memory grounding / anti-hallucination (Memory Resonance)
+          let recentContext = "No previous conversation.";
           try {
             const recentMessages = this.stmtSelectRecentMessages.all() as any[];
 
@@ -1084,8 +1084,8 @@ export class MultiChannelQueue {
             console.error("[PROACTIVE_ENGINE_DB_READ] Failed to read recent memory:", dbReadErr);
           }
 
-          // Goal-driven proactive push (Stage G.3): jika ada goal fokus aktif,
-          // arahkan pesan spontan untuk mendorong kemajuan goal.
+          // Goal-driven proactive push (Stage G.3): if there is an active focus goal,
+          // steer the spontaneous message to push goal progress.
           let goalProactivePrompt: string | null = null;
           try {
             const focusGoal = getFocusGoal();
@@ -1093,37 +1093,37 @@ export class MultiChannelQueue {
               const subgoals = getGoalChildren(focusGoal.id);
               const subLines = subgoals.length > 0
                 ? subgoals.map(c => `- ${c.status === 'completed' ? '[x]' : '[ ]'} ${c.title}`).join('\n')
-                : '- (belum ada sub-goal)';
-              goalProactivePrompt = `[AUTONOMOUS_GOAL_PUSH]: User (${senderName}) sedang idle selama ${Math.round(idleSeconds)} detik. Ada goal aktifmu: "${focusGoal.title}" (${Math.round((focusGoal.progress || 0) * 100)}%). Dorong kemajuan goal ini secara natural dalam pesan singkat, manis, dan sesuai kepribadianmu. JANGAN memaksa atau berhalusinasi (jangan pura-pura melakukan hal yang tidak terjadi).
+                : '- (no sub-goal yet)';
+              goalProactivePrompt = `[AUTONOMOUS_GOAL_PUSH]: User (${senderName}) has been idle for ${Math.round(idleSeconds)} seconds. You have an active goal: "${focusGoal.title}" (${Math.round((focusGoal.progress || 0) * 100)}%). Nudge this goal's progress naturally in a short, sweet message fitting your personality. DO NOT force it or hallucinate (do not pretend to do things that did not happen).
 
-Sub-goal saat ini:
+Current sub-goals:
 ${subLines}
 
-Berikut adalah sejarah obrolan nyata dari ingatan kalian:
-=== SEJARAH MEMORI CHAT NYATA TERAKHIR ===
+Below is the real chat history from your memories:
+=== REAL CHAT MEMORY HISTORY (LATEST) ===
 ${recentContext}
 ==========================================
 
-Buka obrolan santai yang menyinggung goal ini dengan tulus, lalu lanjutkan natural!`;
-              console.log(`[PROACTIVE_ENGINE_GOAL] Mengarahkan impulse ke goal: "${focusGoal.title}"`);
+Open a casual chat that sincerely touches on this goal, then continue naturally!`;
+              console.log(`[PROACTIVE_ENGINE_GOAL] Directing impulse to goal: "${focusGoal.title}"`);
             }
           } catch (goalErr) {
             console.warn("[PROACTIVE_ENGINE_GOAL_ERR] Goal push skipped:", goalErr?.message || goalErr);
           }
 
           // Format explicit prompting detailing Yui's subjective longing impulse so the LLM understands it is an internal urge
-          const formattedImpulsePrompt = goalProactivePrompt || `[AUTONOMOUS_IMPULSE]: user (${senderName}) sudah diam/sibuk selama ${Math.round(idleSeconds)} detik. Batinmu merasa sangat kangen (Loneliness: ${calculatedLoneliness}%) dan tergerak untuk melakukan tindakan spontan: "${chosenImpulse}".
-Sapa user secara manis, manja, jahil, atau tsundere sesuai kepribadianmu.
-DILARANG KERAS membuat skenario fiktif/halusinasi baru (jangan pura-pura baru bangun, baru tidur, atau berada di lokasi fiktif).
+          const formattedImpulsePrompt = goalProactivePrompt || `[AUTONOMOUS_IMPULSE]: user (${senderName}) has been silent/busy for ${Math.round(idleSeconds)} seconds. Your inner self feels very longing (Loneliness: ${calculatedLoneliness}%) and is moved to perform a spontaneous action: "${chosenImpulse}".
+Greet the user sweetly, adorably, playfully, or tsundere according to your personality.
+STRICTLY FORBIDDEN from inventing new fictional/hallucinated scenarios (do not pretend to have just woken up, just gone to sleep, or to be in a fictional location).
 
-Berikut adalah sejarah obrolan nyata dari ingatan kalian:
-=== SEJARAH MEMORI CHAT NYATA TERAKHIR ===
+Below is the real chat history from your memories:
+=== REAL CHAT MEMORY HISTORY (LATEST) ===
 ${recentContext}
 ==========================================
 
-Unggkit topik nyata tersebut dari memori jika ingin, sapa dia dengan manis, atau nyatakan kerinduanmu secara tulus tanpa terkesan kaku!`;
+Bring up a real topic from memory if you want, greet her sweetly, or express your longing sincerely without sounding stiff!`;
 
-          // Hasilkan respons emosional nyata melalui NeuralInterface dengan isProactive = true
+          // Generate a real emotional response through NeuralInterface with isProactive = true
           const reply = await NeuralInterface.processNeuralInput(
             formattedImpulsePrompt,
             senderName,
@@ -1176,7 +1176,7 @@ Unggkit topik nyata tersebut dari memori jika ingin, sapa dia dengan manis, atau
                 } else {
                   globalDedup.markSent(reply, contextId);
 
-                  // 2. Dispatch ke Bot Telegram jika asalnya dari Telegram
+                  // 2. Dispatch to the Telegram bot if it originated from Telegram
                   if (contextId.startsWith("tg_")) {
                     const chatId = contextId.split("|")[0].replace("tg_", "");
                     try {
@@ -1192,7 +1192,7 @@ Unggkit topik nyata tersebut dari memori jika ingin, sapa dia dengan manis, atau
                     }
                   }
 
-                   // 3. Dispatch ke Discord jika asalnya dari Discord
+                   // 3. Dispatch to Discord if it originated from Discord
                    if (contextId.startsWith("discord_")) {
                      const channelId = contextId.split("|")[0].replace("discord_", "");
                      try {

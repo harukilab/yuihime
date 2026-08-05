@@ -2,9 +2,9 @@
  * feedback.ts
  *
  * Server-side closed-loop feedback storage & consolidation helpers.
- * Menerima sinyal nyata dari user (reaksi Telegram / tombol Web UI) lalu
- * memetakannya ke "learned_strategies" (feedback:topic) agar perilaku Yui
- * menyesuaikan jangka panjang. Hanya boleh dipakai di sisi Node (daemon).
+ * Receives real signals from the user (Telegram reactions / Web UI buttons) then
+ * maps them into "learned_strategies" (feedback:topic) so Yui's behavior
+ * adjusts long-term. Only allowed on the Node (daemon) side.
  */
 
 import { getDb } from './database.js';
@@ -143,7 +143,7 @@ export function markFeedbackConsumed(ids: number[]): void {
 }
 
 /**
- * Map emoji reaksi Telegram -> reward (-1 / 0 / +1).
+ * Map Telegram reaction emoji -> reward (-1 / 0 / +1).
  */
 export function emojiToReward(emoji: string): number {
   const positive = new Set(['👍', '❤️', '❤', '🔥', '🥰', '😍', '👏', '😁', '🤩', '🥳', '💯', '✅', '🤗', '🥹', '😊', '😎', '😆', '🤭']);
@@ -164,7 +164,7 @@ const STOPWORDS = new Set([
 ]);
 
 /**
- * Ekstraksi keyword sederhana (tokenisasi + stopword removal + frekuensi).
+ * Simple keyword extraction (tokenization + stopword removal + frequency).
  */
 export function extractTopics(content: string, limit = 3): string[] {
   const text = String(content || '').toLowerCase();
@@ -188,8 +188,8 @@ const NEGATIVE_INSTRUCTION = (topic: string) =>
   `[EN] User reacted negatively to your message about "${topic}". Avoid repeating this tone/content unless the user explicitly asks for it. | [ID] User bereaksi negatif terhadap balasanmu soal "${topic}". Hindari mengulangi nada/konten ini kecuali user memintanya. | [JP] ユーザーは「${topic}」に関するあなたの返信に否定的な反応を示しました。ユーザーが明示的に求める場合を除き、この口調・内容は繰り返さないでください。`;
 
 /**
- * Konsolidasi satu event feedback ke learned_strategies.
- * Mengembalikan delta relasi { affection, trust } agar dimodulasi modul.
+ * Consolidate a single feedback event into learned_strategies.
+ * Returns the relationship delta { affection, trust } for modules to modulate.
  */
 export function consolidateFeedbackEvent(event: any, affectionBoost = 1, affectionPenalty = 2): { affection: number; trust: number; topics: string[] } {
   const db = getDb();
@@ -212,7 +212,7 @@ export function consolidateFeedbackEvent(event: any, affectionBoost = 1, affecti
     );
   }
 
-  // After-action review: resolve review pesan terkait dengan hasil feedback nyata
+  // After-action review: resolve the related message review with the real feedback result
   if (event.message_id) {
     resolveReviewByMessage(event.message_id, reward, topics);
   }

@@ -207,14 +207,14 @@ export const MessagingTool: ToolModule = {
             } else {
               return {
                 success: false,
-                error: resData.error || "Gagal mengirimkan pesan melalui proxy server Telegram."
+                error: resData.error || "Failed to send the message through the Telegram proxy server."
               };
             }
           } catch (browserErr: any) {
             console.error("[MessagingTool] Failed to call telegram send proxy:", browserErr);
             return {
               success: false,
-              error: `Koneksi ke server proxy gagal: ${browserErr.message || browserErr}`
+              error: `Connection to the proxy server failed: ${browserErr.message || browserErr}`
             };
           }
         }
@@ -230,26 +230,26 @@ export const MessagingTool: ToolModule = {
         if (!resolved) {
           return {
             success: false,
-            error: `Gagal mendeteksi profil Telegram untuk "${args.recipient || context?.userName || "pengguna"}". Pastikan target telah mengirimkan pesan /start ke bot Telegram Yuihime agar ID chat terekam, atau tautkan akun menggunakan pola 'id telegram saya <username>' di obrolan.`
+            error: `Failed to detect Telegram profile for "${args.recipient || context?.userName || "user"}". Make sure the target has sent the /start command to the Yuihime Telegram bot so the chat ID is recorded, or link the account using the 'id telegram saya <username>' pattern in chat.`
           };
         }
 
         if (!botToSend) {
           return {
             success: false,
-            error: "Bot Telegram saat ini tidak aktif atau token belum dikonfigurasi di pengaturan."
+            error: "The Telegram Bot is currently inactive or its token has not been configured in settings."
           };
         }
 
-        console.log(`[MessagingTool] Mengirimkan pesan Telegram ke ${resolved.matchedName} (Chat ID: ${resolved.tg_id}) via ${resolved.source}...`);
+        console.log(`[MessagingTool] Sending Telegram message to ${resolved.matchedName} (Chat ID: ${resolved.tg_id}) via ${resolved.source}...`);
         
         try {
           await botToSend.telegram.sendMessage(resolved.tg_id, args.message);
         } catch (tgSendErr: any) {
-          console.error(`[MessagingTool] Gagal mengirim pesan ke Chat ID ${resolved.tg_id} via Telegraf:`, tgSendErr.message || tgSendErr);
+          console.error(`[MessagingTool] Failed to send message to Chat ID ${resolved.tg_id} via Telegraf:`, tgSendErr.message || tgSendErr);
           return {
             success: false,
-            error: `Gagal mengirimkan pesan Telegram ke Chat ID ${resolved.tg_id}: ${tgSendErr.message || tgSendErr}. Pastikan user sudah mengirimkan perintah /start ke bot Telegram Yuihime dan tidak memblokir bot tersebut.`
+            error: `Failed to send Telegram message to Chat ID ${resolved.tg_id}: ${tgSendErr.message || tgSendErr}. Make sure the user has sent the /start command to the Yuihime Telegram bot and has not blocked the bot.`
           };
         }
 

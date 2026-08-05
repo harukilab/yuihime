@@ -599,7 +599,7 @@ export class NeuralProcessor {
 
     let finalResult = clean.trim();
 
-    // Guna mematuhi instruksi batin: jika finalResult kosong secara sengaja, langsung kembalikan string kosong
+    // To comply with inner instructions: if finalResult is deliberately empty, return the empty string directly
     if (finalResult === "") {
       return "";
     }

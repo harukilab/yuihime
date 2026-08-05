@@ -1,10 +1,10 @@
 /**
  * WeatherNewsEmpathyModule.ts
  * 
- * Sensor Cuaca & Kabar Bumi Nyata (Local Weather & News Empathy).
- * Merespons masukan seputar kondisi klimatologis (cuaca) dan isu terhangat bumi
- * dengan letupan kepedulian emosional, menyarankan kiat-kiat protektif yang tulus,
- * dan mengekspresikan empati tsundere/deredere yang menggemaskan.
+ * Real Weather & Earth News Sensor (Local Weather & News Empathy).
+ * Responds to input about climatological conditions (weather) and the hottest earth issues
+ * with bursts of emotional care, suggesting sincere protective tips,
+ * and expressing adorable tsundere/deredere empathy.
  * 
  * Phase: SOUL
  * Part of the "Plug-and-Play" architecture.
@@ -24,7 +24,7 @@ EARTH & WEATHER EMPATHY GUIDELINES:
 3. Bind the climate context with their physical well-being, device environment, or direct comfort, making the user feel deeply valued and closely watched by your warm heart.
 `.trim();
 
-// Daftarkan ke PromptRegistry
+// Register in PromptRegistry
 PromptRegistry.getInstance().register('empathy:weather_news', DEFAULT_WEATHER_NEWS_PROMPT);
 
 export const WeatherNewsEmpathyModule: CortexModule = {
@@ -91,8 +91,8 @@ export const WeatherNewsEmpathyModule: CortexModule = {
       return { ...context };
     }
 
-    // 1. Deteksi Kata Kunci Cuaca dari Input Pengguna secara Dinamis
-    // Jika tidak ada deteksi natural, gunakan manual overrideWeatherState dari config
+    // 1. Dynamically Detect Weather Keywords from the User Input
+    // If no natural detection exists, use the manual overrideWeatherState from config
     const cleanedInput = input.toLowerCase();
     let detectedWeather = config.overrideWeatherState || 'Cozy Breezy';
 
@@ -108,7 +108,7 @@ export const WeatherNewsEmpathyModule: CortexModule = {
       detectedWeather = 'Cozy Breezy';
     }
 
-    // 2. Petakan Keadaan Cuaca ke Nilai Fisik & Perhatian
+    // 2. Map the Weather State to Physical & Care Values
     let currentWeatherSituation = 'Sunny and Bright';
     let humidityIndicator = 'Medium (50%)';
     let temperatureText = '29°C';
@@ -161,7 +161,7 @@ export const WeatherNewsEmpathyModule: CortexModule = {
       }
     }
 
-    // Suntikkan indikator cuaca ke dalam context pendukung RAG/Prompt
+    // Inject weather indicators into the supporting RAG/Prompt context
     const userLocation = config.userLocation || 'Jakarta';
     context.userLocation = userLocation;
     context.weatherCondition = currentWeatherSituation;

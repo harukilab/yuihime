@@ -1,12 +1,12 @@
 /**
  * UserModelModule.ts
  *
- * Persistent per-persona user model (Stage C): memperbarui profil persisten
- * setiap user (topik favorit, bahasa pilihan, jumlah interaksi, sentimen)
- * pada setiap siklus cortex dan mengeksposnya ke context agar dibaca semua
- * modul lain & PromptManager (disuntikkan sebagai USER PROFILE).
+ * Persistent per-persona user model (Stage C): updates the persistent profile
+ * of each user (favorite topics, preferred language, interaction count, sentiment)
+ * on every cortex cycle and exposes it to the context so all other
+ * modules & PromptManager can read it (injected as USER PROFILE).
  *
- * Phase: SOUL (order 22, sebelum emotional-routing & feedback-loop).
+ * Phase: SOUL (order 22, before emotional-routing & feedback-loop).
  */
 
 import { CortexModule, ModuleType, AgentState } from '@shared/include/types';
@@ -73,12 +73,12 @@ export const UserModelModule: CortexModule = {
       const nextContext: any = { ...context, userModel: model, logs };
 
       if (exposeToPrompt) {
-        logs.push(`[USER_MODEL] ${model.userName} (${model.language}) | ${model.interactionCount} interaksi | top: ${(model.topTopics || []).slice(0, 3).join(', ') || '-'}`);
+        logs.push(`[USER_MODEL] ${model.userName} (${model.language}) | ${model.interactionCount} interactions | top: ${(model.topTopics || []).slice(0, 3).join(', ') || '-'}`);
       }
 
       return nextContext;
     } catch (err: any) {
-      logs.push(`[USER_MODEL] Gagal memperbarui model: ${err?.message || err}`);
+      logs.push(`[USER_MODEL] Failed to update model: ${err?.message || err}`);
       return { ...context, logs };
     }
   }

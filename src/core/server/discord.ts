@@ -52,7 +52,7 @@ export async function initializeDiscord(activeDb?: any, force = false) {
 
   if (!botToken || !isEnabled) {
     if (activeDiscordClient) {
-      console.log("[DISCORD] Discord Client dinonaktifkan atau Token kosong. Menghentikan Discord Daemon...");
+      console.log("[DISCORD] Discord Client disabled or Token empty. Stopping Discord Daemon...");
       try {
         activeDiscordClient.destroy();
       } catch (e) {}
@@ -60,27 +60,27 @@ export async function initializeDiscord(activeDb?: any, force = false) {
       activeDiscordToken = null;
     }
     if (!botToken) {
-      console.warn("[KERNEL] Discord Bot Token tidak ditemukan di config.toml atau pengaturan UI. Discord dinonaktifkan.");
+      console.warn("[KERNEL] Discord Bot Token not found in config.toml or UI settings. Discord is disabled.");
     } else {
-      console.log("[KERNEL] Discord Bot dinonaktifkan melalui konfigurasi.");
+      console.log("[KERNEL] Discord Bot disabled through configuration.");
     }
     return;
   }
 
   if (activeDiscordClient && activeDiscordToken === botToken && !force) {
-    console.log("[DISCORD] Discord Client sudah aktif dengan token yang sesuai. Melewati inisialisasi.");
+    console.log("[DISCORD] Discord Client already active with the matching token. Skipping initialization.");
     return;
   }
 
   if (activeDiscordClient) {
-    console.log("[DISCORD] Menghentikan instansi Discord Client lama demi penyegaran...");
+    console.log("[DISCORD] Stopping the old Discord Client instance for refresh...");
     try {
       activeDiscordClient.destroy();
     } catch (e) {}
     activeDiscordClient = null;
   }
 
-  console.log("[DISCORD] Menginisiasi Discord Client dengan Gateway Intents...");
+  console.log("[DISCORD] Initializing Discord Client with Gateway Intents...");
   const client = new Client({
     intents: [
       GatewayIntentBits.Guilds,
@@ -91,28 +91,28 @@ export async function initializeDiscord(activeDb?: any, force = false) {
   });
 
   client.once("ready", () => {
-    console.log(`[DISCORD] Sukses terhubung! Bermain sebagai: ${client.user?.tag}`);
+    console.log(`[DISCORD] Successfully connected! Playing as: ${client.user?.tag}`);
   });
 
   client.on("messageCreate", async (message: Message) => {
-    // Abaikan pesan dari bot sendiri atau bot lain untuk menghindari kognisi tanpa akhir
+    // Ignore messages from our own bot or other bots to avoid endless cognition
     if (message.author.bot) return;
 
     const currentSettings = Kernel.getInstance().getSettings().getAll();
     const userMessage = message.content;
     const senderName = message.author.displayName || message.author.username;
 
-    console.log(`[DISCORD] Pesan masuk dari ${senderName}: ${userMessage.substring(0, 200)}`);
+    console.log(`[DISCORD] Incoming message from ${senderName}: ${userMessage.substring(0, 200)}`);
 
-      // Tentukan apakah pesan ini ditujukan untuk Yui
+      // Determine whether this message is addressed to Yui
     const isDM = message.channel.type === ChannelType.DM;
     const isMentioned = client.user ? message.mentions.has(client.user) : false;
     
-    // Kita tangkap jika direct message, bot dimention, atau jika channel dikonfigurasi sebagai tempat Yui mengobrol
+    // We catch direct messages, bot mentions, or if the channel is configured as a place where Yui chats
     const targetChannelId = currentSettings['discord_bridge']?.voiceChannelId || currentSettings['discord_bridge']?.guildId;
     const matchesTargetChannel = targetChannelId ? message.channel.id === targetChannelId : false;
 
-    // Yui merespons jika: DM, dimention, atau berada di channel target
+    // Yui responds if: DM, mentioned, or in the target channel
     if (!isDM && !isMentioned && !matchesTargetChannel) {
       return; 
     }
@@ -131,7 +131,7 @@ export async function initializeDiscord(activeDb?: any, force = false) {
       const contextId = `dc_${message.channel.id}`;
       const chatType = `Discord (${isServerText ? 'Guild: ' + message.guild?.name : 'DM'})`;
 
-      // Bersihkan text dari mention tag Yui agar input bersih
+      // Clean the text of Yui's mention tags so the input is clean
       let cleanedInput = userMessage;
       if (client.user && isMentioned) {
         cleanedInput = userMessage.replace(new RegExp(`<@!?${client.user.id}>`, 'g'), '').trim();
@@ -184,11 +184,11 @@ const desc = await describeImageFromBuffer(buffer, mimeType);
       }
 
       if (!cleanedInput && attachmentInfo) {
-        cleanedInput = "Mengirim file attachment";
+        cleanedInput = "Sending a file attachment";
       }
       cleanedInput += attachmentInfo;
 
-      // 1. Broadcast pesan masuk dari Discord ke Web UI via WebSockets
+      // 1. Broadcast incoming message from Discord to the Web UI via WebSockets
       broadcastToWS({
         type: "remote_message_received",
         data: {
@@ -199,7 +199,7 @@ const desc = await describeImageFromBuffer(buffer, mimeType);
         }
       });
 
-      // 2. Tambahkan ke Antrean Multi-Saluran (MultiChannelQueue)
+      // 2. Add to the Multi-Channel Queue (MultiChannelQueue)
       MultiChannelQueue.getInstance().addMessage(
         cleanedInput,
         senderName,
@@ -212,7 +212,7 @@ const desc = await describeImageFromBuffer(buffer, mimeType);
               await message.reply(response).catch(() => {});
             }
 
-            // 3. Broadcast ucapan Yui ke Web UI via WebSockets
+            // 3. Broadcast Yui's reply to the Web UI via WebSockets
             broadcastToWS({
               type: "remote_response_sent",
               data: {
@@ -224,19 +224,19 @@ const desc = await describeImageFromBuffer(buffer, mimeType);
           }
         },
         async (err) => {
-          console.error("[DISCORD_QUEUE] Gagal memproses pesan Discord:", err);
+          console.error("[DISCORD_QUEUE] Failed to process Discord message:", err);
           try {
-            await message.reply("[SYSTEM ERROR] Sambungan saraf kognitif Yui terputus sementara.");
+            await message.reply("[SYSTEM ERROR] Yui's cognitive neural connection is temporarily interrupted.");
           } catch (e) {}
         }
       );
     } catch (err: any) {
-      console.error("[DISCORD_ERROR] Terjadi kesalahan dalam pemrosesan pesan:", err);
+      console.error("[DISCORD_ERROR] An error occurred while processing the message:", err);
     }
   });
 
   client.on("error", (error) => {
-    console.error("[DISCORD_CLIENT_ERROR] Terjadi kegagalan koneksi di Discord client:", error);
+    console.error("[DISCORD_CLIENT_ERROR] A connection failure occurred in the Discord client:", error);
   });
 
   try {
@@ -245,6 +245,6 @@ const desc = await describeImageFromBuffer(buffer, mimeType);
     activeDiscordToken = botToken;
     (globalThis as any).activeDiscordClient = client;
   } catch (err: any) {
-    console.error(`[DISCORD] Gagal melakukan login dengan token: ${err.message || err}`);
+    console.error(`[DISCORD] Failed to login with token: ${err.message || err}`);
   }
 }

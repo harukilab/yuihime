@@ -63,8 +63,8 @@ export const DelegateTool: ToolModule = {
     const availableAgents = SubAgentRegistry.getAll();
     const agentIds = availableAgents.map((a: any) => a.id);
 
-    // opencode-style auto-routing: pilih sub-agent berdasarkan kata kunci tugas,
-    // bukan asal ambil urutan pertama.
+    // opencode-style auto-routing: pick a sub-agent based on task keywords,
+    // not just take the first one in order.
     const pickAgent = (prompt: string): string => {
       const p = String(prompt || '').toLowerCase();
       const has = (re: RegExp) => re.test(p);

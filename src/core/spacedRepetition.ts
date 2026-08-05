@@ -1,13 +1,13 @@
 /**
  * spacedRepetition.ts
  *
- * Forgetting-curve (Ebbinghaus) retrieval untuk memori. Setiap memori punya
- * retrievalCount & lastRetrievedAt; semakin lama tidak diingat + semakin
- * jarang diingat, semakin tinggi skor "recall" sehingga memori penting yang
- * nyaris terlupakan muncul kembali (spaced repetition).
+ * Ebbinghaus forgetting-curve retrieval for memory. Each memory has a
+ * retrievalCount & lastRetrievedAt; the longer it is not recalled and the less
+ * often it is recalled, the higher its "recall" score, so important memories
+ * that are almost forgotten resurface again (spaced repetition).
  *
- * Digunakan: (1) re-ranking pada jalur retrieval NeuralInterface, (2) modul
- * SOUL untuk menggugah memori yang berisiko dilupakan secara proaktif.
+ * Used by: (1) re-ranking on the NeuralInterface retrieval path, (2) the SOUL
+ * module to proactively surface memories at risk of being forgotten.
  */
 
 import { getDb } from './database.js';
@@ -20,9 +20,9 @@ export interface RecallMemoryRow {
   lastRetrievedAt: number;
 }
 
-const BASE_STABILITY_MS = 4 * 60 * 60 * 1000;      // 4 jam stabilitas dasar
-const GROWTH_EXPONENT = 0.6;                        // tiap retrieval memperkuat stabilitas
-const MIN_PROBABILITY = 0.02;                       // jangan sampai 0 (flashback mungkin)
+const BASE_STABILITY_MS = 4 * 60 * 60 * 1000;      // 4 hours of base stability
+const GROWTH_EXPONENT = 0.6;                        // each retrieval strengthens stability
+const MIN_PROBABILITY = 0.02;                       // never reach 0 (flashback is possible)
 
 export function calculateStability(retrievalCount: number): number {
   return BASE_STABILITY_MS * Math.pow((retrievalCount || 0) + 1, GROWTH_EXPONENT);
@@ -42,9 +42,9 @@ export function calculateRecallProbability(
 }
 
 /**
- * Skor retrieval gabungan: makin dekat ambang lupa (P rendah) + penting +
- * belum lama di-recall, makin tinggi. Ini yang membuat memori lama yang
- * penting muncul kembali meski bukan yang terbaru.
+ * Combined retrieval score: closer to the forgetting threshold (low P) + important +
+ * not recently recalled, the higher. This is what resurfaces old important
+ * memories even when they are not the most recent.
  */
 export function computeRetrievalScore(
   memory: RecallMemoryRow,
@@ -57,16 +57,16 @@ export function computeRetrievalScore(
     memory.lastRetrievedAt || 0,
     now
   );
-  // Near-forgetting boost: 1-P membuat memori yang hampir lupa paling menonjol
+  // Near-forgetting boost: 1-P makes the almost-forgotten memories stand out most
   const forgettingBoost = Math.max(0, 1 - recallP);
   const recencyBoost = Math.max(0, 1 - (now - (memory.timestamp || now)) / (30 * 24 * 60 * 60 * 1000));
   return forgettingBoost * 0.6 + importance * 0.3 + recencyBoost * 0.1;
 }
 
 /**
- * Re-rank daftar memori dengan forgetting curve lalu tandai memori yang
- * benar-benar diambil (update retrievalCount & lastRetrievedAt).
- * Mengembalikan { rows, recalledIds }.
+ * Re-rank a memory list with the forgetting curve then mark the memories that
+ * were actually taken (update retrievalCount & lastRetrievedAt).
+ * Returns { rows, recalledIds }.
  */
 export function rankMemoriesByForgetting(
   rows: any[],
@@ -98,8 +98,8 @@ export function rankMemoriesByForgetting(
 }
 
 /**
- * Mark memori yang di-recall agar retrievalCount bertambah & lastRetrievedAt
- * diperbarui (stabilitas memori menguat tiap diingat).
+ * Mark recalled memories so retrievalCount grows & lastRetrievedAt is
+ * updated (memory stability strengthens each time it is recalled).
  */
 export function markMemoriesRecalled(ids: string[]): void {
   if (!ids || ids.length === 0) return;
@@ -113,13 +113,13 @@ export function markMemoriesRecalled(ids: string[]): void {
       WHERE id IN (${placeholders})
     `).run(Date.now(), ...ids);
   } catch (err: any) {
-    console.warn('[SPACED_REP] Gagal tandai memori di-recall:', err?.message || err);
+    console.warn('[SPACED_REP] Failed to mark recalled memories:', err?.message || err);
   }
 }
 
 /**
- * Query memori yang berisiko dilupakan (recall probability rendah) tetapi
- * penting — untuk digugah proaktif (recollection).
+ * Query memories at risk of being forgotten (low recall probability) but
+ * important — for proactive recollection.
  */
 export function getAtRiskMemories(
   contextLike?: string,
@@ -148,7 +148,7 @@ export function getAtRiskMemories(
     });
     return rankMemoriesByForgetting(atRisk, limit, now);
   } catch (err: any) {
-    console.warn('[SPACED_REP] Gagal ambil memori berisiko lupa:', err?.message || err);
+    console.warn('[SPACED_REP] Failed to get at-risk memories:', err?.message || err);
     return { rows: [], recalledIds: [] };
   }
 }

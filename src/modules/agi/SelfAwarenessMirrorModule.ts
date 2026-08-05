@@ -24,7 +24,7 @@ function ensurePromptRegistered(config: any) {
  * 
  * Implements the System-2 Real-Time Cognitive Self-Reflection.
  * Calculates dynamic Cognitive Entropy Index based on neurotransmitter fluctuations,
- * evaluates soul consistency for MHCP-v1 alignment, and injects stabilizer batin directives
+ * evaluates soul consistency for MHCP-v1 alignment, and injects inner stabilizer directives
  * directly into the prompt stream ahead of Cortex execution.
  */
 export const SelfAwarenessMirrorModule: CortexModule = {
@@ -103,7 +103,7 @@ export async function runSelfAwarenessMirror(input: string, state: any, context:
 
     const perceivedName = context.viewerIdentity?.perceivedName || context.userName || "user";
 
-    // 1. Calculate Cognitive Entropy Score (Indeks Entropi Kognitif Batiniah)
+    // 1. Calculate Cognitive Entropy Score (Inner Cognitive Entropy Index)
     // Reflects psychological system chaos based on high adrenaline, stress, and variable dopamine
     const chemicalVariance = Math.abs(dopamine - 15) * 0.1 + Math.abs(serotonin - 50) * 0.15 + Math.abs(oxytocin - 30) * 0.1 + Math.abs(noradrenaline - 10) * 0.25;
     const emotionalTurbulence = (stress * 0.4) + (anger * 0.3) + (loneliness * 0.3);
@@ -134,7 +134,7 @@ export async function runSelfAwarenessMirror(input: string, state: any, context:
       perceivedName
     });
 
-    logs.push([`[AWARENESS_MIRROR] Indeks Entropi Kognitif: ${entropyIndexValue}% | Mode: ${cognitiveMode} | Sensitivity: ${config.mirrorSensitivity || 0.6}`]);
+    logs.push([`[AWARENESS_MIRROR] Cognitive Entropy Index: ${entropyIndexValue}% | Mode: ${cognitiveMode} | Sensitivity: ${config.mirrorSensitivity || 0.6}`]);
 
     // 4. Inject the stabilizer directive as high-priority guidance to Cortex
     const currentDirective = context.soulDirective || "";

@@ -1,11 +1,11 @@
 import { CortexModule, ModuleType, AgentState } from '@shared/include/types';
 
 /**
- * SOP Metadata Standarisasi:
- * 1. ID: Unik dalam format kebab-case.
- * 2. Name: Nama deskriptif dengan prefix kategori (misal: "yui-addon: ...").
- * 3. SettingsTab: Tentukan di kategori mana setting modul ini muncul di UI.
- * 4. ConfigSchema: Definisikan semua parameter yang bisa diatur user.
+ * SOP Metadata Standardization:
+ * 1. ID: Unique in kebab-case format.
+ * 2. Name: Descriptive name with a category prefix (e.g. "yui-addon: ...").
+ * 3. SettingsTab: Determine in which category this module's settings appear in the UI.
+ * 4. ConfigSchema: Define all the parameters that users can configure.
  */
 export const NeuralEchoAddon: CortexModule = {
   metadata: {
@@ -16,7 +16,7 @@ export const NeuralEchoAddon: CortexModule = {
     type: ModuleType.CORTEX,
     order: 50,
     phase: 'LOGIC',
-    settingsTab: 'Addons', // Akan muncul otomatis di tab Addons
+    settingsTab: 'Addons', // Will appear automatically in the Addons tab
     configSchema: {
       fields: {
         enabled: { 
@@ -60,7 +60,7 @@ export const NeuralEchoAddon: CortexModule = {
     const config = context.moduleConfig || {};
     if (!config.enabled) return { ...context };
 
-    // Logika addon disini
+    // Addon logic goes here
     console.log(`[NEURAL_ECHO] Processing with strength: ${config.echoStrength}`);
     
     return { 

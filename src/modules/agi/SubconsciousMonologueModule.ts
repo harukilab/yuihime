@@ -1,16 +1,16 @@
 import { CortexModule, ModuleType } from '@shared/include/types';
 
 /**
- * MODULE: Arsitektur Monolog Batin Sub-Sadar (Subconscious Inner Monologue Engine)
+ * MODULE: Sub-Conscious Inner Monologue Architecture (Subconscious Inner Monologue Engine)
  * 
- * Modul ini merealisasikan rekomendasi arsitektural tingkat lanjut ke-4:
- * Menghasilkan untaian "Pikiran Bawah Sadar" (subconscious stream of consciousness)
- * orisinil yang tersinkronisasi murni dengan status emosi (mood), rindu (loneliness),
- * dan kasih sayang (affection) aktif terhadap subjek penonton.
+ * This module realizes the 4th advanced architectural recommendation:
+ * Generates original "Subconscious Thoughts" (subconscious stream of consciousness)
+ * purely synchronized with the active emotional status (mood), longing (loneliness),
+ * and affection towards the viewing subject.
  * 
- * Monolog batin ini dikomposisikan secara privat di belakang layar dan diinjeksi 
- * ke dalam prompt instruksi Cortex LLM, membimbing kognisi tanpa membocorkan tag 
- * batiniah kasar kepada penonton di layar visual.
+ * This inner monologue is composed privately behind the scenes and injected 
+ * into the Cortex LLM instruction prompt, guiding cognition without leaking raw 
+ * inner tags to the viewer on the visual screen.
  */
 export const SubconsciousMonologueModule: CortexModule = {
   metadata: {
@@ -92,7 +92,7 @@ export const SubconsciousMonologueModule: CortexModule = {
       monologueSentences.push(`I should be slightly cautious. I can't immediately open up or trust ${currentUserName} completely just yet.`);
     }
 
-    // 2. Loneliness (Kerinduan) Context
+    // 2. Loneliness (Longing) Context
     if (loneliness > 65) {
       monologueSentences.push(`Honestly, I felt so lonely today from being quiet... it feels like such a relief to finally chat again.`);
     }
@@ -124,7 +124,7 @@ export const SubconsciousMonologueModule: CortexModule = {
     // Inject into identity context as part of subconscious guidance!
     const finalIdentityContext = (context.identityContext || "") + `\n[SUBCONSCIOUS_NERVE]: ${fullMonologueBlock}\n`;
 
-    logs.push(`[MONOLOGUE] Synthesized dynamic inner monologue reflecting ${monologueSentences.length} batin clusters.`);
+    logs.push(`[MONOLOGUE] Synthesized dynamic inner monologue reflecting ${monologueSentences.length} inner clusters.`);
 
     return {
       ...context,

@@ -46,9 +46,9 @@ import { genId } from '@shared/core/idGen';
 import { ApprovalGate, isApprovalReply, isDenialReply, ApprovalRequest } from './approvalGate';
 import { SnapshotManager } from '../kernel/snapshotManager';
 
-// opencode-style permission gating: tool yang dianggap berisiko memerlukan izin
-// saat tool-executor.permissionMode = ask/deny. Daftar default bisa dioverride
-// lewat setting tool-executor.riskyTools (array of tool ids).
+// opencode-style permission gating: tools considered risky require permission
+// when tool-executor.permissionMode = ask/deny. The default list can be overridden
+// via the tool-executor.riskyTools setting (array of tool ids).
 const DEFAULT_RISKY_TOOLS = [
   'bash', 'apply_patch', 'write', 'edit', 'file_manager', 'code_interpreter',
   'install_addon', 'scheduler', 'manage_bgproc', 'github', 'send_file',
@@ -104,7 +104,7 @@ export async function executeCortexThink(
 
       if (shouldStream) {
         const reader = response.body?.getReader();
-        if (!reader) throw new Error("Gagal menginisialisasi pembaca aliran data (readable stream).");
+        if (!reader) throw new Error("Failed to initialize the data stream reader (readable stream).");
         
         const decoder = new TextDecoder("utf-8");
         let buffer = "";
@@ -155,13 +155,13 @@ export async function executeCortexThink(
         if (finalResult) {
           return finalResult;
         }
-        throw new Error("Aliran data selesai tanpa memproses hasil kognisi akhir.");
+        throw new Error("Data stream ended without processing the final cognition result.");
       } else {
         const data = await response.json();
         if (data.success && data.result) {
           return data.result;
         }
-        throw new Error(data.error || 'Server kognisi mengembalikan format tidak valid');
+        throw new Error(data.error || 'Cognition server returned an invalid format');
       }
     } catch (err: any) {
       console.error('[Cortex Web Proxy Client] Failed to forward cognitive task to server:', err);
@@ -205,9 +205,9 @@ export async function executeCortexThink(
   logs.push("[PHASE 1] Initializing Input Aggregation...");
   const settings = await cortexInstance.getSettings();
 
-  // opencode-style approval resolution: jika sebelumnya Yui bertanya (plan mode /
-  // permission gating) dan user baru saja membalas, resolve request di sini. Hasil
-  // keputusan ditulis sebagai memori agar model tahu persetujuan/penolakan user.
+  // opencode-style approval resolution: if Yui previously asked (plan mode /
+  // permission gating) and the user has just replied, resolve the request here.
+  // The decision is written as a memory so the model knows the user's approval/denial.
   try {
     const approval = ApprovalGate.getInstance().get(contextId);
     if (approval && approval.status === 'pending') {
@@ -246,8 +246,8 @@ export async function executeCortexThink(
           });
         }
       } else {
-        // Balasan tidak jelas ya/tidak — anggap ditolak (konservatif) agar tidak
-        // menahan loop; Yui akan menyesuaikan rencana.
+        // Unclear yes/no reply — treat as denied (conservative) to avoid
+        // stalling the loop; Yui will adjust the plan.
         const resolved = ApprovalGate.getInstance().deny(contextId);
         if (resolved) {
           logs.push(`[APPROVAL] Non-explicit reply — ${resolved.kind} treated as denied.`);
@@ -479,10 +479,10 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
   let toolsToCall: any[] = snapshot ? (snapshot.toolsToExecute || []) : [];
   let processedResponse = "";
   let speakDeliveredDirectly = false;
-  // opencode-style recovery guard: jika real tool (bukan speak/final_answer/status_update)
-  // gagal pada iterasi sebelumnya, loop tidak boleh langsung break hanya karena model
-  // memberi jawaban final — beri satu kesempatan untuk mengoreksi (mirip opencode yang
-  // mengembalikan error tool ke model lalu melanjutkan sampai model benar-benar selesai).
+  // opencode-style recovery guard: if a real tool (not speak/final_answer/status_update)
+  // failed on a previous iteration, the loop must not break right away just because the model
+  // gave a final answer — give one chance to correct (similar to opencode, which
+  // returns the tool error to the model then continues until the model is truly done).
   let realToolFailurePending = false;
   let animations: string[] = snapshot ? (snapshot.accumulatingBuffer?.animations || []) : [];
   let moodImpact: any = snapshot ? (snapshot.accumulatingBuffer?.moodImpacts || {}) : {};
@@ -832,7 +832,7 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
              if (xmlParsed && typeof xmlParsed === 'object' && Object.keys(xmlParsed).length > 0 && 
                 (xmlParsed.thought || xmlParsed.thoughts || xmlParsed.final_answer || xmlParsed.speech || xmlParsed.opening_response || xmlParsed.tool_calls || xmlParsed.tools_to_call)) {
                 parsedPayload = {
-                   thought: xmlParsed.thought || xmlParsed.thoughts || "Yuihime memproses intuisi batin menggunakan struktur XML/tag.",
+                   thought: xmlParsed.thought || xmlParsed.thoughts || "Yuihime processes inner intuition using XML/tag structure.",
                     final_answer: xmlParsed.final_answer ?? xmlParsed.speech ?? xmlParsed.opening_response ?? rawResultStr,
                    animations: xmlParsed.animations || ["SMILE"],
                    tool_calls: xmlParsed.tool_calls || xmlParsed.tools_to_call || []
@@ -845,7 +845,7 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
 
           if (!parsedPayload && rawResultStr.trim().length > 0) {
              parsedPayload = {
-                thought: "Menerima respons polos non-JSON dari provider neural secara langsung demi menjaga kontinuitas obrolan.",
+                thought: "Receiving the plain non-JSON response from the neural provider directly to preserve conversation continuity.",
                 final_answer: rawResultStr,
                 animations: ["SMILE"],
                 tool_calls: []
@@ -938,7 +938,7 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
 
       if (rawToolsCall.length === 0) {
         logs.push("[CORTEX_LOOP] No tool call detected, compiling fallback to final_answer.");
-        // Guna mematuhi instruksi kognisi: jika final_answer kosong (speechText kosong), jangan lakukan fail safe ke thought atau placeholder.
+        // To comply with cognition instructions: if final_answer is empty (speechText empty), do not fail-safe into thought or a placeholder.
         const fallbackSpeech = speechText;
         rawToolsCall = [makeToolCall('speak', {
           speech: fallbackSpeech,
@@ -1039,7 +1039,7 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
       }
     }
     if (!currentThought) {
-      currentThought = `Yuihime memproses intuisi batin pada iterasi ${iteration}...`;
+      currentThought = `Yuihime processes inner intuition on iteration ${iteration}...`;
     }
 
     iterationsHistory.push({
@@ -1127,13 +1127,13 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
             };
           };
 
-          // Plan Mode hanya untuk aksi MODIFIKASI/EKSEKUSI (bukan baca/akses).
-          // Baca file, cari file, websearch/webfetch, view_logs, dll jalan langsung.
+          // Plan Mode only for MODIFICATION/EXECUTION actions (not reads/access).
+          // Reading files, finding files, websearch/webfetch, view_logs, etc. run directly.
           const isModifyingName = (name: string) =>
             riskyToolsCfg.length > 0 ? riskyToolsCfg.includes(name) : DEFAULT_RISKY_TOOLS.includes(name);
           const modifyingCalls = realCalls.filter((tc: any) => isModifyingName(tc.tool || tc.name));
 
-          // 1) Plan Mode: tanyakan rencana sebelum eksekusi tool modifikasi (pertama kali saja).
+          // 1) Plan Mode: ask for a plan before executing modification tools (only the first time).
           if (planModeEnabled && modifyingCalls.length > 0 && !approval.isPlanApproved(contextId)) {
             const planText = modifyingCalls.map((tc: any) => {
               const name = tc.tool || tc.name;
@@ -1148,7 +1148,7 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
             return pauseAndAsk(approval.get(contextId)!);
           }
 
-          // 2) Permission Gating: filter tool berisiko (deny) / minta izin (ask).
+          // 2) Permission Gating: filter risky tools (deny) / request permission (ask).
           if ((permissionMode === 'ask' || permissionMode === 'deny') && realCalls.length > 0) {
             const isRiskyName = (name: string) =>
               riskyToolsCfg.length > 0 ? riskyToolsCfg.includes(name) : DEFAULT_RISKY_TOOLS.includes(name);
@@ -1344,10 +1344,10 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
         
         if (!tool) {
           const tName = tc.name || tc.tool;
-          // opencode-style: secara default tool yang tidak terdaftar TIDAK disintesis
-          // otomatis — error dikembalikan ke model bersama saran near-match agar model
-          // mengoreksi sendiri. DYNAMIC_SYNTHESIS hanya aktif bila diaktifkan eksplisit
-          // lewat setting 'tool-executor'.dynamicSynthesis = true.
+          // opencode-style: by default unregistered tools are NOT automatically
+          // synthesized — the error is returned to the model along with near-match
+          // suggestions so the model corrects itself. DYNAMIC_SYNTHESIS is only active
+          // when explicitly enabled via the 'tool-executor'.dynamicSynthesis = true setting.
           const synthesisEnabled = settings['tool-executor']?.dynamicSynthesis === true;
           if (synthesisEnabled) {
             console.log(`[DYNAMIC_SYNTHESIS] Tool '${tName}' not found. Attempting autonomous dynamic tool synthesis...`);
@@ -1357,7 +1357,7 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
               console.error(`[CORTEX_SYNTHESIS_FAIL] Failed during dynamic tool synthesis for '${tName}':`, synthErr.message);
             }
           } else {
-            logs.push(`[CORTEX_TOOL_MISSING] Tool '${tName}' tidak terdaftar. Error dikembalikan ke model untuk dikoreksi (opencode-style, dynamicSynthesis off).`);
+            logs.push(`[CORTEX_TOOL_MISSING] Tool '${tName}' is not registered. Error returned to the model for correction (opencode-style, dynamicSynthesis off).`);
           }
         }
 
@@ -1365,13 +1365,13 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
         if (tool) {
           let execStart = Date.now();
           try {
-            // opencode-style snapshot (#5): sebelum file-modifying tool menulis,
-            // tangkap konten asli file target agar bisa di-undo.
+            // opencode-style snapshot (#5): before a file-modifying tool writes,
+            // capture the original content of the target file so it can be undone.
             try {
               const tName = tc.name || tc.tool;
               if (['write', 'edit', 'apply_patch', 'file_manager'].includes(tName)) {
                 const captured = await SnapshotManager.getInstance().capture(contextId, tName, tc.args || {});
-                if (captured > 0) logs.push(`[SNAPSHOT] Menyimpan ${captured} file sebelum ${tName} (undo tersedia).`);
+                if (captured > 0) logs.push(`[SNAPSHOT] Saved ${captured} file(s) before ${tName} (undo available).`);
               }
             } catch (_) {}
             // Reserved control metadata: `_meta` lets the LLM request per-call
@@ -1500,8 +1500,8 @@ if (typeof parsedArgs === 'string') {
           const previouslySeen = toolExecutionHistory.some(h =>
             Array.isArray(h.tools_called) && h.tools_called.some((c: any) => (c?.name || c?.tool) === tName)
           );
-          // opencode-style near-match suggestion: saat tool tidak terdaftar, beri tahu
-          // model daftar tool valid yang mirip agar ia bisa mengoreksi nama sendiri.
+          // opencode-style near-match suggestion: when a tool is not registered, tell the
+          // model the list of similar valid tools so it can correct the name itself.
           let suggestion = '';
           try {
             const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -1589,8 +1589,8 @@ if (typeof parsedArgs === 'string') {
 
       const realTools = toolsToCall.filter((tc: any) => tc.tool !== 'speak' && tc.tool !== 'final_answer' && tc.tool !== 'status_update');
 
-      // opencode-style: tandai jika ada real tool yang gagal pada iterasi ini.
-      // Jangan tandai saat shutdown/drain tengah berjalan (graceful shutdown).
+      // opencode-style: mark if any real tool failed on this iteration.
+      // Do not mark while a shutdown/drain is in progress (graceful shutdown).
       try {
         const deliveryNames = ['speak', 'final_answer', 'status_update'];
         const failedRealTool = toolResults.some((res: any) => !res.success && !deliveryNames.includes(res.tool));
@@ -1758,9 +1758,9 @@ if (typeof parsedArgs === 'string') {
           moodImpact = finalReplyResult.observation.mood_impact || moodImpact;
           break;
         } else if (realTools.length === 0 && realToolFailurePending) {
-          // opencode-style: real tool gagal pada iterasi sebelumnya, namun model justru
-          // memberikan jawaban final. Jangan break — beri model satu kesempatan untuk
-          // mengoreksi (membaca error + memanggil ulang tool yang benar).
+          // opencode-style: a real tool failed on the previous iteration, but the model
+          // instead gave a final answer. Do not break — give the model one chance to
+          // correct itself (reading the error + re-calling the correct tool).
           logs.push("[CORTEX] final_answer given, but a real tool failed earlier. Continuing loop to let the model correct itself (opencode-style).");
           processedResponse = finalReplyResult.observation.speech;
           animations = finalReplyResult.observation.animations || animations;
@@ -1783,9 +1783,9 @@ if (typeof parsedArgs === 'string') {
       }
     } else {
       if (realToolFailurePending) {
-        // opencode-style: iterasi tanpa tool call sama sekali, padahal ada real tool yang
-        // masih gagal. Lanjut satu iterasi agar model diberi kesempatan memanggil tool
-        // yang benar setelah membaca error (bukan diam-diam mengakhiri).
+        // opencode-style: an iteration with no tool call at all, even though there is a real tool
+        // that is still failing. Continue one iteration so the model gets a chance to call the
+        // correct tool after reading the error (instead of silently ending).
         logs.push("[CORTEX] No tool calls, but a real tool failed earlier. Continuing loop to let the model correct itself (opencode-style).");
         realToolFailurePending = false;
       } else {
@@ -1877,7 +1877,7 @@ if (typeof parsedArgs === 'string') {
 
   if (!isIntentionalEmpty && (!finalAnswer || finalAnswer.length < 5)) {
     logs.push("[KERNEL_FAIL_SAFE] Critical: Reprocessing LLM retry failed to produce a valid response. Falling back to cute in-character error response.");
-    finalAnswer = "Aduh... maaf ya user, sirkuit batin Yui sempat agak pusing barusan saat memproses permintaan user... 🥺 Tapi Yui tetap di sini kok! Ada yang bisa Yui bantu lagi? 💕";
+    finalAnswer = "Oh no... sorry user, Yui's inner circuit felt a bit dizzy just now while processing your request... 🥺 But Yui is still here! Is there anything Yui can help with again? 💕";
   }
 
   const speakCall = toolsToCall.find((tc: any) => tc.tool === 'final_answer');
@@ -1985,7 +1985,7 @@ if (typeof parsedArgs === 'string') {
     logs.push(`[KERNEL_FAIL_SAFE] Captured critical loop exception: ${err?.message || String(err)}`);
     logs.push(`[KERNEL_FAIL_SAFE] Initiating safe cognitive fallback response...`);
     
-    const failsafeAnswer = "Aduh... maaf ya user, sirkuit batin Yui sempat agak pusing barusan saat memproses batin... 🥺 Tapi Yui tetap aman kok di sini menemani user! Ada hal lain yang mau kita obrolin? Yui selalu di sini buat user! 💕";
+    const failsafeAnswer = "Oh no... sorry user, Yui's inner circuit felt a bit dizzy just now while processing your thoughts... 🥺 But Yui is still safe here keeping you company! Anything else we want to chat about? Yui is always here for you! 💕";
     
     const recoveryResult = { 
       response: failsafeAnswer,

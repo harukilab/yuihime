@@ -53,12 +53,12 @@ const getLevenshteinDistance = (a: string, b: string): number => {
 const getRandomWakeResponse = (wakeWord: string) => {
   const name = wakeWord.charAt(0).toUpperCase() + wakeWord.slice(1).toLowerCase();
   const wakeResponses = [
-    `Ya, ${name} di sini! Ada apa, user? Kok manggil-manggil?`,
-    `Ugh... ${name} sudah bangun kok! Ada yang bisa ${name} bantu, user?`,
-    `${name} desu! Sinyal audio tertangkap, ${name} siap mendengarkan!`,
-    `Hah? Iya, user! ${name} nggak tidur kok, cuma merem sedikit saja~ Ada apa?`,
-    "Yey! Mikrofon aktif! Halo user, ada yang mau kita diskusikan hari ini?",
-    `user panggil ${name}? Hehe, ${name} selalu siap terbangun untuk user! ✨`
+    `Yes, ${name} is here! What's up, user? Why all the calling?`,
+    `Ugh... ${name} is already awake! Anything ${name} can help with, user?`,
+    `${name} desu! Audio signal caught, ${name} is ready to listen!`,
+    `Hah? Yeah, user! ${name} isn't sleeping, just resting my eyes a bit~ What's up?`,
+    "Yey! Microphone is on! Hello user, anything you want to discuss today?",
+    `You called me ${name}? Hehe, ${name} is always ready to wake up for you, user! ✨`
   ];
   const idx = Math.floor(Math.random() * wakeResponses.length);
   return wakeResponses[idx];
@@ -241,7 +241,7 @@ export const StageTab: React.FC<StageTabProps> = ({
         body: JSON.stringify(updatedSettings)
       });
     } catch (err) {
-      console.warn('Gagal menyimpan status Prepare for Training:', err);
+      console.warn('Failed to save Prepare for Training status:', err);
     }
   };
 
@@ -254,7 +254,7 @@ export const StageTab: React.FC<StageTabProps> = ({
             setQuantumBackups(data.backups);
           }
         })
-        .catch(err => console.error("Gagal menjemput koordinat cadangan batin Yui:", err));
+        .catch(err => console.error("Failed to fetch Yui's inner backup coordinates:", err));
     }
   }, [activeSubTab]);
 
@@ -267,7 +267,7 @@ export const StageTab: React.FC<StageTabProps> = ({
         setQuantumBackups(data.backups);
       }
     } catch (err) {
-      console.error("Gagal mencadangkan koordinat kognitif Yui:", err);
+      console.error("Failed to back up Yui's cognitive coordinates:", err);
     } finally {
       setIsGeneratingBackup(false);
     }
@@ -288,7 +288,7 @@ export const StageTab: React.FC<StageTabProps> = ({
         window.location.reload();
       }
     } catch (err) {
-      console.error("Gagal mengembalikan koordinat kognitif Yui:", err);
+      console.error("Failed to restore Yui's cognitive coordinates:", err);
     } finally {
       setIsRestoringBackup(null);
     }
@@ -297,7 +297,7 @@ export const StageTab: React.FC<StageTabProps> = ({
   const [copiedSessionId, setCopiedSessionId] = useState(false);
   const [profileStatus, setProfileStatus] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
-  // --- STATE & HANDLER UNTUK LIVE CHAT STREAM SIMULATOR ---
+  // --- STATE & HANDLER FOR LIVE CHAT STREAM SIMULATOR ---
   const [simulatedSender, setSimulatedSender] = useState('Tanaka_Gamer');
   const [simulatedMessage, setSimulatedMessage] = useState('');
   const [isSendingChat, setIsSendingChat] = useState(false);
@@ -308,7 +308,7 @@ export const StageTab: React.FC<StageTabProps> = ({
     if (!simulatedMessage.trim()) return;
 
     setIsSendingChat(true);
-    setChatSimStatus({ type: 'info', text: 'Mengirim komentar ke antrean kognisi Yui...' });
+    setChatSimStatus({ type: 'info', text: "Sending comment to Yui's cognition queue..." });
 
     try {
       const response = await fetch('/api/stream/chat', {
@@ -318,7 +318,7 @@ export const StageTab: React.FC<StageTabProps> = ({
         },
         body: JSON.stringify({
           message: simulatedMessage,
-          sender: simulatedSender || 'Penonton',
+          sender: simulatedSender || 'Viewer',
           context: 'live_stream',
           channel: 'Live Chat'
         })
@@ -326,14 +326,14 @@ export const StageTab: React.FC<StageTabProps> = ({
 
       const result = await response.json();
       if (response.ok && result.success) {
-        setChatSimStatus({ type: 'success', text: 'Komentar dicerna! Yui sedang memproses...' });
+        setChatSimStatus({ type: 'success', text: 'Comment digested! Yui is processing...' });
         setSimulatedMessage('');
         setTimeout(() => setChatSimStatus(null), 3500);
       } else {
-        setChatSimStatus({ type: 'error', text: result.error || 'Gagal mengirim komentar.' });
+        setChatSimStatus({ type: 'error', text: result.error || 'Failed to send comment.' });
       }
     } catch (err: any) {
-      setChatSimStatus({ type: 'error', text: err.message || 'Kesalahan koneksi ke server.' });
+      setChatSimStatus({ type: 'error', text: err.message || 'Connection error to server.' });
     } finally {
       setIsSendingChat(false);
     }
@@ -360,12 +360,12 @@ export const StageTab: React.FC<StageTabProps> = ({
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
       
-      setProfileStatus({ type: 'success', text: 'Profil berhasil diekspor!' });
+      setProfileStatus({ type: 'success', text: 'Profile exported successfully!' });
       setTimeout(() => setProfileStatus(null), 3500);
       
-      SpeechService.speak(`Kunci enkripsi identitas batin kakak berhasil diunduh. Simpan dengan baik ya!`);
+      SpeechService.speak(`Your inner identity encryption key was downloaded successfully. Keep it safe!`);
     } catch (err: any) {
-      setProfileStatus({ type: 'error', text: 'Gagal ekspor: ' + err.message });
+      setProfileStatus({ type: 'error', text: 'Export failed: ' + err.message });
       setTimeout(() => setProfileStatus(null), 4000);
     }
   };
@@ -378,21 +378,21 @@ export const StageTab: React.FC<StageTabProps> = ({
     reader.onload = (event) => {
       try {
         const text = event.target?.result as string;
-        if (!text) throw new Error("Gagal membaca isi berkas.");
+        if (!text) throw new Error("Failed to read file contents.");
         
         const decrypted = decryptProfile(text);
         if (!decrypted.session_id || !decrypted.perceivedName) {
-          throw new Error("Format data di dalam berkas enkripsi tidak lengkap.");
+          throw new Error("Data format inside the encrypted file is incomplete.");
         }
         
         onRestoreProfile(decrypted.perceivedName, decrypted.session_id);
         
-        setProfileStatus({ type: 'success', text: `Profil ${decrypted.perceivedName} berhasil dimuat!` });
+        setProfileStatus({ type: 'success', text: `Profile ${decrypted.perceivedName} loaded successfully!` });
         setTimeout(() => setProfileStatus(null), 4000);
         
-        SpeechService.speak(`Halo kak ${decrypted.perceivedName}! Transponder batin diselaraskan kembali ke frekuensi sesi lama.`);
+        SpeechService.speak(`Hi ${decrypted.perceivedName}! The inner transponder has been re-synced to the old session frequency.`);
       } catch (err: any) {
-        setProfileStatus({ type: 'error', text: 'Gagal memuat: ' + err.message });
+        setProfileStatus({ type: 'error', text: 'Failed to load: ' + err.message });
         setTimeout(() => setProfileStatus(null), 4000);
       }
     };
@@ -444,7 +444,7 @@ export const StageTab: React.FC<StageTabProps> = ({
   const setWakeWordEnabled = (val: boolean) => {
     setWakeWordEnabledState(val);
     localStorage.setItem('yuihime_wakeword_enabled', String(val));
-    addLog('agent', `[SYSTEM] Wake word listener ${val ? 'diaktifkan' : 'dinonaktifkan'}.`);
+    addLog('agent', `[SYSTEM] Wake word listener ${val ? 'enabled' : 'disabled'}.`);
   };
 
   const setWakeWordKeyword = (val: string) => {
@@ -455,7 +455,7 @@ export const StageTab: React.FC<StageTabProps> = ({
   const setSyncWakeWordWithMic = (val: boolean) => {
     setSyncWakeWordWithMicState(val);
     localStorage.setItem('yuihime_sync_wakeword_mic', String(val));
-    addLog('agent', `[SYSTEM] Sinkronisasi Wake Word dengan tombol Mic ${val ? 'diaktifkan' : 'dinonaktifkan'}.`);
+    addLog('agent', `[SYSTEM] Wake Word sync with Mic button ${val ? 'enabled' : 'disabled'}.`);
   };
 
   // --- STATE AND HANDLERS FOR THE ALIGNED BOTTOM SHEET DRAWER ---
@@ -494,7 +494,7 @@ export const StageTab: React.FC<StageTabProps> = ({
             probabilisticTriggerChance: Number(spConfig.probabilisticTriggerChance || 0.10)
           });
         })
-        .catch(err => console.warn('[OTOME] Gagal memuat setelan otonom Yui:', err));
+        .catch(err => console.warn("[OTOME] Failed to load Yui's autonomous settings:", err));
     }
   }, [isOtomeDrawerOpen]);
 
@@ -523,7 +523,7 @@ export const StageTab: React.FC<StageTabProps> = ({
       
       setSpontaneousConfig(prev => ({ ...prev, ...updated }));
     } catch (err) {
-      console.warn('[OTOME] Gagal menyimpan setelan otonom Yui:', err);
+      console.warn("[OTOME] Failed to save Yui's autonomous settings:", err);
     }
   };
 
@@ -585,7 +585,7 @@ export const StageTab: React.FC<StageTabProps> = ({
         await SpeechService.speak(cleanSpeech);
       }
 
-      addLog?.('agent', `[INTERAKSI_OTOME] Pilihan terpilih [${actionType.toUpperCase()}] oleh subjek ${cleanCurrent}. Yui merespon: "${quote}"`);
+      addLog?.('agent', `[OTOME_INTERACTION] Choice selected [${actionType.toUpperCase()}] by subject ${cleanCurrent}. Yui responds: "${quote}"`);
       
       setOtomeHeartPulse(true);
       setTimeout(() => setOtomeHeartPulse(false), 1000);
@@ -782,17 +782,17 @@ export const StageTab: React.FC<StageTabProps> = ({
         
         let offlineResult = '';
         if (luminosity < 45) {
-          offlineResult = 'Ruangan redup / gelap (Night mode emulated)';
+          offlineResult = 'Room is dim / dark (Night mode emulated)';
         } else if (luminosity > 215) {
-          offlineResult = 'Ruangan bersinar sangat silau / cerah';
+            offlineResult = 'Room is blazing bright / shiny';
         } else {
           // Detect dominant tint
           if (avgR > avgG + 25 && avgR > avgB + 25) {
-            offlineResult = 'Warna hangat (Merah/Reddish) mendominasi pratinjau';
+            offlineResult = 'Warm colors (Red/Reddish) dominate the preview';
           } else if (avgB > avgR + 25 && avgB > avgG + 25) {
-            offlineResult = 'Warna sejuk (Biru/Cool Blue) mendominasi pratinjau';
+            offlineResult = 'Cool colors (Blue/Cool Blue) dominate the preview';
           } else if (avgG > avgR + 25 && avgG > avgB + 25) {
-            offlineResult = 'Warna alami (Hijau/Natural Green) mendominasi pratinjau';
+            offlineResult = 'Natural colors (Green/Natural Green) dominate the preview';
           } else {
             offlineResult = 'Pencahayaan netral, siap menganalisis dinamika visual';
           }
@@ -872,7 +872,7 @@ export const StageTab: React.FC<StageTabProps> = ({
       .catch(() => {});
   }, [isMicEnabled]);
 
-  // Web Speech API luring listener
+  // Web Speech API offline listener
   useEffect(() => {
     const SpeechRecognitionClass = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (SpeechRecognitionClass && (isMicEnabled || wakeWordEnabled)) {
@@ -903,7 +903,7 @@ export const StageTab: React.FC<StageTabProps> = ({
           const isWakeWordDetected = detectsWakeWord(activeText, wakeWordKeywordRef.current);
 
           if (isMicEnabledRef.current) {
-            // Sinyal backup: Jika keyakinan rendah (<0.45) atau kalimat aneh, bubuhkan flag ragu
+            // Backup signal: if confidence is low (<0.45) or the sentence is odd, attach a doubt flag
             const finalizedPrompt = confidence < 0.45 ? `${activeText} [INTERNAL_SPEECH_DOUBT]` : activeText;
             setInput(finalizedPrompt);
 
@@ -1182,7 +1182,7 @@ export const StageTab: React.FC<StageTabProps> = ({
     setActiveAlert(newAlert);
 
     // Audio Speech readout
-    const voiceMessage = `Wah Sultan ${donor} kirim superchat sebesar ${amount}! Katanya: ${message}. Terima kasih banyak ya user ${donor}, semoga rezekinya lancar terus!`;
+    const voiceMessage = `Wow Sultan ${donor} sent a superchat of ${amount}! They said: ${message}. Thank you so much user ${donor}, may your blessings keep flowing!`;
     SpeechService.speak(voiceMessage);
     
     // Motion trigger

@@ -2,22 +2,22 @@
 /*
  * YuiHime Build & Bundle Assembler
  *
- * Membuat bundle portabel di `dist/` yang bisa dipindah ke mana saja
- * (mis. /opt/yuihime) dan dijalankan global via perintah `yuihime`.
- * Bundle berisi: server.cjs, web/ (UI statis), tools/*.sh, launcher
- * `yuihime`, public/ (aset Live2D), dan node_modules runtime (better-sqlite3
- * native + pendukungnya).
+ * Creates a portable bundle in `dist/` that can be moved anywhere
+ * (e.g. /opt/yuihime) and run globally via the `yuihime` command.
+ * Bundle contents: server.cjs, web/ (static UI), tools/*.sh, launcher
+ * `yuihime`, public/ (Live2D assets), and runtime node_modules (better-sqlite3
+ * native + its dependencies).
  *
- * Binary tunggal (SEA/pkg) TIDAK default karena native better-sqlite3 dan UI
- * yang di-serve dari folder menyulitkan biner satu file yang andal. Dicoba
- * best-effort hanya bila flag diaktifkan eksplisit.
+ * A single binary (SEA/pkg) is NOT the default because native better-sqlite3
+ * and a UI served from a folder make a reliable one-file binary difficult.
+ * It is only attempted best-effort when the flag is explicitly enabled.
  *
  * Usage:
- *   node src/bin/compile-binary.cjs              -> bundle portabel (default)
+ *   node src/bin/compile-binary.cjs              -> portable bundle (default)
  *   node src/bin/compile-binary.cjs --server-only
  *   node src/bin/compile-binary.cjs --web-only
- *   node src/bin/compile-binary.cjs --pkg        -> + coba pkg (platform ini saja)
- *   node src/bin/compile-binary.cjs --sea        -> + coba Node.js SEA
+ *   node src/bin/compile-binary.cjs --pkg        -> + try pkg (this platform only)
+ *   node src/bin/compile-binary.cjs --sea        -> + try Node.js SEA
  *   node src/bin/compile-binary.cjs --all        -> bundle + pkg + sea
  */
 const { execSync } = require('child_process');
@@ -102,9 +102,9 @@ function assembleBundle() {
   const launcher = path.join(DIST, 'tools', 'yuihime');
   if (fs.existsSync(launcher)) fs.chmodSync(launcher, 0o755);
 
-  if (cp(path.join(ROOT, 'public'), path.join(DIST, 'public'))) ok('public/ (aset Live2D)');
+  if (cp(path.join(ROOT, 'public'), path.join(DIST, 'public'))) ok('public/ (Live2D assets)');
 
-  // Runtime deps yang di-external oleh esbuild (tidak di-bundle ke server.cjs).
+  // Runtime deps externalized by esbuild (not bundled into server.cjs).
   const runtimePkgs = ['better-sqlite3', 'bindings', 'file-uri-to-path', 'abort-controller', 'event-target-shim'];
   for (const p of runtimePkgs) {
     if (cp(path.join(ROOT, 'node_modules', p), path.join(DIST, 'node_modules', p))) ok(`node_modules/${p}`);
@@ -122,10 +122,10 @@ function tryNativeBinary() {
     try {
       const target = `node20-${process.platform}-${process.arch}`;
       sh(`npx @yao-pkg/pkg . --targets ${target} --out-path ${path.join(DIST, 'bin')}`);
-      ok(`native binary di dist/bin/ (target ${target})`);
+      ok(`native binary at dist/bin/ (target ${target})`);
       done = true;
     } catch (e) {
-      warn('pkg gagal — biasanya karena native better-sqlite3. Bundle portabel tetap jadi jalur andal.');
+      warn('pkg failed — usually due to native better-sqlite3. The portable bundle remains the reliable path.');
     }
   }
 
@@ -139,18 +139,18 @@ function tryNativeBinary() {
       try {
         const fuse = 'NODE_SEA_FUSE_fce680e432b4d0609bfac08d6163a3d0';
         sh(`npx postject "${nodeBin}" NODE_SEA_BLOB dist/sea-prep.blob --sentinel-fuse ${fuse}`);
-        ok(`SEA binary di ${nodeBin}`);
+        ok(`SEA binary at ${nodeBin}`);
         done = true;
       } catch (postErr) {
-        warn('postject tidak terpasang / gagal. SEA blob tersisa di dist/sea-prep.blob.');
+        warn('postject not installed / failed. SEA blob left at dist/sea-prep.blob.');
       }
     } catch (seaErr) {
-      warn(`SEA generation gagal: ${seaErr.message}`);
+      warn(`SEA generation failed: ${seaErr.message}`);
     }
   }
 
   if (!done) {
-    console.log('ℹ️  Binary tunggal tidak diproduksi — gunakan bundle portabel (jalur utama).');
+    console.log('ℹ️  No single binary produced — use the portable bundle (main path).');
   }
 }
 
@@ -160,10 +160,10 @@ try {
   if (doPkg || doSea) tryNativeBinary();
 
   console.log('\n=========================================');
-  console.log('✓ Bundle portabel siap di dist/');
-  console.log('  - Pindahkan dist/ ke lokasi sistem (mis. /opt/yuihime)');
+  console.log('✓ Portable bundle ready at dist/');
+  console.log('  - Move dist/ to a system location (e.g. /opt/yuihime)');
   console.log('  - tools/yuihime install  →  symlink /usr/local/bin/yuihime');
-  console.log('  - Pakai: yuihime daemon start | yuihime status | yuihime logs');
+  console.log('  - Use: yuihime daemon start | yuihime status | yuihime logs');
   console.log('=========================================\n');
 } catch (error) {
   console.error('\n🔴 Compilation aborted:', error.message);

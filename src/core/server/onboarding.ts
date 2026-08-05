@@ -77,18 +77,18 @@ function chooseOptionSync(title: string, options: string[], defaultIdx = 0): num
     console.log(`  \x1b[32m[${idx + 1}]\x1b[0m ${opt}${isDefault}`);
   });
   while (true) {
-    const ans = askSync(`Pilihan (1-${options.length})`, (defaultIdx + 1).toString());
+    const ans = askSync(`Choice (1-${options.length})`, (defaultIdx + 1).toString());
     const val = parseInt(ans, 10);
     if (!isNaN(val) && val >= 1 && val <= options.length) {
       return val - 1;
     }
-    console.log(`\x1b[31m⚠️ Pilihan tidak valid. Silakan pilih nomor antara 1 dan ${options.length}.\x1b[0m`);
+    console.log(`\x1b[31m⚠️ Invalid option. Please choose a number between 1 and ${options.length}.\x1b[0m`);
   }
 }
 
 // Real-time dynamic model discovery probe inside a synchronous child process (Agnostic - NO hardcoded fallbacks)
 function discoverModelsSync(provider: string, apiKey: string, baseUrl?: string): string[] {
-  console.log(`\n\x1b[35m🔍 Sedang mencari model dari provider [${provider.toUpperCase()}]...\x1b[0m`);
+  console.log(`\n\x1b[35m🔍 Searching for models from provider [${provider.toUpperCase()}]...\x1b[0m`);
   try {
     const cleanProvider = provider.toLowerCase();
     let url = "";
@@ -157,13 +157,13 @@ function discoverModelsSync(provider: string, apiKey: string, baseUrl?: string):
     const list = JSON.parse(resultJson.trim() || "[]");
     return list;
   } catch (e: any) {
-    console.log(`\x1b[31m⚠️ Gagal melakukan dynamic discovery: ${e.message}\x1b[0m`);
+    console.log(`\x1b[31m⚠️ Dynamic discovery failed: ${e.message}\x1b[0m`);
     return [];
   }
 }
 
 // Default cron task seed: memory consolidation every 6 hours (idempotent, ON CONFLICT DO NOTHING).
-// Dipanggil dari server.ts SETELAH setupSchema(db) supaya tabel cron_tasks sudah ada.
+// Called from server.ts AFTER setupSchema(db) so the cron_tasks table already exists.
 export async function seedDefaultCronTask(db: any): Promise<void> {
   try {
     await retryDbOperation(() => {
@@ -230,7 +230,7 @@ export function runOnboarding() {
     try {
       renameSync(rootConfigPath, defaultDataConfigPath);
     } catch (e: any) {
-      if (isInteractive) console.warn(`[ONBOARDING] Gagal memindahkan config.toml lawas:`, e.message);
+      if (isInteractive) console.warn(`[ONBOARDING] Failed to move legacy config.toml:`, e.message);
     }
   }
 
@@ -240,7 +240,7 @@ export function runOnboarding() {
     try {
       renameSync(rootDbPath, defaultDataDbPath);
     } catch (e: any) {
-      if (isInteractive) console.warn(`[ONBOARDING] Gagal memindahkan yuihime.db lawas:`, e.message);
+      if (isInteractive) console.warn(`[ONBOARDING] Failed to move legacy yuihime.db:`, e.message);
     }
   }
 
@@ -363,7 +363,7 @@ try {
       const content = readFileSync(resolvedConfigPath, "utf-8");
       configData = toml.parse(content) as any;
     } catch (e: any) {
-      if (isInteractive) console.warn("[ONBOARDING] Gagal mem-parsing config.toml, membuat konfigurasi kosong baru:", e.message);
+      if (isInteractive) console.warn("[ONBOARDING] Failed to parse config.toml, creating a fresh empty configuration:", e.message);
     }
   }
 
@@ -383,15 +383,15 @@ try {
 
   if (isInteractive) {
     clearScreen();
-    console.log(`\n\x1b[1;36m👉 Terdeteksi sesi terminal interaktif! Membuka Setup Onboarding TUI...\x1b[0m\n`);
-    const wantSetup = askSync("Apakah Anda ingin menjalankan Setup Onboarding TUI sekarang? (y/N)", "n");
+    console.log(`\n\x1b[1;36m👉 Interactive terminal session detected! Opening Setup Onboarding TUI...\x1b[0m\n`);
+    const wantSetup = askSync("Do you want to run the Setup Onboarding TUI now? (y/N)", "n");
     
     if (wantSetup.toLowerCase() === "y" || wantSetup.toLowerCase() === "ya") {
       // -------------------------------------------------------------
       // STEP 1: PHYSICAL WORKSPACE RUNTIME
       // -------------------------------------------------------------
       drawHeader(1, "PHYSICAL WORKSPACE RUNTIME");
-      console.log(`\x1b[32mSistem mendeteksi direktori workspace fisik berikut:\x1b[0m`);
+      console.log(`\x1b[32mSystem detected the following physical workspace directories:\x1b[0m`);
       console.log(`  • System Root (PROCESS_CWD) : \x1b[33m${yuihimeSystemRoot}\x1b[0m`);
       console.log(`  • Data Directory            : \x1b[33m${resolvedDataDir}\x1b[0m`);
       console.log(`  • Config Path (.toml)       : \x1b[33m${resolvedConfigPath}\x1b[0m`);
@@ -400,7 +400,7 @@ try {
       console.log(`  • Personalities / Agent Dir : \x1b[33m${resolvedAgentDir}\x1b[0m`);
       console.log(`  • Addons Library Folder     : \x1b[33m${resolvedAddonsDir}\x1b[0m`);
 
-      const editPaths = askSync("\nApakah Anda ingin menyesuaikan direktori workspace di atas? (y/N)", "n");
+      const editPaths = askSync("\nDo you want to customize the workspace directories above? (y/N)", "n");
       if (editPaths.toLowerCase() === "y" || editPaths.toLowerCase() === "ya") {
         yuihimeSystemRoot = askSync("  System Root", yuihimeSystemRoot);
         resolvedDataDir = askSync("  Data Folder", resolvedDataDir);
@@ -424,7 +424,7 @@ try {
       // -------------------------------------------------------------
       drawHeader(2, "CORE AI PROVIDER CREDENTIALS & MODELS");
       const providers = ["gemini", "openai", "deepseek", "groq", "openrouter", "ollama", "custom"];
-      const pIdx = chooseOptionSync("Pilih AI Provider Utama:", providers, providers.indexOf(configData.provider || "gemini"));
+      const pIdx = chooseOptionSync("Choose Main AI Provider:", providers, providers.indexOf(configData.provider || "gemini"));
       const selectedProvider = providers[pIdx];
       configData.provider = selectedProvider;
 
@@ -435,36 +435,36 @@ try {
 
       if (selectedProvider === "ollama" || selectedProvider === "custom" || selectedProvider === "openai") {
         const defaultUrl = selectedProvider === "ollama" ? "http://127.0.0.1:11434" : "https://api.openai.com/v1";
-        baseUrl = askSync(`Masukkan Base URL / Endpoint`, baseUrl || defaultUrl);
+        baseUrl = askSync(`Enter Base URL / Endpoint`, baseUrl || defaultUrl);
         configData[selectedProvider].baseUrl = baseUrl;
       }
 
       if (selectedProvider !== "ollama") {
-        apiKey = askSync(`Masukkan API Key / Token untuk ${selectedProvider.toUpperCase()}`, apiKey);
+        apiKey = askSync(`Enter API Key / Token for ${selectedProvider.toUpperCase()}`, apiKey);
         configData[selectedProvider].apiKey = normalizeApiKeyInput(apiKey);
       }
 
       const modelOpts = ["Discover and Fetch Models dynamically (Real-time)", "Input Model ID manually"];
-      const mIdx = chooseOptionSync("Metode Pemilihan Model LLM:", modelOpts, 0);
+      const mIdx = chooseOptionSync("LLM Model Selection Method:", modelOpts, 0);
 
       let chosenModel = configData[selectedProvider].model || "";
 
       if (mIdx === 0) {
         const discovered = discoverModelsSync(selectedProvider, apiKey, baseUrl);
         if (discovered.length > 0) {
-          const dIdx = chooseOptionSync("Model yang ditemukan:", discovered, 0);
+          const dIdx = chooseOptionSync("Models found:", discovered, 0);
           chosenModel = discovered[dIdx];
         } else {
-          console.log(`\x1b[31m⚠️ Tidak ditemukan model atau koneksi gagal. Beralih ke input manual...\x1b[0m`);
-          chosenModel = askSync(`Masukkan Model ID secara manual`, chosenModel);
+          console.log(`\x1b[31m⚠️ No models found or the connection failed. Switching to manual input...\x1b[0m`);
+          chosenModel = askSync(`Enter Model ID manually`, chosenModel);
         }
       } else {
-        chosenModel = askSync(`Masukkan Model ID secara manual`, chosenModel);
+        chosenModel = askSync(`Enter Model ID manually`, chosenModel);
       }
 
       if (!chosenModel) {
-        console.log(`\x1b[31m⚠️ Model ID wajib ditentukan! Silakan masukkan secara manual.\x1b[0m`);
-        chosenModel = askSync(`Masukkan Model ID (contoh: deepseek-chat)`, "");
+        console.log(`\x1b[31m⚠️ Model ID is required! Please enter it manually.\x1b[0m`);
+        chosenModel = askSync(`Enter Model ID (example: deepseek-chat)`, "");
       }
 
       configData[selectedProvider].model = chosenModel;
@@ -473,73 +473,73 @@ try {
       // STEP 3: MULTI-PROVIDER RESILIENT FALLBACKS
       // -------------------------------------------------------------
       drawHeader(3, "MULTI-PROVIDER RESILIENT FALLBACKS");
-      console.log(`\x1b[32mKonfigurasi ini untuk menjaga stabilitas batin Yuihime jika provider utama gagal.\x1b[0m`);
-      const setupFallback = askSync("\nApakah Anda ingin mengonfigurasi provider cadangan? (y/N)", "n");
+      console.log(`\x1b[32mThis configuration keeps Yuihime stable if the main provider fails.\x1b[0m`);
+      const setupFallback = askSync("\nDo you want to configure a backup provider? (y/N)", "n");
       if (setupFallback.toLowerCase() === "y" || setupFallback.toLowerCase() === "ya") {
-        const fIdx = chooseOptionSync("Pilih Provider Cadangan:", providers, 1);
+        const fIdx = chooseOptionSync("Choose Backup Provider:", providers, 1);
         const fallbackProv = providers[fIdx];
         if (!configData[fallbackProv]) configData[fallbackProv] = {};
         
         let fKey = configData[fallbackProv].apiKey || "";
-        fKey = askSync(`Masukkan API Key untuk ${fallbackProv.toUpperCase()}`, fKey);
+        fKey = askSync(`Enter API Key for ${fallbackProv.toUpperCase()}`, fKey);
         configData[fallbackProv].apiKey = normalizeApiKeyInput(fKey);
         
         let fModel = configData[fallbackProv].model || "";
-        fModel = askSync(`Masukkan Model ID untuk ${fallbackProv.toUpperCase()}`, fModel);
+        fModel = askSync(`Enter Model ID for ${fallbackProv.toUpperCase()}`, fModel);
         configData[fallbackProv].model = fModel;
         
-        console.log(`\x1b[32m✓ Provider cadangan ${fallbackProv.toUpperCase()} berhasil dikonfigurasi!\x1b[0m`);
-        askSync("Tekan Enter untuk melanjutkan...");
+        console.log(`\x1b[32m✓ Backup provider ${fallbackProv.toUpperCase()} configured successfully!\x1b[0m`);
+        askSync("Press Enter to continue...");
       }
 
       // -------------------------------------------------------------
       // STEP 4: SOCIAL CHANNELS & COMMUNICATION BRIDGES
       // -------------------------------------------------------------
       drawHeader(4, "SOCIAL CHANNELS & BRIDGES");
-      console.log(`\x1b[32mJembatani batin Yuihime ke jejaring sosial Anda.\x1b[0m`);
+      console.log(`\x1b[32mBridge Yuihime to your social networks.\x1b[0m`);
       
       if (!configData.telegram_bridge) configData.telegram_bridge = {};
-      configData.telegram_bridge.botToken = askSync("Telegram Bot Token (kosongkan jika tidak pakai)", configData.telegram_bridge.botToken);
+      configData.telegram_bridge.botToken = askSync("Telegram Bot Token (leave empty if not used)", configData.telegram_bridge.botToken);
 
       if (!configData.discord_bridge) configData.discord_bridge = {};
-      configData.discord_bridge.botToken = askSync("Discord Bot Token (kosongkan jika tidak pakai)", configData.discord_bridge.botToken);
+      configData.discord_bridge.botToken = askSync("Discord Bot Token (leave empty if not used)", configData.discord_bridge.botToken);
 
       if (!configData.twitter_bridge) configData.twitter_bridge = {};
-      configData.twitter_bridge.apiKey = normalizeApiKeyInput(askSync("Twitter/X API Key (kosongkan jika tidak pakai)", configData.twitter_bridge.apiKey));
+      configData.twitter_bridge.apiKey = normalizeApiKeyInput(askSync("Twitter/X API Key (leave empty if not used)", configData.twitter_bridge.apiKey));
 
       // -------------------------------------------------------------
       // STEP 5: AGNOSTIC TUNNELING PROXY
       // -------------------------------------------------------------
       drawHeader(5, "AGNOSTIC TUNNELING PROXY");
-      console.log(`\x1b[32mTunneling memungkinkankan transmisi publik luring ke server lokal Anda.\x1b[0m`);
+      console.log(`\x1b[32mTunneling enables offline public transmission to your local server.\x1b[0m`);
       const tunnelOpts = ["None (Localhost only)", "Cloudflare Tunnel", "ngrok", "Tailscale Funnel"];
-      const tIdx = chooseOptionSync("Pilih Tunneling Proxy:", tunnelOpts, 0);
+      const tIdx = chooseOptionSync("Choose Tunneling Proxy:", tunnelOpts, 0);
       configData.tunnel_provider = ["none", "cloudflare", "ngrok", "tailscale"][tIdx];
-      console.log(`\x1b[32m✓ Tunneling disetel ke: ${configData.tunnel_provider.toUpperCase()}\x1b[0m`);
-      askSync("Tekan Enter untuk melanjutkan...");
+      console.log(`\x1b[32m✓ Tunneling set to: ${configData.tunnel_provider.toUpperCase()}\x1b[0m`);
+      askSync("Press Enter to continue...");
 
       // -------------------------------------------------------------
       // STEP 6: SECURITY GATEWAYS & SANDBOX PROTECTION
       // -------------------------------------------------------------
       drawHeader(6, "SECURITY GATEWAYS & SANDBOX");
-      console.log(`\x1b[32mKeamanan Sandbox melindungi berkas sistem dari directory traversal eksternal.\x1b[0m`);
+      console.log(`\x1b[32mSandbox security protects system files from external directory traversal.\x1b[0m`);
       
-      const pairingOtp = askSync("Masukkan 6-digit Gateway Pairing OTP", "123456");
+      const pairingOtp = askSync("Enter 6-digit Gateway Pairing OTP", "123456");
       configData.sandbox_paths.pairing_otp = pairingOtp;
 
-      const autoAcc = askSync("Aktifkan Auto-Approve Modifikasi Sandbox (auto_acc_user_data)? (y/N)", configData.sandbox_paths.auto_acc_user_data ? "y" : "n");
+      const autoAcc = askSync("Enable Auto-Approve Sandbox Modifications (auto_acc_user_data)? (y/N)", configData.sandbox_paths.auto_acc_user_data ? "y" : "n");
       configData.sandbox_paths.auto_acc_user_data = (autoAcc.toLowerCase() === "y" || autoAcc.toLowerCase() === "ya");
 
       // -------------------------------------------------------------
       // STEP 7: PERSONALIZATION & TTS SOUND SYNTHESIS
       // -------------------------------------------------------------
       drawHeader(7, "PERSONALIZATION & TTS COGNITIVE SOUND");
-      console.log(`\x1b[32mAtur personalisasi penampilan, suara, dan semai berkas batin Markdown.\x1b[0m`);
+      console.log(`\x1b[32mCustomize appearance, voice, and seed inner Markdown files.\x1b[0m`);
       
-      const themeChoice = askSync("Pilih Tema UI (dark/light)", configData["modular-settings"].ui_theme || "dark");
+      const themeChoice = askSync("Choose UI Theme (dark/light)", configData["modular-settings"].ui_theme || "dark");
       configData["modular-settings"].ui_theme = themeChoice.toLowerCase() === "light" ? "light" : "dark";
 
-      const enableTts = askSync("Aktifkan ElevenLabs TTS? (y/N)", configData["modular-settings"].enable_tts ? "y" : "n");
+      const enableTts = askSync("Enable ElevenLabs TTS? (y/N)", configData["modular-settings"].enable_tts ? "y" : "n");
       if (enableTts.toLowerCase() === "y" || enableTts.toLowerCase() === "ya") {
         configData.elevenlabs.apiKey = normalizeApiKeyInput(askSync("  ElevenLabs API Key", configData.elevenlabs.apiKey));
         configData.elevenlabs.voiceId = askSync("  ElevenLabs Voice ID", configData.elevenlabs.voiceId);
@@ -551,10 +551,10 @@ try {
       }
 
       clearScreen();
-      console.log(`\n\x1b[32m🎉 [WIZARD] Setup Onboarding 7-Langkah Selesai!\x1b[0m`);
-      console.log(`\x1b[35mMenyimpan seluruh konfigurasi batin baru ke config.toml...\x1b[0m\n`);
+      console.log(`\n\x1b[32m🎉 [WIZARD] Setup Onboarding 7-Step Complete!\x1b[0m`);
+      console.log(`\x1b[35mSaving all new inner configuration to config.toml...\x1b[0m\n`);
     } else {
-      console.log("\n🚀 Setup Wizard dilewati. Menggunakan konfigurasi yang sudah ada atau opsi bawaan.");
+      console.log("\n🚀 Setup Wizard skipped. Using existing configuration or default options.");
     }
   } else {
     // Non-interactive / no TTY: silently skip setup TUI
@@ -595,7 +595,7 @@ try {
     mkdirSync(resolvedAgentDir, { recursive: true });
   }
 
-  updateProgress(6, 7, "Synchronizing core batin files");
+  updateProgress(6, 7, "Synchronizing core inner files");
 
   const promptFiles = [
     "character.md", 
@@ -684,11 +684,11 @@ try {
         cpSync(defaultAddsSrc, resolvedAddonsDir, { recursive: true });
       }
     } catch (e: any) {
-      if (isInteractive) console.warn(`[ONBOARDING] Gagal menyalin addons bawaan ke sandbox:`, e.message);
+      if (isInteractive) console.warn(`[ONBOARDING] Failed to copy built-in addons into sandbox:`, e.message);
     }
   }
 
-  // First-run device onboarding: create marker and enqueue initial auto-response so Yui aktif otomatis
+  // First-run device onboarding: create marker and enqueue initial auto-response so Yui activates automatically
   try {
     const markerPath = path.join(resolvedDataDir, '.first_run_done');
     if (!existsSync(markerPath)) {
@@ -718,7 +718,7 @@ try {
   if (!isInteractive) {
     process.stdout.write(`\r\x1b[32m✔ [YUIHIME BOOT] System workspace, configuration, and sandbox files fully synchronized!\x1b[0m\n\n`);
   } else {
-    console.log("[ONBOARDING] ✓ Berkas batin, konfigurasi, dan addons Yuihime siap dan sinkron!");
-    console.log("[ONBOARDING] Mengaktifkan Kernel Neural Yuihime...\n");
+    console.log("[ONBOARDING] ✓ Inner files, configuration, and Yuihime addons ready and synchronized!");
+    console.log("[ONBOARDING] Activating Yuihime Neural Kernel...\n");
   }
 }

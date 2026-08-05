@@ -15,7 +15,7 @@ export function registerDatasetRoutes(app: express.Express, db: any) {
     try {
       const { entries, target } = req.body;
       if (!Array.isArray(entries) || entries.length === 0) {
-        return res.status(400).json({ error: "Sirkuit hampa: tidak ada data percakapan untuk diimpor." });
+        return res.status(400).json({ error: "Empty circuit: no conversation data to import." });
       }
 
       let system1Count = 0;
@@ -106,7 +106,7 @@ export function registerDatasetRoutes(app: express.Express, db: any) {
         success: true,
         system1Count,
         system2Count,
-        message: `Dataset Yuihime sukses diimpor ke sirkuit kognitif luring Yuihime.`
+        message: `Yuihime dataset successfully imported into Yuihime's offline cognitive circuit.`
       });
     } catch (error: any) {
       console.error("[SERVER_CORTEX] Dataset Import Error:", error);
@@ -270,7 +270,7 @@ export function registerDatasetRoutes(app: express.Express, db: any) {
         return res.json({
           success: true,
           entries: [],
-          message: "Database memories batin Yuihime dalam keadaan kosong."
+          message: "Yuihime's inner memory database is empty."
         });
       }
 
@@ -397,9 +397,9 @@ export function registerDatasetRoutes(app: express.Express, db: any) {
           if (cleanMessages.length === 1) {
             const sole = cleanMessages[0];
             if (sole.role === 'assistant') {
-              cleanMessages.unshift({ role: 'user', content: `Bicaralah atau berikan refleksi tentang: ${context}`, senderName: 'User' });
+              cleanMessages.unshift({ role: 'user', content: `Speak or reflect on: ${context}`, senderName: 'User' });
             } else {
-              cleanMessages.push({ role: 'assistant', content: `mengangguk tersenyum mendengar ucapanmu`, senderName: 'Yui' });
+              cleanMessages.push({ role: 'assistant', content: `nods and smiles while listening to your words`, senderName: 'Yui' });
             }
           } else {
             continue;
@@ -641,7 +641,7 @@ DO NOT alter, omit, or shorten her original speech. Preserve actual physical exp
       res.json({
         success: true,
         entries: finalDataset,
-        message: `Sukses menyusun ${finalDataset.length} sesi aktivitas percakapan Yuihime.`
+        message: `Successfully compiled ${finalDataset.length} sessions of Yuihime's conversation activity.`
       });
     } catch (error: any) {
       console.error("[SERVER_CORTEX] Dataset Export Error:", error);
@@ -654,7 +654,7 @@ DO NOT alter, omit, or shorten her original speech. Preserve actual physical exp
     try {
       const { base64, fileName, modelName } = req.body;
       if (!base64) {
-        return res.status(400).json({ error: "Sirkuit hampa: tidak ada data file ZIP yang diunggah." });
+        return res.status(400).json({ error: "Empty circuit: no ZIP file data was uploaded." });
       }
 
       // Convert base64 to buffer
@@ -745,7 +745,7 @@ DO NOT alter, omit, or shorten her original speech. Preserve actual physical exp
         // Clean up empty directory if no compatible models found
         await fs.rm(destFolder, { recursive: true, force: true });
         return res.status(400).json({ 
-          error: "Sirkuit gagal: Tidak ditemukan file spesifikasi model (.model3.json, .model.json, atau .vrm) di dalam file ZIP yang diunggah." 
+          error: "Circuit failed: no model specification file (.model3.json, .model.json, or .vrm) found inside the uploaded ZIP file." 
         });
       }
 
@@ -762,18 +762,18 @@ DO NOT alter, omit, or shorten her original speech. Preserve actual physical exp
         imageUrl: previewImg || (primaryModel.type === 'VRM' 
           ? 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=300&auto=format&fit=crop'
           : 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?q=80&w=300&auto=format&fit=crop'),
-        desc: `Model ${primaryModel.type} diimpor dari file ZIP "${fileName || 'custom.zip'}".`
+        desc: `Model ${primaryModel.type} imported from ZIP file "${fileName || 'custom.zip'}".`
       };
 
       res.json({
         success: true,
         model: importedModel,
-        message: `Model ${primaryModel.type} sukses diekstrak dan diimpor.`
+        message: `Model ${primaryModel.type} successfully extracted and imported.`
       });
 
     } catch (error: any) {
       console.error("[SERVER_MODELS] Import ZIP Error:", error);
-      res.status(500).json({ error: error.message || "Gagal memproses file ZIP model." });
+      res.status(500).json({ error: error.message || "Failed to process model ZIP file." });
     }
   });
 

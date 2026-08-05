@@ -12,11 +12,11 @@ interface BufferedMessage {
   chatType?: string;
 }
 
-const IDLE_TIMEOUT_MS = 120_000; // Jeda hening 120 detik tanpa pesan masuk
-const MIN_IDLE_SUMMARY_MESSAGES = 30; // Minimal 30 pesan sejak ringkasan terakhir
-const MAX_IDLE_SUMMARY_MESSAGES = 80; // Cap per sesi agar prompt tetap ringkas
-const DAILY_SUMMARY_MAX_LINES = 500; // Cap baris log harian yang dirangkum
-const RETENTION_DAYS = 7; // Log harian & ringkasan disimpan 7 hari berdasarkan tanggal
+const IDLE_TIMEOUT_MS = 120_000; // 120-second idle gap without incoming messages
+const MIN_IDLE_SUMMARY_MESSAGES = 30; // Minimum 30 messages since the last summary
+const MAX_IDLE_SUMMARY_MESSAGES = 80; // Per-session cap so the prompt stays concise
+const DAILY_SUMMARY_MAX_LINES = 500; // Cap on daily log lines to summarize
+const RETENTION_DAYS = 7; // Daily logs & summaries kept for 7 days based on date
 const DAILY_CHECK_INTERVAL_MS = 60_000;
 
 function toDateKey(d: Date): string {
@@ -34,8 +34,8 @@ function toTimeKey(d: Date): string {
 }
 
 /**
- * Date "lokal" user (circadian-rhythm.timezoneOffsetHours) untuk kunci tanggal harian.
- * Pastikan log harian & daily summary memakai hari lokal, bukan server UTC.
+ * User's "local" date (circadian-rhythm.timezoneOffsetHours) for the daily date key.
+ * Ensure daily logs & daily summary use the local day, not server UTC.
  */
 function localDateFor(epochMs?: number): Date {
   return toLocalClock(getTzOffsetHours(), epochMs != null ? new Date(epochMs) : undefined);
@@ -46,17 +46,17 @@ function yesterdayKey(): string {
 }
 
 /**
- * ChatSummaryEngine — Pencerna Obrolan Latar Belakang.
+ * ChatSummaryEngine — Background Chat Digestor.
  *
- * Dua tipe ringkasan:
- * 1. Idle-gap summary: dipicu saat tidak ada pesan selama 120 detik DAN minimal
- *    30 pesan terkumpul sejak ringkasan terakhir. Murni background, tidak dibacakan.
- * 2. Daily summary: dibuat otomatis saat tanggal berganti + manual via API/tool.
+ * Two summary types:
+ * 1. Idle-gap summary: triggered when no messages arrive for 120 seconds AND at least
+ *    30 messages have accumulated since the last summary. Purely background, not spoken.
+ * 2. Daily summary: created automatically when the date rolls over + manually via API/tool.
  *
- * Penyimpanan:
- * - Setiap pesan masuk dicatat ke file log harian (<dataDir>/chat_logs/YYYY-MM-DD.log).
- * - Hasil ringkasan disimpan ke database `memories` DAN file ringkasan harian.
- * - Log & ringkasan dipertahankan 7 hari berdasarkan tanggal lalu dibersihkan.
+ * Storage:
+ * - Every incoming message is recorded into a daily log file (<dataDir>/chat_logs/YYYY-MM-DD.log).
+ * - Summary results are saved into the `memories` database AND a daily summary file.
+ * - Logs & summaries are retained for 7 days based on date, then cleaned up.
  */
 export class ChatSummaryEngine {
    private static instance: ChatSummaryEngine | null = null;
@@ -127,8 +127,8 @@ export class ChatSummaryEngine {
    }
 
   /**
-   * Dipanggil untuk setiap pesan masuk. Mencatat ke log harian, menambah buffer,
-   * dan mengatur ulang timer jeda hening.
+   * Called for every incoming message. Records to the daily log, appends to the buffer,
+   * and resets the idle timer.
    */
   public noteIncomingMessage(msg: BufferedMessage) {
     if (!msg || !msg.text) return;
@@ -155,7 +155,7 @@ export class ChatSummaryEngine {
   }
 
   /**
-   * Membaca file log harian mentah untuk tanggal tertentu (default: kemarin).
+   * Reads the raw daily log file for a given date (default: yesterday).
    */
   public readDailyLog(dateStr?: string, opts?: { limit?: number; tail?: boolean }): { date: string; exists: boolean; file: string; lines: string[] } {
     const targetDate = dateStr && /^\d{4}-\d{2}-\d{2}$/.test(dateStr) ? dateStr : yesterdayKey();
@@ -171,7 +171,7 @@ export class ChatSummaryEngine {
       }
       return { date: targetDate, exists: true, file, lines };
     } catch (e: any) {
-      console.warn("[CHAT_SUMMARY_READ_ERR] Gagal membaca log harian:", e?.message || e);
+      console.warn("[CHAT_SUMMARY_READ_ERR] Failed to read daily log:", e?.message || e);
       return { date: targetDate, exists: false, file, lines: [] };
     }
   }
@@ -189,9 +189,9 @@ export class ChatSummaryEngine {
   }
 
   /**
-   * Trigger jeda hening: hanya berjalan jika minimal 30 pesan terkumpul
-   * sejak ringkasan terakhir. Murni background — tidak diucapkan/dibroadcast.
-   * Setelah itu, proses daily summary yang terlewat (boot catch-up).
+   * Idle-gap trigger: only runs if at least 30 messages have accumulated
+   * since the last summary. Purely background — not spoken/broadcast.
+   * After that, processes missed daily summaries (boot catch-up).
    */
   private async onIdleTimeout() {
     if (this.isIdleSummaryRunning) {
@@ -202,47 +202,47 @@ export class ChatSummaryEngine {
       if (this.buffer.length >= MIN_IDLE_SUMMARY_MESSAGES) {
         const chunk = this.buffer.splice(0, Math.min(this.buffer.length, MAX_IDLE_SUMMARY_MESSAGES));
         try {
-          console.log(`[CHAT_SUMMARY_IDLE] Jeda hening terdeteksi. Merangkum ${chunk.length} pesan latar belakang...`);
+          console.log(`[CHAT_SUMMARY_IDLE] Idle gap detected. Summarizing ${chunk.length} background messages...`);
 
           const chatSnippet = chunk.map(c => `[${c.speaker}]: ${c.text}`).join("\n");
           const summaryPrompt = `
-Anda adalah kognisi latar belakang subkesadaran Yui Hime, AI VTuber ceria dan otonom.
-Pesan-pesan obrolan berikut meluncur cepat sehingga tidak bisa dibalas satu-per-satu secara manual.
+You are the subconscious background cognition of Yui Hime, a cheerful and autonomous AI VTuber.
+The following chat messages are streaming by too fast to be replied to one-by-one manually.
 
-Rangkumlah percakapan, topik diskusi hangat, suasana (hype, santai, bercanda, atau bertanya), dan kemauan penonton saat ini dalam 1-2 kalimat pendek bahasa Indonesia dari sudut pandang subkesadaran Anda (Gunakan format: "Saya merasakan penonton sedang membahas [topik], suasananya [suasana]"). Do not output any thinking prefix or markdown fence blocks.
+Summarize the conversation, hot discussion topics, mood (hype, relaxed, joking, or asking), and the audience's current disposition in 1-2 short Indonesian sentences from your subconscious point of view (Use the format: "Saya merasakan penonton sedang membahas [topik], suasananya [suasana]"). Do not output any thinking prefix or markdown fence blocks.
 
-Berikut daftar obrolannya:
+Here is the list of chats:
 ${chatSnippet}
 
-Hasil rangkuman singkat subkesadaran:`.trim();
+Short subconscious summary result:`.trim();
 
           const summary = await this.getCortex().thinkSimple(summaryPrompt);
           const cleanSummary = (summary || "").trim().replace(/^['"]|['"]$/g, "");
           if (!cleanSummary) {
-            console.warn("[CHAT_SUMMARY_IDLE] Hasil ringkasan kosong, pesan dikembalikan ke buffer.");
+            console.warn("[CHAT_SUMMARY_IDLE] Summary result is empty, messages returned to buffer.");
             this.buffer.unshift(...chunk);
           } else {
             this.persistIdleSummary(chunk, cleanSummary);
             this.appendToSummaryFile(toDateKey(localDateFor()), `[IDLE SUMMARY] ${cleanSummary}`);
-            console.log(`[CHAT_SUMMARY_IDLE] Ringkasan jeda hening ${chunk.length} pesan disimpan (DB + file). Tidak diucapkan.`);
+            console.log(`[CHAT_SUMMARY_IDLE] Idle-gap summary of ${chunk.length} messages saved (DB + file). Not spoken.`);
           }
         } catch (e: any) {
-          console.error("[CHAT_SUMMARY_IDLE] Gagal menghasilkan ringkasan jeda hening:", e?.message || e);
+          console.error("[CHAT_SUMMARY_IDLE] Failed to generate idle-gap summary:", e?.message || e);
           this.buffer.unshift(...chunk);
         }
       }
 
       await this.processPendingDailySummaries();
     } catch (e: any) {
-      console.error("[CHAT_SUMMARY_IDLE] Gagal memproses ringkasan latar belakang:", e?.message || e);
+      console.error("[CHAT_SUMMARY_IDLE] Failed to process background summaries:", e?.message || e);
     } finally {
       this.isIdleSummaryRunning = false;
     }
   }
 
   /**
-   * Memproses daily summary yang terlewat (mis. aplikasi mati saat tanggal berganti).
-   * Dijalankan saat idle (tidak ada aktivitas chat).
+   * Processes missed daily summaries (e.g. app was down when the date changed).
+   * Runs while idle (no chat activity).
    */
   private async processPendingDailySummaries() {
     if (this.pendingDailyDates.length === 0) return;
@@ -253,23 +253,23 @@ Hasil rangkuman singkat subkesadaran:`.trim();
         if (this.hasDailySummary(dateStr)) continue;
         const res = await this.generateDailySummary(dateStr);
         if (res.success) {
-          console.log(`[CHAT_SUMMARY_DAILY] Boot catch-up ${dateStr} selesai.`);
+          console.log(`[CHAT_SUMMARY_DAILY] Boot catch-up ${dateStr} completed.`);
         } else {
-          console.warn(`[CHAT_SUMMARY_DAILY] Boot catch-up ${dateStr} dilewati (${res.reason}).`);
+          console.warn(`[CHAT_SUMMARY_DAILY] Boot catch-up ${dateStr} skipped (${res.reason}).`);
           if (res.reason === "llm_failed" || res.reason === "empty_summary") {
             this.pendingDailyDates.push(dateStr);
           }
         }
       } catch (e: any) {
-        console.error(`[CHAT_SUMMARY_DAILY] Boot catch-up ${dateStr} gagal:`, e?.message || e);
+        console.error(`[CHAT_SUMMARY_DAILY] Boot catch-up ${dateStr} failed:`, e?.message || e);
         this.pendingDailyDates.push(dateStr);
       }
     }
   }
 
   /**
-   * Saat boot: cari tanggal dalam periode retensi yang punya file log harian
-   * tapi belum punya daily summary di DB → tandai sebagai pending catch-up.
+   * At boot: find dates within the retention period that have a daily log file
+   * but no daily summary in the DB → mark as pending catch-up.
    */
 private scanPendingDailySummaries() {
     if (!this.db || !this.logDir || !existsSync(this.logDir)) return;
@@ -289,10 +289,10 @@ private scanPendingDailySummaries() {
       const existing = this.hasDailySummariesBatch(Array.from(dates));
       this.pendingDailyDates = Array.from(dates).filter(d => !existing.has(d)).sort();
       if (this.pendingDailyDates.length > 0) {
-        console.log(`[CHAT_SUMMARY_DAILY] ${this.pendingDailyDates.length} daily summary terlewat terdeteksi saat boot (${this.pendingDailyDates.join(", ")}). Akan diisi saat idle.`);
+        console.log(`[CHAT_SUMMARY_DAILY] ${this.pendingDailyDates.length} missed daily summaries detected at boot (${this.pendingDailyDates.join(", ")}). Will be filled while idle.`);
       }
     } catch (e: any) {
-      console.warn("[CHAT_SUMMARY_SCAN_ERR] Gagal memindai daily summary yang terlewat:", e?.message || e);
+      console.warn("[CHAT_SUMMARY_SCAN_ERR] Failed to scan for missed daily summaries:", e?.message || e);
     }
   }
 
@@ -328,13 +328,13 @@ private hasDailySummary(dateStr: string): boolean {
       const memoryId = "bg_digest_" + genId(9);
       this.stmtInsertIdleSummary.run(memoryId, `[RINGKASAN OBROLAN ${toDateKey(localDateFor(chunk[0]?.timestamp || Date.now()))}]: ${summary}`, chunk[chunk.length - 1]?.timestamp || Date.now());
     } catch (dbErr) {
-      console.error("[CHAT_SUMMARY_IDLE_DB_ERR] Gagal menyimpan ringkasan jeda hening ke DB:", dbErr);
+      console.error("[CHAT_SUMMARY_IDLE_DB_ERR] Failed to save idle-gap summary to DB:", dbErr);
     }
   }
 
   /**
-   * Membuat daily summary untuk tanggal tertentu (default: kemarin) dari file log harian.
-   * Disimpan ke DB `memories` (type daily_summary) dan file ringkasan harian.
+   * Builds a daily summary for a given date (default: yesterday) from the daily log file.
+   * Saved to the `memories` DB (type daily_summary) and a daily summary file.
    */
   public async generateDailySummary(dateStr?: string): Promise<{ success: boolean; date: string; reason?: string; error?: string; summary?: string }> {
     const targetDate = dateStr && /^\d{4}-\d{2}-\d{2}$/.test(dateStr) ? dateStr : yesterdayKey();
@@ -357,14 +357,14 @@ private hasDailySummary(dateStr: string): boolean {
     const lines = raw.split("\n");
     const snippet = lines.slice(-DAILY_SUMMARY_MAX_LINES).join("\n");
     const summaryPrompt = `
-Anda adalah kognisi batin Yui Hime yang menyusun ringkasan harian.
-Buatlah ringkasan kognitif yang padat dan terstruktur (3-5 kalimat bahasa Indonesia) tentang apa yang terjadi sepanjang hari pada tanggal ${targetDate}: topik yang dibahas, suasana obrolan, orang-orang yang paling aktif, dan hal penting yang perlu diingat Yui.
-Jangan menyebut ini sebagai AI/ringkasan sistem. Jangan output thinking prefix atau markdown fence.
+You are the inner cognition of Yui Hime composing a daily summary.
+Create a dense, structured cognitive summary (3-5 Indonesian sentences) of what happened throughout the day on date ${targetDate}: topics discussed, chat mood, the most active people, and important things Yui should remember.
+Do not mention this as an AI/system summary. Do not output thinking prefix or markdown fence.
 
-Log obrolan harian (terakhir ${lines.length} baris):
+Daily chat log (last ${lines.length} lines):
 ${snippet}
 
-Ringkasan harian:`.trim();
+Daily summary:`.trim();
 
     try {
       const summary = await this.getCortex().thinkSimple(summaryPrompt);
@@ -377,13 +377,13 @@ Ringkasan harian:`.trim();
       this.appendToSummaryFile(targetDate, `[DAILY SUMMARY] ${cleanSummary}`);
       this.pendingDailyDates = this.pendingDailyDates.filter(d => d !== targetDate);
 
-      // Bersihkan buffer dari pesan yang termasuk tanggal target (sudah tercakup log harian)
+      // Clear the buffer of messages from the target date (already covered by the daily log)
       try {
         const startOfNext = new Date(`${targetDate}T00:00:00`).getTime() + 86400000;
         this.buffer = this.buffer.filter(m => m.timestamp >= startOfNext);
       } catch {}
 
-      console.log(`[CHAT_SUMMARY_DAILY] Daily summary ${targetDate} disimpan (DB + file).`);
+      console.log(`[CHAT_SUMMARY_DAILY] Daily summary ${targetDate} saved (DB + file).`);
       return { success: true, date: targetDate, summary: cleanSummary };
     } catch (e: any) {
       return { success: false, date: targetDate, reason: "llm_failed", error: e?.message || String(e) };
@@ -397,12 +397,12 @@ private persistDailySummary(targetDate: string, summary: string) {
       const memoryId = `daily_summary_${targetDate}`;
       this.stmtUpsertDailySummary.run(memoryId, `[RINGKASAN HARIAN ${targetDate}]: ${summary}`, endOfDay, JSON.stringify({ date: targetDate }));
     } catch (dbErr) {
-      console.error("[CHAT_SUMMARY_DAILY_DB_ERR] Gagal menyimpan daily summary ke DB:", dbErr);
+      console.error("[CHAT_SUMMARY_DAILY_DB_ERR] Failed to save daily summary to DB:", dbErr);
     }
   }
 
   /**
-   * Membaca daily summary yang tersimpan untuk tanggal tertentu (default: kemarin).
+   * Reads the stored daily summary for a given date (default: yesterday).
    */
 public getDailySummary(dateStr?: string): { date: string; summary: string; timestamp: number } | null {
     const targetDate = dateStr && /^\d{4}-\d{2}-\d{2}$/.test(dateStr) ? dateStr : yesterdayKey();
@@ -424,7 +424,7 @@ public getDailySummary(dateStr?: string): { date: string; summary: string; times
       const line = `[${toTimeKey(localDateFor(msg.timestamp))}] [${msg.chatType || "chat"}] ${msg.speaker}: ${String(msg.text).replace(/\n/g, " ")}\n`;
       appendFileSync(file, line, "utf-8");
     } catch (e) {
-      console.warn("[CHAT_SUMMARY_LOG_ERR] Gagal menulis log harian:", e?.message || e);
+      console.warn("[CHAT_SUMMARY_LOG_ERR] Failed to write daily log:", e?.message || e);
     }
   }
 
@@ -433,12 +433,12 @@ public getDailySummary(dateStr?: string): { date: string; summary: string; times
       const file = path.join(this.logDir, `${dateStr}.summary.log`);
       appendFileSync(file, `[${toTimeKey(localDateFor())}] ${line}\n`, "utf-8");
     } catch (e) {
-      console.warn("[CHAT_SUMMARY_SUMMARY_FILE_ERR] Gagal menulis file ringkasan:", e?.message || e);
+      console.warn("[CHAT_SUMMARY_SUMMARY_FILE_ERR] Failed to write summary file:", e?.message || e);
     }
   }
 
   /**
-   * Penjadwal harian: saat tanggal berganti, buat daily summary untuk hari sebelumnya.
+   * Daily scheduler: when the date changes, create a daily summary for the previous day.
    */
   private startDailyScheduler() {
     setInterval(() => {
@@ -450,9 +450,9 @@ public getDailySummary(dateStr?: string): { date: string; summary: string; times
           if (!this.hasDailySummary(prevDate)) {
             this.generateDailySummary(prevDate).then(res => {
               if (res.success) {
-                console.log(`[CHAT_SUMMARY_DAILY] Daily summary otomatis ${prevDate} selesai.`);
+                console.log(`[CHAT_SUMMARY_DAILY] Automatic daily summary ${prevDate} completed.`);
               } else {
-                console.warn(`[CHAT_SUMMARY_DAILY] Daily summary otomatis ${prevDate} dilewati (${res.reason}).`);
+                console.warn(`[CHAT_SUMMARY_DAILY] Automatic daily summary ${prevDate} skipped (${res.reason}).`);
               }
             }).catch(e => console.error("[CHAT_SUMMARY_DAILY_AUTO_ERR]", e?.message || e));
           }
@@ -465,8 +465,8 @@ public getDailySummary(dateStr?: string): { date: string; summary: string; times
   }
 
   /**
-   * Hapus file log/ringkasan yang lebih lama dari RETENTION_DAYS dan
-   * daily summary DB yang sudah kadaluwarsa.
+   * Delete log/summary files older than RETENTION_DAYS and
+   * expired daily summaries in the DB.
    */
   private runCleanup() {
     const cutoffMs = Date.now() - RETENTION_DAYS * 86400000;

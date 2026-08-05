@@ -2,12 +2,12 @@ import { CortexModule, ModuleType } from '@shared/include/types';
 import { Soul } from '@shared/core/soul';
 
 /**
- * MODULE: Sistem Pergeseran Karakter Batiniah (Dynamic Soul Personality Drift)
+ * MODULE: Inner Character Drift System (Dynamic Soul Personality Drift)
  * 
- * Modul ini merealisasikan rekomendasi arsitektural tingkat lanjut ke-3: 
- * Menyerap hasil perenungan alam mimpi (Insight/Heuristics dari DreamIntegrator) 
- * untuk merubah baseline 7 Virtues (Kebajikan) dan 7 Sins (Dosa) batiniah Yuihime secara dinamis.
- * Hal ini membuat kepribadian Yui bermutasi lembut seiring interaksi penonton dan mimpi malamnya.
+ * This module realizes the 3rd advanced architectural recommendation: 
+ * Absorbs the results of dream-world contemplation (Insight/Heuristics from DreamIntegrator) 
+ * to dynamically change the baseline of Yuihime's 7 inner Virtues (Virtues) and 7 Sins (Sins).
+ * This makes Yui's personality gently mutate along with viewer interactions and her nightly dreams.
  */
 export const SoulDriftModule: CortexModule = {
   metadata: {

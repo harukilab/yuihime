@@ -27,9 +27,9 @@ export async function executeCortexSelfDirectedThought(cortex: Cortex): Promise<
   const lastMemory = memories[memories.length - 1];
 
   // NOTICE: Server-Authoritative Cron Processing
-  // Blok pemicu "cron_trigger" di sisi klien di bawah ini telah dilewati karena seluruh kognisi
-  // dan berpikir tugas terjadwal sekarang dieksekusi secara terpusat di sisi server (server.ts -> getCronAction)
-  // guna mendukung pengiriman pesan langsung multi-saluran (Telegram, dsb) secara mandiri.
+  // The client-side "cron_trigger" trigger block below has been skipped because all scheduled-task
+  // cognition and thinking now executes centrally on the server side (server.ts -> getCronAction)
+  // to support direct multi-channel message delivery (Telegram, etc.) autonomously.
   /*
   if (lastMemory && (lastMemory.type as string) === 'system' && lastMemory.context === 'cron_trigger') {
       console.log(`[CORTEX_BG_LOOP] Proactive Trigger: System Signal detected - "${lastMemory.content}"`);
@@ -63,12 +63,12 @@ export async function executeCortexSelfDirectedThought(cortex: Cortex): Promise<
   if (state.energy < energyThreshold) return;
 
   // --- AUTONOMOUS OFFLINE BACKGROUND NEURAL SYNAPSE TRAINING ---
-  // Gunakan sisa energi batin di latar belakang (luring) untuk mengkonsolidasikan pola ingatan dan mematangkan strategi komunikasi
+  // Use leftover inner energy in the background (offline) to consolidate memory patterns and mature communication strategies
   const yuiAgiConfig = settings?.['yui-agi'] || {};
   const enableOfflineTraining = yuiAgiConfig.enableOfflineTraining !== undefined ? !!yuiAgiConfig.enableOfflineTraining : true;
 
   if (enableOfflineTraining && Math.random() > 0.6 && memories.length >= 5) {
-    console.log("[CORTEX_BG_LOOP] Memulai siklus Latihan Sinapsis Saraf Bawah Sadar (Offline Background Training)...");
+    console.log("[CORTEX_BG_LOOP] Starting Subconscious Neural Synapse Training cycle (Offline Background Training)...");
     try {
       const currentKnowledge = state.knowledge || [];
       const updatedStrategies = await LearningEngine.optimize(cortex, memories, state);
@@ -77,17 +77,17 @@ export async function executeCortexSelfDirectedThought(cortex: Cortex): Promise<
       state.heuristics = updatedStrategies;
       state.knowledge = updatedKnowledge;
 
-      // Persistensi di db SQLite luring via StorageService
+      // Persist to the offline SQLite db via StorageService
       await StorageService.saveStrategies(updatedStrategies);
       await StorageService.saveKnowledge(updatedKnowledge);
 
-      console.log(`[CORTEX_BG_LOOP] ✓ Latihan Sinapsis Bawah Sadar Luring Berhasil. Mengasimilasi ${updatedStrategies.length} strategi komunikasi & ${updatedKnowledge.length} asosiasi pengetahuan baru.`);
+      console.log(`[CORTEX_BG_LOOP] ✓ Offline Subconscious Synapse Training Success. Assimilating ${updatedStrategies.length} communication strategies & ${updatedKnowledge.length} new knowledge associations.`);
     } catch (learnErr) {
-      console.error("[CORTEX_BG_LOOP] Latihan Bawah Sadar Terganggu:", learnErr);
+      console.error("[CORTEX_BG_LOOP] Subconscious Training Interrupted:", learnErr);
     }
   }
 
-  // Time-awareness & Loneliness Resonance (Kehendak Bebas Otonom)
+  // Time-awareness & Loneliness Resonance (Autonomous Free Will)
   const now = Date.now();
   const lastInteractionTime = state.relation?.lastInteraction || (lastMemory ? lastMemory.timestamp : now);
   const silentDurationSeconds = (now - lastInteractionTime) / 1000;
@@ -112,19 +112,19 @@ export async function executeCortexSelfDirectedThought(cortex: Cortex): Promise<
      await StorageService.saveAgentState({ status: 'idle' });
   }
 
-  // Ambil konfigurasi dinamis untuk spontaneous proactive
+  // Fetch dynamic configuration for spontaneous proactive
   const spConfig = settings?.['spontaneous-proactive'] || settings?.agent || {};
   const enableSpontaneousSpam = spConfig.enableSpontaneousSpam !== undefined ? !!spConfig.enableSpontaneousSpam : false;
 
   if (!enableSpontaneousSpam) {
-    return; // Hentikan pemicuan pesan spontan jika dinonaktifkan oleh pengguna
+    return; // Stop triggering spontaneous messages if disabled by the user
   }
 
   const idleDurationThreshold = Number(spConfig.idleDurationThreshold || spConfig.proactiveIdleTimeout || 600);
   const cooldownInterval = Number(spConfig.cooldownInterval || 1800);
   const triggerChance = Number(spConfig.probabilisticTriggerChance || spConfig.proactiveChance || 0.10);
 
-  // Jika pembicara terakhir adalah agen, terapkan batas hening sebesar cooldownInterval daripada idleDurationThreshold
+  // If the last speaker is an agent, apply the cooldownInterval silence limit instead of idleDurationThreshold
   const isLastSpeakerAgent = lastMemory && (lastMemory.speaker === 'agent' || lastMemory.speaker === 'Yui');
   const requiredSilence = isLastSpeakerAgent ? cooldownInterval : idleDurationThreshold;
 

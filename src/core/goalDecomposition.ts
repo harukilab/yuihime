@@ -1,13 +1,13 @@
 /**
  * goalDecomposition.ts
  *
- * Recursive goal decomposition (Stage F): goals disimpan secara hierarkis
- * (parent -> subgoals). Closed-loop monitoring: setiap kemajuan subgoal
- * memperbarui progress parent secara rekursif; saat semua subgoal selesai,
- * parent otomatis ter-complete — naik sampai akar. Modul SOUL membaca goal
- * aktif terpilih sebagai fokus siklus.
+ * Recursive goal decomposition (Stage F): goals are stored hierarchically
+ * (parent -> subgoals). Closed-loop monitoring: every subgoal progress
+ * updates the parent progress recursively; when all subgoals are done,
+ * the parent is auto-completed — up to the root. The SOUL module reads the
+ * active selected goal as the focus of the cycle.
  *
- * Hanya boleh dipakai di sisi Node (daemon).
+ * Only allowed on the Node (daemon) side.
  */
 
 import { getDb } from './database.js';
@@ -29,9 +29,9 @@ export interface Goal {
 let cache: any = null;
 
 /**
- * Batas maksimum goal ROOT aktif (active/in_progress) untuk mencegah
- * database goals membengkak tak terkendali (self-proposal + user request).
- * Sub-goal tidak dihitung, tapi jumlahnya terbatasi oleh roots.
+ * Maximum number of active ROOT goals (active/in_progress) to prevent
+ * the goals database from growing out of control (self-proposal + user request).
+ * Sub-goals are not counted, but their number is bounded by the roots.
  */
 let maxActiveGoals = 20;
 
@@ -106,7 +106,7 @@ export function createGoal(data: { title: string; description?: string; category
     const now = Date.now();
     const parentId = data.parentId || null;
     if (!parentId && getActiveGoalCount() >= maxActiveGoals) {
-      console.warn(`[GOAL] Batas goal root aktif tercapai (${maxActiveGoals}). Goal "${data.title}" ditolak.`);
+      console.warn(`[GOAL] Active root goal limit reached (${maxActiveGoals}). Goal "${data.title}" rejected.`);
       return null;
     }
     stmts(db).insert.run(
@@ -118,7 +118,7 @@ export function createGoal(data: { title: string; description?: string; category
     }
     return rowToGoal(stmts(db).get.get(id));
   } catch (err: any) {
-    console.warn('[GOAL] Gagal membuat goal:', err?.message || err);
+    console.warn('[GOAL] Failed to create goal:', err?.message || err);
     return null;
   }
 }
@@ -126,7 +126,7 @@ export function createGoal(data: { title: string; description?: string; category
 function touchGoal(id: string): void {
   try {
     stmts(getDb()).updateStatus.run('in_progress', 0, Date.now(), id);
-  } catch { /* abaikan */ }
+  } catch { /* ignore */ }
 }
 
 export function getGoal(id: string): Goal | null {
@@ -154,9 +154,9 @@ export function getGoalChildren(id: string): Goal[] {
 }
 
 /**
- * Kemajuan sebuah goal (re-evaluasi rekursif). Bila goal punya subgoals,
- * progress = rata-rata progress subgoal aktif, dan bila semua selesai,
- * goal otomatis complete (closed-loop). Lalu naik ke parent.
+ * Progress of a goal (recursive re-evaluation). When a goal has subgoals,
+ * progress = average of active subgoal progress, and when all are done,
+ * the goal auto-completes (closed-loop). Then it ascends to the parent.
  */
 export function recomputeGoal(id: string): Goal | null {
   try {
@@ -178,13 +178,13 @@ export function recomputeGoal(id: string): Goal | null {
     }
     return goal;
   } catch (err: any) {
-    console.warn('[GOAL] Gagal recompute:', err?.message || err);
+    console.warn('[GOAL] Failed to recompute:', err?.message || err);
     return getGoal(id);
   }
 }
 
 /**
- * Tambah kemajuan leaf-goal lalu propagate ke atas (rekursif).
+ * Add leaf-goal progress then propagate upward (recursively).
  */
 export function advanceGoal(id: string, delta: number): Goal | null {
   try {
@@ -200,7 +200,7 @@ export function advanceGoal(id: string, delta: number): Goal | null {
     }
     return getGoal(id);
   } catch (err: any) {
-    console.warn('[GOAL] Gagal advance:', err?.message || err);
+    console.warn('[GOAL] Failed to advance:', err?.message || err);
     return getGoal(id);
   }
 }
@@ -216,7 +216,7 @@ export function completeGoal(id: string): Goal | null {
     }
     return getGoal(id);
   } catch (err: any) {
-    console.warn('[GOAL] Gagal complete:', err?.message || err);
+    console.warn('[GOAL] Failed to complete:', err?.message || err);
     return getGoal(id);
   }
 }
@@ -226,13 +226,13 @@ export function abandonGoal(id: string): Goal | null {
     stmts(getDb()).updateStatus.run('abandoned', 0, Date.now(), id);
     return getGoal(id);
   } catch (err: any) {
-    console.warn('[GOAL] Gagal abandon:', err?.message || err);
+    console.warn('[GOAL] Failed to abandon:', err?.message || err);
     return getGoal(id);
   }
 }
 
 /**
- * Dekomposisi rekursif: pecah goal menjadi subgoals.
+ * Recursive decomposition: split a goal into subgoals.
  */
 export function decomposeGoal(id: string, subgoals: { title: string; description?: string }[]): Goal[] {
   const created: Goal[] = [];
@@ -245,8 +245,8 @@ export function decomposeGoal(id: string, subgoals: { title: string; description
 }
 
 /**
- * Goal fokus untuk siklus saat ini: prioritas in_progress (paling baru),
- * lalu active paling tua yang belum punya progress dan masih relevan.
+ * Focus goal for the current cycle: prioritize in_progress (newest),
+ * then the oldest active goal with no progress yet that is still relevant.
  */
 export function getFocusGoal(now: number = Date.now()): Goal | null {
   const active = listActiveGoals(50);
@@ -262,13 +262,13 @@ export function getFocusGoal(now: number = Date.now()): Goal | null {
 }
 
 /**
- * Bangun blok direktif trilingual untuk goal fokus.
+ * Build a trilingual directive block for the focus goal.
  */
 export function buildGoalDirective(goal: Goal): string {
   const children = getGoalChildren(goal.id);
   const childLines = children.length > 0
     ? children.map((c: Goal) => `  - ${c.status === 'completed' ? '[x]' : '[ ]'} (${Math.round(c.progress * 100)}%) ${c.title}`).join('\n')
-    : '  - (sub-goal belum didekomposisi)';
+    : '  - (sub-goals not yet decomposed)';
   return [
     '',
     '# CURRENT GOAL FOCUS (RECURSIVE MONITORING)',
@@ -281,8 +281,8 @@ export function buildGoalDirective(goal: Goal): string {
 }
 
 /**
- * Throttle self-proposal: benar jika sudah melewati cooldown sejak proposal
- * otomatis terakhir (atau belum pernah ada).
+ * Throttle self-proposal: returns true if the cooldown has passed since the last
+ * automatic proposal (or none has ever been made).
  */
 export function isProposalThrottled(source = 'auto', cooldownMs: number): boolean {
   try {
@@ -295,19 +295,19 @@ export function isProposalThrottled(source = 'auto', cooldownMs: number): boolea
 }
 
 /**
- * Catat proposal agar throttle bekerja.
+ * Record a proposal so throttling works.
  */
 export function recordProposal(source: string, rootGoalId: string): void {
   try {
     stmts(getDb()).insertProposal.run(source, rootGoalId, Date.now());
   } catch (err: any) {
-    console.warn('[GOAL] Gagal catat proposal:', err?.message || err);
+    console.warn('[GOAL] Failed to record proposal:', err?.message || err);
   }
 }
 
 /**
- * Kemiripan kata kunci antara teks percakapan dan goal (judul/deskripsi/sub).
- * Mengembalikan daftar kata yang cocok; untuk deteksi sentuhan konteks.
+ * Keyword similarity between a conversation text and a goal (title/description/sub).
+ * Returns the list of matching words; for context-touch detection.
  */
 export function goalKeywordOverlap(goal: Goal, text: string): string[] {
   const textTokens = new Set(

@@ -39,7 +39,7 @@ export class NeuralInterface {
       if (memoryConf.forgetfulness_enabled !== undefined) return !!memoryConf.forgetfulness_enabled;
       if (memoryConf.forgetfulnessEnabled !== undefined) return !!memoryConf.forgetfulnessEnabled;
     } catch (err: any) {
-      console.warn('[FORGETFULNESS_ALGORITHM] Gagal baca config memory:', err?.message || err);
+      console.warn('[FORGETFULNESS_ALGORITHM] Failed to read memory config:', err?.message || err);
     }
     return true;
   }
@@ -335,9 +335,9 @@ export class NeuralInterface {
       `).all(...dbQueryParams);
       historyRows = recentRows.reverse();
 
-      // Forgetting-curve spaced repetition: pertahankan kontinuitas percakapan
-      // terbaru, re-rank memori lama berdasar probabilitas lupa (Ebbinghaus)
-      // + kepentingan, lalu tandai yang di-recall agar stabilitasnya menguat.
+      // Forgetting-curve spaced repetition: keep recent conversation continuity,
+      // re-rank older memories by forgetting probability (Ebbinghaus)
+      // + importance, then mark the recalled ones so their stability strengthens.
       try {
         const now = Date.now();
         const recentCount = 40;
@@ -347,7 +347,7 @@ export class NeuralInterface {
         historyRows = [...recalledOlder, ...continuity];
         markMemoriesRecalled(recalledOlder.map((r: any) => r.id));
       } catch (err: any) {
-        console.warn('[NEURAL] Forgetting-curve re-rank gagal, pakai urutan kronologis:', err?.message || err);
+        console.warn('[NEURAL] Forgetting-curve re-rank failed, using chronological order:', err?.message || err);
       }
     }
 
@@ -369,7 +369,7 @@ export class NeuralInterface {
       const pendingSet = BackgroundToolDispatcher.getInstance().getPending(contextId);
       if (pendingSet) {
         if (pendingSet.status === 'pending') {
-          const pendingReply = "Yui sedang mengerjakan request kamu sebentar ya~ 🌸 Tunggu sebentar, hasilnya akan segera tersedia.";
+          const pendingReply = "Yui is working on your request, hold on a sec~ 🌸 Wait a moment, the result will be ready soon.";
           const pendingMemoryId = "pending_bg_" + genId(9);
           memories.push({
             id: pendingMemoryId,
@@ -639,7 +639,7 @@ export class NeuralInterface {
             `).run(pendingId, input, senderName, contextId, chatType, Date.now());
           }, 'insert-pending-message');
         } catch (dbErr: any) {
-          console.error("[NEURAL_INTERFACE_FALLBACK_ERR] Gagal menyimpan pesan fallback ke database:", dbErr.message);
+          console.error("[NEURAL_INTERFACE_FALLBACK_ERR] Failed to save fallback message to database:", dbErr.message);
         }
         return null;
       }

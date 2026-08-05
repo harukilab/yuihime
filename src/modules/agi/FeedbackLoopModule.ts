@@ -1,11 +1,11 @@
 /**
  * FeedbackLoopModule.ts
  *
- * Closed-loop Learning: memproses sinyal feedback nyata (reaksi Telegram,
- * tombol Web UI) menjadi learned_strategies jangka panjang + penyesuaian
- * relasi, lalu menyuntikkan catatan feedback terbaru ke dalam soulDirective.
+ * Closed-loop Learning: processes real feedback signals (Telegram reactions,
+ * Web UI buttons) into long-term learned_strategies + relation adjustments,
+ * then injects the latest feedback notes into the soulDirective.
  *
- * Phase: SOUL (order 30, setelah proactive-volition & spontaneous-proactive).
+ * Phase: SOUL (order 30, after proactive-volition & spontaneous-proactive).
  */
 
 import { CortexModule, ModuleType, AgentState } from '@shared/include/types';
@@ -97,7 +97,7 @@ export const FeedbackLoopModule: CortexModule = {
         trustDelta += delta.trust;
         recentTopics.push(...delta.topics);
         consumedIds.push(event.id);
-        const topicsStr = delta.topics.join(', ') || '(tanpa topik)';
+        const topicsStr = delta.topics.join(', ') || '(no topic)';
         const tone = event.reward > 0
           ? { en: 'User liked', id: 'User suka', jp: 'ユーザーが気に入った' }
           : event.reward < 0
@@ -105,7 +105,7 @@ export const FeedbackLoopModule: CortexModule = {
             : { en: 'User reacted neutral', id: 'User bereaksi netral', jp: 'ユーザーは中立' };
         summary.push(`${tone.en}: ${topicsStr} | ${tone.id}: ${topicsStr} | ${tone.jp}: ${topicsStr}`);
       } catch (err: any) {
-        logs.push(`[FEEDBACK_LOOP] Gagal konsolidasi event #${event.id}: ${err?.message || err}`);
+        logs.push(`[FEEDBACK_LOOP] Failed to consolidate event #${event.id}: ${err?.message || err}`);
       }
     }
 
@@ -121,7 +121,7 @@ export const FeedbackLoopModule: CortexModule = {
     }
 
     const uniqueTopics = [...new Set(recentTopics)].slice(0, 5);
-    logs.push(`[FEEDBACK_LOOP] Konsolidasi ${consumedIds.length} feedback. Affection ${affectionDelta >= 0 ? '+' : ''}${affectionDelta} | Trust ${trustDelta >= 0 ? '+' : ''}${trustDelta} | Topik: ${uniqueTopics.join(', ') || '-'}`);
+    logs.push(`[FEEDBACK_LOOP] Consolidated ${consumedIds.length} feedback. Affection ${affectionDelta >= 0 ? '+' : ''}${affectionDelta} | Trust ${trustDelta >= 0 ? '+' : ''}${trustDelta} | Topics: ${uniqueTopics.join(', ') || '-'}`);
 
     let nextContext: any = { ...context, feedbackConsolidated: true, logs };
 

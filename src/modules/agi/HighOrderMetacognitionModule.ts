@@ -19,7 +19,7 @@ function ensurePromptRegistered(config: any) {
  * HighOrderMetacognitionModule: Meta-cognitive Self-Reflection & Bias Evaluator.
  * 
  * Analyzes internal cognitive dissonance, calculates a virtual Hallucination Index,
- * compares model parameters across sirkuit kognisi, and executes self-critique.
+ * compares model parameters across cognitive circuits, and executes self-critique.
  */
 export const HighOrderMetacognitionModule: CortexModule = {
   metadata: {
@@ -148,7 +148,7 @@ export async function runHighOrderMetacognition(input: string, state: any, conte
           llmCritique = (llmCritique || "").trim().slice(0, 800);
           logs.push(`[META_COGNITION] LLM self-critique (hybrid) generated: "${llmCritique.substring(0, 60)}..."`);
         } catch (e) {
-          logs.push(`[META_COGNITION] LLM critique gagal, lanjut heuristik.`);
+          logs.push(`[META_COGNITION] LLM critique failed, continuing with heuristics.`);
         }
       }
     }

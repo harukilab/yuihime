@@ -460,19 +460,19 @@ export function useAppHandlers(
     if (activeInput.trim() === '/reset_cognition') {
       s.setInput('');
       chat.addLog('user', '/reset_cognition');
-      chat.addLog('agent', "[SYSTEM] Menyegarkan memori percakapan batin... Mohon tunggu sebentar.");
+      chat.addLog('agent', "[SYSTEM] Refreshing inner conversation memory... Please wait a moment.");
       try {
         const success = await StorageService.purge('soft');
         if (success) {
           const nameToUse = s.perceivedName || 'user';
-          chat.addLog('agent', `[SYSTEM] Sukses! Riwayat obrolan sesaat telah disegarkan. Seluruh ingatan penting, mimpi, dan relasi cinta kepribadian Yui dengan ${nameToUse} tetap utuh.`);
-          SpeechService.speak(`Sirkuit obrolanku sudah disegarkan dan kembali jernih, ${nameToUse}! Tenang saja, aku tidak melupakan ${nameToUse} kok~`);
+          chat.addLog('agent', `[SYSTEM] Success! The momentary chat history has been refreshed. All of Yui's important memories, dreams, and love relationships with ${nameToUse} remain intact.`);
+          SpeechService.speak(`My chat circuit has been refreshed and is clear again, ${nameToUse}! Don't worry, I haven't forgotten ${nameToUse} at all~`);
           window.dispatchEvent(new CustomEvent('cognition_purged', { detail: { mode: 'soft' } }));
         } else {
-          chat.addLog('agent', "[SYSTEM] Gagal menyegarkan sirkuit obrolan.");
+          chat.addLog('agent', "[SYSTEM] Failed to refresh the chat circuit.");
         }
       } catch (err: any) {
-        chat.addLog('agent', `[SYSTEM] Terjadi kesalahan: ${err.message || String(err)}`);
+        chat.addLog('agent', `[SYSTEM] An error occurred: ${err.message || String(err)}`);
       }
       return;
     }
@@ -497,7 +497,7 @@ export function useAppHandlers(
       const code = pairMatch[1];
       s.setInput('');
       chat.addLog('user', activeInput.trim());
-      chat.addLog('agent', `[SYSTEM] Memverifikasi kode penyandingan ${code}...`);
+      chat.addLog('agent', `[SYSTEM] Verifying pairing code ${code}...`);
       try {
         const res = await fetch('/api/pair/claim', {
           method: 'POST',
@@ -509,14 +509,14 @@ export function useAppHandlers(
         });
         const data = await res.json();
         if (res.ok && data.success) {
-          chat.addLog('agent', `✨ Kognisi Terhubung! ${data.message}`);
-          SpeechService.speak(`Kognisi kita sudah terhubung sepenuhnya, user ${s.perceivedName || 'Guest'}!`);
+          chat.addLog('agent', `✨ Cognition Connected! ${data.message}`);
+          SpeechService.speak(`Our cognition is now fully connected, user ${s.perceivedName || 'Guest'}!`);
           window.dispatchEvent(new CustomEvent('pairing_status_updated'));
         } else {
-          chat.addLog('agent', `❌ Gagal: ${data.error || 'Kode salah atau kedaluwarsa.'}`);
+          chat.addLog('agent', `❌ Failed: ${data.error || 'Wrong or expired code.'}`);
         }
       } catch (err: any) {
-        chat.addLog('agent', `❌ Gagal menghubungi server batin Yui: ${err.message || String(err)}`);
+        chat.addLog('agent', `❌ Failed to reach Yui's inner server: ${err.message || String(err)}`);
       }
       return;
     }

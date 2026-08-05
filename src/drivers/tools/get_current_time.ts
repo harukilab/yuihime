@@ -41,7 +41,7 @@ export const GetCurrentTimeTool: ToolModule = {
           timezoneLabel = 'server';
         }
       } else {
-        // Default: waktu lokal user yang dikonfigurasi (circadian-rhythm.timezoneOffsetHours)
+        // Default: user's configured local time (circadian-rhythm.timezoneOffsetHours)
         const offset = getTzOffsetHours();
         display = formatLocalFull(offset);
         timezoneLabel = tzLabel(offset);

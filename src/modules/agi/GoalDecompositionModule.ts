@@ -1,20 +1,20 @@
 /**
  * GoalDecompositionModule.ts
  *
- * Recursive goal decomposition & closed-loop monitoring (Stage F): modul SOUL
- * membaca goal aktif yang paling relevan sebagai fokus siklus ini, lalu
- * menyuntikkan direktif trilingual ke soulDirective agar Yui mendorong
- * kemajuan goal secara alami dalam percakapan.
+ * Recursive goal decomposition & closed-loop monitoring (Stage F): the SOUL module
+ * reads the most relevant active goal as this cycle's focus, then
+ * injects a trilingual directive into the soulDirective so Yui pushes
+ * goal progress naturally in the conversation.
  *
- * Phase: SOUL (order 26, setelah confidence & abstain).
+ * Phase: SOUL (order 26, after confidence & abstain).
  */
 
 import { CortexModule, ModuleType, AgentState } from '@shared/include/types';
 import { getFocusGoal, buildGoalDirective, listActiveGoals, advanceGoal, goalKeywordOverlap, createGoal } from '../../core/goalDecomposition';
 
 /**
- * Deteksi permintaan "tambah goal" dari input user (ID/EN/JP).
- * Return judul goal, atau null bila input bukan permintaan.
+ * Detects "add goal" requests from the user input (ID/EN/JP).
+ * Returns the goal title, or null if the input is not a request.
  */
 const GOAL_KEYWORD_RE = /(?:goal|target|目標|ゴール)/i;
 const GOAL_COLON_RE = /[:：]\s*(.+)/;
@@ -98,16 +98,16 @@ export const GoalDecompositionModule: CortexModule = {
       return { ...context };
     }
 
-    // Permintaan user untuk menambah goal -> buat langsung sebagai fokus baru.
+    // User request to add a goal -> create it directly as the new focus.
     let focus = getFocusGoal();
     const requestedTitle = extractGoalTitle(input);
     if (requestedTitle) {
       const created = createGoal({ title: requestedTitle, category: 'user-request' });
       if (created) {
-        logs.push(`[GOAL_CREATE] Permintaan user -> goal baru: "${created.title}" (${created.id})`);
+        logs.push(`[GOAL_CREATE] User request -> new goal: "${created.title}" (${created.id})`);
         focus = created;
       } else {
-        logs.push(`[GOAL_CREATE] Gagal membuat goal dari permintaan: "${requestedTitle}"`);
+        logs.push(`[GOAL_CREATE] Failed to create goal from request: "${requestedTitle}"`);
       }
     }
 
@@ -117,7 +117,7 @@ export const GoalDecompositionModule: CortexModule = {
 
     let nextContext: any = { ...context, currentGoal: focus, logs };
 
-    // Closed-loop monitoring: obrolan menyentuh topik goal -> dorong maju sedikit
+    // Closed-loop monitoring: the conversation touches the goal topic -> nudge it forward a bit
     const autoAdvance = config.autoAdvanceOnTopic !== undefined ? !!config.autoAdvanceOnTopic : true;
     const advanceStep = Number(config.advanceStep !== undefined ? config.advanceStep : 0.05);
     if (autoAdvance && advanceStep > 0 && input) {
@@ -125,7 +125,7 @@ export const GoalDecompositionModule: CortexModule = {
       if (matches.length > 0) {
         const advanced = advanceGoal(focus.id, advanceStep);
         if (advanced) {
-          logs.push(`[GOAL_MONITOR] Topik cocok (${matches.slice(0, 3).join(', ')}) -> goal "${advanced.title}" +${advanceStep}`);
+          logs.push(`[GOAL_MONITOR] Topic matched (${matches.slice(0, 3).join(', ')}) -> goal "${advanced.title}" +${advanceStep}`);
           nextContext = { ...nextContext, currentGoal: advanced };
           if (advanced.status === 'completed') {
             nextContext = { ...nextContext, goalJustCompleted: advanced };
@@ -140,7 +140,7 @@ export const GoalDecompositionModule: CortexModule = {
       soulDirective: `${context.soulDirective || ''}\n${directive}`.trim()
     };
 
-    logs.push(`[GOAL_FOCUS] ${nextContext.currentGoal.title} (${Math.round((nextContext.currentGoal.progress || 0) * 100)}%) — ${listActiveGoals(10).length} goal aktif.`);
+    logs.push(`[GOAL_FOCUS] ${nextContext.currentGoal.title} (${Math.round((nextContext.currentGoal.progress || 0) * 100)}%) — ${listActiveGoals(10).length} active goals.`);
     return nextContext;
   }
 };

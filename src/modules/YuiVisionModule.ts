@@ -5,10 +5,10 @@ import { toSingleString } from '@/core/kernel/configNormalizer';
 /**
  * YuiVisionModule
  * 
- * Modul kognitif vision mandiri (self-contained/terpisah) untuk memproses
- * masukan gambar dengan konsumsi token yang sangat minimal (low-token optimization).
- * Mengurangi besaran context biner sensor menjadi deskripsi tekstual padat (< 50 token).
- * Dirancang agar UNIVERSAL tanpa terkunci ke satu penyedia (Gemini, OpenAI, OpenRouter, Anthropic, Custom).
+ * Standalone cognitive vision module (self-contained/separate) for processing
+ * image input with very minimal token consumption (low-token optimization).
+ * Reduces the binary sensor context size into a compact textual description (< 50 tokens).
+ * Designed to be UNIVERSAL without being locked to a single provider (Gemini, OpenAI, OpenRouter, Anthropic, Custom).
  */
 export const YuiVisionModule: CortexModule = {
   metadata: {
@@ -91,14 +91,14 @@ export const YuiVisionModule: CortexModule = {
   },
 
   run: async (input: string, state: AgentState, context: any) => {
-    // Pada loop kognitif normal, jika tidak ada context gambar baru, bypass dengan aman
+    // In the normal cognitive loop, if there is no new image context, bypass safely
     return { ...context };
   }
 };
 
 /**
- * Menganalisis buffer gambar secara online menggunakan berbagai penyedia AI yang dikonfigurasi secara fleksibel dan universal.
- * Menghasilkan deskripsi visual teks pendek untuk menghemat akumulasi token memori jangka panjang Yui.
+ * Analyzes the image buffer online using various flexibly and universally configured AI providers.
+ * Produces a short visual text description to save Yui's long-term memory token accumulation.
  */
 export async function describeImageFromBuffer(buffer: Buffer, mimeType: string): Promise<string | null> {
   try {
@@ -114,7 +114,7 @@ export async function describeImageFromBuffer(buffer: Buffer, mimeType: string):
     const provider = visionSettings.provider || "gemini";
     const base64Data = buffer.toString("base64");
 
-    // Bentuk prompt dinamis berdasarkan pengaturan lowTokenMode, maxWords, describeFace, dsb.
+    // Build a dynamic prompt based on the lowTokenMode, maxWords, describeFace, etc. settings.
     let basePrompt = visionSettings.customVisionPrompt || "Analyze this image and describe it in a brief, highly concise sentence or two. Focus on identifying the main subjects, elements, text, colors, characters, and environment. Keep it compact, descriptive, and low-token. Respond using standard descriptive language, no filler.";
     
     if (visionSettings.lowTokenMode !== false) {

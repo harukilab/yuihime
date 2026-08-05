@@ -41,7 +41,7 @@ export async function proxyAIRequest(options: {
 
   let response: Response;
   try {
-    // Hard timeout (120s) untuk mencegah hang selamanya pada upstream provider.
+    // Hard timeout (120s) to prevent hanging forever on the upstream provider.
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 120000);
     try {

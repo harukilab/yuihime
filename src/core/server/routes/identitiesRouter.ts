@@ -109,13 +109,13 @@ export function registerIdentitiesRoutes(app: express.Express, db: any) {
     }
   });
 
-  // Master endpoint untuk membersihkan dan menggabungkan profil duplikat secara otomatis
+  // Master endpoint to automatically clean up and merge duplicate profiles
   app.post("/api/identities/deduplicate", (req, res) => {
     try {
       const allIdentities = db.prepare("SELECT * FROM identities").all() as any[];
       let mergedCount = 0;
 
-      // Set pelacak ID agar tidak memproses identitas yang sudah di-merge/dihapus
+      // Set ID tracker so already merged/deleted identities are not processed
       const processedIds = new Set<string>();
 
       for (const iden of allIdentities) {
@@ -133,7 +133,7 @@ export function registerIdentitiesRoutes(app: express.Express, db: any) {
 
       res.json({ 
         success: true, 
-        message: "Proses kondensasi kognitif selesai! Seluruh profil batin duplikat dengan nama serupa atau pengenal tumpang tindih berhasil dilebur.",
+        message: "Cognitive condensation complete! All duplicate inner profiles with similar names or overlapping identifiers have been merged.",
         mergedCount,
         totalsRemaining: updatedIdentities.length
       });
@@ -175,7 +175,7 @@ export function registerIdentitiesRoutes(app: express.Express, db: any) {
       // Check pairing code
       const row = db.prepare("SELECT * FROM pairing_codes WHERE code = ?").get(code);
       if (!row) {
-        return res.status(400).json({ error: "Kode penyandingan salah, tidak aktif, atau tidak terdaftar." });
+        return res.status(400).json({ error: "Matching code is wrong, inactive, or not registered." });
       }
 
       if (row.expires_at < Date.now()) {
@@ -189,12 +189,12 @@ export function registerIdentitiesRoutes(app: express.Express, db: any) {
       // Find identity associated with code
       const identity = db.prepare("SELECT * FROM identities WHERE id = ?").get(row.identity_id);
       if (!identity) {
-        return res.status(404).json({ error: "Identitas rujukan tidak ditemukan." });
+        return res.status(404).json({ error: "Reference identity not found." });
       }
 
       // Confirm that the identity's perceivedName matches the active user's perceivedName
       if (identity.perceivedName.toLowerCase() !== perceivedName.toLowerCase()) {
-        return res.status(400).json({ error: "Kode penyandingan ini dibuat untuk nama identitas yang berbeda." });
+        return res.status(400).json({ error: "This matching code was created for a different identity name." });
       }
 
       // Link pending platform account
@@ -225,7 +225,7 @@ export function registerIdentitiesRoutes(app: express.Express, db: any) {
 
       res.json({
         success: true,
-        message: `Kognisi platform eksternal berhasil ditautkan ke profil '${identity.perceivedName}'!`,
+        message: `External platform cognition successfully linked to profile '${identity.perceivedName}'!`,
         linkedAccounts: currentAccounts
       });
     } catch (error: any) {
@@ -278,7 +278,7 @@ export function registerIdentitiesRoutes(app: express.Express, db: any) {
           success: true, 
           alreadyLinked: true, 
           claimedName: identity.perceivedName,
-          message: `Akun platform user saat ini sudah tertaut rapat dengan profil '${identity.perceivedName}'!` 
+          message: `User's platform account is already tightly linked to the profile '${identity.perceivedName}'!` 
         });
       }
 
@@ -307,7 +307,7 @@ export function registerIdentitiesRoutes(app: express.Express, db: any) {
         code,
         expires_at,
         claimedName: identity.perceivedName,
-        message: `Berhasil membuat kode sirkuit penyandian pengenalan mandiri.`
+        message: `Successfully created a self-recognition encoding circuit code.`
       });
     } catch (error: any) {
       console.error("[SERVER] POST /api/pair/generate-code-tool Error:", error);
@@ -348,13 +348,13 @@ export function registerIdentitiesRoutes(app: express.Express, db: any) {
       }
 
       if (!identity) {
-        return res.status(404).json({ success: false, error: "Identitas tidak ditemukan dalam sirkuit memori Yui." });
+        return res.status(404).json({ success: false, error: "Identity not found in Yui's memory circuit." });
       }
 
       // 2. Perform operations
       if (action === 'update_nickname') {
         if (!perceivedName || !perceivedName.trim()) {
-          return res.status(400).json({ success: false, error: "perceivedName wajib diisikan." });
+          return res.status(400).json({ success: false, error: "perceivedName is required." });
         }
         await retryDbOperation(() =>
           db.prepare("UPDATE identities SET perceivedName = ? WHERE id = ?").run(perceivedName.trim(), identity.id),
@@ -362,13 +362,13 @@ export function registerIdentitiesRoutes(app: express.Express, db: any) {
         );
         return res.json({ 
           success: true, 
-          message: `Sinyal kognitif Yui diperbarui! Nama panggilan user dalam memori Yui berhasil diubah menjadi: ${perceivedName.trim()} 🌸` 
+          message: `Yui's cognitive signal updated! The user's nickname in Yui's memory was successfully changed to: ${perceivedName.trim()} 🌸` 
         });
       }
 
       if (action === 'set_real_name') {
         if (!realName || !realName.trim()) {
-          return res.status(400).json({ success: false, error: "realName wajib diisikan." });
+          return res.status(400).json({ success: false, error: "realName is required." });
         }
         await retryDbOperation(() =>
           db.prepare("UPDATE identities SET realName = ? WHERE id = ?").run(realName.trim(), identity.id),
@@ -376,13 +376,13 @@ export function registerIdentitiesRoutes(app: express.Express, db: any) {
         );
         return res.json({ 
           success: true, 
-          message: `Sinyal kognitif batin Yui diperbarui! Nama asli user sekarang terekam dengan indah sebagai: ${realName.trim()} 🌸` 
+          message: `Yui's inner cognitive signal updated! The user's real name is now beautifully recorded as: ${realName.trim()} 🌸` 
         });
       }
 
       if (action === 'add_fact') {
         if (!fact || !fact.trim()) {
-          return res.status(400).json({ success: false, error: "Isi fakta kosong." });
+          return res.status(400).json({ success: false, error: "Fact content is empty." });
         }
         const facts = identity.importantFacts ? JSON.parse(identity.importantFacts) : [];
         if (!facts.includes(fact.trim())) {
@@ -392,12 +392,12 @@ export function registerIdentitiesRoutes(app: express.Express, db: any) {
             'identity-tool-add-fact'
           );
         }
-        return res.json({ success: true, message: `Fakta baru tentang user berhasil direkam dalam memori Yui! 🌸` });
+        return res.json({ success: true, message: `New fact about the user successfully recorded in Yui's memory! 🌸` });
       }
 
       if (action === 'remove_fact') {
         if (!fact || !fact.trim()) {
-          return res.status(400).json({ success: false, error: "Isi fakta kosong." });
+          return res.status(400).json({ success: false, error: "Fact content is empty." });
         }
         const facts = identity.importantFacts ? JSON.parse(identity.importantFacts) : [];
         const filtered = facts.filter((f: string) => f.toLowerCase() !== fact.trim().toLowerCase());
@@ -405,21 +405,21 @@ export function registerIdentitiesRoutes(app: express.Express, db: any) {
           db.prepare("UPDATE identities SET importantFacts = ? WHERE id = ?").run(JSON.stringify(filtered), identity.id),
           'identity-tool-remove-fact'
         );
-        return res.json({ success: true, message: `Fakta berhasil dihapus dari memori batin Yui.` });
+        return res.json({ success: true, message: `Fact successfully removed from Yui's inner memory.` });
       }
 
       if (action === 'update_perspective') {
         if (!yuiPerspective) {
-          return res.status(400).json({ success: false, error: "yuiPerspective wajib diisikan." });
+          return res.status(400).json({ success: false, error: "yuiPerspective is required." });
         }
         await retryDbOperation(() =>
           db.prepare("UPDATE identities SET yuiPerspective = ? WHERE id = ?").run(yuiPerspective, identity.id),
           'identity-tool-update-perspective'
         );
-        return res.json({ success: true, message: `Sudut pandang batin subjektif Yui tentang user berhasil diperbarui! 🌸` });
+        return res.json({ success: true, message: `Yui's subjective inner perspective about the user was successfully updated! 🌸` });
       }
 
-      return res.status(400).json({ success: false, error: `Action '${action}' tidak valid.` });
+      return res.status(400).json({ success: false, error: `Action '${action}' is invalid.` });
     } catch (err: any) {
       console.error("[SERVER] Tool Update Error:", err);
       res.status(500).json({ success: false, error: err.message });

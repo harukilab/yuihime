@@ -28,7 +28,7 @@ export abstract class NeuralCircuit {
 }
 
 /**
- * Pengatur dan Pengendali Sirkuit Saraf Batin (Neural Circuit Manager) untuk Yuihime
+ * Inner Neural Circuit Manager for Yuihime
  */
 export class NeuralCircuitManager {
   private circuits: Map<string, NeuralCircuit> = new Map();
@@ -38,7 +38,7 @@ export class NeuralCircuitManager {
 
   public register(circuit: NeuralCircuit) {
     this.circuits.set(circuit.config.id, circuit);
-    console.log(`[NEURAL_CIRCUIT] Sirkuit saraf batin terdaftar: ${circuit.config.name}`);
+    console.log(`[NEURAL_CIRCUIT] Inner neural circuit registered: ${circuit.config.name}`);
   }
 
   public startAll() {
@@ -46,11 +46,11 @@ export class NeuralCircuitManager {
       if (this.intervals.has(circuit.config.id)) return;
       
       const interval = setInterval(() => {
-        circuit.execute().catch(err => console.error(`Sirkuit ${circuit.config.id} gagal dieksekusi:`, err));
+        circuit.execute().catch(err => console.error(`Circuit ${circuit.config.id} failed to execute:`, err));
       }, circuit.config.intervalMs);
       
       this.intervals.set(circuit.config.id, interval);
-      this.logSystem(`Sirkuit saraf batin [${circuit.config.name}] mulai berdenyut otonom.`);
+      this.logSystem(`Inner neural circuit [${circuit.config.name}] started pulsing autonomously.`);
     });
   }
 

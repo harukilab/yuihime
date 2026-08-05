@@ -187,8 +187,8 @@ export class CronModule {
 
     // Fallback basic cron scheduler: check every 20 seconds to prevent drift/misses
     const interval = setInterval(async () => {
-      // Evaluasi jadwal memakai WAKTU LOKAL user (circadian-rhythm.timezoneOffsetHours),
-      // sehingga cron chan (mis. "0 8 * * *") ikut waktu user, bukan server UTC.
+      // Evaluate the schedule using the user's LOCAL time (circadian-rhythm.timezoneOffsetHours),
+      // so cron tasks (e.g. "0 8 * * *") follow the user's time, not server UTC.
       const now = toLocalClock(getTzOffsetHours());
       const currentMinuteStamp = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}-${now.getHours()}-${now.getMinutes()}`;
       

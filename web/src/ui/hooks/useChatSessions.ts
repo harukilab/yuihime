@@ -84,7 +84,7 @@ export function useChatSessions(loadDataCallback?: () => void) {
       const currentLocal = safeLocalStorage.parseJSON<ChatSession[]>('yuihime_chat_sessions', []);
       
       if (dbData && Array.isArray(dbData) && dbData.length > 0) {
-        // Gabungkan dbData dari peladen dan localStorage secara aman demi mencegah overwriting pesan tepercaya baru yang dikirim
+        // Merge dbData from the server and localStorage safely to prevent overwriting newly sent trusted messages
         const merged: ChatSession[] = [];
         const dbMap = new Map<string, ChatSession>(dbData.map(s => [s.id, s]));
         const localMap = new Map<string, ChatSession>(currentLocal.map(s => [s.id, s]));
@@ -109,7 +109,7 @@ export function useChatSessions(loadDataCallback?: () => void) {
         safeLocalStorage.setItem('yuihime_chat_sessions', JSON.stringify(merged));
         StorageService.saveCustom('yuihime_chat_sessions', merged);
 
-        // Load active ID dari backend custom storage
+        // Load active ID from backend custom storage
         StorageService.getCustom('yuihime_active_session_id').then((dbActiveId) => {
           const storedActiveId = dbActiveId || safeLocalStorage.getItem('yuihime_active_session_id') || merged[0].id;
           const exists = merged.some((s: any) => s.id === storedActiveId);
@@ -258,17 +258,17 @@ export function useChatSessions(loadDataCallback?: () => void) {
     StorageService.saveCustom('yuihime_chat_sessions', filtered);
     StorageService.saveCustom('yuihime_active_session_id', targetActiveId);
 
-    // Bersihkan seluruh riwayat memori percakapan batin yang terkait dengan sesi tersebut secara aman di sisi SQLite database
+    // Safely clear all inner conversation memory history tied to that session on the SQLite database side
     StorageService.deleteMemoriesByContext(`web_${id}`).then((success) => {
       if (success) {
-        addLog('agent', `[SYSTEM] Riwayat database batin sesi <web_${id}> telah dibersihkan secara aman.`);
+        addLog('agent', `[SYSTEM] Inner database history for session <web_${id}> has been cleared safely.`);
       }
     }).catch(err => {
-      console.warn("[SYSTEM] Gagal membersihkan memori di SQLite:", err);
+      console.warn("[SYSTEM] Failed to clear memory in SQLite:", err);
     });
   };
 
-  // Selaraskan memori obrolan secara instan saat terjadi perpindahan Sesi ID aktif
+  // Instantly sync chat memory when the active Session ID switches
   useEffect(() => {
     if (activeSessionId && loadDataCallback) {
       loadDataCallback();
@@ -384,9 +384,9 @@ export function useChatSessions(loadDataCallback?: () => void) {
                      processedContent.startsWith('Action Result from') ||
                      processedContent.startsWith('Neural sync failed') ||
                      processedContent.startsWith('Starting Server') ||
-                     processedContent.startsWith('✨ Kognisi Terhubung') ||
-                     processedContent.startsWith('❌ Gagal') ||
-                     processedContent.startsWith('Riwayat database batin') ||
+                     processedContent.startsWith('✨ Cognition Connected') ||
+                     processedContent.startsWith('❌ Failed') ||
+                     processedContent.startsWith('Inner database history') ||
                      processedContent.includes('[SYSTEM]') ||
                      processedContent.includes('[SYSTEM_OBSERVATION]') ||
                      processedContent.includes('[LEARNING_ENGINE]') ||

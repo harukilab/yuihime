@@ -193,7 +193,7 @@ export const ControlPanelDrawer: React.FC<ControlPanelDrawerProps> = ({
           enableSomaticGrounding: config.enableSomaticGrounding !== undefined ? !!config.enableSomaticGrounding : true
         });
       })
-      .catch(err => console.warn('[SOMATIC] Gagal memuat setelan somatisasi:', err));
+      .catch(err => console.warn('[SOMATIC] Failed to load somatic settings:', err));
   }, [isPanelOpen, state.systemHealth?.somatic?.virtualTemperature]);
 
   // Dynamic live calculations for biological somatic vitals (with micro-oscillators)
@@ -394,7 +394,7 @@ export const ControlPanelDrawer: React.FC<ControlPanelDrawerProps> = ({
                           onClick={onOpenBgDrawer}
                           className="w-full py-2 bg-gradient-to-r from-amber-500/10 to-amber-600/10 hover:from-amber-500/20 hover:to-amber-600/20 border border-amber-500/35 text-amber-500 hover:text-amber-400 font-bold rounded-xl text-[10px] font-mono uppercase tracking-wider transition-all duration-200 cursor-pointer text-center flex items-center justify-center gap-1.5 shadow-[0_4px_12px_rgba(245,158,11,0.05)]"
                         >
-                          🖼️ Buka Galeri Backdrops (Laci)
+                          🖼️ Open Backdrops Gallery (Drawer)
                         </button>
                       </div>
 
@@ -486,13 +486,13 @@ export const ControlPanelDrawer: React.FC<ControlPanelDrawerProps> = ({
                           }}
                           className="bg-red-500/30 hover:bg-red-500/40 text-white font-bold px-2.5 py-1 rounded text-[8px] uppercase tracking-wide cursor-pointer border border-red-500/40 transition-all select-none"
                         >
-                          Buka di Tab Baru
+                          Open in New Tab
                         </button>
                         <button 
                           onClick={async () => { setMicError(null); await startMic(); }}
                           className="bg-white/10 hover:bg-white/20 text-zinc-300 hover:text-white font-bold px-2.5 py-1 rounded text-[8px] uppercase tracking-wide cursor-pointer border border-white/10 transition-all select-none"
                         >
-                          Coba Lagi
+                          Try Again
                         </button>
                       </div>
                     </div>
@@ -516,12 +516,12 @@ export const ControlPanelDrawer: React.FC<ControlPanelDrawerProps> = ({
                     </label>
                   </div>
                   <p className="text-[8.5px] font-mono text-white/40 leading-relaxed text-left">
-                    Sebut kata kunci saat mic mati atau asisten tidur untuk mengaktifkan asisten dan mic secara otomatis lewat Web Speech API browser Anda.
+                    Say the keyword when the mic is off or the assistant is asleep to automatically activate the assistant and mic via your browser's Web Speech API.
                   </p>
                   {setSyncWakeWordWithMic && (
                     <div className="flex items-center justify-between text-[8.5px] font-mono pt-1.5 pb-0.5 border-t border-white/5">
                       <span className="flex items-center gap-1.5 text-white/60 cursor-help" title="Toggling Open Mic will automatically toggle the Wake Word trigger to keep them synchronized. Highly recommended for a seamless hands-free workflow!">
-                        🔗 Sinkronkan dgn Tombol Mic
+                        🔗 Sync with Mic Button
                       </span>
                       <label className="relative inline-flex items-center cursor-pointer select-none">
                         <input 
@@ -536,7 +536,7 @@ export const ControlPanelDrawer: React.FC<ControlPanelDrawerProps> = ({
                   )}
                   {wakeWordEnabled && (
                     <div className="flex items-center gap-2 pt-1 bg-black/30 border border-white/5 rounded-xl p-2">
-                      <span className="text-[8px] font-mono uppercase text-white/40 truncate">Kata Kunci:</span>
+                      <span className="text-[8px] font-mono uppercase text-white/40 truncate">Keyword:</span>
                       <input
                         type="text"
                         value={wakeWordKeyword}
@@ -552,14 +552,14 @@ export const ControlPanelDrawer: React.FC<ControlPanelDrawerProps> = ({
                 <div className="space-y-2 border-t border-white/5 pt-4">
                   <div className="flex items-center justify-between text-[10px] font-mono">
                     <span className="text-white/70 flex items-center gap-1.5 font-bold uppercase tracking-wide">
-                      <Mic size={11} className="text-cyan-400" /> Mode Interupsi Suara
+                      <Mic size={11} className="text-cyan-400" /> Speech Interruption Mode
                     </span>
                     <div className="flex bg-black/60 border border-white/10 rounded-lg p-0.5 font-mono text-[8.5px]">
                       <button
                         type="button"
                         onClick={() => setSpeechInterruptionMode('manual')}
                         className={`px-2 py-1 rounded transition-all cursor-pointer ${speechInterruptionMode === 'manual' ? 'bg-cyan-500/20 text-cyan-400 font-bold border border-cyan-500/30' : 'text-white/40 hover:text-white/70 border border-transparent'}`}
-                        title="Yui akan terus bicara kecuali jika dibilang stop dulu"
+                        title="Yui will keep talking unless told to say stop"
                       >
                         Mode 1 (Manual)
                       </button>
@@ -567,7 +567,7 @@ export const ControlPanelDrawer: React.FC<ControlPanelDrawerProps> = ({
                         type="button"
                         onClick={() => setSpeechInterruptionMode('interrupt')}
                         className={`px-2 py-1 rounded transition-all cursor-pointer ${speechInterruptionMode === 'interrupt' ? 'bg-amber-500/20 text-amber-500 font-bold border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent'}`}
-                        title="Setiap input baru akan langsung memotong suara Yui"
+                        title="Each new input will immediately cut off Yui's voice"
                       >
                         Mode 2 (Instan)
                       </button>
@@ -575,8 +575,8 @@ export const ControlPanelDrawer: React.FC<ControlPanelDrawerProps> = ({
                   </div>
                   <p className="text-[8.5px] font-mono text-white/40 leading-relaxed text-left">
                     {speechInterruptionMode === 'manual' 
-                      ? '🌸 Mode 1: Yui akan menyelesaikan ucapannya sampai selesai kecuali Anda mengucapkan kata "stop dulu", "stop", atau "diam".'
-                      : '⚡ Mode 2: Setiap perkataan baru Anda akan langsung memotong suara Yui secara otomatis (Instan).'
+                      ? '🌸 Mode 1: Yui will finish her sentence unless you say the words "stop dulu", "stop", or "diam".'
+                      : "⚡ Mode 2: Any new words from you will instantly cut off Yui's voice automatically."
                     }
                   </p>
                 </div>
@@ -599,7 +599,7 @@ export const ControlPanelDrawer: React.FC<ControlPanelDrawerProps> = ({
                     {!isCameraEnabled ? (
                       <div className="text-[8px] font-mono text-zinc-500 uppercase tracking-widest text-center px-4">
                         <span>Lens Deactivated / Offline</span>
-                        <span className="block text-[6px] text-zinc-600 font-sans normal-case mt-1">Gunakan pratinjau kamera luring dengan perlindungan privasi bawaan</span>
+                        <span className="block text-[6px] text-zinc-600 font-sans normal-case mt-1">Use offline camera preview with built-in privacy protection</span>
                       </div>
                     ) : (
                       <div className="w-full h-full relative">
@@ -628,19 +628,19 @@ export const ControlPanelDrawer: React.FC<ControlPanelDrawerProps> = ({
                   {isCameraEnabled && (
                     <div className="p-2.5 bg-white/[0.02] border border-white/5 rounded-xl text-[8px] font-mono text-white/50 leading-relaxed text-left">
                       <div className="text-[7.5px] uppercase tracking-wider font-bold text-zinc-400 mb-1 flex justify-between">
-                        <span>LOKAL SIGHT REASONING</span>
-                        <span className="text-pink-400 font-black animate-pulse">LURING ACTIVE</span>
+                        <span>LOCAL SIGHT REASONING</span>
+                        <span className="text-pink-400 font-black animate-pulse">OFFLINE ACTIVE</span>
                       </div>
                       <div className="text-white/80">{offlineVisualAnalysis}</div>
                       <div className="text-[7px] text-white/30 italic mt-1.5 border-t border-white/5 pt-1">
-                        *Bila gerakan atau gradasi warna berfluktuasi drastis (ragu), model online secara otonom diaktifkan sebagai backup.
+                        *When motion or color gradient fluctuates drastically (uncertain), the online model is autonomously enabled as a backup.
                       </div>
                     </div>
                   )}
 
                   {cameraError && (
                     <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-[10px] font-mono text-red-400 leading-relaxed text-left flex flex-col gap-2 mt-2">
-                      <span className="font-bold flex items-center gap-1 text-red-500 uppercase text-[9px]">⚠️ Kendala Kamera:</span>
+                      <span className="font-bold flex items-center gap-1 text-red-500 uppercase text-[9px]">⚠️ Camera Issue:</span>
                       <span>{cameraError}</span>
                     </div>
                   )}
@@ -807,7 +807,7 @@ export const ControlPanelDrawer: React.FC<ControlPanelDrawerProps> = ({
                             disabled={isSendingChat || !simulatedMessage.trim()}
                             className="px-3 bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/30 text-cyan-400 rounded-lg text-[9px] font-mono font-bold tracking-wider hover:text-white transition-all active:scale-95 disabled:opacity-50 disabled:scale-100 cursor-pointer flex items-center justify-center whitespace-nowrap"
                           >
-                            Kirim
+                            Send
                           </button>
                         </div>
                       </div>
@@ -1163,7 +1163,7 @@ export const ControlPanelDrawer: React.FC<ControlPanelDrawerProps> = ({
                           </div>
                         ) : (
                           <span className="text-[7.5px] font-mono text-white/40 uppercase leading-relaxed block">
-                            Single Linear Emotion Cycle. Trigger contrasting feelings (e.g. fear with hope) to activate complex batin resonance.
+                            Single Linear Emotion Cycle. Trigger contrasting feelings (e.g. fear with hope) to activate complex inner resonance.
                           </span>
                         )}
                       </div>
@@ -1332,7 +1332,7 @@ export const ControlPanelDrawer: React.FC<ControlPanelDrawerProps> = ({
                         </div>
                       ) : (
                         <div className="text-[7.5px] text-center text-white/25 border border-dashed border-white/5 p-4 rounded-xl leading-relaxed uppercase">
-                          No quantum Coordinate Backups generated yet. Press 'Backup Coordinates' to record current batin soul state.
+                          No quantum Coordinate Backups generated yet. Press 'Backup Coordinates' to record current inner soul state.
                         </div>
                       )}
                     </div>

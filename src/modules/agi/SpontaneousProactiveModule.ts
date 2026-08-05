@@ -1,9 +1,9 @@
 /**
  * SpontaneousProactiveModule.ts
  * 
- * Mengelola inisiatif pesan spontan iseng (tsundere/deredere) secara otonom.
- * Indeks Kerinduan (Longing Level) dihitung oleh ProactiveVolitionModule
- * (SOUL, order 13) dan dikonsumsi dari sini — satu sumber kebenaran.
+ * Manages autonomous spontaneous playful message initiative (tsundere/deredere).
+ * The Longing Index (Longing Level) is calculated by ProactiveVolitionModule
+ * (SOUL, order 13) and consumed from here — one source of truth.
  * 
  * Phase: SOUL
  * Part of the "Plug-and-Play" architecture.
@@ -39,7 +39,7 @@ ABSOLUTE INSTRUCTIONS:
    - Sincerity: Fully convey your genuine longing for their warm presence.
 `.trim();
 
-// Daftarkan template ke PromptRegistry
+// Register the template in PromptRegistry
 PromptRegistry.getInstance().register('proactive:spontaneous_interaction', DEFAULT_SPONTANEOUS_PROMPT);
 
 export const SpontaneousProactiveModule: CortexModule = {
@@ -99,18 +99,18 @@ export const SpontaneousProactiveModule: CortexModule = {
       return { ...context };
     }
 
-    // 1. Ekstraksi stempel waktu aktivitas terakhir
+    // 1. Extract the last activity timestamp
     const now = Date.now();
     const lastActiveTime = context.lastInteractiveTimestamp || now;
     const idleSeconds = (now - lastActiveTime) / 1000;
 
-    // 2. Konsumsi Longing Index dari ProactiveVolitionModule (SOUL, order 13).
-    //    Jangan hitung ulang — satu sumber kebenaran untuk mencegah saling timpa.
+    // 2. Consume the Longing Index from ProactiveVolitionModule (SOUL, order 13).
+    //    Do not recompute — one source of truth to prevent mutual overwrites.
     const longingIndex = context.longingIndex ?? state.mood?.loneliness ?? 5;
     context.longingIndex = longingIndex;
-    logs.push(`[SPONTANEOUS_PROACTIVE] Menggunakan Indeks Kerinduan: ${longingIndex}% (Idle: ${Math.round(idleSeconds)}s)`);
+    logs.push(`[SPONTANEOUS_PROACTIVE] Using Longing Index: ${longingIndex}% (Idle: ${Math.round(idleSeconds)}s)`);
 
-    // 3. Masukkan direktif impuls kerinduan ke dalam instruksi batin
+    // 3. Inject the longing impulse directive into the inner instructions
     const registry = PromptRegistry.getInstance();
     const template = config.promptTemplate || registry.get('proactive:spontaneous_interaction');
     registry.register('proactive:spontaneous_interaction', template, true);
@@ -119,7 +119,7 @@ export const SpontaneousProactiveModule: CortexModule = {
       longingIndex: longingIndex.toString(),
       channelType: context.chatType || 'Web Console',
       contextId: context.contextId || 'web_default',
-      lastActionText: idleSeconds > 300 ? 'user sedang sibuk di dunia nyata' : 'user sempat melihat Yui sesaat lalu'
+      lastActionText: idleSeconds > 300 ? 'user is busy in the real world' : 'user briefly looked at Yui a moment ago'
     });
 
     const activeAura = context.soulDirective || '';

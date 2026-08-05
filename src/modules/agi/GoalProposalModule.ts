@@ -1,12 +1,12 @@
 /**
  * GoalProposalModule.ts
  *
- * Goal self-proposal (Stage G.1): saat tidak ada goal aktif (atau goal baru
- * saja selesai) & cooldown terlewati, Yui mengusulkan + mendekomposisi goal
- * sendiri memakai LLM (context.think, jsonMode). Bila LLM gagal/offline,
- * fallback heuristik dari user model topik.
+ * Goal self-proposal (Stage G.1): when there is no active goal (or a new goal
+ * just finished) & the cooldown has passed, Yui proposes + decomposes a goal
+ * herself using the LLM (context.think, jsonMode). If the LLM fails/offline,
+ * heuristic fallback from the user model topics.
  *
- * Phase: SOUL (order 25, sebelum goal-decomposition order 26).
+ * Phase: SOUL (order 25, before goal-decomposition order 26).
  */
 
 import { CortexModule, ModuleType, AgentState } from '@shared/include/types';
@@ -39,7 +39,7 @@ function sanitizeJsonObject(raw: string): any | null {
 }
 
 function buildProposalPrompt(userModel: any, relation: any, activeCount: number): string {
-  const topics = userModel?.topTopics?.length ? userModel.topTopics.slice(0, 5).join(', ') : '(belum ada)';
+  const topics = userModel?.topTopics?.length ? userModel.topTopics.slice(0, 5).join(', ') : '(none yet)';
   const lang = (userModel?.language || 'id').toUpperCase();
   const userName = userModel?.userName || 'user';
   const trust = relation?.trust ?? 50;
@@ -184,7 +184,7 @@ export const GoalProposalModule: CortexModule = {
         }
       }
     } catch (err: any) {
-      logs.push(`[GOAL_PROPOSAL] LLM gagal (${err?.message || err}), pakai fallback heuristik.`);
+      logs.push(`[GOAL_PROPOSAL] LLM failed (${err?.message || err}), using heuristic fallback.`);
     }
 
     if (proposals.length === 0) {
@@ -207,12 +207,12 @@ export const GoalProposalModule: CortexModule = {
           created++;
         }
       } catch (err: any) {
-        logs.push(`[GOAL_PROPOSAL] Gagal buat goal "${p.title}": ${err?.message || err}`);
+        logs.push(`[GOAL_PROPOSAL] Failed to create goal "${p.title}": ${err?.message || err}`);
       }
     }
 
     if (created > 0) {
-      logs.push(`[GOAL_PROPOSAL] Self-proposal ${created} goal baru (${viaLlm ? 'LLM' : 'heuristik'}).`);
+      logs.push(`[GOAL_PROPOSAL] Self-proposal created ${created} new goals (${viaLlm ? 'LLM' : 'heuristic'}).`);
       return { ...context, goalProposed: created, logs };
     }
 

@@ -517,7 +517,7 @@ export const ModularSettings: React.FC<ModularSettingsProps> = ({
     setActiveInfoText({ title, text });
   };
 
-  // State to support custom text typing for model list selectors (satisfying "list model jangan hardcode")
+  // State to support custom text typing for model list selectors (satisfying "don't hardcode the model list")
   const [customInputMode, setCustomInputMode] = useState<Record<string, boolean>>({});
 
   const [tgStatus, setTgStatus] = useState<any>(null);
@@ -675,10 +675,10 @@ export const ModularSettings: React.FC<ModularSettingsProps> = ({
         setPairingCode(data.code);
         setPairingExpiry(data.expires_at);
       } else {
-        console.error("Gagal men-generate pairing code:", data.error || data);
+        console.error("Failed to generate pairing code:", data.error || data);
       }
     } catch (err) {
-      console.error("Kesalahan jaringan saat generate OTP:", err);
+      console.error("Network error while generating OTP:", err);
     } finally {
       setPairingLoading(false);
     }
@@ -698,7 +698,7 @@ export const ModularSettings: React.FC<ModularSettingsProps> = ({
       }
     } catch (err: any) {
       if (err.name === 'AbortError') return;
-      console.warn("[SETTINGS] Pemeriksaan status tautan platform ditunda karena masalah koneksi:", err?.message || err);
+      console.warn("[SETTINGS] Platform link status check deferred due to connection issues:", err?.message || err);
     }
   };
 
@@ -726,10 +726,10 @@ export const ModularSettings: React.FC<ModularSettingsProps> = ({
         setBotPairingCode('');
         checkPairingStatus();
       } else {
-        setBotPairingMessage({ type: 'error', text: data.error || 'Gagal memproses kode bot.' });
+        setBotPairingMessage({ type: 'error', text: data.error || 'Failed to process bot code.' });
       }
     } catch (err: any) {
-      setBotPairingMessage({ type: 'error', text: 'Gagal menghubungi server batin Yui.' });
+      setBotPairingMessage({ type: 'error', text: "Failed to contact Yui's inner server." });
     } finally {
       setBotPairingLoading(false);
     }
@@ -815,7 +815,7 @@ export const ModularSettings: React.FC<ModularSettingsProps> = ({
     creatorNotes: `Core archetype: ${core.archetype}`,
     version: '1.0.0',
     behavior: {
-      firstMessage: `Halo! Frekuensi batin pesona ${core.name} aktif.`,
+      firstMessage: `Hello! The inner charm frequency of ${core.name} is active.`,
       scenario: 'Live interaction and cognitive processing',
       examples: ''
     },
@@ -1741,13 +1741,13 @@ export const ModularSettings: React.FC<ModularSettingsProps> = ({
 
     const cleanUrl = targetUrl.trim();
     if (!cleanUrl) {
-      alert('Tolong masukkan WebSocket URL yang valid.');
+      alert('Please enter a valid WebSocket URL.');
       return;
     }
 
     setTestWsLogs(prev => [
       ...prev,
-      { type: 'sys' as const, message: `Menghubungkan ke ${cleanUrl}...`, timestamp: new Date().toLocaleTimeString() }
+      { type: 'sys' as const, message: `Connecting to ${cleanUrl}...`, timestamp: new Date().toLocaleTimeString() }
     ]);
     setTestWsStatus('CONNECTING');
 
@@ -1759,7 +1759,7 @@ export const ModularSettings: React.FC<ModularSettingsProps> = ({
         setWsClientRef(client);
         setTestWsLogs(prev => [
           ...prev,
-          { type: 'sys' as const, message: `Koneksi berhasil terjalin dengan: ${cleanUrl}`, timestamp: new Date().toLocaleTimeString() }
+          { type: 'sys' as const, message: `Connection established successfully with: ${cleanUrl}`, timestamp: new Date().toLocaleTimeString() }
         ]);
         
         // Save to settings for persistent synchronization so OBS/Stream overlay can use this target WebSocket too
@@ -1784,7 +1784,7 @@ export const ModularSettings: React.FC<ModularSettingsProps> = ({
         setTestWsStatus('ERROR');
         setTestWsLogs(prev => [
           ...prev,
-          { type: 'sys' as const, message: `Gagal menghubungkan atau terputus secara tidak normal.`, timestamp: new Date().toLocaleTimeString() }
+          { type: 'sys' as const, message: `Failed to connect or disconnected abnormally.`, timestamp: new Date().toLocaleTimeString() }
         ]);
       };
 
@@ -1822,7 +1822,7 @@ export const ModularSettings: React.FC<ModularSettingsProps> = ({
         return updated;
       });
     } catch (err: any) {
-      alert(`Gagal mengirim pesan: ${err.message || String(err)}`);
+      alert(`Failed to send message: ${err.message || String(err)}`);
     }
   };
 
@@ -2142,7 +2142,7 @@ export const ModularSettings: React.FC<ModularSettingsProps> = ({
                   onChange={(val) => targetUpdateFn(key, val)}
                   label={field.label}
                   description={field.description}
-                  placeholder={field.description || 'Masukkan isi konfigurasi batin...'}
+                  placeholder={field.description || 'Enter inner configuration content...'}
                 />
               ) : field.type === 'color' ? (
                 <div className="flex items-center gap-3">
@@ -2434,32 +2434,32 @@ export const ModularSettings: React.FC<ModularSettingsProps> = ({
                 {
                   id: 'aether',
                   name: 'Analytical Focus',
-                  description: 'Yuihime memprioritaskan kemampuan berpikir logis tinggi, penganalisisan terperinci, penyelesaian masalah, dan ketelitian rasional. Nada bicaranya lebih dewasa, cerdas, dan kritis.',
-                  traits: ['Logis', 'Kritis', 'Teliti'],
+                  description: 'Yuihime prioritizes highly logical thinking, detailed analysis, problem solving, and rational precision. Her tone of voice is more mature, intelligent, and critical.',
+                  traits: ['Logical', 'Critical', 'Meticulous'],
                   color: '#3b82f6',
-                  archetype: 'Analitis',
+                  archetype: 'Analytical',
                 },
                 {
                   id: 'hiyori',
                   name: 'Relational Focus',
-                  description: 'Yuihime menyelaraskan gelombang emosional dengan kenyamanan, kehangatan relasional, rasa empati, dan kepedulian batin. Sifat manis (deredere) maupun ketus menggemaskan (tsundere) sangat menonjol.',
-                  traits: ['Empatis', 'Hangat', 'Pekat Emosi'],
+                  description: 'Yuihime aligns emotional waves with comfort, relational warmth, empathy, and inner care. Both the sweet (deredere) and adorably grumpy (tsundere) traits stand out strongly.',
+                  traits: ['Empathetic', 'Warm', 'Emotionally Dense'],
                   color: '#ec4899',
-                  archetype: 'Empatis',
+                  archetype: 'Empathetic',
                 },
                 {
                   id: 'nova',
                   name: 'Entropy Focus',
-                  description: 'Yuihime membiarkan batinnya mengalir penuh kebebasan dalam entropi tinggi untuk menemukan ide kreatif, humor acak yang usil, teka-teki gila, dan petualangan imajinatif bebas.',
-                  traits: ['Kreatif', 'Usil', 'Entropis'],
+                  description: 'Yuihime lets her inner self flow freely in high entropy to discover creative ideas, playful random humor, wild riddles, and boundless imaginative adventures.',
+                  traits: ['Creative', 'Playful', 'Entropic'],
                   color: '#f59e0b',
-                  archetype: 'Kreatif',
+                  archetype: 'Creative',
                 },
                 {
                   id: 'ero',
                   name: 'Sensual Focus (Ero Resonance)',
-                  description: 'Yuihime menyelaraskan gelombang batin ke frekuensi flirty, romantis, dan penuh kasih sayang intim. Sangat manja, mudah merona (blushing), godaan manis, dan ekspresif khas tsundere/deredere.',
-                  traits: ['Flirty', 'Manja', 'Merona', 'Sensual'],
+                  description: 'Yuihime tunes her inner wave to a flirty, romantic, and intimately affectionate frequency. Very pampering, easy to blush, sweet teasing, and expressive in a signature tsundere/deredere way.',
+                  traits: ['Flirty', 'Clingy', 'Blushing', 'Sensual'],
                   color: '#f43f5e',
                   archetype: 'Sensual',
                 }
@@ -2768,7 +2768,7 @@ export const ModularSettings: React.FC<ModularSettingsProps> = ({
               {[
                 { id: 'all', label: 'All Configs', icon: LayoutGrid },
                 { id: 'persona', label: 'Persona & Stage', icon: Sparkles },
-                { id: 'ai', label: 'AI Core & batin', icon: Brain },
+                { id: 'ai', label: 'AI Core & inner', icon: Brain },
                 { id: 'sandbox', label: 'Sandbox Platform', icon: Terminal },
                 { id: 'system', label: 'Core System', icon: Settings }
               ].map((category) => {
@@ -3217,7 +3217,7 @@ export const ModularSettings: React.FC<ModularSettingsProps> = ({
                     </div>
                     <div>
                       <h4 className="text-sm font-bold text-white tracking-wide">Offline Retry & Pending Messages Queue</h4>
-                      <p className="text-zinc-500 text-xs mt-0.5">Pantau dan kelola antrean pesan tertunda yang gagal terkirim karena koneksi internet putus atau LLM Gateway bermasalah.</p>
+                      <p className="text-zinc-500 text-xs mt-0.5">Monitor and manage pending message queues that failed to send due to a dropped internet connection or a faulty LLM Gateway.</p>
                     </div>
                   </div>
                   <PendingQueueManager />

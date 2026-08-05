@@ -1,7 +1,7 @@
 /**
  * DiaryModule.ts
  *
- * Yui Airi's private diary (Rahasia Pribadi). Each night during the
+ * Yui Airi's private diary (Private Secret). Each night during the
  * sleep/dream cycle (or on explicit WRITE_DIARY trigger), Yui writes a
  * secret diary entry summarizing the day from her inner perspective.
  *

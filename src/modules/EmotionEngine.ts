@@ -723,7 +723,7 @@ export const EmotionEngine: CortexModule = {
     }
     state.mood.ambivalence = activeAmbivalence;
 
-    // 7. ARSITEKTUR MEMORI BERLAPIS DENGAN SENTIMEN (LAYERED EMOTIONAL TAGGING)
+    // 7. LAYERED MEMORY ARCHITECTURE WITH SENTIMENT (LAYERED EMOTIONAL TAGGING)
     // Prepares high-fidelity structured emotional pointers for down-stream context injections
     const shortTermBuffer = `Lexical sentiment score of current turn: ${userSentiment.toFixed(2)}`;
     

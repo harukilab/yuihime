@@ -113,7 +113,7 @@ async function showStatus() {
 
 async function listPendingConfirmations() {
   if (!apiConnected) {
-    console.log(`\n${YELLOW}⚠️ Otorisasi berkas (Acc) hanya dapat dikelola saat server API berjalan online.${RESET}\n`);
+    console.log(`\n${YELLOW}⚠️ File authorization (Acc) can only be managed while the API server is online.${RESET}\n`);
     return;
   }
 
@@ -123,23 +123,23 @@ async function listPendingConfirmations() {
       const data = await res.json();
       const list = data.list || [];
       if (list.length === 0) {
-        console.log(`\n${GREEN}✓ Tidak ada antrean otorisasi berkas (pending confirmations) saat ini.${RESET}\n`);
+        console.log(`\n${GREEN}✓ No file authorization queue (pending confirmations) right now.${RESET}\n`);
       } else {
-        console.log(`\n${BOLD}${MAGENTA}=== ANTREAN OTORISASI BERKAS BATIN (PENDING ACC) ===${RESET}`);
+        console.log(`\n${BOLD}${MAGENTA}=== INNER FILE AUTHORIZATION QUEUE (PENDING ACC) ===${RESET}`);
         list.forEach((item: any, idx: number) => {
           console.log(`[${idx + 1}] ${BOLD}ID: ${item.id}${RESET} | ${YELLOW}${item.action.toUpperCase()}${RESET} | Path: ${item.targetPath}`);
         });
-        console.log(`${MAGENTA}Gunakan perintah: 'approve <ID>', 'always <ID>', atau 'deny <ID>' untuk mengontrol.${RESET}\n`);
+        console.log(`${MAGENTA}Use the commands: 'approve <ID>', 'always <ID>', or 'deny <ID>' to control.${RESET}\n`);
       }
     }
   } catch (err: any) {
-    console.log(`${RED}Gagal memuat daftar pending confirmations: ${err.message}${RESET}`);
+    console.log(`${RED}Failed to load pending confirmations list: ${err.message}${RESET}`);
   }
 }
 
 async function handleApproveCommand(baseCmd: string, id: string) {
   if (!apiConnected) {
-    console.log(`${RED}Koneksi API Offline. Tidak dapat merespon otorisasi.${RESET}`);
+    console.log(`${RED}API connection Offline. Cannot respond to authorization.${RESET}`);
     return;
   }
 
@@ -152,11 +152,11 @@ async function handleApproveCommand(baseCmd: string, id: string) {
       if (list.length === 1) {
         id = list[0].id;
       } else {
-        console.log(`${RED}Silakan sertakan ID konfirmasi. Contoh: ${baseCmd} ABCDEF${RESET}`);
+        console.log(`${RED}Please include a confirmation ID. Example: ${baseCmd} ABCDEF${RESET}`);
         return;
       }
     } catch (_) {
-      console.log(`${RED}Silakan sertakan ID konfirmasi.${RESET}`);
+      console.log(`${RED}Please include a confirmation ID.${RESET}`);
       return;
     }
   }
@@ -178,15 +178,15 @@ async function handleApproveCommand(baseCmd: string, id: string) {
     });
     const result = await res.json();
     if (result.success) {
-      console.log(`${GREEN}✓ Berhasil memberikan otorisasi batin untuk ID ${id.toUpperCase()} dengan status [${status.toUpperCase()}].${RESET}`);
+      console.log(`${GREEN}✓ Successfully granted inner authorization for ID ${id.toUpperCase()} with status [${status.toUpperCase()}].${RESET}`);
       if (status === "always") {
         alwaysApprove = true;
       }
     } else {
-      console.log(`${RED}Gagal memperbarui otorisasi untuk ID ${id}: ${result.error}${RESET}`);
+      console.log(`${RED}Failed to update authorization for ID ${id}: ${result.error}${RESET}`);
     }
   } catch (err: any) {
-    console.log(`${RED}Kesalahan jaringan: ${err.message}${RESET}`);
+    console.log(`${RED}Network error: ${err.message}${RESET}`);
   }
 }
 
@@ -194,12 +194,12 @@ async function handleChat(message: string) {
   if (!message || !message.trim()) return;
 
   if (!apiConnected) {
-    console.log(`\n${YELLOW}[Standalone Mode] Menstimulasi respon batin luring Yuihime...${RESET}`);
-    console.log(`${CYAN}Yuihime:${RESET} "user! Maaf sirkuit utama batin Yui sedang offline (server mati). Tolong nyalakan dulu servernya agar Yui bisa berpikir jernih ya! Tapi tenang, Yui tetap menyayangi user!"\n`);
+    console.log(`\n${YELLOW}[Standalone Mode] Stimulating Yuihime's inner offline response...${RESET}`);
+    console.log(`${CYAN}Yuihime:${RESET} "user! Sorry, Yui's main inner circuit is offline (server is down). Please start the server first so Yui can think clearly! But don't worry, Yui still loves you, user!"\n`);
     return;
   }
 
-  process.stdout.write(`\n${MAGENTA}⠋ Yuihime sedang merenung...${RESET}`);
+  process.stdout.write(`\n${MAGENTA}⠋ Yuihime is thinking...${RESET}`);
   
   try {
     const response = await fetch(`${API_URL}/api/cortex/think`, {
@@ -220,36 +220,36 @@ async function handleChat(message: string) {
     if (response.ok) {
       const data = await response.json();
       console.log(`\n${GREEN}${BOLD}👑 YUIHIME RESPONDED:${RESET}`);
-      console.log(`${data.response || data.activeSubtitle || "Tanpa respon teks."}\n`);
+      console.log(`${data.response || data.activeSubtitle || "No text response."}\n`);
     } else {
-      console.log(`\n${RED}Gagal memproses obrolan. Kode status: ${response.status}${RESET}\n`);
+      console.log(`\n${RED}Failed to process the chat. Status code: ${response.status}${RESET}\n`);
     }
   } catch (err: any) {
     readline.clearLine(process.stdout, 0);
     readline.cursorTo(process.stdout, 0);
-    console.log(`\n${RED}Error saat mengirim pesan ke Cortex: ${err.message}${RESET}\n`);
+    console.log(`\n${RED}Error sending message to Cortex: ${err.message}${RESET}\n`);
   }
 }
 
 function showHelp() {
-  console.log(`\n${BOLD}${CYAN}Daftar Perintah Terminal Kognitif YuiHime:${RESET}`);
+  console.log(`\n${BOLD}${CYAN}YuiHime Cognitive Terminal Command List:${RESET}`);
   console.log(`--------------------------------------------------------------------------------`);
-  console.log(`  ${GREEN}help${RESET}                  : Tampilkan daftar bantuan ini.`);
-  console.log(`  ${GREEN}clear${RESET}                 : Bersihkan baris terminal.`);
-  console.log(`  ${GREEN}status${RESET} / ${GREEN}yuihime${RESET}       : Tampilkan detail status sistem kognisi dan database.`);
-  console.log(`  ${GREEN}pending${RESET}               : Tampilkan daftar antrean konfirmasi perubahan berkas.`);
-  console.log(`  ${GREEN}approve <ID>${RESET} / ${GREEN}acc <ID>${RESET} : Setujui satu perubahan berkas (Acc sekali).`);
-  console.log(`  ${GREEN}always <ID>${RESET}           : Setujui semua perubahan berkas pada sesi ini.`);
-  console.log(`  ${GREEN}deny <ID>${RESET} / ${GREEN}tolak <ID>${RESET}   : Tolak perubahan berkas.`);
-  console.log(`  ${GREEN}chat <pesan>${RESET} / ${GREEN}yui <msg>${RESET}: Kirim pesan obrolan langsung ke batin kognitif Yuihime.`);
-  console.log(`  ${GREEN}ls [folder]${RESET}           : Lihat isi folder aktif di workspace.`);
-  console.log(`  ${GREEN}cat <file>${RESET}            : Cetak isi file sandbox.`);
-  console.log(`  ${GREEN}touch <file>${RESET}          : Buat file kosong baru di sandbox.`);
-  console.log(`  ${GREEN}mkdir <folder>${RESET}        : Buat folder baru di sandbox.`);
-  console.log(`  ${GREEN}rm <file_atau_folder>${RESET} : Hapus berkas/folder sandbox.`);
-  console.log(`  ${GREEN}edit <file>${RESET}            : Buka file menggunakan editor Linux asli (nano/vim/vi).`);
-  console.log(`  ${GREEN}cd <folder>${RESET}           : Navigasi masuk ke dalam sub-direktori sandbox.`);
-  console.log(`  ${GREEN}[any-bash-command]${RESET}    : Jalankan perintah bash/shell langsung ke Linux OS.`);
+  console.log(`  ${GREEN}help${RESET}                  : Show this help list.`);
+  console.log(`  ${GREEN}clear${RESET}                 : Clear the terminal lines.`);
+  console.log(`  ${GREEN}status${RESET} / ${GREEN}yuihime${RESET}       : Show detailed cognitive system and database status.`);
+  console.log(`  ${GREEN}pending${RESET}               : Show the list of pending file-change confirmations.`);
+  console.log(`  ${GREEN}approve <ID>${RESET} / ${GREEN}acc <ID>${RESET} : Approve one file change (Acc once).`);
+  console.log(`  ${GREEN}always <ID>${RESET}           : Approve all file changes in this session.`);
+  console.log(`  ${GREEN}deny <ID>${RESET} / ${GREEN}tolak <ID>${RESET}   : Deny a file change.`);
+  console.log(`  ${GREEN}chat <message>${RESET} / ${GREEN}yui <msg>${RESET}: Send a chat message directly to Yuihime's cognitive inner self.`);
+  console.log(`  ${GREEN}ls [folder]${RESET}           : View the contents of the active folder in the workspace.`);
+  console.log(`  ${GREEN}cat <file>${RESET}            : Print the contents of a sandbox file.`);
+  console.log(`  ${GREEN}touch <file>${RESET}          : Create a new empty file in the sandbox.`);
+  console.log(`  ${GREEN}mkdir <folder>${RESET}        : Create a new folder in the sandbox.`);
+  console.log(`  ${GREEN}rm <file_atau_folder>${RESET} : Delete sandbox files/folders.`);
+  console.log(`  ${GREEN}edit <file>${RESET}            : Open a file using a native Linux editor (nano/vim/vi).`);
+  console.log(`  ${GREEN}cd <folder>${RESET}           : Navigate into a sandbox sub-directory.`);
+  console.log(`  ${GREEN}[any-bash-command]${RESET}    : Run bash/shell commands directly on the Linux OS.`);
   console.log(`--------------------------------------------------------------------------------\n`);
 }
 
@@ -284,7 +284,7 @@ export async function startRepl() {
     switch (baseCmd) {
       case "exit":
       case "quit":
-        console.log(`\n${GREEN}Sampai jumpa lagi user! Sirkuit batin Yui tetap siaga.${RESET}\n`);
+        console.log(`\n${GREEN}See you again, user! Yui's inner circuit stays on standby.${RESET}\n`);
         process.exit(0);
         break;
 
@@ -320,7 +320,7 @@ export async function startRepl() {
         if (chatText) {
           await handleChat(chatText);
         } else {
-          console.log(`${RED}Masukkan pesan obrolan. Contoh: yui halo yuihime!${RESET}`);
+          console.log(`${RED}Enter a chat message. Example: yui halo yuihime!${RESET}`);
         }
         break;
 
@@ -370,7 +370,7 @@ export async function startRepl() {
 
       case "cat":
         if (!args[1]) {
-          console.log(`${RED}Masukkan nama berkas. Contoh: cat README.md${RESET}`);
+          console.log(`${RED}Enter a file name. Example: cat README.md${RESET}`);
         } else {
           const targetFile = path.resolve(SANDBOX_ROOT, currentSubPath, args[1]);
           if (!targetFile.startsWith(SANDBOX_ROOT)) {
@@ -392,7 +392,7 @@ export async function startRepl() {
 
       case "touch":
         if (!args[1]) {
-          console.log(`${RED}Masukkan nama berkas baru. Contoh: touch sample.js${RESET}`);
+          console.log(`${RED}Enter a new file name. Example: touch sample.js${RESET}`);
         } else {
           const targetFile = path.resolve(SANDBOX_ROOT, currentSubPath, args[1]);
           if (!targetFile.startsWith(SANDBOX_ROOT)) {
@@ -410,7 +410,7 @@ export async function startRepl() {
 
       case "mkdir":
         if (!args[1]) {
-          console.log(`${RED}Masukkan nama folder baru. Contoh: mkdir scripts${RESET}`);
+          console.log(`${RED}Enter a new folder name. Example: mkdir scripts${RESET}`);
         } else {
           const targetDir = path.resolve(SANDBOX_ROOT, currentSubPath, args[1]);
           if (!targetDir.startsWith(SANDBOX_ROOT)) {
@@ -428,7 +428,7 @@ export async function startRepl() {
 
       case "rm":
         if (!args[1]) {
-          console.log(`${RED}Masukkan nama berkas/folder yang akan dihapus. Contoh: rm sample.js${RESET}`);
+          console.log(`${RED}Enter the name of the file/folder to delete. Example: rm sample.js${RESET}`);
         } else {
           const targetPath = path.resolve(SANDBOX_ROOT, currentSubPath, args[1]);
           if (!targetPath.startsWith(SANDBOX_ROOT)) {
@@ -443,7 +443,7 @@ export async function startRepl() {
               }
               console.log(`${GREEN}✓ Deleted: ${args[1]}${RESET}`);
             } catch (e: any) {
-              console.log(`${RED}rm: Gagal menghapus: ${e.message}${RESET}`);
+              console.log(`${RED}rm: Failed to delete: ${e.message}${RESET}`);
             }
           } else {
             console.log(`${RED}rm: File or folder not found: ${args[1]}${RESET}`);
@@ -456,7 +456,7 @@ export async function startRepl() {
       case "vim":
         const editFile = args[1];
         if (!editFile) {
-          console.log(`${RED}Masukkan nama berkas untuk diedit. Contoh: edit run-code.js${RESET}`);
+          console.log(`${RED}Enter a file name to edit. Example: edit run-code.js${RESET}`);
         } else {
           const targetFile = path.resolve(SANDBOX_ROOT, currentSubPath, editFile);
           if (!targetFile.startsWith(SANDBOX_ROOT)) {
@@ -466,7 +466,7 @@ export async function startRepl() {
             if (!fs.existsSync(targetFile)) {
               fs.writeFileSync(targetFile, "// New script inside Yuihime Sandbox Workspace\n");
             }
-            console.log(`${YELLOW}Membuka ${editFile} di terminal editor Linux asli...${RESET}`);
+            console.log(`${YELLOW}Opening ${editFile} in a native Linux editor terminal...${RESET}`);
             
             // Try editors in sequence: nano -> vim -> vi
             let editorSpawned = false;
@@ -481,9 +481,9 @@ export async function startRepl() {
             }
             
             if (editorSpawned) {
-              console.log(`${GREEN}✓ Selesai mengedit ${editFile}.${RESET}`);
+              console.log(`${GREEN}✓ Finished editing ${editFile}.${RESET}`);
             } else {
-              console.log(`${RED}Gagal memicu editor Linux asli (nano, vim, vi). Pastikan salah satunya terinstal di sistem operasi Anda.${RESET}`);
+              console.log(`${RED}Failed to launch a native Linux editor (nano, vim, vi). Make sure at least one is installed on your operating system.${RESET}`);
             }
           }
         }
@@ -492,7 +492,7 @@ export async function startRepl() {
       default:
         // Execute command as native shell command inside sandbox workspace
         const cmdWorkingDir = path.resolve(SANDBOX_ROOT, currentSubPath);
-        console.log(`${CYAN}[Execution] Menjalankan perintah shell luring di workspace...${RESET}`);
+        console.log(`${CYAN}[Execution] Running shell command offline in workspace...${RESET}`);
         try {
           const res = spawnSync(input, {
             cwd: cmdWorkingDir,
@@ -500,10 +500,10 @@ export async function startRepl() {
             stdio: "inherit"
           });
           if (res.status !== 0) {
-            console.log(`${YELLOW}Perintah selesai dengan kode exit: ${res.status}${RESET}`);
+            console.log(`${YELLOW}Command finished with exit code: ${res.status}${RESET}`);
           }
         } catch (execErr: any) {
-          console.log(`${RED}Gagal menjalankan perintah shell: ${execErr.message}${RESET}`);
+          console.log(`${RED}Failed to run shell command: ${execErr.message}${RESET}`);
         }
         break;
     }

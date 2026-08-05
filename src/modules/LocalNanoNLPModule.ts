@@ -490,7 +490,7 @@ async function generateLocalMarkovResponse(input: string, state: AgentState, tem
   const isSweetheart = trust > 75 && affection > 45;
   const isStranger = trust < 35;
 
-  // Exact Time-of-Day Aware Chat & Correction Logic (waktu lokal user)
+  // Exact Time-of-Day Aware Chat & Correction Logic (user local time)
   const currentHour = localDateParts(getTzOffsetHours(context?.config)).hour;
   let actualTimeOfDay: "pagi" | "siang" | "sore" | "malam" = "malam";
   if (currentHour >= 5 && currentHour < 11) {

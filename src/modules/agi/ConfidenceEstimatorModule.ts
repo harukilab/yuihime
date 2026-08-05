@@ -1,12 +1,12 @@
 /**
  * ConfidenceEstimatorModule.ts
  *
- * Confidence & Abstain: memperkirakan tingkat keyakinan Yui terhadap topik
- * sebelum balasan dihasilkan. Jika pertanyaan faktual & keyakinan rendah,
- * menyuntikkan direktif abstain (jangan berhalusinasi, akui ketidaktahuan,
- * tawarkan pencarian) ke dalam soulDirective — trilingual EN/ID/JP.
+ * Confidence & Abstain: estimates Yui's confidence level on the topic
+ * before the reply is generated. If the question is factual & confidence is low,
+ * injects an abstain directive (don't hallucinate, acknowledge ignorance,
+ * offer a search) into the soulDirective — trilingual EN/ID/JP.
  *
- * Phase: SOUL (order 24, sebelum PromptManager di PHASE 2 memformat prompt).
+ * Phase: SOUL (order 24, before PromptManager in PHASE 2 formats the prompt).
  */
 
 import { CortexModule, ModuleType, AgentState } from '@shared/include/types';
@@ -86,7 +86,7 @@ export const ConfidenceEstimatorModule: CortexModule = {
 
     const factual = isFactualQuery(input);
 
-    // Grounding dari knowledge base & memori terbaru
+    // Grounding from the knowledge base & recent memory
     const words = tokenize(input);
     const knowledge = (state as any).knowledge || context.knowledge || [];
     const memories = context.memories || (state as any).memories || [];
@@ -100,7 +100,7 @@ export const ConfidenceEstimatorModule: CortexModule = {
     if (knowledgeHits > 0) confidence += 20;
     if (memoryHits > 0) confidence += 10;
 
-    // Jika fakta tapi tak ter-grounding, namun tool web search tersedia → bisa ditawarkan
+    // If factual but not grounded, yet the web search tool is available → can be offered
     let webSearchAvailable = false;
     try {
       webSearchAvailable = typeof window === 'undefined' && !!SystemRegistry.getTool('websearch');
@@ -111,7 +111,7 @@ export const ConfidenceEstimatorModule: CortexModule = {
       confidence = Math.min(confidence, 45);
     }
 
-    // Sinyal error tool / verifikasi gagal menurunkan keyakinan
+    // Tool error signal / failed verification lowers confidence
     if (context.lastToolError || context.toolExecutionError || context.cortexValidationError) {
       confidence -= 15;
     }
@@ -124,7 +124,7 @@ export const ConfidenceEstimatorModule: CortexModule = {
     const lowConfidence = factual && confidence < threshold;
     context.lowConfidence = lowConfidence;
 
-    logs.push(`[CONFIDENCE] ${factual ? 'Faktual' : 'Subjektif'} | Score: ${confidence}% | KnowledgeHits: ${knowledgeHits} | MemoryHits: ${memoryHits} | WebSearch: ${webSearchAvailable} | LowConfidence: ${lowConfidence}`);
+    logs.push(`[CONFIDENCE] ${factual ? 'Factual' : 'Subjective'} | Score: ${confidence}% | KnowledgeHits: ${knowledgeHits} | MemoryHits: ${memoryHits} | WebSearch: ${webSearchAvailable} | LowConfidence: ${lowConfidence}`);
 
     if (!lowConfidence) {
       return { ...context, logs };

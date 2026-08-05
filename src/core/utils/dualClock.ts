@@ -1,8 +1,8 @@
 /**
- * DualClock — Yui punya dua referensi waktu:
- *  - UTC      : referensi internasional (reset, sinkronisasi global, ISO).
- *  - Local    : waktu lokasi user, dikonfigurasi lewat `circadian-rhythm.timezoneOffsetHours`
- *               (default GMT+7 / WIB). Dipakai untuk cron chan & konteks waktu yang dikirim ke LLM.
+ * DualClock — Yui has two time references:
+ *  - UTC      : international reference (reset, global sync, ISO).
+ *  - Local    : the user's local time, configured via `circadian-rhythm.timezoneOffsetHours`
+ *               (default GMT+7 / WIB). Used for cron tasks and the time context sent to the LLM.
  */
 import { SettingsManager } from '../kernel/settings.js';
 
@@ -11,10 +11,10 @@ export const DEFAULT_TZ_OFFSET_HOURS = 7;
 type SettingsLike = Record<string, any> | null | undefined;
 
 /**
- * Ambil offset timezone lokal (GMT+X). Prioritas:
- * 1. settings map lengkap (`settings['circadian-rhythm'].timezoneOffsetHours`)
- * 2. objek config circadian langsung (`settings.timezoneOffsetHours`)
- * 3. SettingsManager (fallback global)
+ * Fetch the local timezone offset (GMT+X). Priority:
+ * 1. full settings map (`settings['circadian-rhythm'].timezoneOffsetHours`)
+ * 2. direct circadian config object (`settings.timezoneOffsetHours`)
+ * 3. SettingsManager (global fallback)
  */
 export function getTzOffsetHours(settings?: SettingsLike): number {
   let off: any;
@@ -36,8 +36,8 @@ export function getTzOffsetHours(settings?: SettingsLike): number {
 }
 
 /**
- * Ubah momen UTC menjadi Date "lokal" (wall-clock bergeser sesuai offset).
- * getHours()/getMinutes()/getDate()/getDay() dari hasil ini = waktu lokal user.
+ * Shift a UTC moment into a "local" Date (wall-clock shifted per the offset).
+ * getHours()/getMinutes()/getDate()/getDay() from the result = the user's local time.
  */
 export function toLocalClock(offsetHours: number, date?: Date): Date {
   const d = date ? new Date(date.getTime()) : new Date();
@@ -109,7 +109,7 @@ export function tzLabel(offsetHours: number): string {
   return `GMT${sign}${Math.abs(offsetHours)}`;
 }
 
-/** Ringkasan blok waktu untuk prompt LLM (UTC + Local). */
+/** Time block summary for the LLM prompt (UTC + Local). */
 export function dualClockPromptBlock(settings?: SettingsLike): string {
   const offset = getTzOffsetHours(settings);
   return [
@@ -118,7 +118,7 @@ export function dualClockPromptBlock(settings?: SettingsLike): string {
   ].join('\n');
 }
 
-/** Daypart Indonesia berdasarkan jam lokal. */
+/** Indonesian daypart based on the local hour. */
 export function localDaypart(offsetHours: number, date?: Date): string {
   const hour = localDateParts(offsetHours, date).hour;
   if (hour >= 5 && hour < 11) return 'Pagi';
