@@ -814,11 +814,20 @@ function menuKeyboard(tc?: TgToolContext) {
   rows.push([{ text: '🧬 Care', callback_data: 'qt:care' }]);
   rows.push([{ text: '🎯 Goals', callback_data: 'qt:goals' }, { text: '🧹 New Chat', callback_data: 'qt:new' }]);
   if (tc && isAdmin(tc)) {
-    rows.push([{ text: '🛠️ Daemon', callback_data: 'qt:daemon' }]);
-    rows.push([{ text: '🧰 Tools', callback_data: 'qt:tools' }, { text: '⏰ Cron', callback_data: 'qt:cron' }]);
+    rows.push([{ text: '🔐 Admin', callback_data: 'qt:admin' }]);
   }
   rows.push([{ text: '✖️ Close Menu', callback_data: 'qt:close' }]);
   return { inline_keyboard: rows };
+}
+
+function adminMenuKeyboard() {
+  return {
+    inline_keyboard: [
+      [{ text: '🛠️ Daemon', callback_data: 'qt:daemon' }, { text: '🧰 Tools', callback_data: 'qt:tools' }],
+      [{ text: '⏰ Cron', callback_data: 'qt:cron' }],
+      [{ text: '« Back to Menu', callback_data: 'qt:menu' }]
+    ]
+  };
 }
 
 function cronMenuKeyboard() {
@@ -826,7 +835,7 @@ function cronMenuKeyboard() {
     inline_keyboard: [
       [{ text: '📋 List tasks', callback_data: 'qt:cron:list' }, { text: '➕ Add task', callback_data: 'qt:cron:add' }],
       [{ text: '❓ Help', callback_data: 'qt:cron:help' }],
-      [{ text: '« Back to Menu', callback_data: 'qt:menu' }]
+      [{ text: '« Back to Admin', callback_data: 'qt:admin' }]
     ]
   };
 }
@@ -862,7 +871,7 @@ function cronListReply(tc: TgToolContext): { text: string; keyboard: any } {
       { text: '🗑️ Del', callback_data: `qt:cron:del:${i}` }
     ]);
   });
-  buttons.push([{ text: '« Cron', callback_data: 'qt:cron' }, { text: '« Menu', callback_data: 'qt:menu' }]);
+  buttons.push([{ text: '« Cron', callback_data: 'qt:cron' }, { text: '« Admin', callback_data: 'qt:admin' }]);
   return { text: lines.join('\n').slice(0, 3000), keyboard: { inline_keyboard: buttons } };
 }
 
@@ -873,7 +882,7 @@ function daemonMenuKeyboard() {
       [{ text: '⏹️ Stop', callback_data: 'qt:daemon:stop' }, { text: '🔄 Restart', callback_data: 'qt:daemon:restart' }],
       [{ text: '🔨 Rebuild', callback_data: 'qt:daemon:rebuild' }, { text: '📜 Logs', callback_data: 'qt:daemon:logs' }],
       [{ text: '🧰 Tools', callback_data: 'qt:tools' }, { text: '❓ Help', callback_data: 'qt:daemon:help' }],
-      [{ text: '« Back', callback_data: 'qt:menu' }]
+      [{ text: '« Back', callback_data: 'qt:admin' }]
     ]
   };
 }
@@ -883,7 +892,7 @@ function toolsMenuKeyboard() {
     inline_keyboard: [
       [{ text: '💻 Bash', callback_data: 'qt:tools:bash' }, { text: '🎨 Image', callback_data: 'qt:tools:img' }],
       [{ text: '📂 File', callback_data: 'qt:tools:files' }, { text: '❓ Help', callback_data: 'qt:tools' }],
-      [{ text: '« Menu', callback_data: 'qt:menu' }]
+      [{ text: '« Admin', callback_data: 'qt:admin' }]
     ]
   };
 }
@@ -1015,7 +1024,8 @@ function runCareAction(action: string, tc: TgToolContext): TgReply {
       if (food) {
         food.qty -= 1;
         v.lastMeal = now;
-        text = `🍽️ Yui eats "${food.name}" — full now! (${food.qty} left)`;
+        v.hunger = 0;
+        text = `🍽️ Yui eats "${food.name}" — hunger 0%! (${food.qty} left)`;
       } else {
         text = '🍽️ Food inventory is empty — nothing to feed Yui.';
       }
@@ -1026,7 +1036,8 @@ function runCareAction(action: string, tc: TgToolContext): TgReply {
       if (drink) {
         drink.qty -= 1;
         v.lastDrink = now;
-        text = `💧 Yui drinks "${drink.name}" — refreshed! (${drink.qty} left)`;
+        v.thirst = 0;
+        text = `💧 Yui drinks "${drink.name}" — thirst 0%! (${drink.qty} left)`;
       } else {
         text = '💧 Drink inventory is empty — nothing for Yui to drink.';
       }
@@ -1034,56 +1045,50 @@ function runCareAction(action: string, tc: TgToolContext): TgReply {
     }
     case 'bath':
       v.lastBath = now;
-      text = '🚿 Yui takes a bath — clean & fresh again! Nyaaa~';
+      v.cleanliness = 100;
+      text = '🚿 Yui takes a bath — cleanliness 100%! Nyaaa~';
       break;
     case 'toilet':
       v.lastToilet = now;
-      text = '🚽 Yui uses the bathroom — relieved.';
+      v.bladder = 0;
+      text = '🚽 Yui uses the bathroom — relieved (bladder 0%).';
       break;
     case 'sleep':
       v.sleepState = 'asleep';
       v.asleepSince = now;
+      v.sleepiness = 5;
       text = '😴 Yui goes to sleep now. Good night~';
       break;
     case 'play':
       v.lastPlay = now;
-      text = '🎾 Yui plays chase — hunting instinct satisfied!';
+      v.playUrge = 0;
+      text = '🎾 Yui plays chase — play urge 0%!';
       break;
     case 'fish':
       v.lastFish = now;
-      text = '🐟 Yui is given fish — craving for さかな satisfied!';
+      v.fishCraving = 0;
+      text = '🐟 Yui is given fish — craving satisfied (0%)!';
       break;
     case 'status':
     case '':
       return { text: yuiStatusText(tc) };
     case 'inventory':
     case 'inv':
-    case 'bag': {
-      const fmtItem = (it: any) => {
-        const emoji = it.emoji || '·';
-        const name = it.name || it.id || '?';
-        const jp = it.jp ? ` (${it.jp})` : '';
-        const qty = Number(it.qty || 0);
-        return `${emoji} ${name}${jp} — ${qty > 0 ? `x${qty}` : '0'}`;
-      };
-      const foods = (inv.foods || []).map(fmtItem);
-      const drinks = (inv.drinks || []).map(fmtItem);
-      const items = (inv.items || []).map(fmtItem);
-      const sections = [
-        '🎒 YUI INVENTORY',
-        '',
-        '🍖 FOODS',
-        ...(foods.length ? foods : ['(none)']),
-        '',
-        '🥤 DRINKS',
-        ...(drinks.length ? drinks : ['(none)']),
-        '',
-        '🎒 ITEMS',
-        ...(items.length ? items : ['(none)'])
-      ];
-      const total = (inv.foods || []).concat(inv.drinks || []).concat(inv.items || []).reduce((s, it) => s + Number(it.qty || 0), 0);
-      sections.push('', `Total items: ${total}`);
-      return { text: sections.join('\n') };
+    case 'bag':
+      return careInventoryView(inv);
+    case 'invadd': {
+      const [, type, idxStr] = action.split(':');
+      const list = (inv[type] || []);
+      const item = list[Number(idxStr)];
+      if (!item) {
+        return { text: '⚠️ Item not found.', keyboard: careMenuKeyboard() };
+      }
+      item.qty = Number(item.qty || 0) + 1;
+      sh.lifeVitals = v;
+      sh.lifeInventory = inv;
+      db.prepare('UPDATE agent_state SET systemHealth = ? WHERE id = 1').run(JSON.stringify(sh));
+      const view = careInventoryView(inv);
+      return { text: `➕ Added +1 ${item.emoji || ''} ${item.name || item.id}.\n\n${view.text}`, keyboard: view.keyboard };
     }
     default:
       return { text: `⚠️ Unknown action: "${action}".\n\nUsage: /care <eat|drink|bath|toilet|sleep|play|fish|inventory>` };
@@ -1092,6 +1097,48 @@ function runCareAction(action: string, tc: TgToolContext): TgReply {
   sh.lifeInventory = inv;
   db.prepare('UPDATE agent_state SET systemHealth = ? WHERE id = 1').run(JSON.stringify(sh));
   return { text: `${text}\n\nUse the 🧬 Care buttons below for more actions.` };
+}
+
+function careInventoryView(inv: any): TgReply {
+  const fmtItem = (it: any) => {
+    const emoji = it.emoji || '·';
+    const name = it.name || it.id || '?';
+    const jp = it.jp ? ` (${it.jp})` : '';
+    const qty = Number(it.qty || 0);
+    return `${emoji} ${name}${jp} — ${qty > 0 ? `x${qty}` : '0'}`;
+  };
+  const foods = (inv.foods || []).map(fmtItem);
+  const drinks = (inv.drinks || []).map(fmtItem);
+  const items = (inv.items || []).map(fmtItem);
+  const sections = [
+    '🎒 YUI INVENTORY',
+    '',
+    '🍖 FOODS',
+    ...(foods.length ? foods : ['(none)']),
+    '',
+    '🥤 DRINKS',
+    ...(drinks.length ? drinks : ['(none)']),
+    '',
+    '🎒 ITEMS',
+    ...(items.length ? items : ['(none)'])
+  ];
+  const total = (inv.foods || []).concat(inv.drinks || []).concat(inv.items || []).reduce((s, it) => s + Number(it.qty || 0), 0);
+  sections.push('', `Total items: ${total}`, '', 'Tap ➕ to add +1 item:');
+
+  const makeBtn = (type: string) => (inv[type] || []).map((it: any, i: number) => ({
+    text: `➕ ${it.emoji || '·'} ${String(it.name || it.id || '?').slice(0, 12)}`,
+    callback_data: `qt:care:invadd:${type}:${i}`
+  }));
+  const keyboard: any[][] = [];
+  const pushRows = (type: string) => {
+    const b = makeBtn(type);
+    for (let i = 0; i < b.length; i += 3) keyboard.push(b.slice(i, i + 3));
+  };
+  pushRows('foods');
+  pushRows('drinks');
+  pushRows('items');
+  keyboard.push([{ text: '« Care', callback_data: 'qt:care' }, { text: '« Menu', callback_data: 'qt:menu' }]);
+  return { text: sections.join('\n').slice(0, 3000), keyboard: { inline_keyboard: keyboard } };
 }
 
 function splitArgsQuoted(input: string): string[] {
@@ -1909,10 +1956,14 @@ export async function handleTgCallback(data: string, tc: TgToolContext): Promise
   if (cmd === 'care') {
     return { action: 'edit', text: `${yuiStatusText(tc)}\n\n🧬 CARE MENU\nPick an action:`, keyboard: careMenuKeyboard() };
   }
+  if (cmd === 'admin') {
+    if (!isAdmin(tc)) return { action: 'edit', text: '⛔ This section is for the bot admin only.', keyboard: backToMenuKeyboard() };
+    return { action: 'edit', text: '🔐 ADMIN MENU\n\nDaemon, Tools, and Cron controls:', keyboard: adminMenuKeyboard() };
+  }
   if (cmd.startsWith('care:')) {
     const sub = cmd.slice(5);
     const reply = runCareAction(sub, tc);
-    return { action: 'edit', text: reply.text, keyboard: careMenuKeyboard() };
+    return { action: 'edit', text: reply.text, keyboard: reply.keyboard || careMenuKeyboard() };
   }
 
   if (cmd === 'daemon') {

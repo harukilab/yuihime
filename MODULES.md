@@ -159,4 +159,5 @@ Peta struktur direktori pasca-pemisahan Web UI ↔ Daemon (lihat UPDATE_LOG `[4.
 - `mcp-bridge: added MCP client config (enabled, serversJson); tool-executor: added planMode, permissionMode, riskyTools; delegate tool: auto-routing to explorer/planner/research agents; new tools: undo_last_changes, diagnostics`
 - `telegram_quick_tools: Cron masuk inline keyboard (qt:cron menu, list + per-task Run/Toggle/Del buttons); new tool ask_choice + core/kernel/tgAskChoice.ts: Yui kirim pesan pilihan inline di Telegram (qt:ask:<token>:<idx> callback resolve ke LLM)`
 - `telegram_quick_tools: Care menu + /care inventory — tombol 🎒 Inventory menampilkan isi lifeInventory (foods/drinks/items: qty, nama JP, emoji, total)`
+- `telegram_quick_tools: Care quick actions langsung mengubah stat (hunger/thirst/cleanliness/bladder/sleepiness/playUrge/fishCraving); tombol ➕ menambah qty item inventory; main menu hanya untuk all-user, Daemon/Tools/Cron dipindah ke tab 🔐 Admin (qt:admin)`
 

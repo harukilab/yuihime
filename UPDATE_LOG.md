@@ -1,6 +1,13 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.275] - 2026-08-05
+### Feature: Care: stat quick action langsung berubah + tambah inventory via tombol ➕ + menu admin terpisah
+- Perbaiki quick action care: eat/drink/bath/toilet/sleep/play/fish sekarang langsung mengubah stat tersimpan (hunger 0, thirst 0, cleanliness 100, bladder 0, sleepiness 5, playUrge 0, fishCraving 0) — status langsung terlihat berubah, tidak menunggu tick LifeSimulation berikutnya
+- Inventory bisa ditambah: tombol ➕ per item di tampilan inventory (qt:care:invadd:<type>:<idx>) menambah qty +1 lalu re-render list
+- Menu Telegram dirapikan: main menu hanya aksi untuk semua user; Daemon/Tools/Cron dipindah ke tab 🔐 Admin (qt:admin) yang hanya tampil & bisa diakses admin; tombol back dari submenu admin mengarah ke tab admin
+
+
 ## [4.274] - 2026-08-05
 ### Feature: Menu Care: tombol & tampilan Inventory di Telegram
 - careMenuKeyboard: tombol 🎒 Inventory (antara Fish dan Status); runCareAction case inventory/inv/bag merender isi lifeInventory (foods/drinks/items lengkap dengan qty, nama JP, emoji, dan total item); didukung juga lewat /care inventory
