@@ -1,4 +1,4 @@
-# 👑 Yuihime AI v4.294 - Autonomous VTuber Engine (Airi OS Core v2.39)
+# 👑 Yuihime AI v4.296 - Autonomous VTuber Engine (Airi OS Core v2.39)
 
 **Yuihime** adalah engine agen AI otonom untuk VTuber dengan arsitektur *daemon + web UI*.cognitive loop, memory jangka panjang (SQLite), eksekusi tool modular, dan antarmuka web real-time untuk kontrol kepribadian.
 
@@ -309,6 +309,10 @@ Contoh webhook (kirim data ke service luar, respons disimpan ke output):
 > 📖 **Panduan lengkap & detail**: `docs/CORTEX_MODULES_EXTERNAL.md` — konsep, skema
 > JSON, tabel fase, semua key `context`/`state`, action types, contoh lengkap, API,
 > best practices, dan troubleshooting.
+>
+> 🧩 **Integrasi addon ↔ external cortex module** (sepasang, berbagi file JSON di
+> `~/.yuihime/user_data/`): `docs/ADDON_CORTEX_INTEGRATION.md` — alur data, contoh
+> addon penulis + cortex reader/inject, arah sebaliknya, env injection, & troubleshooting.
 
 ### Tabel Fase Cortex
 

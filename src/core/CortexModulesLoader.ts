@@ -25,8 +25,11 @@ import { exec } from 'child_process';
 //   "actionCode": "..."
 // }
 //
-// - "code":    JS sandbox function; receives (args, context); may mutate and
-//              return context so results flow into the pipeline.
+// - "code":    async JS sandbox function (async wrapper); receives
+//              (args, context, state, input); `await` fully supported
+//              (e.g. context.think, fetch); may mutate and return context
+//              so results flow into the pipeline. Only global JS + fetch are
+//              available — require() is NOT available in the bundled daemon.
 // - "shell":   bash command; {{argName}} placeholders are replaced from args.
 // - "webhook": POST JSON to the URL in actionCode, args as the request body.
 //
@@ -93,11 +96,13 @@ export class CortexModulesLoader {
           if (actionType === 'code') {
             // eslint-disable-next-line no-new-func
             const fn = new Function('args', 'context', 'state', 'input', `
-              try {
-                ${actionCode}
-              } catch (err) {
-                throw new Error("Cortex Module Execution Error: " + (err?.message || err));
-              }
+              return (async () => {
+                try {
+                  ${actionCode}
+                } catch (err) {
+                  throw new Error("Cortex Module Execution Error: " + (err?.message || err));
+                }
+              })();
             `);
             const result = await fn(args, context, state, input);
             return result === undefined ? context : result;

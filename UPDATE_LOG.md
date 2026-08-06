@@ -1,6 +1,24 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.296] - 2026-08-06
+### Docs: Integrasi sepasang addon + external cortex module (file JSON sharing)
+- Buat docs/ADDON_CORTEX_INTEGRATION.md — panduan pasangan modul: addon (subprocess penuh, on-demand via tool addon-<id>) + external cortex module (tiap putaran pipeline) berbagi data via file JSON di ~/.yuihime/user_data/.
+- Isi: tabel perbandingan addon vs cortex module, diagram alur data (addon -> file JSON -> shell reader -> code inject -> externalInjection -> prompt), contoh lengkap 'Stats Logger' (addon pair_stats tulis pair_shared.json) + reader/inject cortex, arah sebaliknya (shell module menulis heartbeat.json via printf, addon membaca), env injection addon, best practices, troubleshooting, referensi kode.
+- TERVERIFIKASI end-to-end daemon produksi: addon pair_stats menulis coins=42 ke pair_shared.json; cortex module ext_pair_reader (shell) + ext_pair_inject (code) meng-inject; LLM menjawab 'nilai PAIR_STATS kamu itu tepatnya coins=42!'. Contoh §5 (printf JSON heartbeat) diuji: file yang dihasilkan valid JSON.parse. Modul test dibersihkan.
+- Koreksi akurasi pada contoh: placeholder shell {{key}} hanya diganti dari parameters statis + input (bukan context dinamis), jadi shell module hanya bisa menulis data yang shell sanggup susun — bukan state/context kaya; catatan ini ditambahkan di §5.
+- README & CORTEX_MODULES_EXTERNAL.md diberi referensi silang ke doc baru.
+
+
+## [4.295] - 2026-08-06
+### Fix: External cortex modules: await support + contoh shell/fetch/webhook + koreksi require()
+- FIX KRUCIAL: loader external cortex module kini membungkus actionCode dalam async wrapper (return (async () => {...})()) di src/core/CortexModulesLoader.ts — sebelumnya new Function sinkron sehingga 'await' (context.think, fetch) selalu gagal dengan SyntaxError. Semua contoh doc yang memakai await kini benar-benar berjalan.
+- Koreksi akurasi sandbox: require() TIDAK tersedia di daemon bundel (esbuild) — hanya tampak tersedia di node -e. Konsekuensi: require('fs')/require('child_process') tidak bisa dipakai di actionCode; baca/tulis file & exec wajib lewat action shell. Bab 6.4 & 7.1 doc diperbarui, contoh 8.8 (shared file JSON), 8.9 (shell kondisional), 8.12 (gabungan shell+internet) ditulis ulang jadi pola shell+code.
+- Contoh doc baru: 8.9 shell kondisional (shell probe aggregation + code inject compression dengan filter input), 8.10 fetch internet (cuaca open-meteo, await penuh), 8.11 webhook (POST httpbin + inject respons), 8.12 gabungan (uptime shell + GitHub fetch).
+- Verifikasi end-to-end daemon produksi: modul shell ext_chain_probe echo token -> ext_chain_inject (code) append ke externalInjection -> PromptManager render <external_module_injections> -> LLM mengutip token persis ('CHAIN_PROBE_OK_12345'). Bukti lengkap rantai shell->code->inject->prompt. Modul test dibersihkan.
+- Verifikasi await: ext_async_verify (await fetch internet + await context.think) jalan 2.2s di daemon nyata membuktikan async berfungsi; /proc/loadavg di-block container (bukan bug kode). Lint & build bersih, daemon sehat.
+
+
 ## [4.294] - 2026-08-06
 ### Docs: File JSON sebagai solusi berbagi data jangka panjang antar external modules
 - docs/CORTEX_MODULES_EXTERNAL.md contoh baru 8.8: berbagi shared state antar modul eksternal via file JSON di ~/.yuihime/user_data/ — modul penulis (aggregation) & pembaca (compression), memakai require('fs')/require('path') yang TERSEDIA di sandbox actionCode (loader berjalan di scope modul CJS).

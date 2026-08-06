@@ -6,7 +6,7 @@ tersedia, cara injeksi ke LLM, action types, API, best practices, dan troublesho
 - **Lokasi folder**: `~/.yuihime/cortexloader/` (override: env `YUIHIME_CORTEX_LOADER_PATH`)
 - **File**: satu JSON per modul — `~/.yuihime/cortexloader/<id>.json`
 - **Tanpa rebuild**: modul di-scan saat startup daemon, atau didaftarkan real-time via API
-- **Cara baca lain**: ringkasan singkat ada di `README.md`; panduan modul built-in di `docs/MODULAR_GUIDE.md`
+- **Cara baca lain**: ringkasan singkat ada di `README.md`; panduan modul built-in di `docs/MODULAR_GUIDE.md`; integrasi sepasang addon ↔ cortex module (file JSON sharing) di `docs/ADDON_CORTEX_INTEGRATION.md`
 
 ---
 
@@ -321,19 +321,25 @@ Ini salah satu pertanyaan paling penting. Ringkasnya:
 2. **Kalau Anda ingin data bertahan antar putaran**, jangan menaruhnya di
    `context` — tulis ke penyimpanan persisten. Di dalam `actionCode` (sandbox
    `code`) Anda punya `args`, `context`, `state`, `input` + global JS (`fetch`,
-   `console`, `Date`, dst) **+ `require`** (sehingga `require('fs')`,
-   `require('path')`, `require('os')` bisa dipakai langsung — loader berjalan di
-   scope modul CJS). **Tidak ada akses langsung ke `StorageService` maupun
-   `context.db`**. Cara menyimpan data persisten:
+   `console`, `Date`, dst), dan **`await` didukung penuh** (async wrapper).
+   **TIDAK ada `require()`** di daemon bundel (esbuild), jadi `require('fs')` /
+   `require('child_process')` TIDAK bisa dipakai di `code`. **Tidak ada akses
+   langsung ke `StorageService` maupun `context.db`**. Cara menyimpan data persisten:
 
    - **File JSON di `~/.yuihime/user_data/`** (paling fleksibel untuk berbagi data
-     antar modul eksternal): pakai `require('fs')` untuk baca/tulis JSON sendiri —
-     format bebas, dikendalikan Anda. Ini cara yang disarankan untuk "shared state"
-     antar modul eksternal. Contoh lengkap di bab 8.8.
+     antar modul eksternal): pakai **action `shell`** untuk baca/tulis file (shell
+     punya akses fs penuh), lalu modul `code` untuk parse & inject. Contoh lengkap
+     di bab 8.8.
    - **HTTP API daemon**: `fetch` ke endpoint internal daemon, mis.
      `POST /api/storage/history` untuk menyimpan entri riwayat, atau `POST
      /api/storage/memories` untuk menambah memori jangka panjang. Contoh di bab 8.7.
    - **Action `shell`**: `echo ... >> ~/.yuihime/user_data/my_data.txt` — bertahan.
+
+   > ⚠️ **Penting soal `require`**: di lingkungan dev (`node -e`) `require` tampak
+   > tersedia, tetapi di daemon produksi yang di-bundel esbuild (`dist/server.cjs`)
+   > sandbox `code` TIDAK punya `require`. Jangan gunakan `require(...)` di
+   > `actionCode` — selalu gunakan action `shell` untuk file/exec, dan `fetch` +
+   > `context.think` (keduanya `await`-able) untuk I/O jaringan/LLM.
 
 3. **`state` di-update oleh modul built-in**, bukan oleh modul eksternal Anda secara
    otomatis. Kalau Anda mengubah `state.mood` di `actionCode`, perubahan itu berlaku
@@ -359,8 +365,8 @@ Ini salah satu pertanyaan paling penting. Ringkasnya:
 
 ### 7.1 `code` (default) — sandbox JS
 
-Fungsi dibungkus `new Function('args', 'context', 'state', 'input', actionCode)`.
-Menerima 4 argumen:
+Fungsi dibungkus async wrapper `new Function('args', 'context', 'state', 'input',
+'return (async () => {...})()')`. Menerima 4 argumen:
 
 - `args` — `{ ...parameters, input, _input }`
 - `context` — objek pipeline (bisa dimutasi)
@@ -374,9 +380,12 @@ return context;
 
 Aturan:
 
+- `await` didukung penuh — sandbox berjalan async (`context.think`, `fetch`, dst).
+- Global yang tersedia: `fetch`, `console`, `Date`, `JSON`, `process` (terbatas),
+  dst. **`require()` TIDAK tersedia** di daemon bundel — file/exec harus lewat
+  action `shell`.
 - Return `undefined` → loader memakai `context` (return value di-merge).
 - Return objek lain → di-merge ke context (spread).
-- `await` didukung penuh (mis. `context.think`).
 - Error di-catch loader → `context.<id>_error` diisi, pipeline lanjut.
 
 ### 7.2 `shell` — bash
@@ -541,42 +550,197 @@ global yang tersedia di sandbox `code`:
 ### 8.8 Berbagi data antar modul eksternal via file JSON
 
 Cara paling sederhana untuk "shared state" antar modul eksternal: **file JSON** di
-`~/.yuihime/user_data/`. `require('fs')` & `require('path')` tersedia di sandbox
-`code`, jadi Anda bisa baca/tulis JSON sendiri — format bebas, tidak bergantung API.
+`~/.yuihime/user_data/`. Sandbox `code` TIDAK punya `require('fs')` di daemon bundel,
+jadi pembacaan/penulisan file dilakukan lewat **action `shell`** (shell punya akses fs
+penuh), lalu **action `code`** untuk parsing & injeksi. Terdiri dari 3 modul:
 
-**Modul penulis** (mis. phase `aggregation`, menulis data tiap putaran):
+**Modul 1 — penulis** (action `shell`, phase `aggregation`): tulis counter ke file.
+Tambah baris ke file (tidak menimpa), pakai `wc -l` untuk menghitung putaran:
 
 ```json
 {
   "id": "ext_state_writer",
   "name": "Shared State Writer",
-  "description": "Writes a shared JSON file every cycle.",
+  "description": "Appends a cycle line to a shared file every cycle.",
   "phase": "aggregation",
   "order": 1,
-  "actionType": "code",
-  "actionCode": "const fs = require('fs'); const os = require('os'); const path = require('path'); const dir = process.env.YUIHIME_USER_DATA_PATH || path.join(os.homedir(), '.yuihime', 'user_data'); fs.mkdirSync(dir, { recursive: true }); const file = path.join(dir, 'ext_shared.json'); let data = {}; try { data = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) {} data.lastCycle = new Date().toISOString(); data.mood = state.mood; data.turns = (data.turns || 0) + 1; fs.writeFileSync(file, JSON.stringify(data, null, 2)); context.externalInjection = (context.externalInjection || '') + '\\n[EXT_SHARED] cycle #' + data.turns + ' (mood: ' + data.mood + ')'; return context;"
+  "actionType": "shell",
+  "actionCode": "mkdir -p ~/.yuihime/user_data && echo \"cycle: $(date -u +%FT%TZ)\" >> ~/.yuihime/user_data/ext_shared.log && wc -l < ~/.yuihime/user_data/ext_shared.log"
 }
 ```
 
-**Modul pembaca** (mis. phase `compression`, membacanya untuk injeksi ke LLM):
+> Hasil shell (stdout) otomatis tersimpan di `context.ext_state_writer_output` —
+> di sini berisi jumlah baris (count putaran).
+
+**Modul 2 — pembaca file** (action `shell`, phase `compression`): baca file ke stdout
+(jika ada). Kosong jika file belum dibuat:
 
 ```json
 {
   "id": "ext_state_reader",
   "name": "Shared State Reader",
-  "description": "Reads the shared JSON file and injects it into the prompt.",
+  "description": "Outputs the shared log content via stdout.",
   "phase": "compression",
   "order": 1,
+  "actionType": "shell",
+  "actionCode": "cat ~/.yuihime/user_data/ext_shared.log 2>/dev/null || echo no-data"
+}
+```
+
+**Modul 3 — inject** (action `code`, phase `compression`, order 2): parse output
+modul 1 & 2, lalu append ke `externalInjection`:
+
+```json
+{
+  "id": "ext_state_inject",
+  "name": "Shared State Inject",
+  "description": "Parses shared file output and injects it into the prompt.",
+  "phase": "compression",
+  "order": 2,
   "actionType": "code",
-  "actionCode": "const fs = require('fs'); const os = require('os'); const path = require('path'); const dir = process.env.YUIHIME_USER_DATA_PATH || path.join(os.homedir(), '.yuihime', 'user_data'); const file = path.join(dir, 'ext_shared.json'); let data = {}; try { data = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) {} context.externalInjection = (context.externalInjection || '') + '\\n[EXT_SHARED_STATE] ' + JSON.stringify(data); return context;"
+  "actionCode": "const count = (context.ext_state_writer_output || '').trim(); const lines = (context.ext_state_reader_output || '').split('\\n').filter(Boolean).slice(-3).join(' | '); context.externalInjection = (context.externalInjection || '') + '\\n[EXT_SHARED] cycles=' + count + ' last=' + lines; return context;"
 }
 ```
 
 > ✅ **Keuntungan file JSON vs API daemon**: tidak ada port/endpoint yang harus
 > ditebak, format bebas (bukan hanya history/memories), dan tiap modul eksternal bisa
-> baca/tulis file yang sama. Wajib pakai path **absolut** (`os.homedir()` /
-> `YUIHIME_USER_DATA_PATH`), bukan `~` mentah — shell tidak mengekspansi tilde di
-> sandbox `code`.
+> baca/tulis file yang sama. Gunakan `~/.yuihime/user_data/` (di-resolve shell).
+> Jangan gunakan `require('fs')` di `code` — tidak tersedia di daemon bundel.
+
+### 8.9 Shell kondisional dengan hasil di-inject
+
+External JSON tidak mendukung field `trigger` (loader hanya membaca
+`id`/`phase`/`order`/`parameters`/`actionType`/`actionCode`). Untuk "jalankan shell
+hanya saat kondisi terpenuhi", kombinasikan **action `shell` yang selalu jalan** (di
+aggregation) dengan **action `code` yang memutuskan inject** (di compression). Shell
+menghasilkan output; code yang memfilter berdasarkan `input`:
+
+**Modul 1 — shell probe** (action `shell`, aggregation, selalu jalan):
+
+```json
+{
+  "id": "ext_disk_probe",
+  "name": "Disk Probe",
+  "description": "Probes disk usage on every cycle.",
+  "phase": "aggregation",
+  "order": 1,
+  "actionType": "shell",
+  "actionCode": "df -h / | tail -1"
+}
+```
+
+**Modul 2 — inject kondisional** (action `code`, compression): hanya injek saat user
+menanyakan disk/storage:
+
+```json
+{
+  "id": "ext_disk_inject",
+  "name": "Disk Inject",
+  "description": "Injects the disk probe output only when disk/storage is mentioned.",
+  "phase": "compression",
+  "order": 1,
+  "actionType": "code",
+  "actionCode": "if (/disk|storage|space|penuh|sisa/i.test(input) && context.ext_disk_probe_output) { context.externalInjection = (context.externalInjection || '') + '\\n[DISK]: ' + String(context.ext_disk_probe_output).trim(); } return context;"
+}
+```
+
+> Ini setara dengan modul built-in yang punya `trigger(input, state)` — bedanya shell
+> selalu jalan (murah, cepat), dan keputusan "inject atau tidak" diambil di `code`.
+> Kalau user tidak menyinggung disk, modul 2 tidak menambah injeksi apa pun.
+
+### 8.10 Fetch dari internet (API publik)
+
+`fetch` adalah global Node di sandbox — modul bisa ambil data real-time dari API
+publik & injeksikan ke prompt Yui. **`await` didukung penuh** (async wrapper):
+
+```json
+{
+  "id": "ext_weather",
+  "name": "Weather Check",
+  "description": "Fetches current weather for a fixed city and injects it.",
+  "phase": "aggregation",
+  "actionType": "code",
+  "actionCode": "if (/weather|cuaca|hujan|panas/i.test(input)) { const res = await fetch('https://api.open-meteo.com/v1/forecast?latitude=-6.2&longitude=106.8&current_weather=true'); const data = await res.json(); const w = data.current_weather; context.externalInjection = (context.externalInjection || '') + '\\n[WEATHER] Jakarta: ' + w.temperature + '°C, wind ' + w.windspeed + ' km/h'; } return context;"
+}
+```
+
+> Catatan keamanan: hanya boleh `fetch` ke URL **HTTPS publik yang Anda percaya**. URL
+> dengan kredensial (API key) tersimpan terbuka di file JSON modul — jangan letakkan
+> secret di `actionCode`; kalau perlu, baca dari file env di `user_data`.
+
+### 8.11 Webhook — kirim data keluar + inject respons
+
+Action `webhook` me-`POST` JSON (body = `args`) ke URL di `actionCode`, lalu hasil
+disimpan ke `context.<id>_output` dan bisa di-inject modul lain:
+
+```json
+{
+  "id": "ext_uptime_notify",
+  "name": "Uptime Notify",
+  "description": "Posts current uptime to a webhook and injects the response.",
+  "phase": "aggregation",
+  "order": 1,
+  "actionType": "webhook",
+  "actionCode": "https://httpbin.org/post",
+  "parameters": { "service": "yuihime", "uptime": "{{input}}" }
+}
+```
+
+`inject_uptime.json` (code, `finalize`) membaca `context.ext_uptime_notify_output`:
+
+```json
+{
+  "id": "ext_uptime_inject",
+  "name": "Inject Uptime Response",
+  "phase": "finalize",
+  "order": 1,
+  "actionType": "code",
+  "actionCode": "const resp = context.ext_uptime_notify_output; if (resp) { context.externalInjection = (context.externalInjection || '') + '\\n[UPTIME_NOTIFY] ' + JSON.stringify(resp).slice(0, 300); } return context;"
+}
+```
+
+> Placeholder `{{input}}` di-isi `input` user; `{{key}}` lain dari `parameters`.
+> Respons yang bukan JSON di-parse sebagai `{ rawResponse: text }` (lihat bab 7.3).
+
+### 8.12 Gabungan: shell + file + internet dalam satu modul
+
+Contoh "satu modul melakukan beberapa hal": cek status & catat ke file, lalu fetch
+versi terbaru dari GitHub, semua disuntikkan ke prompt. Karena `require('fs')` tidak
+tersedia di sandbox `code`, file ditulis via action `shell`, lalu fetch internet +
+inject via action `code`:
+
+**Modul 1 — shell logger** (action `shell`, aggregation): cek uptime & catat ke file:
+
+```json
+{
+  "id": "ext_combined_log",
+  "name": "Combined Log",
+  "description": "Logs uptime to a file and exposes it via stdout.",
+  "phase": "aggregation",
+  "order": 1,
+  "actionType": "shell",
+  "actionCode": "mkdir -p ~/.yuihime/user_data && (uptime -p || echo n/a) | tee -a ~/.yuihime/user_data/ext_combined.log | tail -1"
+}
+```
+
+**Modul 2 — inject** (action `code`, compression): baca stdout logger + fetch GitHub:
+
+```json
+{
+  "id": "ext_combined_inject",
+  "name": "Combined Inject",
+  "description": "Combines uptime + GitHub latest release and injects them.",
+  "phase": "compression",
+  "order": 1,
+  "actionType": "code",
+  "actionCode": "const up = (context.ext_combined_log_output || '').trim(); let ver = 'n/a'; try { const r = await fetch('https://api.github.com/repos/anomalyco/opencode/releases/latest'); ver = (await r.json()).tag_name || 'n/a'; } catch (e) { ver = 'err'; } context.externalInjection = (context.externalInjection || '') + '\\n[COMBINED] uptime=' + up + ', latest=' + ver; return context;"
+}
+```
+
+> Semua contoh di atas aman dijalankan berulang — gunakan `try/catch` untuk fetch
+> internet agar kegagalan jaringan tidak menghentikan pipeline (loader menangkap error,
+> tapi `context.<id>_error` lebih baik daripada injeksi kosong). Untuk baca/tulis file
+> gunakan action `shell` — sandbox `code` tidak punya `require`.
 
 ---
 
