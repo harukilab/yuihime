@@ -346,6 +346,7 @@ async function bootstrap() {
   (globalThis as any).yuihime_db = db;
   (globalThis as any).yuihime_initializeDatabase = initializeDatabase;
   (globalThis as any).yuihime_CronModule = CronModule;
+  (globalThis as any).yuihime_getCronAction = getCronAction;
 
   try {
     await retryDbOperation(() => {

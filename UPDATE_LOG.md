@@ -1,6 +1,14 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.300] - 2026-08-06
+### Fix: Cron one-off (3m) tidak pernah jalan saat dibuat via tool scheduler — global yuihime_getCronAction hilang
+- ROOT CAUSE: server.ts menyetel globalThis.yuihime_db / yuihime_CronModule tapi TIDAK pernah menyetel yuihime_getCronAction, sementara manage_cron.ts membaca g.yuihime_getCronAction. Akibatnya getCronAction selalu undefined di cabang global-direct, dan kode lama 'if (enabled && getCronAction)' diam-diam melewati registerTask → task hanya masuk DB (enabled) tanpa timer, tidak pernah dieksekusi (dan tak ada log '[CRON] One-off Delay Task started').
+- FIX server.ts:348 — tambah (globalThis as any).yuihime_getCronAction = getCronAction di samping global cron lainnya.
+- FIX manage_cron.ts (add/edit & toggle) — bila getCronAction undefined, throw error sehingga jatuh ke fallback HTTP loopback (POST /api/cron) alih-alih diam-diam tidak mendaftarkan timer.
+- VERIFIKASI prod: setelah rebuild + restart, log '[CRON] One-off Delay Task started: Greet Al (triggers in 180000ms)' muncul untuk 2 task; task akan fire 3 menit lalu auto-delete dari DB (getCronAction non-repeating → DELETE).
+
+
 ## [4.299] - 2026-08-06
 ### Feature: Tombol ✖️ Close Menu selalu ada di semua menu Telegram quick tools (dari '/' atau callback apa pun)
 - Helper ensureCloseRow() baru di src/drivers/tools/telegram_quick_tools.ts — menambahkan baris '✖️ Close Menu' (qt:close) ke inline keyboard bila belum ada (tanpa duplikasi).

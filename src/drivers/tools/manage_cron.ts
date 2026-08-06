@@ -238,7 +238,10 @@ export const CronTool: ToolModule = {
             final_prompt
           );
 
-          if (enabled && getCronAction) {
+          if (enabled) {
+            if (!getCronAction) {
+              throw new Error("Cron globals not initialized (yuihime_getCronAction missing) — falling back to HTTP loopback");
+            }
             cron.registerTask({
               id,
               name: taskName,
@@ -267,7 +270,10 @@ export const CronTool: ToolModule = {
           const nextEnabled = task.enabled === 1 ? 0 : 1;
           db.prepare("UPDATE cron_tasks SET enabled = ? WHERE id = ?").run(nextEnabled, resolvedId);
           
-          if (nextEnabled === 1 && getCronAction) {
+          if (nextEnabled === 1) {
+            if (!getCronAction) {
+              throw new Error("Cron globals not initialized (yuihime_getCronAction missing) — falling back to HTTP loopback");
+            }
             cron.registerTask({
               id: task.id,
               name: task.name,
