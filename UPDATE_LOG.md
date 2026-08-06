@@ -1,6 +1,14 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.306] - 2026-08-06
+### Fix: Saat buat cron Yui jawab 2x (konfirmasi + final answer); guard 1-reply per permintaan cron
+- DOUBLE REPLY saat pembuatan cron: LLM memanggil scheduler + speak (konfirmasi 'Okey, Al! Yui sudah pasang pengingatnya ya~') pada iterasi pertama lalu mengirim final answer ('Iya, Al! Yui bakal selalu ingetin kok~') pada iterasi berikutnya — keduanya terkirim langsung ke Telegram, sehingga 1 permintaan user = 2 pesan.
+- CRON ONE-REPLY GUARD: cortexThinkEngine menandai state._yuiCronActionDone saat tool scheduler sukses dalam satu turn. Speak tool mencatat state._yuiTurnSpeakDelivered setelah pengiriman langsung. Bila keduanya aktif, speak berikutnya DI-TEKAN (status suppressed, isFinalReply tetap true agar loop berhenti bersih) dan final answer di-swallow — hanya konfirmasi pertama yang terkirim (1 pesan per permintaan).
+- TIDAK MEMPENGARUHI turn normal: guard hanya aktif bila scheduler tool ikut berhasil dalam turn yang sama; percakapan biasa dengan speak-berturut tetap mengirim semua pesan.
+- VERIFIKASI: unit test — cron turn dengan konfirmasi terkirim → final answer suppressed; non-cron turn → tidak tersuppress. Cron firing (test_fire_1reply) tetap 1 pesan + dedup ok. Lint & build pass, daemon sehat.
+
+
 ## [4.305] - 2026-08-06
 ### Fix: Cron kirim sampah JSON (thought-dump) & salam generik saat reply gagal; speak sanitasi + fallback inisiator
 - SPEAK SANITASI: saat cron/chat memicu tool speak dengan speech yang bocor berisi envelope JSON internal (mis. {"thought":...} terpotong), teks mentah itu terkirim verbatim ke Telegram (user dapat sampah JSON). FIX: sanitizeSpeech() di LiveStatusToolsModule — ekstrak field speech/text/message dari envelope JSON (juga code fence & string ber-tanda kutip), dan TOLAK pengiriman bila tidak ada teks yang layak kirim (log speak rejected).

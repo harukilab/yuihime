@@ -162,11 +162,29 @@ export const SendFinalReplyTool: ToolModule = {
       const hostPort = process.env.PORT || "3000";
       const senderName = context?.userName || context?.state?.relation?.uid || "Unknown";
       const contextId = context?.contextId || "";
+      const state = context?.state as any;
       const speech = sanitizeSpeech(args.speech);
       if (!speech) {
         console.warn("[LiveStatus] speak rejected: speech contained no deliverable text (internal JSON/thought leaked).");
         return { status: "rejected", reason: "speech contains no deliverable text (likely internal JSON/thought leaked)", senderName };
       }
+
+      // Cron one-reply guard: if the scheduler tool ran in this turn and a speak already
+      // delivered its confirmation directly, swallow the redundant final answer.
+      if (state && state._yuiCronActionDone === true && state._yuiTurnSpeakDelivered === true) {
+        console.warn("[LiveStatus] speak suppressed: cron confirmation already delivered this turn — skipping final answer.");
+        return {
+          status: "suppressed",
+          isFinalReply: true,
+          speech,
+          animations: args.animations || [],
+          mood_impact: args.mood_impact || {},
+          senderName,
+          sentDirectly: false,
+          suppressedFinal: true
+        };
+      }
+
       const dedupKey = getDedupKey(contextId, speech);
 
       if (isDuplicateSend(dedupKey)) {
@@ -238,6 +256,10 @@ export const SendFinalReplyTool: ToolModule = {
 
       if (delivered || sentDirectly) {
         markDeduplicated(dedupKey);
+      }
+
+      if (sentDirectly && state) {
+        state._yuiTurnSpeakDelivered = true;
       }
 
       return { 

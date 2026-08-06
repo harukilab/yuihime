@@ -480,6 +480,10 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
   let toolsToCall: any[] = snapshot ? (snapshot.toolsToExecute || []) : [];
   let processedResponse = "";
   let speakDeliveredDirectly = false;
+  // Cron one-reply guard: when a cron/scheduler tool succeeds in this turn and a
+  // speak already delivered its confirmation directly, the redundant final answer
+  // (a second message on the same channel) must be swallowed.
+  let cronActionDoneThisTurn = false;
   // opencode-style recovery guard: if a real tool (not speak/final_answer/status_update)
   // failed on a previous iteration, the loop must not break right away just because the model
   // gave a final answer — give one chance to correct (similar to opencode, which
@@ -1565,9 +1569,17 @@ if (typeof parsedArgs === 'string') {
       toolPromises.forEach((p, idx) => {
         p.then((res) => {
           const tc = toolsToCall[idx];
+          if (res.success && (tc.tool === 'scheduler' || tc.name === 'scheduler' || tc.tool === 'cron' || tc.name === 'cron' || tc.tool === 'manage_cron' || tc.name === 'manage_cron')) {
+            cronActionDoneThisTurn = true;
+            try { (state as any)._yuiCronActionDone = true; } catch (_) { /* non-fatal */ }
+          }
           if (res.success && (tc.tool === 'speak' || tc.name === 'speak')) {
             const speech = res.observation?.speech;
             if (speech) {
+              if (res.observation?.suppressedFinal === true) {
+                // Redundant cron final answer — confirmation already delivered via speak this turn.
+                return;
+              }
               if (res.observation?.sentDirectly === true) {
                 speakDeliveredDirectly = true;
               }
@@ -1885,7 +1897,14 @@ if (typeof parsedArgs === 'string') {
   const finalSpeech = speakCall?.args?.speech && typeof speakCall.args.speech === 'string' ? speakCall.args.speech : finalAnswer;
 
   const dedup = GlobalOutputDeduplicator.getInstance();
-  if (!dedup.isDuplicate(finalSpeech, contextId || 'web_default')) {
+  if (speakDeliveredDirectly && cronActionDoneThisTurn) {
+    // Cron one-reply guard: the confirmation speak already reached the user directly.
+    // Swallow the redundant final answer so only ONE message is delivered per request.
+    console.log("[CORTEX] Suppressing redundant final answer: cron confirmation already delivered via speak this turn.");
+    if (finalSpeech) {
+      try { dedup.markSent(finalSpeech, contextId || 'web_default'); } catch (_) { /* non-fatal */ }
+    }
+  } else if (!dedup.isDuplicate(finalSpeech, contextId || 'web_default')) {
     if (speakDeliveredDirectly) {
       dedup.markSent(finalSpeech, contextId || 'web_default');
     }
