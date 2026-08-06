@@ -1,4 +1,4 @@
-# 👑 Yuihime AI v4.296 - Autonomous VTuber Engine (Airi OS Core v2.39)
+# 👑 Yuihime AI v4.297 - Autonomous VTuber Engine (Airi OS Core v2.39)
 
 **Yuihime** adalah engine agen AI otonom untuk VTuber dengan arsitektur *daemon + web UI*.cognitive loop, memory jangka panjang (SQLite), eksekusi tool modular, dan antarmuka web real-time untuk kontrol kepribadian.
 
@@ -48,8 +48,8 @@ src/
 │   │   └── ...
 │   └── database.ts               # SQLite init + queries
 ├── drivers/
-│   ├── ai-providers/             # OpenAI, Gemini, Anthropic, OpenRouter
-│   └── tools/                    # Tool modular (file, shell, web, dll)
+│   ├── ai-providers/             # OpenAI, Gemini, Anthropic, OpenRouter, Custom, Local, OfficialChat
+│   └── tools/                    # Tool modular datar (file, shell, web, dll)
 ├── modules/                      # Feature modules (auto-registered)
 └── ...
 
@@ -64,9 +64,9 @@ web/                               # Vite React app (builds to dist/web)
 ## 🧠 Fitur Kognitif Otonom
 
 ### Cognitive Loop (`cortexThinkEngine.ts`)
-- **Loop kognitif iteratif** (maks 3 iterasi): Reason → Tool Call → Observe → Respond
+- **Loop kognitif iteratif (Reason → Tool Call → Observe → Respond)**: berulang selama tool dipanggil, dibatasi `tool-executor.maxIterations` (default 50; ceil override `tool-executor.maxIterationsCeiling`, default +5)
 - **Tool execution dengan retry & timeout**: Setiap tool dijalankan dengan batas waktu, retry otomatis, dan abort support via `AbortSignal`
-- **JSON enforcement**: LLM dipaksa output JSON valid untuk memisahkan `thought` dan `final_answer`
+- **JSON enforcement**: LLM dipaksa output JSON valid (`thought` / `speech` / `tool_calls` / `animations` / `mood_impact`)
 - **Memory integration**: Hasil tool disimpan ke episodic memory + dataset synthesis
 
 ### Fast-Track Background Worker (`fastTrackRunner.ts`)
@@ -95,7 +95,7 @@ Semua module (driver, tool, addon) **otomatis terdaftar** via `RegistryInitializ
 - **Node**: Filesystem scan
 
 ### Tool Execution
-- Setiap tool di-load dari `src/drivers/tools/*/index.ts`
+- Setiap tool di-load dari `src/drivers/tools/<id>.ts` (file datar, manifest tertanam)
 - Tool calls menghasilkan `observation` yang masuk ke cognitive loop sebagai konteks berikutnya
 - Spek tool pakai skema JSON OpenAI (`parameters`)
 
@@ -107,7 +107,7 @@ Semua module (driver, tool, addon) **otomatis terdaftar** via `RegistryInitializ
 - Instal dari repo git: `POST /api/addons/install` dengan `{ repoUrl, skill }` (auto-clone + deteksi folder SKILL.md/config.toml)
 - Uninstall: `DELETE /api/addons/:id`
 - Eksekusi: `POST /api/addons/execute/:id` (addon biasa = run entry point; skill = `action:"instructions"` atau `action:"run_script"`)
-- Tool addon otomatis didaftarkan ke `available_tools.json` dan terlihat oleh agent via prompt builder
+- Tool addon otomatis didaftarkan ke `~/.yuihime/data/available_tools.json` (di-generate `src/core/toolRegistryFile.ts`) dan terlihat oleh agent via prompt builder
 
 ### External Cortex Modules (`~/.yuihime/cortexloader/`)
 Modul Cortex eksternal yang **selalu dijalankan setiap putaran** pipeline — tanpa perlu
@@ -351,6 +351,7 @@ menentukan kapan dijalankan dalam pipeline. Nama fase kini seragam & mudah dibac
 
 ### Input Channels
 - **Telegram Bot** (`src/core/server/telegram.ts`)
+- **Discord Bot** (`src/core/server/discord.ts`)
 - **Web Chat** (`web/src/app/`)
 - **REST API** (`src/core/server/routes/cortexRouter.ts`)
 

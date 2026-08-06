@@ -11,7 +11,7 @@ npm install pm2 -g
 ## 2. Menjalankan Yuihime
 Gunakan PM2 untuk menjalankan server yang sudah di-build:
 ```bash
-pm2 start dist/server.cjs --name "yuihime-core"
+pm2 start dist/server.cjs --name "yuihime"
 ```
 
 ## 3. Mengatur Auto-Boot (Startup)
@@ -23,7 +23,7 @@ Agar Yui otomatis menyala saat PC baru dinyalakan:
 ## 4. Monitoring
 Untuk melihat log aktivitas Yui (misalnya chat yang masuk dari Telegram/Twitch):
 ```bash
-pm2 logs yuihime-core
+pm2 logs yuihime
 ```
 
 Yuihime sekarang akan berjalan di latar belakang (Daemon) dan tidak akan mati meskipun window terminal ditutup. 🌸

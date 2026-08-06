@@ -283,9 +283,8 @@ ollama create yuihime-engine -f ./Modelfile
 Sekarang Anda bisa mendaftarkan Model Lokal hasil fine-tuning ini secara langsung lewat panel antarmuka Yuihime (Yui Settings UI):
 
 1. **Masuk ke Pengaturan**: Buka bilah menu **Settings** (`ModularSettings.tsx`).
-2. **Setup Provider**: Buka tab **Providers** dan pilih **Local Provider (Ollama / Llama.cpp / LM Studio)**.
+2. **Setup Provider**: Buka tab **Providers** dan pilih **Local Ollama** (atau **LM Studio**; Llama.cpp digunakan via provider `custom`).
 3. **Set URL & Model Name**:
-   * API Endpoint: `http://localhost:11434/v1` (Default Ollama) atau `http://localhost:8080/v1` (Llama.cpp).
+   * API Endpoint: `http://localhost:11434/api` (default provider Local Ollama) — bukan `/v1`.
    * Model Name: `yuihime-engine`.
-4. **Aligment Verify**: Klik tombol **Calibration Test** di panel Settings untuk menguji kestabilan emosi dan ketepatan schema batin Yuihime.
-5. **Simpan**: Konfigurasi akan tersimpan otomatis ke dalam `config.toml` dan Yuihime siap menemani petualangan kasual Kakak sepenuhnya secara luring dan mandiri!
+4. **Simpan**: Konfigurasi akan tersimpan otomatis ke dalam `config.toml` dan Yuihime siap menemani petualangan kasual Kakak sepenuhnya secara luring dan mandiri!

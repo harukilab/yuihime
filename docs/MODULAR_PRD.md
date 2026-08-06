@@ -4,19 +4,19 @@
 To transform Yuihime from a static application into a dynamic, extensible agentic platform where features (modules, addons, and logic layers) can be hot-swapped without modifying the core kernel or existing modules.
 
 ## 2. Technical Objectives
-- **Zero-Touch Core**: Adding or removing a module must require zero changes to `cortex.ts`, `soul.ts`, or any other core file.
-- **Config-Driven**: Every parameter that governs a module's behavior must be defined in a configuration file (`system.config.json` or `config.toml`) or via a dynamic `configSchema`.
+- **Zero-Touch Core**: Adding or removing a module must require zero changes to `cortex.ts`, `shared/core/soul.ts`, or any other core file.
+- **Config-Driven**: Every parameter that governs a module's behavior must be defined in a configuration file (`config.toml`) or via a dynamic `configSchema`.
 - **Atomic Modules**: Modules must be self-contained units of logic with well-defined inputs and outputs.
 - **Dream Simulation**: Implement a "Dream Core" that goes beyond narrative synthesis to simulate hypothetical future scenarios and alternate realities based on stored memories.
 
 ## 3. Features: Modular Architecture
 ### 3.1. Dynamic Discovery
-- The system must automatically detect modules in designated directories (`/modules`, `/addons`, `/services/tools`).
+- Modules auto-register via `RegistryInitializer.ts` (Vite glob in browser, filesystem scan in Node); addons and external cortex modules load at runtime via `DynamicLoader` / `CortexModulesLoader`.
 - Modules should register their own metadata, including triggers and configuration schemas.
 
 ### 3.2. Lifecycle Management
 - **Initialization**: Modules load their settings from persistence or global config on startup.
-- **Execution**: Modules are called by the `FlowEngine` or `Cortex` based on their phase (Aggregation, Compression, Evaluation, soul, etc.).
+- **Execution**: Cortex modules are invoked by `SystemRegistry.runCortexPhase` based on their (lowercase) phase (`aggregation`, `compression`, `evaluation`, `soul`, etc.).
 - **Persistence**: Modules manage their own state persistence using `StorageService`.
 
 ## 4. Features: Dream Simulation (Scenario Engine)
@@ -30,8 +30,8 @@ To transform Yuihime from a static application into a dynamic, extensible agenti
 - These projections are stored as `Dream` objects in the database.
 
 ### 4.3. Integration
-- Dreams are reflected upon during the `reflect` phase.
-- Positive outcomes from successful simulations are injected back into the `AdaptiveLearningModule` as positive reinforcement.
+- Dreams are reflected upon during the `reflect` phase (`AGIReflectModules` / `DreamModule`).
+- Positive outcomes inform future reasoning via the shared `context` / `state`; there is no dedicated `AdaptiveLearningModule` injection.
 
 ## 5. Constraints
 - **Anti-Hardcoding**: No strings or magic numbers related to specific modules are allowed in the kernel.

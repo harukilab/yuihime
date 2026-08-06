@@ -45,7 +45,7 @@ Setiap modul yang memproses teks atau fungsi LLM **WAJIB** mengikuti format Open
 1. Tempatkan file di folder yang sesuai:
    - `/src/drivers/ai-providers/` (LLM Providers)
    - `/src/modules/` (Core Cortex Modules)
-   - `/addons/` (External Addons)
+   - addons dir runtime (default `~/.yuihime/addons/`, override `--addons` / `YUIHIME_ADDONS_PATH`) — tidak ada folder `/addons/` di root repo
 2. Pastikan file mengekspor modul dengan properti `metadata`.
 3. Sistem akan mendeteksi modul secara otomatis via `RegistryInitializer.ts`. **Dilarang mengedit file registrasi secara manual.**
 
@@ -56,150 +56,19 @@ Setiap modul yang memproses teks atau fungsi LLM **WAJIB** mengikuti format Open
 
 ## 5. Panduan Modul untuk Streaming & Real-Time Token Flow
 
-Sistem Yuihime v4.5 mendukung penuh dua pilar arsitektur streaming:
+Sistem Yuihime v4.296 mendukung penuh dua pilar arsitektur streaming:
 1. **AI Token Stream (LLM Generation)**: Aliran chunk teks karakter demi karakter (real-time token generation) dari LLM Provider untuk meminimalkan latensi percakapan secara dramatis.
 2. **Live Event Stream (SSE - Server-Sent Events)**: Aliran data subjudul, perubahan status visual, ekspresi emosional, dan animasi avatar dari backend langsung ke OBS/Live2D overlay secara non-blocking.
 
 ---
 
-### A. Kompatibilitas AI Provider Streaming (`generateStream`)
+### A. AI Token Stream (LLM Generation)
 
-Setiap LLM Provider di Yuihime didorong untuk mendukung kognisi streaming. Agar provider Anda mendukung streaming secara lancar, Anda wajib menambahkan metode `generateStream` pada objek modul provider Anda di folder `/src/drivers/ai-providers/`.
+Real-time token streaming ditangani di dalam cortex pipeline di `src/core/kernel/ai/generateSegment.ts` melalui callback `onChunk`. Provider **tidak** diwajibkan mengimplementasikan metode `generateStream` — tidak ada provider yang mendefinisikannya (grep `generateStream` = 0 hits). Alih-alih, setiap provider mengekspos satu metode `generate` (plus opsional `getModels` / `getDynamicOptions`); `ProviderGatewayModule` mengatur pemilihan model, dan `generateSegment.ts` mengalirkan chunk melalui `onChunk` sambil menyusun respons lengkap.
 
-#### Interface Standar Provider Streaming:
-```typescript
-import { ProviderModule, ChatCompletionMessage } from '../../include/types';
-
-export interface StreamableProviderModule extends ProviderModule {
-  /**
-   * Menghasilkan teks secara streaming melalui callback onChunk
-   */
-  generateStream?: (
-    prompt: string | ChatCompletionMessage[],
-    config: any,
-    onChunk: (chunk: string) => void
-  ) => Promise<string>;
-}
-```
-
-#### Contoh Implementasi Modul Provider yang Mendukung Streaming:
-Berikut adalah contoh struktur lengkap untuk provider OpenAI/Local (seperti Ollama) yang mengimplementasikan generate stream modular:
-
-```typescript
-// /src/drivers/ai-providers/MyCustomProvider.ts
-import { ProviderModule, ModuleType } from '../../include/types';
-
-export const MyCustomProvider: ProviderModule & {
-  generateStream: (prompt: string, config: any, onChunk: (chunk: string) => void) => Promise<string>;
-} = {
-  metadata: {
-    id: 'my-custom-provider',
-    name: 'Custom Streaming Provider',
-    description: 'AI Provider yang mendukung real-time token streaming.',
-    version: '1.0.0',
-    type: ModuleType.PROVIDER,
-    order: 4,
-    models: ['custom-gpt-4o', 'custom-gpt-4-mini'],
-    configSchema: {
-      fields: {
-        baseUrl: { type: 'string', label: 'API Base URL', default: 'https://api.openai.com/v1' },
-        apiKey: { type: 'password', label: 'API Key', default: '' },
-        model: { type: 'string', label: 'Model ID', default: 'custom-gpt-4o' }
-      }
-    }
-  },
-
-  getModels: async (config: any) => {
-    return [
-      { label: 'GPT-4o Custom', value: 'custom-gpt-4o' },
-      { label: 'GPT-4-mini Custom', value: 'custom-gpt-4-mini' }
-    ];
-  },
-
-  // Fallback standar (non-stream)
-  generate: async (prompt: string, context: any) => {
-    const config = context.config?.['my-custom-provider'] || context.config || {};
-    const baseUrl = config.baseUrl || 'https://api.openai.com/v1';
-    const apiKey = config.apiKey || '';
-    const model = config.model || 'custom-gpt-4o';
-
-    const response = await fetch(`${baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: model,
-        messages: [{ role: 'user', content: prompt }],
-        stream: false
-      })
-    });
-
-    const data = await response.json();
-    return data.choices[0]?.message?.content || '';
-  },
-
-  // IMPLEMENTASI UTAMA: Real-time Streaming
-  generateStream: async (prompt: string, context: any, onChunk: (chunk: string) => void) => {
-    const config = context.config?.['my-custom-provider'] || context.config || {};
-    const baseUrl = config.baseUrl || 'https://api.openai.com/v1';
-    const apiKey = config.apiKey || '';
-    const model = config.model || 'custom-gpt-4o';
-
-    const response = await fetch(`${baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: model,
-        messages: [{ role: 'user', content: prompt }],
-        stream: true // Aktifkan flag stream dari API hulu
-      })
-    });
-
-    if (!response.ok || !response.body) {
-      throw new Error(`Gagal menginisiasi stream: ${response.statusText}`);
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder('utf-8');
-    let fullResponse = '';
-    let buffer = '';
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || ''; // simpan baris parsial yang belum lengkap ke buffer
-
-      for (const line of lines) {
-        const cleanedLine = line.trim();
-        if (!cleanedLine || cleanedLine === 'data: [DONE]') continue;
-
-        if (cleanedLine.startsWith('data: ')) {
-          try {
-            const parsed = JSON.parse(cleanedLine.slice(6));
-            const token = parsed.choices?.[0]?.delta?.content || '';
-            if (token) {
-              fullResponse += token;
-              onChunk(token); // Picu callback onChunk untuk mendesiminasikan token secara instant
-            }
-          } catch (e) {
-            // Abaikan kesalahan parsial JSON yang tidak valid dalam paket stream
-          }
-        }
-      }
-    }
-
-    return fullResponse;
-  }
-};
-```
+- **Input**: Menggunakan format `ChatCompletionMessage[]` (OpenAI-compatible).
+- **Streaming**: Saat `stream: true`, chunk dialirkan melalui callback `onChunk` dan diteruskan ke klien via SSE (`/api/stream/events`) atau lapisan kompatibel OpenAI (`POST /v1/chat/completions` dengan `stream: true`).
+- **Kontrak provider**: Sebuah provider cukup mengekspor `metadata` + `generate(prompt, config)`; token streaming adalah tanggung jawab pipeline (`generateSegment.ts`), bukan provider.
 
 ---
 

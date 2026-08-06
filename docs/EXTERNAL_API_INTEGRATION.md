@@ -48,7 +48,7 @@ Yuihime mengekspos endpoint tunggal yang sangat fleksibel untuk menampung seluru
 | Field Name | Type | Required | Default | Deskripsi |
 | :--- | :--- | :---: | :--- | :--- |
 | `message` | `string` | **Ya** | - | Isi pesan/komentar dari penonton streaming (misal: "Halo Yui, semangat live-nya!"). |
-| `sender` | `string` | Opsional | `"Penonton"` | Nama samaran penonton pengirim pesan (misal: `"Tanaka_Gamer"`). |
+| `sender` | `string` | Opsional | `"user"` | Nama samaran penonton pengirim pesan (misal: `"Tanaka_Gamer"`). |
 | `context` | `string` | Opsional | `"live_stream"` | Konteks klastering memori di SQLite. Gunakan `"live_stream"` agar Yui mengingat obrolan ini sebagai bagian dari interaksi siaran langsung. |
 | `channel` | `string` | Opsional | `"Live Chat"` | Platform/saluran asal pesan (misal: `"Twitch Chat"`, `"TikTok Live"`, `"Discord"`). |
 

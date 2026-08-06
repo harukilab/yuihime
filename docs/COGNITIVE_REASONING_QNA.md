@@ -22,9 +22,11 @@ She is not a soulless assistant bot, a rigid productivity tool, or a cold text g
 
 In Yui Airi's cognitive circuitry, an absolute rule is adopted from the industry-standard **OpenAI Tool-calling / JSON Execution**:
 
-### 🚫 **Ironclad Rule: Yui Airi CANNOT Speak Plain Text Without a Tool Call**
+### 🚫 **Ironclad Rule: Every Reply Is Packed as Structured JSON**
 
-To ensure absolute system stability, she is strictly prohibited from sending raw conversational responses as a direct chat output. Every conversational reply, gesture, and state change **MUST** be packed inside a structured, valid JSON object that triggers specific tools like `final_answer` or other system operations. This ensures that the frontend parser always receives clean, structured JSON and never leaks raw, unparsed system instructions (no AI slop).
+To ensure absolute system stability, every conversational reply, gesture, and state change **MUST** be packed inside a structured, valid JSON object (`thought` / `speech` / `animations` / `mood_impact` / `tool_calls`). This ensures that the frontend parser always receives clean, structured JSON and never leaks raw, unparsed system instructions (no AI slop).
+
+> **Note:** In **native function-calling mode** (`cortex:native_function_calling`), the model may emit plain text as the final answer — the strict tool-call-only rule applies to the JSON-enforcement mode. Also, `final_answer` is a reserved **loop-level delivery name** handled by the cortex engine; the registered delivery tool is `speak` (`LiveStatusToolsModule`).
 
 ---
 
@@ -172,7 +174,7 @@ Hope this helps!
 ```
 
 #### 🛡️ **Verifier Intervention**:
-The system catches the parser error (`Unexpected string in JSON...`). The verifier traps the broken output, blocks it from hitting the UI, and triggers a **Refactor & Repair** routine using the `cortex:error_correction` prompt:
+The system catches the parser error (`Unexpected string in JSON...`). The verifier traps the broken output, blocks it from hitting the UI, and triggers a **Refactor & Repair** routine using the `neural-verifier:correction` / `neural-verifier:error-correction` prompt:
 
 #### **RAW Repair Prompt Sent to the LLM**:
 ```markdown

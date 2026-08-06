@@ -20,7 +20,8 @@ Mode baru **v0.4.0** menambal celah ini dengan mengintegrasikan sistem regulasi 
 ### 1. Ketahanan Pengulangan (Repetition Fatigue & Anti-Spam)
 Sistem kini melacak kemiripan semantik dan struktural dari **6 pesan terakhir** yang dikirimkan oleh pengguna tertentu.
 * **Mekanisme Redaman**: Setiap kali pesan yang sama atau serupa dideteksi ulang, sistem menerapkan `fatigueMultiplier` dengan peluruhan eksponensial:
-  $$\text{Dampak Emosional} = \text{Dampak Baseline} \times (0.4)^{\text{Jumlah Pengulangan}}$$
+  $$\text{Dampak Emosional} = \text{Dampak Baseline} \times \left(\frac{0.4}{\text{neuroticismFatigueMultiplier}}\right)^{\text{Jumlah Pengulangan}}$$
+  Dengan default `neuroticismFatigueMultiplier ≈ 1.2`, basis peluruhan ≈ `0.333` (bukan `0.4`).
 * **Kognitif Jengah**: Jika pengulangan melewati batas toleransi (*Fatigue Threshold*), seluruh emosi positif (seperti kebahagiaan dan antusiasme) akan diredam menjadi nol, dan ketertarikan Yuihime akan tergantikan dengan lonjakan rasa jengkel (*irritation*) dan kemarahan (*anger*) secara progresif.
 
 ### 2. Perisai Anti-Manipulasi (Relationship-Gated Protection)
@@ -34,7 +35,7 @@ Yuihime kini memiliki kecerdasan sosial untuk membedakan perundungan nyata (*abu
 * **Banter Companion**: Ejekan ringan dari orang dekat akan disaring melalui modul humor. Jika pengguna menyertakan elemen candaan atau dideteksi memiliki relasi intim, kata-kata tersebut akan diterjemahkan menjadi interaksi main-main (*playfulness*) dan rasa gemas (*playful frustration/irritation*), menjaga atmosfer komunikasi tetap hangat dan organik.
 
 ### 4. Sinkronisasi Native (Native Cortex Coupling)
-Sistem emosi baru ini terpasang langsung di dalam jalur pemrosesan kognitif utama `NeuralInterface.ts`.
+Sistem emosi ini berjalan sebagai **CortexModule terdaftar** pada fase `soul`, dieksekusi via `SystemRegistry.runCortexPhase('soul', …)` di dalam `cortexThinkEngine.ts` (bukan terpasang di `NeuralInterface.ts`).
 Setiap respon psikis tidak lagi sekadar visual, melainkan langsung mengubah matriks memori, status relasi jangka panjang, dan mengoptimalkan respon generasi logika berikutnya secara sinkron.
 
 ---

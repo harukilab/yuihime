@@ -19,7 +19,7 @@ Di dalam database lokal tunggal Yuihime (`yuihime.db`), seluruh identitas dikons
 
 ```sql
 CREATE TABLE IF NOT EXISTS identities (
-    id TEXT PRIMARY KEY,               -- UUID internal (contoh: 'web_usr_3hfa8dj2a')
+    id TEXT PRIMARY KEY,               -- UUID internal (contoh: 'api_usr_Ab3XkLm9n')
     perceivedName TEXT,                -- Nama panggilan kesayangan yang disematkan Yui/User
     realName TEXT,                     -- Nama asli pengguna (bukan ID media sosial)
     habits TEXT,                       -- Array JSON string untuk pola kebiasaan obrolan
@@ -133,10 +133,11 @@ Untuk mencegah pencurian identitas atau manipulasi data batin lintas platform, Y
        │                                                                           Input kode 582910
        │                                                                           di Settings > Connection
        │                                                                                    │
-       │<────────────────────────────────── [MERGE ACCOUNTS] ───────────────────────────────│
-       │                                    Akun 'telegram:id:xxx'                           │
-       │                                    ditautkan permanen ke                            │
-       │                                    profil 'web_default_haruki'                     │
+        │<────────────────────────────────── [MERGE ACCOUNTS] ───────────────────────────────│
+        │                                    Akun 'telegram:id:xxx'                           │
+        │                                    ditautkan permanen ke profil                      │
+        │                                    (tag: 'chatType:userName' pada                     │
+        │                                     linkedAccounts + linked_identity:<id>)          │
 ```
 
 Dengan sistem OTP terisolasi ini, penautan akun lintas platform (Telegram, Discord, Web UI, dll) terjamin aman tanpa kebocoran keamanan.
@@ -150,7 +151,7 @@ Yuihime dipandu secara absolut menggunakan blok data XML `<active_user_context>`
 <active_user_context>
 # GELEMBUNG INFORMASI & DATA PROFIL TEMAN YANG SEDANG MENGOBROL DENGANMU SEKARANG
 Sangat penting! Saat ini kamu sedang berbicara langsung dengan teman berikut:
-- **ID Sistem**: web_usr_3hfa8dj2a
+- **ID Sistem**: api_usr_Ab3XkLm9n
 - **Nama Panggilan (Perceived Name)**: Haruki
 - **Nama Asli (Real Name)**: Haruki Nakamura
 - **Kadar Kedekatan**: Trust 98%, Affection 94%

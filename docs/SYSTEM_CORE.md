@@ -1,7 +1,7 @@
 # Yuihime AI: System Core & Architecture
 
 ## Overview
-Yuihime AI is a next-generation autonomous adaptive agent designed to simulate consciousness through a tiered cognitive architecture. Unlike traditional chatbots, Yuihime possesses a persistent "Soul," a logical "Cortex," and an autonomous "Nanobot" layer for background self-optimization.
+Yuihime AI is a next-generation autonomous adaptive agent designed to simulate consciousness through a tiered cognitive architecture. Unlike traditional chatbots, Yuihime possesses a persistent "Soul," a logical "Cortex," and a background "Circuit" layer for self-optimization.
 
 ---
 
@@ -10,14 +10,14 @@ Yuihime AI is a next-generation autonomous adaptive agent designed to simulate c
 ### A. The Soul (Emotional Core)
 The Soul manages the agent's internal state, identity, and raw personality.
 - **Mood Engine:** Tracks 8 primary emotional vectors (Joy, Anger, Stress, etc.).
-- **Personality Matrix:** Blends different personas (Hiyori, Haru, Shizuku) based on interaction history.
+- **Personality Matrix:** Blends different neural core personas (aether, hiyori, nova, ero) based on interaction history.
 - **Rapport System:** Tracks a multi-dimensional relationship with the user (Affection, Trust, Reputation).
 
 ### B. The Cortex (Reasoning Engine)
 The Cortex is the central processing unit for all cognitive tasks.
-- **Flow Engine:** Manages complex task sequences using a node-based logic system.
+- **Cortex Pipeline:** Processes cognition through a 6-phase modular pipeline (`aggregation → soul → compression → reflect → finalize → logic`) driven by `SystemRegistry.runCortexPhase`.
 - **Planning Module:** Breaks down user requests into actionable sub-tasks.
-- **Self-Correction:** Analyzes past failures to adjust future internal reasoning.
+- **Self-Correction:** Analyzes past failures to adjust future internal reasoning via the `NeuralVerifierModule` (English correction keywords).
 
 ### C. The Memory System (Temporal Persistence)
 - **Episodic Memory:** Stores individual interactions with high-fidelity context.
@@ -28,11 +28,10 @@ The Cortex is the central processing unit for all cognitive tasks.
 
 ## 2. Advanced Features (Nanobot & Cortex Background Loop)
 
-### Nanobot Framework
-Nanobots are background micro-processes that operate independently of the main chat loop.
-- **Memory Refiner:** Automatically tags and categorizes vague memories.
-- **Mood Stabilizer:** Gently drifts the agent's mood back toward its baseline personality over time.
-- **System Sentinel:** Monitors internal registry health and API efficiency.
+### Background Circuits
+Background micro-processes run independently of the main chat loop via `NeuralCircuitManager`.
+- **Memory Refiner Circuit:** Automatically tags and categorizes vague memories (≈120s interval).
+- **Mood Stabilizer Circuit:** Gently drifts the agent's mood back toward its baseline personality over time (1 min interval).
 
 ### Autonomous Loop (Cortex Background Loop)
 The "Auto-Pilot" mode allows the agent to initiate internal thoughts and tool usage without direct user input.
@@ -51,13 +50,13 @@ The "Auto-Pilot" mode allows the agent to initiate internal thoughts and tool us
 
 ## 4. Centralized AI & Speech Gateway (ABSOLUTE RULE)
 To ensure system consistency, scalability, and observability, all AI and Speech operations are strictly centralized:
-- **Neural Gateway (`provider-selector`):** The ONLY authorized entry point for LLM reasoning. No module may call an AI provider directly.
+- **Neural Gateway (`provider-gateway`):** The ONLY authorized entry point for LLM reasoning. No module may call an AI provider directly.
 - **Speech Gateway (`tts-selector`):** The ONLY authorized entry point for TTS synthesis.
 - **Modular Access:** All components MUST retrieve these gateways from the `SystemRegistry` and use their modular `run` methods. This allows for global model swapping and unified error handling.
 
 ---
 
 ## 5. Developer Guide
-- **Registry:** All modules must register via `SystemRegistry` to be discoverable by the Cortex.
-- **FlowNodes:** Custom logic should be implemented as `FlowNodes` for the visual workflow editor.
-- **Safety Tags:** All outputs are filtered through the `TagEnforcer` to maintain persona consistency.
+- **Registry:** All modules must register via `SystemRegistry` (auto-registered by loaders / `RegistryInitializer`) to be discoverable by the Cortex.
+- **Custom Logic:** Implement logic as a Cortex module exposing `metadata.phase` and `run()`. There is no visual workflow editor; only a `NeuralWorkflow` type + `StorageService.getWorkflow()`.
+- **Safety Tags:** Outputs may optionally be filtered by `NeuralVerifierModule` `strictTagEnforcement` (default OFF) to maintain persona consistency.

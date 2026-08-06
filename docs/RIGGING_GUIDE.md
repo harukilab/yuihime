@@ -105,8 +105,8 @@ Ketika YuiHime sedang mengucapkan kalimat subtitle, sistem backend memindai kemu
 *   **Sedih (`sad`/`sedih`)**: Alis menurun, sudut bibir melengkung ke bawah.
 *   **Marah (`angry`/`marah`)**: Alis menekuk tajam (karakteristik tsundere).
 
-### B. Kontrol Animasi Melalui Tag `<animations>`
-Di dalam dialog kognitifnya, YuiHime dapat menyisipkan instruksi gerakan khusus menggunakan tag XML `<animations>`. Contoh payload kognitif batin:
+### B. Kontrol Animasi Melalui Field `animations`
+Di dalam dialog kognitifnya, YuiHime dapat menyisipkan instruksi gerakan khusus menggunakan field JSON `animations`. Contoh payload kognitif batin:
 
 ```json
 {

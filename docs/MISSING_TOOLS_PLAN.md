@@ -2,6 +2,11 @@
 
 This document outlines the implementation plans for tools/modules that are currently missing from YuiHime. Each plan includes the purpose, architecture, dependencies, and implementation steps.
 
+> **Konvensi aktual (hasil audit):**
+> - Driver tool berbentuk **file datar** `src/drivers/tools/<id>.ts` dengan manifest const tertanam — **tidak ada** subdirektori `<id>/` dan **tidak ada** `manifest.json`.
+> - Registri runtime dibuat otomatis di `~/.yuihime/data/available_tools.json` oleh `src/core/toolRegistryFile.ts` — **tidak ada** `src/core/available_tools.json` dan tidak perlu diedit manual.
+> - Plan #6 (OCR) dan #8 (Calendar/Reminder) **sudah dikirim** (`ocr.ts`, `calendar_reminder.ts`).
+
 ---
 
 ## 1. Weather API Fetcher
@@ -123,7 +128,9 @@ This document outlines the implementation plans for tools/modules that are curre
 
 ---
 
-## 6. OCR / Image Text Extraction
+## 6. OCR / Image Text Extraction — ✅ SHIPPED
+
+> Sudah diimplementasikan sebagai `src/drivers/tools/ocr.ts`.
 
 **Purpose**: Extract text from images, enabling Yui to read screenshots, documents, and visual content.
 
@@ -171,7 +178,9 @@ This document outlines the implementation plans for tools/modules that are curre
 
 ---
 
-## 8. Calendar / Reminder Tool
+## 8. Calendar / Reminder Tool — ✅ SHIPPED
+
+> Sudah diimplementasikan sebagai `src/drivers/tools/calendar_reminder.ts`.
 
 **Purpose**: Schedule events and set reminders, enabling Yui to manage the user's time and notify them of upcoming events.
 

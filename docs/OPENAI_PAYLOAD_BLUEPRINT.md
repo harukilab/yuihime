@@ -157,7 +157,7 @@ Untuk mencegah pengembang atau asisten melakukan perubahan skema parameter secar
 2. **Neural Verifier Guard**: Setiap output yang dihasilkan diperiksa integritas formatnya. Jika terdeteksi cacat parsing secara berturut-turut ($\ge 3$ kali):
    - Status `isJson` dinonaktifkan sementara.
    - Panggilan respons dipulihkan ke teks percakapan biasa (*Failsafe Dialogue Fallback*).
-3. **Structured Logging**: Semua lalu lintas payload yang memicu error dicatat secara lengkap dengan menyertakan context request/response ke dalam `/api/ai/proxy/audit` untuk mempermudah visualisasi debug oleh pengguna.
+3. **Structured Logging**: Semua lalu lintas payload yang memicu error dicatat secara lengkap dengan menyertakan context request/response. LLM I/O log disajikan via `GET/POST /api/cortex/llm-logs` dan audit log via `/api/cortex/audit-logs` (tidak ada endpoint `/api/ai/proxy/audit`).
 
 ---
 *(Cetak biru ini mengikat seluruh suprastruktur Yuihime dan dilarang diubah tanpa menaikkan Major Version).*

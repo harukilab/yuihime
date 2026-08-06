@@ -7,7 +7,7 @@ This document provides a highly detailed, comprehensive reference of all API end
 1. [Core Routing & Security Architecture](#core-routing--security-architecture)
 2. [Cortex & Messaging Daemon Routes (`cortexRouter.ts`)](#1-cortex--messaging-daemon-routes-cortexrouterts)
 3. [Storage Subsystem Routes (`storageRouter.ts`)](#2-storage-subsystem-routes-storagerouterts)
-4. [Sandbox & Execution Routes (`sandboxRouter.ts`)](#3-sandbox--execution-routes-sandboxrouterts)
+4. [Sandbox & Execution Routes](#3-sandbox--execution-routes)
 5. [Identities & Pairing Routes (`identitiesRouter.ts`)](#4-identities--pairing-routes-identitiesrouterts)
 6. [System, Backups & Cron Engine (`systemRouter.ts`)](#5-system-backups--cron-engine-systemrouterts)
 7. [Synaptic Dataset & Models (`datasetRouter.ts`)](#6-synaptic-dataset--models-datasetrouterts)
@@ -148,7 +148,7 @@ The Cortex module manages Yui's cognitive cycles, real-time overlays, stream eve
     "id": "chatcmpl-...",
     "object": "chat.completion",
     "created": 1713583600,
-    "model": "yuihime-cortex",
+    "model": "yuihime-core",
     "choices": [
       {
         "index": 0,
@@ -209,8 +209,12 @@ Interacts with the SQL storage engine to manage the underlying database layers o
   { "success": true, "id": "mem_12345" }
   ```
 
-### 📝 DELETE `/api/storage/memories/:id`
-* **Function:** Unlinks and deletes a specific memory vector by its ID.
+### 📝 DELETE `/api/storage/memories`
+* **Function:** Unlinks and deletes memory records by their IDs.
+* **Query Parameters:**
+  * `id` or `ids` (required) - The memory ID(s) to delete
+  * `context` (optional) - Filter by conversation context
+  * `type` (optional) - Filter by memory type
 * **Response (JSON):**
   ```json
   { "success": true }
@@ -246,12 +250,7 @@ Interacts with the SQL storage engine to manage the underlying database layers o
   { "success": true, "id": "..." }
   ```
 
-### 💤 DELETE `/api/storage/dreams/:id`
-* **Function:** Wipes out a crystallized dream concept from memory.
-* **Response (JSON):**
-  ```json
-  { "success": true }
-  ```
+> **Note:** There is no DELETE route for dreams — only GET and POST are registered.
 
 ### 🎭 GET `/api/storage/state`
 * **Function:** Retrieves Yui's absolute active state, combining her emotional scores, active personality template, metabolic energy, and current cognitive plans.
@@ -283,8 +282,10 @@ Interacts with the SQL storage engine to manage the underlying database layers o
   { "success": true }
   ```
 
-### 📁 GET `/api/storage/knowledge-files`
+### 📁 GET `/api/storage/knowledge_files/:name`
 * **Function:** Reads and lists text or Markdown resource documents registered in her permanent semantic base directories.
+* **Path Parameters:**
+  * `name` (required) - The knowledge file name (lowercased). Returns `404 "File not found"` if absent.
 * **Response (JSON):**
   ```json
   [
@@ -296,12 +297,13 @@ Interacts with the SQL storage engine to manage the underlying database layers o
   ]
   ```
 
-### 📁 POST `/api/storage/knowledge-files`
+### 📁 POST `/api/storage/knowledge_files/:name`
 * **Function:** Creates or overrides a knowledge file in her local knowledge folders.
+* **Path Parameters:**
+  * `name` (required) - The knowledge file name to create/override.
 * **Payload:**
   ```json
   {
-    "name": "favorit_yui.txt",
     "content": "Yui sangat menyukai teh melati hangat dan kue manis!"
   }
   ```
@@ -310,79 +312,29 @@ Interacts with the SQL storage engine to manage the underlying database layers o
   { "success": true, "path": "knowledge/favorit_yui.txt" }
   ```
 
-### 📁 DELETE `/api/storage/knowledge-files`
-* **Function:** Deletes a knowledge file from disk.
-* **Payload:**
-  ```json
-  { "name": "favorit_yui.txt" }
-  ```
-* **Response (JSON):**
-  ```json
-  { "success": true }
-  ```
+> **Note:** There is no DELETE variant for knowledge files.
 
 ---
 
-## 🚧 3. Sandbox & Execution Routes (`sandboxRouter.ts`)
-Safeguards the container operating system by managing execution allowance, file safety blocks, and the interactive execution approval queue.
+## 🚧 3. Sandbox & Execution Routes
+YuiHime does not expose a dedicated `sandboxRouter.ts`. The sandbox engine lives inside `src/core/server/apiRouter.ts`:
+* `SANDBOX_ROOT` — dynamic sandbox root directory (auto-created), with YOLO toggles (`YUIHIME_YOLO_MODE`, `YUIHIME_SANDBOX_YOLO`, `YUIHIME_SHELL_YOLO`)
+* `requestFileOperationConfirmation(action, targetPath, preview)` — pushes an approval item onto the `pendingConfirmations` queue
+* `verifySandboxPath(targetPath, action, confirmed, preview)` — the path-jail verification gate
+* The `pendingConfirmations` queue is consumed **only via non-HTTP channels**: Telegram bot commands and the `approve` tool driver. There is no REST surface for reading or resolving confirmations.
 
-### 📜 GET `/api/sandbox/confirmations`
-* **Function:** Fetches the queue of actions awaiting user approval (e.g., editing files outside standard directories or running bash commands when Auto Acc is disabled).
-* **Response (JSON):**
-  ```json
-  [
-    {
-      "id": "confirm_abc123",
-      "type": "command",
-      "target": "npm run build",
-      "context": "Executing build command.",
-      "timestamp": 1713583600000
-    }
-  ]
-  ```
+Execution surfaces are exposed through `toolsRouter.ts`:
 
-### 📜 POST `/api/sandbox/confirmations/:id`
-* **Function:** Dispatches the user authorization decision back to the pending execution handler block.
+### 🖥️ POST `/api/tools/shell`
+* **Function:** Executes a shell (bash) command, scrutinized against the sandbox verification engine and user confirmation gate.
 * **Payload:**
   ```json
-  {
-    "action": "approve" // "approve" (Acc), "always" (Always Acc), or "deny" (Tolak)
-  }
+  { "command": "git status" }
   ```
-* **Response (JSON):**
-  ```json
-  { "success": true, "message": "Konfirmasi berhasil dikirim!" }
-  ```
+* **Response (JSON):** `{ "success": true, "stdout": "...", "stderr": "" }` — or `403 "Command denied by user confirmation."` when blocked.
 
-### 🖥️ POST `/api/sandbox/execute`
-* **Function:** Attempts to execute a shell bash command in the background. Sandboxed and scrutinized against the command allowlist.
-* **Payload:**
-  ```json
-  {
-    "command": "git status"
-  }
-  ```
-* **Response (JSON):**
-  * If executing synchronously or approved:
-    ```json
-    {
-      "success": true,
-      "stdout": "On branch main...",
-      "stderr": ""
-    }
-    ```
-  * If blocked awaiting approval:
-    ```json
-    {
-      "success": false,
-      "pending": true,
-      "confirmationId": "confirm_xyz",
-      "message": "Perintah shell memerlukan otorisasi Kakak."
-    }
-    ```
-
-### 📁 POST `/api/sandbox/write-file`
-* **Function:** Writes content to a file inside the container, subjected to Path Jail rules.
+### 📁 POST `/api/tools/files/write`
+* **Function:** Writes content to a file inside `user_data/`, subject to path-jail rules.
 * **Payload:**
   ```json
   {
@@ -390,39 +342,20 @@ Safeguards the container operating system by managing execution allowance, file 
     "content": "Baris teks batin baru."
   }
   ```
-* **Response (JSON):**
-  ```json
-  { "success": true, "filePath": "user_data/catatan.txt" }
-  ```
 
-### 📁 POST `/api/sandbox/read-file`
-* **Function:** Reads contents of a file inside the container.
-* **Payload:**
-  ```json
-  {
-    "filePath": "user_data/catatan.txt"
-  }
-  ```
-* **Response (JSON):**
-  ```json
-  {
-    "success": true,
-    "content": "Baris teks batin baru.",
-    "filePath": "user_data/catatan.txt"
-  }
-  ```
+### 📁 GET `/api/tools/files/read`
+* **Function:** Reads the contents of a file inside `user_data/`.
+* **Query Parameters:** `path` (required)
 
-### 📁 POST `/api/sandbox/delete-file`
-* **Function:** Deletes a file inside the container workspace.
-* **Payload:**
+### 📁 POST `/api/tools/files/manager`
+* **Function:** File management operations inside `user_data/`, selected via the `action` field: `copy`, `move`, `delete`.
+* **Payload (copy/move):**
   ```json
   {
-    "filePath": "user_data/catatan.txt"
+    "action": "copy",
+    "source": "user_data/catatan.txt",
+    "destination": "user_data/catatan_backup.txt"
   }
-  ```
-* **Response (JSON):**
-  ```json
-  { "success": true }
   ```
 
 ---
@@ -926,38 +859,20 @@ Interacts as a gateway proxy mapping request parameters to AI providers, handlin
 ---
 
 ## 🤖 8. Telegram Gateway Routes (`telegramRouter.ts`)
-Facilitates identity checks, message dispatching loops, and private Telegram user session listings.
+Facilitates identity resolution and outbound messaging through Yui's Telegram bot.
 
-### 📱 GET `/api/telegram/users`
-* **Function:** Fetches registered private Telegram user profiles logged in Yui's database.
+### 📱 GET `/api/telegram/resolve`
+* **Function:** Resolves a Telegram recipient (`?recipient=` required) to a known identity or chat target.
+* **Query Parameters:**
+  * `recipient` (required) - Telegram username / ID to resolve
 * **Response (JSON):**
   ```json
-  [
-    {
-      "tg_id": 12345678,
-      "username": "kakak_gede_tg",
-      "first_name": "Aditya",
-      "last_seen": 1713583600000,
-      "context": "linked_identity:iden_123"
-    }
-  ]
+  { "success": true, "recipient": { "tg_id": 12345678, "username": "kakak_gede_tg" } }
   ```
+* **Note:** Returns `400` when `recipient` is missing.
 
-### 📱 POST `/api/telegram/users/:id/context`
-* **Function:** Updates or links a private Telegram session identifier directly to a specific master identity model ID.
-* **Payload:**
-  ```json
-  {
-    "context": "linked_identity:iden_123"
-  }
-  ```
-* **Response (JSON):**
-  ```json
-  { "success": true }
-  ```
-
-### 📱 POST `/api/telegram/message`
-* **Function:** Manually sends an outbound message through Yui's Telegram Bot account to a targeted recipient chat ID.
+### 📱 POST `/api/telegram/send`
+* **Function:** Manually sends an outbound message through Yui's Telegram Bot account to a targeted recipient.
 * **Payload:**
   ```json
   {
@@ -973,9 +888,9 @@ Facilitates identity checks, message dispatching loops, and private Telegram use
 ---
 
 ## ⚙️ 9. Synthesizer Daemon Routes (`synthesizerRouter.ts`)
-Handles background consolidation parameters mapping out synthesized dialogue entries for neural fine-tuning sweeps.
+Handles background consolidation parameters mapping out synthesized dialogue entries for neural fine-tuning sweeps. All paths are prefixed with `/api/cortex/synthesizer`.
 
-### 📝 GET `/api/synthesizer/status`
+### 📝 GET `/api/cortex/synthesizer/status`
 * **Function:** Queries active synthesizer daemon compilation status parameters.
 * **Response (JSON):**
   ```json
@@ -986,20 +901,30 @@ Handles background consolidation parameters mapping out synthesized dialogue ent
   }
   ```
 
-### 📝 POST `/api/synthesizer/trigger`
-* **Function:** Directs the background synthesizer daemon to run a manual processing pass immediately.
+### 📝 POST `/api/cortex/synthesizer/configure`
+* **Function:** Updates synthesizer configuration parameters.
+
+### 📝 POST `/api/cortex/synthesizer/control`
+* **Function:** Directs the background synthesizer daemon to run a manual processing pass immediately (start/pause/resume/stop).
 * **Response (JSON):**
   ```json
   { "success": true, "message": "Manual compilation triggered." }
   ```
+
+### 📝 POST `/api/cortex/synthesizer/synthesize-single`
+* **Function:** Runs a single synthesis pass for one record.
+
+### 📝 GET/POST `/api/cortex/synthesizer/records` · PUT/DELETE `/api/cortex/synthesizer/records/:id`
+* **Function:** Records CRUD for the synthesizer queue.
 
 ---
 
 ## 🛠️ 10. File & Search Tools Routes (`toolsRouter.ts`)
 Provides robust file operations to her active cognitive loop (listing files, searching workspaces, moving, or deleting files) safely inside her `user_data/` directory.
 
-### 📁 GET `/api/tools/files`
+### 📁 GET `/api/tools/files/list`
 * **Function:** Scans and lists directories inside `user_data/`. Subjected to Path Jail protections.
+* **Query Parameters:** `limit`, `offset`, `pattern`, `path`
 * **Response (JSON):**
   ```json
   [
@@ -1012,8 +937,12 @@ Provides robust file operations to her active cognitive loop (listing files, sea
   ]
   ```
 
-### 🔍 POST `/api/tools/search`
-* **Function:** Executes string pattern searching (similar to grep) on files inside her permitted directories.
+### 🔍 GET `/api/tools/search`
+* **Function:** AI semantic search over the workspace using `query` / `top_k` (served by `AIService`).
+* **Query Parameters:** `query` (required), `top_k`
+
+### 🔍 POST `/api/tools/grep`
+* **Function:** Executes grep-style string pattern searching on files inside her permitted directories.
 * **Payload:**
   ```json
   {
@@ -1031,27 +960,14 @@ Provides robust file operations to her active cognitive loop (listing files, sea
   ]
   ```
 
-### 📁 POST `/api/tools/copy`
-* **Function:** Copies files inside her permitted directories.
-* **Payload:**
+### 📁 POST `/api/tools/files/manager`
+* **Function:** File management operations (`copy`, `move`, `delete`) inside her permitted directories.
+* **Payload (copy/move):**
   ```json
   {
+    "action": "copy",
     "source": "user_data/catatan.txt",
     "destination": "user_data/catatan_backup.txt"
-  }
-  ```
-* **Response (JSON):**
-  ```json
-  { "success": true }
-  ```
-
-### 📁 POST `/api/tools/move`
-* **Function:** Moves or renames files inside permitted directories.
-* **Payload:**
-  ```json
-  {
-    "source": "user_data/catatan.txt",
-    "destination": "user_data/catatan_baru.txt"
   }
   ```
 * **Response (JSON):**

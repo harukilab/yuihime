@@ -8,12 +8,11 @@ Berikut adalah daftar perintah gerakan yang dapat dipahami oleh sistem VTuber Av
 
 | Perintah (Key) | Sinonim / Bahasa Indonesia | Hasil Gerakan (Mapped Motion) |
 | :--- | :--- | :--- |
-| `nod` | `angguk`, `kait`, `tilts` | Mengangguk (Yes) |
+| `nod` | `angguk` | Mengangguk (Yes) |
 | `shake` | `geleng` | Menggeleng (No) |
 | `wave` | `melambai`, `lambai` | Melambaikan tangan |
-| `touch` | `tap` | Menepuk tubuh / bereaksi terhadap sentuhan |
-| `blink` | `kedip`, `kedipan` | Berkedip (Prosedural) |
-| `wink` | `kedip_sebelah` | Mengedipkan satu mata (Kiri) |
+| `blink` | `kedip` | Berkedip (Prosedural) |
+| `wink` | - | Mengedipkan satu mata (Kiri) |
 
 ## Ekspresi Emosional (Expressions)
 
@@ -38,7 +37,6 @@ Sistem secara otomatis mengarahkan mata dan kepala sesuai arah yang diminta.
 | `look_up` | `tengok_atas` | Melihat ke atas |
 | `look_down` | `tengok_bawah` | Melihat ke bawah |
 | `look_center` | `pusat` | Melihat kembali ke tengah (Kamera) |
-| `look_at_chat`| - | Melihat ke arah chat |
 
 ## Kata Kunci Tambahan (Fuzzy Match)
 

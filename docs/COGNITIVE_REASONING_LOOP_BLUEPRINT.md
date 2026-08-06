@@ -1,6 +1,14 @@
 # Sistem Sirkuit Kognitif Berulang Yuihime (ReAct Agent Loop Blueprint)
 *Panduan Arsitektur & Spesifikasi Mekanisme Berpikir Terpadu (THINK-ACT-OBSERVE)*
 
+> **Catatan Implementasi (bagian dari audit docs vs code):** Dokumen ini adalah *blueprint* desain; sebagian contoh kode bersifat ilustratif. Yang terimplementasi di kode:
+> - Tool `status_update` dan delivery tool `speak` → `src/modules/LiveStatusToolsModule.ts` (bukan `DefaultCortexTools.ts`).
+> - `CognitiveScheduler` (suspend/resume/complete) → `src/core/kernel/CognitiveScheduler.ts`; store snapshot = `CognitiveScheduler.activeTaskStore` (bukan `ActiveTaskContextStore`).
+> - Loop utama tinggal di `src/core/cortex/cortexThinkEngine.ts` (bukan `CognitiveEngineLoop.ts`).
+> - Transport ke UI memakai `broadcastToWS` + `EventBus` (bukan `global.io?.emit`).
+> - Kunci JSON kanonik adalah **`tool_calls`**; `tools_to_call` lama masih diterima via key-sync di parser.
+> - Delivery `final_answer` diimplementasikan sebagai tool **`speak`**; `final_answer` adalah nama delivery tingkat loop yang dipesan.
+
 ---
 
 ## 🏙️ 1. Gambaran Umum Kognisi (High-Level Overview)
@@ -79,12 +87,12 @@ Selama sirkuit berulang masih mencari data dan mengeksekusi aksi, model mersepon
 
 ```json
 {
-  "thought": "Kakak minta carikan berita terbaru mengenai cuaca di Jakarta. Aku harus menggunakan tool web_adv_search dulu untuk memastikannya. Aku juga merasa bersemangat membantu Kakak!",
+  "thought": "Kakak minta carikan berita terbaru mengenai cuaca di Jakarta. Aku harus menggunakan tool websearch dulu untuk memastikannya. Aku juga merasa bersemangat membantu Kakak!",
   "animations": ["TALK", "SMILE"],
   "mood_impact": { "joy": 1, "anticipation": 2 },
   "tools_to_call": [
     {
-      "tool": "web_adv_search",
+      "tool": "websearch",
       "args": { "query": "cuaca Jakarta hari ini" }
     }
   ],
@@ -96,7 +104,7 @@ Selama sirkuit berulang masih mencari data dan mengeksekusi aksi, model mersepon
 Hasil dari tool di atas dikonversi oleh Kernel menjadi prompt umpan balik berulang untuk model:
 
 ```markdown
-[SYSTEM_OBSERVATION]: Tool 'web_adv_search' executed successfully.
+[SYSTEM_OBSERVATION]: Tool 'websearch' executed successfully.
 Results: {
   "weather": "Cerah berawan, suhu 28-32 derajat Celcius, kelembapan 75% dengan angin sepoi."
 }

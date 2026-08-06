@@ -8,7 +8,7 @@ This document captures the current assembled system prompt structure for YuiHime
 
 ```
 # SOP PRIORITY DIRECTIVE
-Before responding or calling any tools, you MUST check the folder `user_data/sops/` using `list_files` or `read_file`. If there is an SOP file whose name is relevant to the user's request (for example, an image request matches `user_data/sops/foto.md`), you MUST read that SOP and treat it as the highest-priority instruction to guide your answer or tool execution.
+Before responding or calling any tools, you MUST check the folder `user_data/sops/` using `glob` or `read`. If there is an SOP file whose name is relevant to the user's request (for example, an image request matches `user_data/sops/foto.md`), you MUST read that SOP and treat it as the highest-priority instruction to guide your answer or tool execution.
 
 <environment_details>
 - **Current Time**: ${new Date().toISOString()}
@@ -111,7 +111,7 @@ ${toolsInstruction}
 - Contains persona/cognitive focus prompt (Aether, Hiyori, Nova, Ero)
 
 ### 7. <yuihime_inner_scaffold_context_md>
-- **Source**: Files from `.yuihime/agent/` or fallback from `src/share/prompts/`
+- **Source**: Files from `.yuihime/agent/` (`YUIHIME_AGENT_PATH` override supported), fallback ke `~/` (homedir) bila file tidak ada di folder agent — **tidak ada** fallback `src/share/prompts/` di runtime.
 - Files loaded based on `llmSizePreset`:
   - `tiny`: IDENTITY.md, USER.md
   - `lite`: IDENTITY.md, SOUL.md, USER.md
@@ -173,14 +173,14 @@ ${toolsInstruction}
 | SOP Priority Directive | Hardcoded in PromptManager.ts | Static |
 | environment_details | Assembled at runtime | Dynamic |
 | active_user_context | Database + session | Dynamic |
-| Scaffold files (IDENTITY, SOUL, etc.) | `.yuihime/agent/` or `src/share/prompts/` | Static (file-based) |
+| Scaffold files (IDENTITY, SOUL, etc.) | `.yuihime/agent/` (fallback `~/`) | Static (file-based) |
 | Growth metrics | Database queries | Dynamic |
 | character.md / lore.md | `.yuihime/agent/` or fallback | Static (file-based) |
 | Physical/emotional states | AgentState | Dynamic |
 | Cognitive directives / SOP | `user_data/sops/` + module injections | Dynamic |
 | Dialogue transcript | Memory DB | Dynamic |
 | Grounded knowledge | RAG / web search | Dynamic |
-| System capabilities | available_tools.json | Static |
+| System capabilities | `~/.yuihime/data/available_tools.json` (generated) | Dynamic |
 
 ---
 
@@ -191,6 +191,5 @@ ${toolsInstruction}
 | `src/modules/PromptManager.ts` | Assembles the final system prompt |
 | `src/modules/SOPModule.ts` | Injects SOP content into `soulDirective` |
 | `src/core/server/onboarding.ts` | Seeds initial files to `.yuihime/agent/` and `user_data/sops/` |
-| `src/share/prompts/` | Source templates for agent files and SOPs |
 | `.yuihime/agent/` | Runtime persona files (user-editable) |
 | `user_data/sops/` | Runtime SOP files (user-editable) |

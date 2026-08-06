@@ -1,10 +1,12 @@
 # Non-Blocking Background Tool Execution Plan
 
+> **Status: IMPLEMENTED.** Dispatcher di `src/core/kernel/BackgroundToolDispatcher.ts` (enqueue/getPending/drain, concurrency default 4, `Promise.allSettled`, TTL 5 menit, event `TOOL_BG_*` + `broadcastToWS`), interim reply + pending injection di `src/core/kernel/NeuralInterface.ts:369-423`.
+
 ## Current State (Masalah)
 
-- Tool execution terjadi di `cortexThinkEngine.ts:1100-1244` menggunakan `Promise.all(toolPromises)` — paralel tapi **masih blocking** final answer.
+- Tool execution terjadi di `cortexThinkEngine.ts` menggunakan `Promise.all(toolPromises)` — paralel tapi **masih blocking** final answer (sekarang: `toolPromises` di ~:1330, `Promise.all` di ~:1586; cabang background-dispatcher di ~:1197-1255).
 - User harus tunggu semua tool selesai baru dapat balasan.
-- Belum ada mekanisme "kirim status sekarang, lanjutkan tool nanti".
+- Belum ada mekanisme "kirim status sekarang, lanjutkan tool nanti". *(telah diatasi via dispatcher)*
 
 ## Target Architecture
 
@@ -47,8 +49,8 @@
 |------|--------|
 | `src/core/kernel/BackgroundToolDispatcher.ts` | NEW — core background worker |
 | `src/core/cortex/cortexThinkEngine.ts` | MODIFY — split tool execution to background, send interim reply |
-| `src/core/kernel/NeuralInterface.ts` | MODIFY — inject pending tool results into next context |
-| `src/core/kernel/MultiChannelQueue.ts` | MODIFY — allow interim reply, handle background completion gracefully |
+| `src/core/kernel/NeuralInterface.ts` | MODIFY — inject pending tool results into next context (implemented here) |
+| `src/core/kernel/MultiChannelQueue.ts` | MODIFY — allow interim reply, handle background completion gracefully (interim reply ditangani di `NeuralInterface`, bukan di sini) |
 | `shared/core/registry.ts` | maybe minor — already parallel-aware, keep |
 
 ## Risks & Mitigations

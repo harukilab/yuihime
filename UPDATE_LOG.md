@@ -1,6 +1,18 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.297] - 2026-08-06
+### Docs: Audit & koreksi akurasi semua dokumentasi terhadap kode (batch final: TOOLS, EXTERNAL_API, MISSING_TOOLS, README, dll)
+- TOOLS.md: daftar built-in tools dikoreksi — file_read/file_write -> read/write; memory_store/recall/forget -> search_chat_history + endpoint REST /api/storage/memories (POST/DELETE).
+- EXTERNAL_API_INTEGRATION.md: default sender 'Penonton' -> 'user' sesuai skema web chat.
+- OPENAI_PAYLOAD_BLUEPRINT.md: endpoint audit palsu /api/ai/proxy/audit -> llm-logs + audit-logs di /api/cortex/*.
+- MISSING_TOOLS_PLAN.md: catatan konvensi aktual (file tool datar .ts + manifest tertanam, registri ~/.yuihime/data/available_tools.json via toolRegistryFile.ts); plan #6 OCR & #8 Calendar/Reminder ditandai SHIPPED (ocr.ts, calendar_reminder.ts).
+- RIGGING_GUIDE.md: 'tag XML <animations>' -> field JSON 'animations' (output JSON mode).
+- SYSTEM_PROMPT_STRUCTURE.md: SOP directive pakai glob/read (bukan list_files/read_file); fallback scaffold ~/ (bukan src/share/prompts/); system capabilities -> ~/.yuihime/data/available_tools.json; baris Key Files dibersihkan dari src/share/prompts/.
+- PARALLEL_PROCESSING.md: diverifikasi akurat (handleDream/handleReflect/handleExtractKnowledge/thinkingCount/normalizeForComparison/streamId cocok web/src/app/handlers.ts + state.ts) — tanpa edit.
+- README.md: loop kognitif maxIterations (default 50 + ceiling, bukan maks 3); tool path datar src/drivers/tools/<id>.ts; available_tools.json -> ~/.yuihime/data/; daftar ai-providers lengkap (Custom/Local/OfficialChat); Input Channels + Discord bridge; tool addon ke registri runtime.
+
+
 ## [4.296] - 2026-08-06
 ### Docs: Integrasi sepasang addon + external cortex module (file JSON sharing)
 - Buat docs/ADDON_CORTEX_INTEGRATION.md — panduan pasangan modul: addon (subprocess penuh, on-demand via tool addon-<id>) + external cortex module (tiap putaran pipeline) berbagi data via file JSON di ~/.yuihime/user_data/.

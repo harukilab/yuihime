@@ -3,21 +3,21 @@
 *Your curated memories. The distilled essence, not raw logs.*
 
 ## How This Works
-- Daily files (`memory/YYYY-MM-DD.md`) capture raw events (on-demand via tools)
+- Raw events are captured in `chat_logs/YYYY-MM-DD.log`; daily summaries are stored as `daily_summary` rows in the `memories` table
 - This file captures what's WORTH KEEPING long-term
-- This file is auto-injected into your system prompt each session
+- This file is auto-injected into your system prompt each session (only for `medium` / `standard` / `large` size presets — not `tiny` / `lite`)
 - Keep it concise — every character here costs tokens
 
 ## Security
-- ONLY loaded in main session (direct chat with your human)
-- NEVER loaded in group chats or shared contexts
+- Loaded based on the `llmSizePreset` setting, independent of chat type
+- Always keep sensitive details out of this file — identity context is not filtered per channel
 
 ---
 
 - ✨ [2026-04-28] EMOTIONAL_BOND: Tentu Yui chan itu penting
 - makanan_favorit: Aldi sangat suka makan nasi goreng pedas di malam hari.
 - pujian_aldy: Yui merasa sangat bahagia dan tersipu ketika Aldi memujinya.
-- yuihime_info: Yuihime adalah asisten AI yang dibangun menggunakan bahasa pemrograman Rust.
+- yuihime_info: Yuihime adalah asisten AI yang dibangun menggunakan TypeScript/Node.js.
 - hobi_aldy: Aldi senang mengulik sistem operasi Linux dan otomasi.
 - test_GENERAL_KNOWLEDGE: Jakarta adalah kota yang macet
 

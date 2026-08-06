@@ -97,7 +97,10 @@ broadcastTTSAudioStream(base64Mp3String, "Halo Kak! Yuihime di sini!", true);
 ## 5. Cara Penggunaan pada Komponen Web UI
 
 ```typescript
-import { socketService } from '@/core/socket';
+import { socketService } from '../core/socket';
+// Note: the client SocketService lives in web/src/core/socket.ts.
+// In web code use a relative import ('../core/socket') or the '@web/core/socket' alias.
+// Do NOT use '@/core/socket' — '@/' resolves to the daemon src/ tree.
 
 // A. Mendaftarkan Listener Animasi Avatar
 useEffect(() => {
