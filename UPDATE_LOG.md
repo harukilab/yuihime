@@ -1,6 +1,14 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.291] - 2026-08-06
+### Fix: v4.291: Key universal context.externalInjection (selalu terlihat LLM)
+- PromptManager: tambah key universal `context.externalInjection` yang SELALU dirender ke system prompt sebagai block <external_module_injections> (apabila diisi) — tanpa perlu tahu key internal lain.
+- External cortex module cukup set/append `context.externalInjection` di phase apa pun sebelum prompt dirakit (mis. aggregation) dan isinya dijamin masuk prompt LLM.
+- README: key externalInjection ditambahkan ke daftar key context, tabel pola injeksi (jadi opsi paling simpel), dan contoh brain_probe & mood_reader kini memakai externalInjection.
+- Terverifikasi end-to-end: module test external set externalInjection (len=72) terbaca di PromptManager & block ter-render; test module dihapus setelah verifikasi.
+
+
 ## [4.290] - 2026-08-06
 ### Fix: v4.290: Koreksi dokumentasi injeksi key External Cortex Modules (mana yang benar-benar terlihat LLM)
 - Perbaikan penting: klaim lama 'semua key context terlihat LLM' SALAH — prompt Yui dirakit modul prompt-manager (phase compression) yang hanya membaca key tertentu. Key kustom yang dibuat sendiri HANYA terlihat modul lain, bukan LLM.

@@ -867,6 +867,12 @@ ${context.groundedKnowledge}
 </grounded_knowledge_context>
 ` : ''}
 
+${context.externalInjection ? `
+<external_module_injections>
+${context.externalInjection}
+</external_module_injections>
+` : ''}
+
 <system_capabilities_and_tools>
 ${toolsInstruction}
 </system_capabilities_and_tools>

@@ -1,4 +1,4 @@
-# 👑 Yuihime AI v4.290 - Autonomous VTuber Engine (Airi OS Core v2.39)
+# 👑 Yuihime AI v4.291 - Autonomous VTuber Engine (Airi OS Core v2.39)
 
 **Yuihime** adalah engine agen AI otonom untuk VTuber dengan arsitektur *daemon + web UI*.cognitive loop, memory jangka panjang (SQLite), eksekusi tool modular, dan antarmuka web real-time untuk kontrol kepribadian.
 
@@ -154,6 +154,11 @@ fase yang sama maupun fase-fase lanjutan:
 > `disableTools`. **Key lain yang kamu buat sendiri HANYA terlihat modul lain**, bukan LLM.
 > Untuk menyuntikkan data kustom ke LLM, set salah satu key di atas (mis. append ke
 > `context.groundedKnowledge` atau `context.soulDirective`).
+>
+> 💡 **Key universal**: gunakan `context.externalInjection` — key khusus yang SELALU
+> dirender ke system prompt (block `<external_module_injections>`) apa pun isinya.
+> Cocok untuk data kustom dari external cortex module yang harus sampai ke LLM
+> tanpa perlu tahu key internal lain.
 
 ##### Key `context` yang tersedia
 
@@ -177,6 +182,7 @@ fase yang sama maupun fase-fase lanjutan:
 | `context.toolExecutionHistory` | Riwayat eksekusi tool di loop ini |
 | `context.lastToolUsed` / `context.lastToolError` | Tool terakhir & error-nya |
 | `context.groundedKnowledge` | Pengetahuan ter-grounding (disuntikkan ke prompt) |
+| `context.externalInjection` | **Key universal** — selalu dirender ke prompt (block `<external_module_injections>`) |
 | `context.knowledge` / `context.heuristics` | Knowledge core & strategi belajar |
 | `context.goals` / `context.activeGoal` / `context.goalPersistencePct` | Sistem goal aktif |
 | `context.soulDirective` | Direktif emosi dari fase soul |
@@ -208,8 +214,8 @@ fase yang sama maupun fase-fase lanjutan:
 #### Mengambil data sistem Yui
 
 Semua key `context` bisa dibaca langsung di `actionCode`. Contoh membaca memori,
-identitas, state emosi, dan konfigurasi — hasilnya di-injeksi ke `groundedKnowledge`
-(append) sehingga benar-benar terlihat LLM di putaran ini:
+identitas, state emosi, dan konfigurasi — hasilnya di-set ke `externalInjection`
+(key universal yang SELALU dirender ke prompt LLM):
 
 ```json
 {
@@ -219,12 +225,12 @@ identitas, state emosi, dan konfigurasi — hasilnya di-injeksi ke `groundedKnow
   "phase": "aggregation",
   "order": 5,
   "actionType": "code",
-  "actionCode": "const report = 'User: ' + context.userName + ' | Joy: ' + (state.mood?.joy || 0) + ' | Stress: ' + (state.mood?.stress || 0) + ' | Energy: ' + state.energy + '% | Memories: ' + (context.memories?.length || 0) + ' | Chat: ' + context.chatType; context.groundedKnowledge = (context.groundedKnowledge || '') + '\\n[BRAIN PROBE]: ' + report; return context;"
+  "actionCode": "const report = 'User: ' + context.userName + ' | Joy: ' + (state.mood?.joy || 0) + ' | Stress: ' + (state.mood?.stress || 0) + ' | Energy: ' + state.energy + '% | Memories: ' + (context.memories?.length || 0) + ' | Chat: ' + context.chatType; context.externalInjection = (context.externalInjection || '') + '\\n[BRAIN PROBE]: ' + report; return context;"
 }
 ```
 
 Untuk panggil LLM Yui sendiri (analisis mandiri, fallback heuristik), gunakan
-`context.think` — hasilnya di-injeksi ke `soulDirective` agar dibaca LLM utama:
+`context.think` — hasilnya di-injeksi ke `externalInjection` agar dibaca LLM utama:
 
 ```json
 {
@@ -233,7 +239,7 @@ Untuk panggil LLM Yui sendiri (analisis mandiri, fallback heuristik), gunakan
   "description": "Analyzes user tone via Yui's own LLM.",
   "phase": "aggregation",
   "actionType": "code",
-  "actionCode": "const r = await context.think('Rate the tone of this message as one word (happy/sad/angry/neutral): ' + input); context.soulDirective = (context.soulDirective || '') + '\\n[MOOD READER]: ' + (r || 'neutral').trim(); return context;"
+  "actionCode": "const r = await context.think('Rate the tone of this message as one word (happy/sad/angry/neutral): ' + input); context.externalInjection = (context.externalInjection || '') + '\\n[MOOD READER]: ' + (r || 'neutral').trim(); return context;"
 }
 ```
 
@@ -289,11 +295,12 @@ Contoh webhook (kirim data ke service luar, respons disimpan ke output):
 
 | Tujuan | Cara |
 |---|---|
+| **Data kustom (paling simpel)** | Set `context.externalInjection` — **selalu** dirender ke prompt (block `<external_module_injections>`) |
 | Data kustom terlihat LLM | Append ke `context.groundedKnowledge` (block `<grounded_knowledge_context>` di prompt) |
 | Arahan emosi/nada terlihat LLM | Append ke `context.soulDirective` (dirender jadi cognitive directives) |
 | Hasil hanya untuk modul lain | Set key sendiri, mis. `context.<id>_result` — baca di modul `code` lain via `context.<id>_result` |
 | Output shell/webhook | Otomatis ke `context.<id>_output` — baca di `code` lain |
-| Menjalankan logika & menyimpan | `context.<id>_output` bisa dibaca oleh modul `code` fase berikutnya (mis. `finalize`) dan di-append ke `groundedKnowledge` di sana |
+| Menjalankan logika & menyimpan | `context.<id>_output` bisa dibaca oleh modul `code` fase berikutnya (mis. `finalize`) dan di-append ke `externalInjection` di sana |
 
 > Contoh rantai: modul `service_status` (shell, `aggregation`) menulis
 > `context.service_status_output`; modul `code` di fase `finalize` membaca
