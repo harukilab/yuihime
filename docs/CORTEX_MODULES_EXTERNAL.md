@@ -320,15 +320,20 @@ Ini salah satu pertanyaan paling penting. Ringkasnya:
 
 2. **Kalau Anda ingin data bertahan antar putaran**, jangan menaruhnya di
    `context` — tulis ke penyimpanan persisten. Di dalam `actionCode` (sandbox
-   `code`) Anda HANYA punya `args`, `context`, `state`, `input` + global JS
-   (`fetch`, `console`, `Date`, dst). **Tidak ada akses langsung ke `StorageService`
-   maupun `context.db`**. Cara menyimpan data persisten:
+   `code`) Anda punya `args`, `context`, `state`, `input` + global JS (`fetch`,
+   `console`, `Date`, dst) **+ `require`** (sehingga `require('fs')`,
+   `require('path')`, `require('os')` bisa dipakai langsung — loader berjalan di
+   scope modul CJS). **Tidak ada akses langsung ke `StorageService` maupun
+   `context.db`**. Cara menyimpan data persisten:
 
-   - **HTTP API daemon** (paling andal): `fetch` ke endpoint internal daemon, mis.
+   - **File JSON di `~/.yuihime/user_data/`** (paling fleksibel untuk berbagi data
+     antar modul eksternal): pakai `require('fs')` untuk baca/tulis JSON sendiri —
+     format bebas, dikendalikan Anda. Ini cara yang disarankan untuk "shared state"
+     antar modul eksternal. Contoh lengkap di bab 8.8.
+   - **HTTP API daemon**: `fetch` ke endpoint internal daemon, mis.
      `POST /api/storage/history` untuk menyimpan entri riwayat, atau `POST
      /api/storage/memories` untuk menambah memori jangka panjang. Contoh di bab 8.7.
-   - **File**: tulis ke `~/.yuihime/user_data/` via action `shell` (`echo ... >>
-     ~/.yuihime/user_data/my_data.txt`) — bertahan.
+   - **Action `shell`**: `echo ... >> ~/.yuihime/user_data/my_data.txt` — bertahan.
 
 3. **`state` di-update oleh modul built-in**, bukan oleh modul eksternal Anda secara
    otomatis. Kalau Anda mengubah `state.mood` di `actionCode`, perubahan itu berlaku
@@ -338,15 +343,15 @@ Ini salah satu pertanyaan paling penting. Ringkasnya:
 4. **Pattern umum untuk data yang ingin bertahan**:
 
    ```
-   Putaran 1:  modul menulis key kustom di context (sementara) ─┐
-               └─ juga POST /api/storage/history / memories    ─┼─► DB (permanen)
-   Putaran 2:  modul GET /api/storage/...                      ─┘
+   Putaran 1:  modul tulis data ke file JSON user_data  ──► ~/.yuihime/user_data/my.json
+                (atau POST /api/storage/history/memories → DB)
+   Putaran 2:  modul (lain) baca file itu / GET /api/storage/...
                lalu append ke externalInjection untuk prompt LLM
    ```
 
 > 📌 **Aturan praktis**: gunakan `context`/`externalInjection` untuk data **per-putaran**
-> (real-time, sekali-pakai). Gunakan HTTP API daemon / file untuk data yang harus
-> **bertahan** antar percakapan & restart.
+> (real-time, sekali-pakai). Gunakan file JSON di `user_data` (atau HTTP API daemon)
+> untuk data yang harus **bertahan** antar percakapan & restart.
 
 ---
 
@@ -532,6 +537,46 @@ global yang tersedia di sandbox `code`:
 > mengeksekusi via `new Function('args', 'context', 'state', 'input', ...)` — lihat
 > `src/core/CortexModulesLoader.ts:95`). Gunakan `fetch` ke API daemon, action `shell`,
 > atau tulis file di `~/.yuihime/user_data/` untuk persistensi.
+
+### 8.8 Berbagi data antar modul eksternal via file JSON
+
+Cara paling sederhana untuk "shared state" antar modul eksternal: **file JSON** di
+`~/.yuihime/user_data/`. `require('fs')` & `require('path')` tersedia di sandbox
+`code`, jadi Anda bisa baca/tulis JSON sendiri — format bebas, tidak bergantung API.
+
+**Modul penulis** (mis. phase `aggregation`, menulis data tiap putaran):
+
+```json
+{
+  "id": "ext_state_writer",
+  "name": "Shared State Writer",
+  "description": "Writes a shared JSON file every cycle.",
+  "phase": "aggregation",
+  "order": 1,
+  "actionType": "code",
+  "actionCode": "const fs = require('fs'); const os = require('os'); const path = require('path'); const dir = process.env.YUIHIME_USER_DATA_PATH || path.join(os.homedir(), '.yuihime', 'user_data'); fs.mkdirSync(dir, { recursive: true }); const file = path.join(dir, 'ext_shared.json'); let data = {}; try { data = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) {} data.lastCycle = new Date().toISOString(); data.mood = state.mood; data.turns = (data.turns || 0) + 1; fs.writeFileSync(file, JSON.stringify(data, null, 2)); context.externalInjection = (context.externalInjection || '') + '\\n[EXT_SHARED] cycle #' + data.turns + ' (mood: ' + data.mood + ')'; return context;"
+}
+```
+
+**Modul pembaca** (mis. phase `compression`, membacanya untuk injeksi ke LLM):
+
+```json
+{
+  "id": "ext_state_reader",
+  "name": "Shared State Reader",
+  "description": "Reads the shared JSON file and injects it into the prompt.",
+  "phase": "compression",
+  "order": 1,
+  "actionType": "code",
+  "actionCode": "const fs = require('fs'); const os = require('os'); const path = require('path'); const dir = process.env.YUIHIME_USER_DATA_PATH || path.join(os.homedir(), '.yuihime', 'user_data'); const file = path.join(dir, 'ext_shared.json'); let data = {}; try { data = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) {} context.externalInjection = (context.externalInjection || '') + '\\n[EXT_SHARED_STATE] ' + JSON.stringify(data); return context;"
+}
+```
+
+> ✅ **Keuntungan file JSON vs API daemon**: tidak ada port/endpoint yang harus
+> ditebak, format bebas (bukan hanya history/memories), dan tiap modul eksternal bisa
+> baca/tulis file yang sama. Wajib pakai path **absolut** (`os.homedir()` /
+> `YUIHIME_USER_DATA_PATH`), bukan `~` mentah — shell tidak mengekspansi tilde di
+> sandbox `code`.
 
 ---
 

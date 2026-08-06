@@ -1,6 +1,13 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.294] - 2026-08-06
+### Docs: File JSON sebagai solusi berbagi data jangka panjang antar external modules
+- docs/CORTEX_MODULES_EXTERNAL.md contoh baru 8.8: berbagi shared state antar modul eksternal via file JSON di ~/.yuihime/user_data/ — modul penulis (aggregation) & pembaca (compression), memakai require('fs')/require('path') yang TERSEDIA di sandbox actionCode (loader berjalan di scope modul CJS).
+- Verifikasi: contoh 8.8 diuji end-to-end di sandbox (tulis & baca ext_shared.json, injeksi ke externalInjection) — berhasil; wajib path absolut (os.homedir() / YUIHIME_USER_DATA_PATH), bukan tilde mentah.
+- Bab 6.4 diperbarui: require('fs') kini tercatat sebagai opsi sandbox, file JSON user_data jadi opsi teratas untuk shared state antar modul eksternal (format bebas, tanpa tebak port/endpoint), pattern diagram disesuaikan.
+
+
 ## [4.293] - 2026-08-06
 ### Docs: Persistensi data injeksi external cortex modules (permanen vs sementara)
 - Dokumentasi (docs/CORTEX_MODULES_EXTERNAL.md bab 6.4 baru + contoh 8.7): context/externalInjection bersifat sementara per-putaran dan TIDAK pernah dipersist otomatis; data yang ingin bertahan antar putaran harus ditulis manual ke penyimpanan persisten.
