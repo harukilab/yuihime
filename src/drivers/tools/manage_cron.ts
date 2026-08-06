@@ -121,6 +121,24 @@ export const CronTool: ToolModule = {
           const schedule = args.schedule || '5m';
           const enabled = true;
           const repeating = args.repeating ?? false;
+
+          // De-duplicate pending tasks: skip creating another enabled task with the
+          // same name + schedule + repeating flag. Prevents duplicate deliveries.
+          if (args.action === 'add' && args.taskName) {
+            const dup = db.prepare(
+              "SELECT * FROM cron_tasks WHERE name = ? AND schedule = ? AND repeating = ? AND enabled = 1"
+            ).get(taskName, schedule, repeating ? 1 : 0) as any;
+            if (dup) {
+              console.log(`[CRON_DE_DUP] Skipped duplicate '${taskName}' (${schedule}): reusing ${dup.id}`);
+              return {
+                success: true,
+                skippedDuplicate: true,
+                existingId: dup.id,
+                message: `Duplicate pending task skipped — a task named '${dup.name}' with the same schedule (${dup.schedule}) already exists (${dup.id}). Reusing it instead of creating another.`
+              };
+            }
+          }
+
           // Crontab model: schedule + command(prompt). Accept prompt/command/instruction aliases.
           const rawFromArgs = extractCronPromptFromArgs(args);
           const promptProvided = typeof rawFromArgs === 'string';

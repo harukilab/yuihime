@@ -1,6 +1,14 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.301] - 2026-08-06
+### Fix: Cron double-delivery & greeting salah bahasa/perspektif
+- DIAGNOSIS (cek log prod): '1 cron 2 jawaban' = dua task duplikat 'Greet Al' (LLM memanggil scheduler tool 2x) → keduanya fire & terkirim. Balasan yang salah ('akhirnya kamu sapa Yui lagi~' seolah Al yang menyapa) = prompt fallback resolveCronJobPrompt tidak menginstruksikan Yui sebagai INISIATOR dan tidak meminta match bahasa user.
+- FIX resolveCronJobPrompt (cron.ts): tambah instruksi eksplisit — Yui adalah aktor/inisiator (bukan responder), JANGAN menyapa balik / bertanya kenapa user menghubungi, dan WAJIB pakai bahasa user yang disapa (fallback bahasa default sendiri bila tidak diketahui).
+- FIX de-duplikasi (manage_cron.ts add): sebelum INSERT, cek task enabled dengan nama+schedule+repeating sama yang masih pending → skip & reuse (return existingId), mencegah pengiriman ganda dari task kembar.
+- VERIFIKASI prod: setelah rebuild+restart hanya tersisa 1 task Greet Al (one-off 3m) → fire → auto-delete; de-dup aktif untuk pembuatan task berikutnya.
+
+
 ## [4.300] - 2026-08-06
 ### Fix: Cron one-off (3m) tidak pernah jalan saat dibuat via tool scheduler — global yuihime_getCronAction hilang
 - ROOT CAUSE: server.ts menyetel globalThis.yuihime_db / yuihime_CronModule tapi TIDAK pernah menyetel yuihime_getCronAction, sementara manage_cron.ts membaca g.yuihime_getCronAction. Akibatnya getCronAction selalu undefined di cabang global-direct, dan kode lama 'if (enabled && getCronAction)' diam-diam melewati registerTask → task hanya masuk DB (enabled) tanpa timer, tidak pernah dieksekusi (dan tak ada log '[CRON] One-off Delay Task started').

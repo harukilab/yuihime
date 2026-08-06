@@ -64,8 +64,11 @@ export function resolveCronJobPrompt(opts: {
     '[SCHEDULED_JOB]',
     `Job: ${name}`,
     '',
-    'This is a scheduled cron job firing in the background. Execute the request described by the job name fully and autonomously.',
+    'This is a scheduled cron job firing in the background. You (Yui) are the ACTIVE INITIATOR of this action, not a responder.',
+    'Execute the request described by the job name fully and autonomously, speaking as the proactive sender to the addressed user.',
+    'Do NOT act as if the user just messaged you, do NOT acknowledge a greeting, and do NOT ask why they contacted you.',
     'If the job name refers to periodic checks, system maintenance, or background tasks, perform them completely using available tools and internal systems.',
+    'Match the language of the addressed user (the user named in the task). When their language is unknown, use your own default language.',
     'Deliver a complete, useful result to the user on this channel — do not only acknowledge the schedule.',
   ].join('\n');
 }
