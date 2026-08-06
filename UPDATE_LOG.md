@@ -1,10 +1,6 @@
 # YuiHime Project Updates Logs
 ---
 
-## [4.303] - 2026-08-06
-### Fix: v4.302 — Adopsi fitur nanobot: Skills, at+timezone, run history, heartbeat, live config reload, dedupe goals
-
-
 ## [4.302] - 2026-08-06
 ### Feature: Adopsi fitur nanobot: Skills, jadwal at+timezone, run history, heartbeat, live config reload, dedupe goals
 - SKILLS: SkillsRegistry baru (~/.yuihime/skills/<name>/SKILL.md) + module SkillsContextModule (order 3) inject <active_skills>/<loaded_skills>; tool skill.ts kini loader nyata (bukan stub).
