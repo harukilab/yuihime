@@ -357,6 +357,7 @@ export async function setupSchema(db: any) {
         repeating INTEGER DEFAULT 0,
         lastRun INTEGER,
         nextRun INTEGER,
+        fire_at INTEGER,
         context_id TEXT,
         chat_type TEXT,
         sender_name TEXT,
@@ -627,7 +628,8 @@ export async function setupSchema(db: any) {
           { name: 'sender_name', type: 'TEXT' },
           { name: 'prompt', type: 'TEXT' },
           { name: 'last_status', type: 'TEXT' },
-          { name: 'last_error', type: 'TEXT' }
+          { name: 'last_error', type: 'TEXT' },
+          { name: 'fire_at', type: 'INTEGER' }
         ];
         for (const col of alterCols) {
           if (!columnNames.includes(col.name)) {
@@ -1039,8 +1041,8 @@ export class CronRepository {
 
   static saveTask(db: any, task: any) {
     return db.prepare(`
-      INSERT INTO cron_tasks (id, name, schedule, action, prompt, enabled, repeating, lastRun, nextRun, context_id, chat_type, sender_name)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO cron_tasks (id, name, schedule, action, prompt, enabled, repeating, lastRun, nextRun, fire_at, context_id, chat_type, sender_name)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         name = excluded.name,
         schedule = excluded.schedule,
@@ -1050,6 +1052,7 @@ export class CronRepository {
         repeating = excluded.repeating,
         lastRun = excluded.lastRun,
         nextRun = excluded.nextRun,
+        fire_at = excluded.fire_at,
         context_id = excluded.context_id,
         chat_type = excluded.chat_type,
         sender_name = excluded.sender_name
@@ -1063,6 +1066,7 @@ export class CronRepository {
       task.repeating ? 1 : 0,
       task.lastRun || 0,
       task.nextRun || 0,
+      task.fire_at || null,
       task.context_id || '',
       task.chat_type || '',
       task.sender_name || ''

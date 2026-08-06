@@ -16,6 +16,8 @@ export interface CronTask {
   repeating: boolean;
   lastRun?: number;
   nextRun?: number;
+  /** Absolute epoch-ms fire time for one-shot tasks (persisted across restarts). */
+  fire_at?: number;
   context_id?: string;
   chat_type?: string;
   sender_name?: string;
@@ -235,6 +237,21 @@ export function parseCronSchedule(schedule: string): CronScheduleKind | null {
   return { kind: 'cron', expr: body, tz };
 }
 
+/**
+ * Absolute epoch-ms fire time for one-shot schedules, or null for repeating /
+ * standard cron expressions. Used to persist one-off targets so their countdown
+ * survives daemon restarts:
+ *  - relative `5m`  → Date.now() + ms (target captured at creation)
+ *  - `at`/ISO time  → the absolute timestamp itself
+ */
+export function getOneShotFireAtMs(schedule: string): number | null {
+  const parsed = parseCronSchedule(schedule);
+  if (!parsed) return null;
+  if (parsed.kind === 'relative') return Date.now() + parsed.ms;
+  if (parsed.kind === 'at') return parsed.atMs;
+  return null;
+}
+
 /** Wall clock parts for the current moment in a given tz (or the user's default local offset). */
 function currentClockParts(tz?: string): Date {
   if (tz) {
@@ -279,9 +296,14 @@ export class CronModule {
         this.intervals.set(id, interval as any);
         console.log(`[CRON] Repeating Interval Task started: ${task.name} (every ${parsed.ms}ms)`);
       } else {
-        const timeout = setTimeout(() => this.runTask(task, { oneShot: true }), parsed.ms);
+        // Persisted absolute target (survives restarts); fallback to relative from now.
+        const fireAt = typeof task.fire_at === 'number' && task.fire_at > 0
+          ? task.fire_at
+          : Date.now() + parsed.ms;
+        const delay = Math.max(0, fireAt - Date.now());
+        const timeout = setTimeout(() => this.runTask(task, { oneShot: true }), delay);
         this.intervals.set(id, timeout as any);
-        console.log(`[CRON] One-off Delay Task started: ${task.name} (triggers in ${parsed.ms}ms)`);
+        console.log(`[CRON] One-off Delay Task started: ${task.name} (triggers in ${delay}ms, fire_at=${new Date(fireAt).toISOString()})`);
       }
       return;
     }

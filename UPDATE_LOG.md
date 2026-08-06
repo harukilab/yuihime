@@ -1,6 +1,14 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.303] - 2026-08-06
+### Feature: Persistensi target absolute untuk cron one-off relatif (fire_at) — countdown tidak reset saat restart
+- DB: kolom baru cron_tasks.fire_at (INTEGER, epoch ms) + migration alterCols; CronRepository.saveTask ikut fire_at.
+- cron.ts: helper baru getOneShotFireAtMs(schedule) (relative -> now+ms, at -> atMs); startTask one-off relatif memakai task.fire_at bila ada, fallback relative dari now; delay dihitung ulang max(0, fire_at - now) sehingga restart daemon tidak me-reset countdown.
+- Penyimpanan fire_at di semua titik pembuatan task: POST /api/cron (systemRouter) & tool scheduler (manage_cron.ts) — relative dan at; boot server.ts meneruskan fire_at saat re-register; toggle memakai task.fire_at; GET /api/cron menampilkan fire_at.
+- Catch-up: bila fire_at sudah lewat saat daemon mati/restart, task fire segera (delay 0), konsisten dengan perilaku at absolute.
+
+
 ## [4.302] - 2026-08-06
 ### Feature: Adopsi fitur nanobot: Skills, jadwal at+timezone, run history, heartbeat, live config reload, dedupe goals
 - SKILLS: SkillsRegistry baru (~/.yuihime/skills/<name>/SKILL.md) + module SkillsContextModule (order 3) inject <active_skills>/<loaded_skills>; tool skill.ts kini loader nyata (bukan stub).

@@ -403,6 +403,7 @@ async function startServer() {
       schedule: task.schedule,
       enabled: task.enabled === 1,
       repeating: task.repeating === 1,
+      fire_at: task.fire_at ?? undefined,
       action: getCronAction(task.id, task.name, task.repeating === 1, db)
     });
   }

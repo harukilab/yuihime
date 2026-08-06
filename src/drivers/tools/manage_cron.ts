@@ -1,5 +1,5 @@
 import { ToolModule } from '@shared/include/types';
-import { extractCronPromptFromArgs, normalizeCronPromptForSave, isSystemCronTask } from '../../core/kernel/cron';
+import { extractCronPromptFromArgs, normalizeCronPromptForSave, isSystemCronTask, getOneShotFireAtMs } from '../../core/kernel/cron';
 
 const manifest = {
   "id": "scheduler",
@@ -244,8 +244,8 @@ export const CronTool: ToolModule = {
           }
 
           db.prepare(`
-            INSERT INTO cron_tasks (id, name, schedule, enabled, repeating, context_id, chat_type, sender_name, prompt)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO cron_tasks (id, name, schedule, enabled, repeating, context_id, chat_type, sender_name, prompt, fire_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
               name = excluded.name,
               schedule = excluded.schedule,
@@ -254,13 +254,15 @@ export const CronTool: ToolModule = {
               context_id = COALESCE(excluded.context_id, cron_tasks.context_id),
               chat_type = COALESCE(excluded.chat_type, cron_tasks.chat_type),
               sender_name = COALESCE(excluded.sender_name, cron_tasks.sender_name),
-              prompt = excluded.prompt
+              prompt = excluded.prompt,
+              fire_at = excluded.fire_at
           `).run(
             id, taskName, schedule, enabled ? 1 : 0, repeating ? 1 : 0,
             final_context_id,
             final_chat_type,
             final_sender_name,
-            final_prompt
+            final_prompt,
+            repeating ? null : getOneShotFireAtMs(schedule)
           );
 
           if (enabled) {
@@ -273,6 +275,7 @@ export const CronTool: ToolModule = {
               schedule,
               enabled: true,
               repeating,
+              fire_at: repeating ? undefined : (getOneShotFireAtMs(schedule) ?? undefined),
               context_id: final_context_id,
               chat_type: final_chat_type,
               sender_name: final_sender_name,
@@ -305,6 +308,7 @@ export const CronTool: ToolModule = {
               schedule: task.schedule,
               enabled: true,
               repeating: task.repeating === 1,
+              fire_at: task.fire_at ?? undefined,
               context_id: task.context_id,
               chat_type: task.chat_type,
               sender_name: task.sender_name,

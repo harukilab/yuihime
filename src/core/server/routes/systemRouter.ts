@@ -7,7 +7,7 @@ import { promisify } from "util";
 import os from "os";
 import * as toml from "smol-toml";
 import { SettingsManager } from "@/core/kernel/settings";
-import { CronModule, extractCronPromptFromArgs, normalizeCronPromptForSave, isSystemCronTask } from "../../kernel/cron.js";
+import { CronModule, extractCronPromptFromArgs, normalizeCronPromptForSave, isSystemCronTask, getOneShotFireAtMs } from "../../kernel/cron.js";
 import { MultiChannelQueue } from "../../kernel/MultiChannelQueue.js";
 import { GlobalOutputDeduplicator } from "../../kernel/GlobalOutputDeduplicator.js";
 import { closeDatabase, getDb } from "../../database.js";
@@ -758,8 +758,8 @@ export function registerSystemRoutes(app: express.Express, db: any) {
     }
 
     db.prepare(`
-      INSERT INTO cron_tasks (id, name, schedule, enabled, repeating, context_id, chat_type, sender_name, prompt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO cron_tasks (id, name, schedule, enabled, repeating, context_id, chat_type, sender_name, prompt, fire_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         name = excluded.name,
         schedule = excluded.schedule,
@@ -768,13 +768,15 @@ export function registerSystemRoutes(app: express.Express, db: any) {
         context_id = COALESCE(excluded.context_id, cron_tasks.context_id),
         chat_type = COALESCE(excluded.chat_type, cron_tasks.chat_type),
         sender_name = COALESCE(excluded.sender_name, cron_tasks.sender_name),
-        prompt = excluded.prompt
+        prompt = excluded.prompt,
+        fire_at = excluded.fire_at
     `).run(
       id, name, schedule, enabled ? 1 : 0, repeating ? 1 : 0,
       final_context_id,
       final_chat_type,
       final_sender_name,
-      final_prompt
+      final_prompt,
+      repeating ? null : getOneShotFireAtMs(schedule)
     );
     
     const cron = CronModule.getInstance();
@@ -785,6 +787,7 @@ export function registerSystemRoutes(app: express.Express, db: any) {
         schedule,
         enabled: true,
         repeating: !!repeating,
+        fire_at: repeating ? undefined : (getOneShotFireAtMs(schedule) ?? undefined),
         context_id: final_context_id,
         chat_type: final_chat_type,
         sender_name: final_sender_name,
