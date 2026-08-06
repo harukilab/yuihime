@@ -1,6 +1,13 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.290] - 2026-08-06
+### Fix: v4.290: Koreksi dokumentasi injeksi key External Cortex Modules (mana yang benar-benar terlihat LLM)
+- Perbaikan penting: klaim lama 'semua key context terlihat LLM' SALAH — prompt Yui dirakit modul prompt-manager (phase compression) yang hanya membaca key tertentu. Key kustom yang dibuat sendiri HANYA terlihat modul lain, bukan LLM.
+- README kini mencantumkan daftar key yang benar-benar disuntikkan otomatis ke prompt: groundedKnowledge, soulDirective, userModel, memories, allIdentities, dreams, heuristics, userName, activePersona, chatType, contextId, timePeriod/timeOfDay/timezoneOffsetHours/userLocation, weatherCondition, dreamInsight, allowedTools, toolChoice, disableTools.
+- Contoh brain_probe & mood_reader diperbaiki: injeksi ke groundedKnowledge & soulDirective (bukan key kustom yang tak terlihat LLM). Tambah sub-section 'Pola injeksi hasil agar terlihat LLM' (tabel tujuan->cara + contoh rantai shell->finalize->groundedKnowledge).
+
+
 ## [4.289] - 2026-08-06
 ### Fix: v4.289: Daftar lengkap key context & state untuk External Cortex Modules
 - README: tambah tabel lengkap key yang tersedia di actionCode — 28 key context (userName, memories, allIdentities, identityContext, userModel, viewerIdentity, contextId/chatType, config, db, think, activePersona, systemPrompt, model, tools, toolExecutionHistory, groundedKnowledge, goals, soulDirective, dreamInsight, waktu/lokasi, weather, logs, processedResponse, moodImpact, dan <id>_output/_error).

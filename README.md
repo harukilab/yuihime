@@ -1,4 +1,4 @@
-# 👑 Yuihime AI v4.289 - Autonomous VTuber Engine (Airi OS Core v2.39)
+# 👑 Yuihime AI v4.290 - Autonomous VTuber Engine (Airi OS Core v2.39)
 
 **Yuihime** adalah engine agen AI otonom untuk VTuber dengan arsitektur *daemon + web UI*.cognitive loop, memory jangka panjang (SQLite), eksekusi tool modular, dan antarmuka web real-time untuk kontrol kepribadian.
 
@@ -137,12 +137,23 @@ Hasil modul **dikirim ke `context`** dan langsung tersedia untuk modul berikutny
 fase yang sama maupun fase-fase lanjutan:
 
 - **`code`**: mutate `context` lalu `return context;` (atau return objek yang di-merge).
-  Semua key yang kamu set akan terlihat LLM via system prompt.
 - **`shell` / `webhook`**: hasil otomatis masuk `context.<id>_output` (contoh:
   `context.service_status_output`), jadi cukup baca key itu di `code` lain / pakai di
   prompt.
 - **Error**: pipeline **tidak putus**. Error disimpan di `context.<id>_error` dan
   modul lanjut ke putaran berikutnya.
+
+> ⚠️ **Penting — key mana yang benar-benar terlihat LLM:** Key yang kamu set di
+> `context` **selalu tersedia untuk modul lain** (bisa dibaca `code` modul berikutnya).
+> Namun **tidak semua key otomatis masuk system prompt LLM**. Prompt Yui dirakit oleh
+> modul `prompt-manager` (phase `compression`) yang HANYA membaca key tertentu. Key yang
+> disuntikkan otomatis ke prompt: `groundedKnowledge`, `soulDirective`, `userModel`,
+> `memories`, `allIdentities`, `dreams`, `heuristics`, `userName`, `activePersona`,
+> `chatType`, `contextId`, `timePeriod`, `timeOfDay`, `timezoneOffsetHours`,
+> `userLocation`, `weatherCondition`, `dreamInsight`, `allowedTools`, `toolChoice`,
+> `disableTools`. **Key lain yang kamu buat sendiri HANYA terlihat modul lain**, bukan LLM.
+> Untuk menyuntikkan data kustom ke LLM, set salah satu key di atas (mis. append ke
+> `context.groundedKnowledge` atau `context.soulDirective`).
 
 ##### Key `context` yang tersedia
 
@@ -197,7 +208,8 @@ fase yang sama maupun fase-fase lanjutan:
 #### Mengambil data sistem Yui
 
 Semua key `context` bisa dibaca langsung di `actionCode`. Contoh membaca memori,
-identitas, state emosi, dan konfigurasi:
+identitas, state emosi, dan konfigurasi — hasilnya di-injeksi ke `groundedKnowledge`
+(append) sehingga benar-benar terlihat LLM di putaran ini:
 
 ```json
 {
@@ -207,12 +219,12 @@ identitas, state emosi, dan konfigurasi:
   "phase": "aggregation",
   "order": 5,
   "actionType": "code",
-  "actionCode": "context.brain_probe_report = 'User: ' + context.userName + ' | Joy: ' + (state.mood?.joy || 0) + ' | Stress: ' + (state.mood?.stress || 0) + ' | Energy: ' + state.energy + '% | Memories: ' + (context.memories?.length || 0) + ' | Chat: ' + context.chatType; return context;"
+  "actionCode": "const report = 'User: ' + context.userName + ' | Joy: ' + (state.mood?.joy || 0) + ' | Stress: ' + (state.mood?.stress || 0) + ' | Energy: ' + state.energy + '% | Memories: ' + (context.memories?.length || 0) + ' | Chat: ' + context.chatType; context.groundedKnowledge = (context.groundedKnowledge || '') + '\\n[BRAIN PROBE]: ' + report; return context;"
 }
 ```
 
 Untuk panggil LLM Yui sendiri (analisis mandiri, fallback heuristik), gunakan
-`context.think`:
+`context.think` — hasilnya di-injeksi ke `soulDirective` agar dibaca LLM utama:
 
 ```json
 {
@@ -221,7 +233,7 @@ Untuk panggil LLM Yui sendiri (analisis mandiri, fallback heuristik), gunakan
   "description": "Analyzes user tone via Yui's own LLM.",
   "phase": "aggregation",
   "actionType": "code",
-  "actionCode": "const r = await context.think('Rate the tone of this message as one word (happy/sad/angry/neutral): ' + input); context.mood_reader_report = (r || 'neutral').trim(); return context;"
+  "actionCode": "const r = await context.think('Rate the tone of this message as one word (happy/sad/angry/neutral): ' + input); context.soulDirective = (context.soulDirective || '') + '\\n[MOOD READER]: ' + (r || 'neutral').trim(); return context;"
 }
 ```
 
@@ -272,6 +284,21 @@ Contoh webhook (kirim data ke service luar, respons disimpan ke output):
 > Catatan: `code`/`shell` dieksekusi penuh di daemon — sama seperti custom tools.
 > Shell di-limit 120 detik (timeout) & 10MB (maxBuffer). Webhook selalu `POST`
 > JSON (body = `args`); respons dicoba di-parse sebagai JSON, fallback `rawResponse`.
+
+#### Pola injeksi hasil agar terlihat LLM
+
+| Tujuan | Cara |
+|---|---|
+| Data kustom terlihat LLM | Append ke `context.groundedKnowledge` (block `<grounded_knowledge_context>` di prompt) |
+| Arahan emosi/nada terlihat LLM | Append ke `context.soulDirective` (dirender jadi cognitive directives) |
+| Hasil hanya untuk modul lain | Set key sendiri, mis. `context.<id>_result` — baca di modul `code` lain via `context.<id>_result` |
+| Output shell/webhook | Otomatis ke `context.<id>_output` — baca di `code` lain |
+| Menjalankan logika & menyimpan | `context.<id>_output` bisa dibaca oleh modul `code` fase berikutnya (mis. `finalize`) dan di-append ke `groundedKnowledge` di sana |
+
+> Contoh rantai: modul `service_status` (shell, `aggregation`) menulis
+> `context.service_status_output`; modul `code` di fase `finalize` membaca
+> `context.service_status_output` lalu meng-append-nya ke `context.groundedKnowledge`
+> sehingga kesimpulan status layanan masuk jawaban LLM.
 
 ### Tabel Fase Cortex
 
