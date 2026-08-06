@@ -1,4 +1,4 @@
-# 👑 Yuihime AI v4.287 - Autonomous VTuber Engine (Airi OS Core v2.39)
+# 👑 Yuihime AI v4.288 - Autonomous VTuber Engine (Airi OS Core v2.39)
 
 **Yuihime** adalah engine agen AI otonom untuk VTuber dengan arsitektur *daemon + web UI*.cognitive loop, memory jangka panjang (SQLite), eksekusi tool modular, dan antarmuka web real-time untuk kontrol kepribadian.
 
@@ -115,27 +115,75 @@ menyentuh/build ulang codebase. Cukup taruh file JSON di `~/.yuihime/cortexloade
 (mulai ulang daemon, atau `POST /api/cortex-modules` untuk registrasi langsung).
 
 - Format: satu file JSON per modul: `~/.yuihime/cortexloader/<id>.json`
-- Phase tersedia: `preprocess`, `soul`, `aggregation`, `compression`,
-  `logic`, `finalize`, `reflect`, dll. (lihat tabel fase di bawah)
+- **Hanya 6 fase yang benar-benar dieksekusi otomatis tiap siklus**: `aggregation`,
+  `soul`, `compression`, `reflect`, `finalize`, `logic` (lihat tabel fase di bawah).
+  Fase lain (mis. `preprocess`, `execute`, `evaluation`) **tidak akan dipanggil** untuk
+  external module — gunakan salah satu dari 6 fase di atas.
 - Modul **tanpa `trigger` selalu jalan tiap siklus**; hasilnya bisa disuntikkan ke `context`
   sehingga terlihat LLM di putaran tersebut.
 - Action type: `code` (JS sandbox), `shell` (bash, `{{arg}}`), `webhook` (POST JSON).
 - API: `GET /api/cortex-modules`, `POST /api/cortex-modules`, `DELETE /api/cortex-modules/:id`.
+- `registry.json` di dalam folder di-ignore (bukan definisi modul).
 
-Contoh `~/.yuihime/cortexloader/example_status.json`:
+#### Darimana data diambil (input) & ke mana hasil pergi (output)
+
+Setiap modul dipanggil sebagai `run(input, state, context)` dan menerima **3 sumber data**:
+
+1. **`input` (string)** — teks mentah pesan user pada putaran ini.
+2. **`state`** — `AgentState` Yui: `mood`, `emotion`, `energy`, `relation`,
+   `currentPlan`, `activeContext`, `systemHealth` (CPU/RAM/denyut virtual), dst.
+3. **`context`** — kumpulan data pipeline fase-fase sebelumnya. Yang selalu tersedia:
+   - `context.memories` — daftar memori/riwayat percakapan
+   - `context.userName` / `context.allIdentities` — profil user & identitas yang dikenal
+   - `context.config` — konfigurasi (settings) YuiHime
+   - `context.contextId` / `context.chatType` — kanal tempat pesan masuk
+   - `context.think(prompt, opts?)` — **memanggil LLM Yui** (cocok untuk analisis mandiri)
+   - `context.activePersona`, `context.systemPrompt`, `context.assembledSystemPrompt`
+   - key hasil modul lain (mood, weather, dreamInsight, groundedKnowledge, dst.)
+
+Hasil modul **dikirim ke `context`** dan langsung tersedia untuk modul berikutnya di
+fase yang sama maupun fase-fase lanjutan:
+
+- **`code`**: mutate `context` lalu `return context;` (atau return objek yang di-merge).
+  Semua key yang kamu set akan terlihat LLM via system prompt.
+- **`shell` / `webhook`**: hasil otomatis masuk `context.<id>_output` (contoh:
+  `context.service_status_output`), jadi cukup baca key itu di `code` lain / pakai di
+  prompt.
+- **Error**: pipeline **tidak putus**. Error disimpan di `context.<id>_error` dan
+  modul lanjut ke putaran berikutnya.
+
+#### Mengambil data sistem Yui
+
+Semua key `context` bisa dibaca langsung di `actionCode`. Contoh membaca memori,
+identitas, state emosi, dan konfigurasi:
 
 ```json
 {
-  "id": "example_status",
-  "name": "Example Status Check",
-  "description": "Runs on every cycle and injects a status note.",
-  "version": "1.0.0",
-  "phase": "preprocess",
-  "order": 1,
+  "id": "brain_probe",
+  "name": "Brain Probe",
+  "description": "Reads Yui's internal data and injects a summary.",
+  "phase": "aggregation",
+  "order": 5,
   "actionType": "code",
-  "actionCode": "context.example_status_report = '[STATUS] OK at ' + new Date().toISOString(); return context;"
+  "actionCode": "context.brain_probe_report = 'User: ' + context.userName + ' | Joy: ' + (state.mood?.joy || 0) + ' | Stress: ' + (state.mood?.stress || 0) + ' | Energy: ' + state.energy + '% | Memories: ' + (context.memories?.length || 0) + ' | Chat: ' + context.chatType; return context;"
 }
 ```
+
+Untuk panggil LLM Yui sendiri (analisis mandiri, fallback heuristik), gunakan
+`context.think`:
+
+```json
+{
+  "id": "mood_reader",
+  "name": "Mood Reader",
+  "description": "Analyzes user tone via Yui's own LLM.",
+  "phase": "aggregation",
+  "actionType": "code",
+  "actionCode": "const r = await context.think('Rate the tone of this message as one word (happy/sad/angry/neutral): ' + input); context.mood_reader_report = (r || 'neutral').trim(); return context;"
+}
+```
+
+#### Contoh shell & webhook
 
 Contoh shell (cek status layanan, argumen di-inject via `{{...}}`):
 
@@ -144,7 +192,7 @@ Contoh shell (cek status layanan, argumen di-inject via `{{...}}`):
   "id": "service_status",
   "name": "Service Status",
   "description": "Check service health every turn.",
-  "phase": "preprocess",
+  "phase": "aggregation",
   "order": 2,
   "actionType": "shell",
   "actionCode": "systemctl status {{service_name}} --no-pager | head -20",
@@ -152,7 +200,36 @@ Contoh shell (cek status layanan, argumen di-inject via `{{...}}`):
 }
 ```
 
+Contoh webhook (kirim data ke service luar, respons disimpan ke output):
+
+```json
+{
+  "id": "webhook_ping",
+  "name": "Webhook Ping",
+  "description": "POST current state to an external service.",
+  "phase": "logic",
+  "actionType": "webhook",
+  "actionCode": "https://example.com/hooks/yuihime/{{user_name}}",
+  "parameters": { "user_name": "guest" }
+}
+```
+
+#### Field lengkap
+
+| Field | Wajib | Fungsi |
+|---|---|---|
+| `id` | ✅ | ID unik; hanya `a-z0-9_-` (lainnya diganti `_`) |
+| `phase` | ✅ | Fase pipeline (lihat tabel fase) |
+| `name` / `description` | — | Metadata (ditampilkan di UI & log) |
+| `order` | — | Urutan eksekusi dalam fase yang sama (naik) |
+| `actionType` | — | `code` (default), `shell`, atau `webhook` |
+| `actionCode` | — | Kode JS / command bash / URL webhook |
+| `parameters` | — | Argumen: `{{key}}` di shell/webhook, `args.key` di code |
+| `trigger` | — | Kondisi opsional; tanpa ini modul jalan tiap siklus |
+
 > Catatan: `code`/`shell` dieksekusi penuh di daemon — sama seperti custom tools.
+> Shell di-limit 120 detik (timeout) & 10MB (maxBuffer). Webhook selalu `POST`
+> JSON (body = `args`); respons dicoba di-parse sebagai JSON, fallback `rawResponse`.
 
 ### Tabel Fase Cortex
 
@@ -160,28 +237,30 @@ Setiap modul Cortex (termasuk external cortex module) mendeklarasikan `phase` un
 menentukan kapan dijalankan dalam pipeline. Nama fase kini seragam & mudah dibaca
 (rename dari label lama):
 
-| Fase (`phase`) | Label lama | Penjelasan |
-|---|---|---|
-| `preprocess` | `pre-process` | Persiapan/penyaringan sinyal sebelum agregasi |
-| `aggregation` | `PHASE 1: AGGREGATION` | Kumpulkan & agregasi semua sinyal input |
-| `context` | `context-augmentation` | Augmentasi konteks percakapan |
-| `context-augment` | `PHASE 2: CONTEXT` | Fase augmentasi konteks terarah |
-| `soul` | `SOUL` | Proses kondisi emosional / kepribadian |
-| `compression` | `PHASE 2: COMPRESSION` | Kompresi payload sebelum gateway |
-| `optimization` | `PHASE 2: OPTIMIZATION` | Optimasi payload |
-| `reflect` | `AGI_REFLECT` | Refleksi diri per-iterasi di loop ReAct |
-| `logic` | `LOGIC` | Pemikiran lanjutan / penalaran non-blok |
-| `postprocess` | `post-process` | Pasca-proses setelah fase inti |
-| `evaluation` | `PHASE 3: EVALUATION` | Verifikasi & evaluasi hasil |
-| `execute` | `execution` | Eksekusi aksi/tool |
-| `finalize` | `PHASE 4: EXECUTION` | Penyelesaian jawaban akhir |
-| `optimize-output` | `PHASE 4: OPTIMIZATION` | Optimasi output akhir |
-| `expression` | `PHASE 4: EXPRESSION` | Ekspresi/penyajian output |
-| `output` | `output` | Kirim hasil ke kanal output |
-| `maintenance` | `PHASE 1: MAINTENANCE` | Perawatan sistem |
+| Fase (`phase`) | Label lama | Eksekusi | Penjelasan |
+|---|---|---|---|
+| `aggregation` | `PHASE 1: AGGREGATION` | ✅ pipeline | Kumpulkan & agregasi semua sinyal input |
+| `soul` | `SOUL` | ✅ pipeline | Proses kondisi emosional / kepribadian |
+| `compression` | `PHASE 2: COMPRESSION` | ✅ pipeline | Kompresi payload sebelum gateway |
+| `reflect` | `AGI_REFLECT` | ✅ pipeline | Refleksi diri per-iterasi di loop ReAct |
+| `finalize` | `PHASE 4: EXECUTION` | ✅ pipeline | Penyelesaian jawaban akhir |
+| `logic` | `LOGIC` | ✅ pipeline | Pemikiran lanjutan / penalaran non-blok |
+| `preprocess` | `pre-process` | ❌ manual | Persiapan/penyaringan sinyal (tidak dieksekusi otomatis) |
+| `context` | `context-augmentation` | ❌ manual | Augmentasi konteks percakapan |
+| `context-augment` | `PHASE 2: CONTEXT` | ❌ manual | Fase augmentasi konteks terarah |
+| `optimization` | `PHASE 2: OPTIMIZATION` | ❌ manual | Optimasi payload |
+| `postprocess` | `post-process` | ❌ manual | Pasca-proses setelah fase inti |
+| `evaluation` | `PHASE 3: EVALUATION` | ❌ manual | Verifikasi & evaluasi hasil (dipanggil khusus: `neural-verifier`) |
+| `execute` | `execution` | ❌ manual | Eksekusi aksi/tool |
+| `optimize-output` | `PHASE 4: OPTIMIZATION` | ❌ manual | Optimasi output akhir (dipanggil khusus: `parallel-streamer`) |
+| `expression` | `PHASE 4: EXPRESSION` | ❌ manual | Ekspresi/penyajian output |
+| `output` | `output` | ❌ manual | Kirim hasil ke kanal output |
+| `maintenance` | `PHASE 1: MAINTENANCE` | ❌ manual | Perawatan sistem |
 
-> Pipeline utama memanggil 6 fase: `aggregation` → `soul` → `compression` →
-> `reflect` → `finalize` → `logic`. Fase lain dieksekusi sesuai mekanisme modul masing-masing.
+> Pipeline utama mengeksekusi otomatis 6 fase: `aggregation` → `soul` → `compression` →
+> `reflect` → `finalize` → `logic`. Fase lain hanya berjalan bila dipanggil langsung
+> (`SystemRegistry.runCortexPhase(...)` atau `getModule(...).run()` di titik khusus).
+> **Untuk external cortex modules gunakan salah satu dari 6 fase ber-tanda ✅**.
 
 ---
 

@@ -1,6 +1,14 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.288] - 2026-08-06
+### Fix: v4.288: Dokumentasi lengkap External Cortex Modules (input/output data) + fix fase
+- README: section External Cortex Modules diperkaya — sumber data (input/state/context), tujuan output (context.<id>_output, context.<id>_error), contoh ambil data sistem Yui via actionCode & panggil LLM via context.think, contoh shell & webhook, tabel field lengkap.
+- Fix penting: pipeline hanya mengeksekusi 6 fase otomatis (aggregation, soul, compression, reflect, finalize, logic); fase lain (preprocess, execute, evaluation, dll) TIDAK pernah dieksekusi untuk external module. Tabel fase kini menandai ✅ pipeline vs ❌ manual, dan catatan untuk external module pakai salah satu fase ✅.
+- Contoh JSON di README, CortexModulesLoader.ts comment, dan ~/.yuihime/cortexloader/example_status.json dipindah ke phase aggregation agar benar-benar dieksekusi (terverifikasi via log [REGISTRY_RUN]).
+- Dokumentasi diperbaiki dari kesalahan: state.mood memakai key emosi (joy/stress) bukan .current.
+
+
 ## [4.287] - 2026-08-06
 ### Fix: v4.287: Rename fase Cortex menjadi nama umum yang mudah dibaca
 - Semua ID fase Cortex di-rename 1:1 menjadi nama tunggal mudah dibaca: aggregation/soul/compression/reflect/finalize/logic/preprocess/context/context-augment/optimization/evaluation/execute/optimize-output/expression/maintenance (menggantikan PHASE 1: AGGREGATION, SOUL, PHASE 2: COMPRESSION, AGI_REFLECT, PHASE 4: EXECUTION, LOGIC, dst).

@@ -19,7 +19,7 @@ import { exec } from 'child_process';
 //   "id": "ext_status_check",
 //   "name": "External Status Check",
 //   "description": "Check external service on every turn.",
-//   "phase": "preprocess",
+//   "phase": "aggregation",
 //   "order": 1,
 //   "actionType": "code" | "shell" | "webhook",
 //   "actionCode": "..."
