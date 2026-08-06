@@ -1,6 +1,14 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.293] - 2026-08-06
+### Docs: Persistensi data injeksi external cortex modules (permanen vs sementara)
+- Dokumentasi (docs/CORTEX_MODULES_EXTERNAL.md bab 6.4 baru + contoh 8.7): context/externalInjection bersifat sementara per-putaran dan TIDAK pernah dipersist otomatis; data yang ingin bertahan antar putaran harus ditulis manual ke penyimpanan persisten.
+- Verifikasi kode: tidak ada path yang menyimpan context/externalInjection ke DB; hanya PromptManager.ts L870-876 yang merendernya ke prompt. SnapshotManager hanya untuk file tool.
+- Koreksi akurasi sandbox: StorageService TIDAK tersedia di actionCode (loader new Function(args,context,state,input) — CortexModulesLoader.ts:95) dan context.db TIDAK di-pass di pipeline runCortexPhase (hanya via cron di apiRouter.ts:199). Contoh persistensi diperbaiki memakai fetch ke HTTP API daemon (POST /api/storage/history) / action shell / file ~/.yuihime/user_data/.
+- README: hapus klaim context.db yang tidak tersedia untuk external module (konsisten dengan doc).
+
+
 ## [4.292] - 2026-08-06
 ### Fix: v4.292: Docs lengkap & detail External Cortex Modules
 - Buat docs/CORTEX_MODULES_EXTERNAL.md — panduan mendalam: konsep & diagram pipeline, direktori/konfigurasi (env YUIHIME_CORTEX_LOADER_PATH), skema JSON + tabel field, penjelasan 6 fase otomatis vs fase manual (tabel lengkap dengan label lama).

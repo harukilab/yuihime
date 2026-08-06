@@ -201,7 +201,6 @@ Kondisi kesadaran/emosi Yui yang persisten.
 | `context.viewerIdentity` | Identitas viewer/kanal stream |
 | `context.contextId` / `context.chatType` | Kanal pesan (tg_..., live_stream, dll) & tipe (private/group) |
 | `context.config` | Konfigurasi/settings YuiHime (`provider`, `providers`, `subAgentDelegation`, dll) |
-| `context.db` | Koneksi SQLite (bila berjalan di server) |
 | `context.think(prompt, opts?)` | Panggil LLM Yui (opts: `model`, `jsonMode`) |
 | `context.activePersona` | Persona aktif (id, name, systemPrompt, traits) |
 | `context.systemPrompt` / `context.assembledSystemPrompt` | Prompt sistem yang dirakit |
@@ -299,6 +298,55 @@ Hasil di prompt LLM:
 [ANOTHER MODULE] cpu=42% ram=1.1GB
 </external_module_injections>
 ```
+
+### 6.4 Permanen vs sementara — apa yang disimpan
+
+Ini salah satu pertanyaan paling penting. Ringkasnya:
+
+| Data | Sifat | Keterangan |
+|---|---|---|
+| `context` (semua key, termasuk `externalInjection`) | ⏱️ **Sementara** | Hidup hanya selama pipeline putaran ini berjalan; **tidak pernah disimpan** otomatis |
+| `context.<id>_output` / `context.<id>_error` | ⏱️ **Sementara** | Sama seperti di atas — hanya untuk putaran ini |
+| `state` | 🔄 **Semi-permanen** | `agent_state` di DB (mood, energy, relation, dll) — bertahan antar putaran, di-update oleh modul built-in (EmotionEngine, dll) |
+| `memories` / `allIdentities` | 💾 **Permanen** | Disimpan ke SQLite oleh modul built-in (MemoryConsolidation, IdentityLinker, dll) — bertahan antar restart |
+| `config` | 💾 **Permanen** | `config.toml` |
+| File di `~/.yuihime/cortexloader/` | 💾 **Permanen** | Definisi modul — bertahan, dipindai ulang saat restart |
+
+**Implikasi penting:**
+
+1. **`externalInjection` TIDAK disimpan.** Setiap putaran baru, `context` dibuat dari
+   awal; injeksi Anda hanya berlaku untuk putaran itu saja. Ini bagus untuk data
+   sekali-pakai (status real-time, analisis pesan saat ini).
+
+2. **Kalau Anda ingin data bertahan antar putaran**, jangan menaruhnya di
+   `context` — tulis ke penyimpanan persisten. Di dalam `actionCode` (sandbox
+   `code`) Anda HANYA punya `args`, `context`, `state`, `input` + global JS
+   (`fetch`, `console`, `Date`, dst). **Tidak ada akses langsung ke `StorageService`
+   maupun `context.db`**. Cara menyimpan data persisten:
+
+   - **HTTP API daemon** (paling andal): `fetch` ke endpoint internal daemon, mis.
+     `POST /api/storage/history` untuk menyimpan entri riwayat, atau `POST
+     /api/storage/memories` untuk menambah memori jangka panjang. Contoh di bab 8.7.
+   - **File**: tulis ke `~/.yuihime/user_data/` via action `shell` (`echo ... >>
+     ~/.yuihime/user_data/my_data.txt`) — bertahan.
+
+3. **`state` di-update oleh modul built-in**, bukan oleh modul eksternal Anda secara
+   otomatis. Kalau Anda mengubah `state.mood` di `actionCode`, perubahan itu berlaku
+   untuk sisa pipeline putaran ini, tetapi **belum tentu tersimpan** ke DB — modul
+   built-in yang meng-commit-nya di akhir putaran.
+
+4. **Pattern umum untuk data yang ingin bertahan**:
+
+   ```
+   Putaran 1:  modul menulis key kustom di context (sementara) ─┐
+               └─ juga POST /api/storage/history / memories    ─┼─► DB (permanen)
+   Putaran 2:  modul GET /api/storage/...                      ─┘
+               lalu append ke externalInjection untuk prompt LLM
+   ```
+
+> 📌 **Aturan praktis**: gunakan `context`/`externalInjection` untuk data **per-putaran**
+> (real-time, sekali-pakai). Gunakan HTTP API daemon / file untuk data yang harus
+> **bertahan** antar percakapan & restart.
 
 ---
 
@@ -462,6 +510,28 @@ Setiap modul `append` ke `externalInjection` — tidak saling timpa:
 ```js
 context.externalInjection = (context.externalInjection || '') + '\n[MODULE X] ...';
 ```
+
+### 8.7 Menyimpan data agar bertahan antar putaran
+
+`context`/`externalInjection` bersifat sementara per-putaran (lihat bab 6.4). Untuk data
+yang harus bertahan (counter, catatan, status), tulis via HTTP API daemon — `fetch` adalah
+global yang tersedia di sandbox `code`:
+
+```json
+{
+  "id": "persistent_counter",
+  "name": "Persistent Counter",
+  "description": "Counts cycles persistently across turns.",
+  "phase": "aggregation",
+  "actionType": "code",
+  "actionCode": "let row = await (await fetch('http://127.0.0.1:' + (process?.env?.YUIHIME_DAEMON_PORT || 3000) + '/api/storage/history')).json(); context.externalInjection = (context.externalInjection || '') + '\\n[COUNTER] history entries so far: ' + row.length; return context;"
+}
+```
+
+> ⚠️ `StorageService` TIDAK tersedia di dalam sandbox `actionCode` (loader
+> mengeksekusi via `new Function('args', 'context', 'state', 'input', ...)` — lihat
+> `src/core/CortexModulesLoader.ts:95`). Gunakan `fetch` ke API daemon, action `shell`,
+> atau tulis file di `~/.yuihime/user_data/` untuk persistensi.
 
 ---
 

@@ -1,4 +1,4 @@
-# 👑 Yuihime AI v4.292 - Autonomous VTuber Engine (Airi OS Core v2.39)
+# 👑 Yuihime AI v4.293 - Autonomous VTuber Engine (Airi OS Core v2.39)
 
 **Yuihime** adalah engine agen AI otonom untuk VTuber dengan arsitektur *daemon + web UI*.cognitive loop, memory jangka panjang (SQLite), eksekusi tool modular, dan antarmuka web real-time untuk kontrol kepribadian.
 
@@ -172,7 +172,6 @@ fase yang sama maupun fase-fase lanjutan:
 | `context.viewerIdentity` | Identitas viewer/kanal stream |
 | `context.contextId` / `context.chatType` | Kanal pesan (tg_..., live_stream, dll) & tipe (private/group) |
 | `context.config` | Konfigurasi/settings YuiHime (`provider`, `providers`, `subAgentDelegation`, dll) |
-| `context.db` | Koneksi SQLite (bila berjalan di server) |
 | `context.think(prompt, opts?)` | Panggil LLM Yui (opts: `model`, `jsonMode`) |
 | `context.activePersona` | Persona aktif (id, name, systemPrompt, traits) |
 | `context.systemPrompt` / `context.assembledSystemPrompt` | Prompt sistem yang dirakit |
