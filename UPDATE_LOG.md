@@ -1,6 +1,14 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.307] - 2026-08-06
+### Fix: Fix: LLM output terpotong (truncated JSON) bocor ke reply; deteksi truncation + auto-retry di generateContent
+- ROOT CAUSE: saat provider mengembalikan response terpotong di tengah JSON envelope (mis. 59 char: {"thought": "I am the active initiator of this scheduled - finishReason MAX_TOKENS/stream putus), kode lama langsung meneruskan teks parsial itu tanpa cek. Potongan >5 karakter lolos dari KERNEL_FAIL_SAFE sehingga terkirim ke Telegram / jadi argumen tool speak.
+- TRUNCATION GUARD: generateSegment.ts menambah TruncatedGenerationError + looksTruncatedJson() - terpicu bila teks diawali { dengan kurung tidak seimbang (envelope belum tertutup) atau JSON malformed (parse gagal). Diterapkan di path non-streaming (cek finishReason) dan streaming (lastFinishReason dari chunk akhir).
+- AUTO-RETRY: error truncation diperlakukan sebagai circuit sehat (tidak di-blacklist key/model) - pool key/model diulang untuk regenerasi utuh; jika seluruh pool terpotong, cooldown-retry jalankan ulang (2s untuk truncation murni, bukan 15s rate-limit). Potongan JSON kini ditolak sebelum menyentuh penulisan reply.
+- TIDAK MISFIRE: hanya memicu pada teks yang diawali { - reply bebas-teks normal tidak terdampak (9 case test pass, termasuk sampel 59-char asli).
+
+
 ## [4.306] - 2026-08-06
 ### Fix: Saat buat cron Yui jawab 2x (konfirmasi + final answer); guard 1-reply per permintaan cron
 - DOUBLE REPLY saat pembuatan cron: LLM memanggil scheduler + speak (konfirmasi 'Okey, Al! Yui sudah pasang pengingatnya ya~') pada iterasi pertama lalu mengirim final answer ('Iya, Al! Yui bakal selalu ingetin kok~') pada iterasi berikutnya — keduanya terkirim langsung ke Telegram, sehingga 1 permintaan user = 2 pesan.

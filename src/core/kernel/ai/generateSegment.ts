@@ -82,6 +82,51 @@ function summarizeAiError(error: any): string {
 }
 
 /**
+ * Raised when a provider returns a response that was cut off mid-generation
+ * (finishReason MAX_TOKENS / unterminated JSON envelope). Downstream retry
+ * logic treats this as a retriable-but-healthy signal: the key/model is NOT
+ * blacklisted, the pool is simply re-run to obtain the full response.
+ */
+export class TruncatedGenerationError extends Error {
+  constructor(public readonly partial: string, finishReason?: string) {
+    const hint = finishReason ? `finishReason=${finishReason}` : 'unterminated JSON envelope';
+    const sample = (partial || '').trim().slice(0, 90) || '(empty)';
+    super(`Generation truncated by provider (${hint}). Partial output: ${sample}`);
+    this.name = 'TruncatedGenerationError';
+  }
+}
+
+/**
+ * Detect a JSON response that was cut off before completion. Only triggered
+ * when the text actually starts an object (`{`), so plain conversational
+ * replies are never misclassified. Braces inside string values are ignored,
+ * and a balanced-but-unparseable object is treated as malformed (retry-worthy).
+ */
+function looksTruncatedJson(text: string): boolean {
+  const t = (text || '').trim();
+  if (!t.startsWith('{')) return false;
+  let depth = 0;
+  let inString = false;
+  let escapeNext = false;
+  for (let i = 0; i < t.length; i++) {
+    const c = t[i];
+    if (escapeNext) { escapeNext = false; continue; }
+    if (c === '\\') { escapeNext = true; continue; }
+    if (c === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (c === '{') depth++;
+    else if (c === '}') { depth--; if (depth === 0) break; }
+  }
+  if (depth > 0) return true;
+  try {
+    JSON.parse(t);
+    return false;
+  } catch {
+    return true;
+  }
+}
+
+/**
  * Coerce a provider-specific `arguments` value into a plain object for the
  * Gemini `functionCall.args` field. Canonical native blocks may carry either an
  * already-parsed object (Anthropic/Gemini) or a JSON string (OpenAI-compatible).
@@ -551,6 +596,7 @@ export async function generateContent(
             let inString = false;
             let escapeNext = false;
             let lastParsedIndex = 0;
+            let lastFinishReason: string | undefined;
             const geminiFunctionCalls: any[] = [];
 
             for await (const rawChunk of reader as any) {
@@ -591,6 +637,7 @@ export async function generateContent(
                         try {
                           const obj = JSON.parse(jsonStr);
                           const candidates = obj.candidates?.[0];
+                          if (candidates?.finishReason) lastFinishReason = candidates.finishReason;
                           const parts = candidates?.content?.parts || [];
                           let partText = "";
                           for (const part of parts) {
@@ -658,6 +705,7 @@ export async function generateContent(
                         try {
                           const obj = JSON.parse(jsonStr);
                           const candidates = obj.candidates?.[0];
+                          if (candidates?.finishReason) lastFinishReason = candidates.finishReason;
                           const parts = candidates?.content?.parts || [];
                           let partText = "";
                           for (const part of parts) {
@@ -708,6 +756,13 @@ export async function generateContent(
               }
             }
 
+            // Truncation guard: if the accumulated model output is an unterminated
+            // JSON envelope (cut off mid-generation, e.g. MAX_TOKENS), re-run the
+            // pool instead of delivering the partial fragment to callers.
+            if (looksTruncatedJson(fullText)) {
+              throw new TruncatedGenerationError(fullText, lastFinishReason || (fullText ? 'MAX_TOKENS' : undefined));
+            }
+
             console.log(`[SERVER_AI] Cognitive circuit streaming succeeded with ${attempt.label}.`);
             clearStallTimeout();
             // Native Gemini function calling: if the model emitted functionCall
@@ -720,7 +775,9 @@ export async function generateContent(
           } else {
             const resJson: any = await res.json();
             clearStallTimeout();
-            const parts = resJson.candidates?.[0]?.content?.parts || [];
+            const candidate = resJson.candidates?.[0];
+            const finishReason = candidate?.finishReason;
+            const parts = candidate?.content?.parts || [];
             const geminiFunctionCalls: any[] = [];
             for (const p of parts) {
               if (p && p.functionCall) geminiFunctionCalls.push(p);
@@ -738,6 +795,11 @@ export async function generateContent(
             if (!text) {
               throw new Error(`Invalid response schema from Gemini API: ${JSON.stringify(resJson)}`);
             }
+            // Truncation guard: reject cut-off JSON envelopes so the retry pool
+            // regenerates a complete response instead of leaking partial output.
+            if (looksTruncatedJson(text)) {
+              throw new TruncatedGenerationError(text, finishReason);
+            }
             
             console.log(`[SERVER_AI] Cognitive circuit pulsation succeeded (NATIVE FETCH) with ${attempt.label}.`);
             return text;
@@ -746,6 +808,15 @@ export async function generateContent(
           lastError = error;
           const errorBody = error.message || String(error);
           // console.error(`[SERVER_AI] Circuit ${attempt.label} failed on Attempt #${retryCount + 1}:`, summarizeAiError(error));
+
+          // Truncation is a healthy-but-incomplete generation, NOT a key/model
+          // fault: skip quota/overload classification (the partial sample inside
+          // the message could contain misleading keywords) and simply move to the
+          // next circuit for a fresh complete generation.
+          if (error instanceof TruncatedGenerationError) {
+            console.warn(`[SERVER_AI] Cognitive circuit ${attempt.label} output truncated (${error.message.slice(0, 110)}). Trying next circuit...`);
+            break;
+          }
           
           const isQuotaOrRateLimit = errorBody.includes('429') || 
                                      errorBody.toLowerCase().includes('quota') || 
@@ -856,12 +927,15 @@ export async function generateContent(
     // pool once more before giving up to the fallback chain. A short-lived 429
     // that clears within seconds must not fire the offline message prematurely.
     const errBody = primaryErr?.message || String(primaryErr);
-    const isTransient = /429|503|quota|rate limit|overloaded|unavailable|temporary|demand|fetch failed|econnreset|socket|timeout|abort/i.test(errBody);
+    const isTransient = /429|503|quota|rate limit|overloaded|unavailable|temporary|demand|fetch failed|econnreset|socket|timeout|abort|truncat/i.test(errBody);
     if (isTransient) {
       const retryMatch = errBody.match(/Please retry in ([0-9.]+)\s*s/i);
+      // Truncation is not a rate limit — a short pause before re-running the pool
+      // (same key/model) is enough to let the provider complete the response.
+      const isTruncationOnly = /truncat/i.test(errBody) && !/429|503|quota|rate limit|overloaded|unavailable|temporary|demand|fetch failed|econnreset|socket|timeout|abort/i.test(errBody);
       const cooldownMs = retryMatch && retryMatch[1]
         ? (Math.ceil(parseFloat(retryMatch[1]) * 1000) + 1500)
-        : 15000;
+        : (isTruncationOnly ? 2000 : 15000);
       console.log(`[SERVER_AI] All cognitive circuits failed transiently (${errBody.slice(0, 100)}). Cooling down ${Math.round(cooldownMs / 1000)}s then re-running the full pool once...`);
       await new Promise(res => setTimeout(res, cooldownMs));
       try {
