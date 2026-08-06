@@ -13,6 +13,7 @@ import { SettingsManager } from "@/core/kernel/settings";
 import { resolveSystemRoot } from "../systemPaths.js";
 import { CronModule, resolveCronJobPrompt } from "../kernel/cron.js";
 import { NeuralInterface } from "../kernel/NeuralInterface.js";
+import { heartbeatScan, resolveHeartbeatTarget } from "../kernel/heartbeat.js";
 import { MultiChannelQueue } from "../kernel/MultiChannelQueue.js";
 import { eventBus } from "@shared/core/kernel/event-bus";
 import { SystemRegistry } from '@shared/core/registry';
@@ -97,7 +98,8 @@ import { listUserModels, getUserModel } from "../userModel.js";
 import { listRecentReviews, getPendingReviewCount } from "../afterActionReview.js";
 import {
   createGoal, listGoals, getGoal, advanceGoal, completeGoal,
-  abandonGoal, decomposeGoal, getFocusGoal
+  abandonGoal, decomposeGoal, getFocusGoal, findSimilarActiveGoal,
+  createGoalCheckin, getGoalCheckins, listActiveGoals, setGoalContext
 } from "../goalDecomposition.js";
 import { registerSynthesizerRoutes } from "./routes/synthesizerRouter.js";
 import { registerToolsRoutes } from "./routes/toolsRouter.js";
@@ -192,123 +194,186 @@ async function withSqliteRetry<T>(label: string, db: any, fn: () => T): Promise<
 }
 
 export const getCronAction = (id: string, name: string, repeating: boolean, db: any) => async () => {
+  const startedAt = Date.now();
+  let status = 'ok';
+  let error: string | null = null;
   let taskName = name;
   console.log(`[CRON] Executing Task: ${name} (${id})`);
-  
-  // CUSTOM OVERRIDES FOR BUILT-IN SYSTEM TASKS
-  if (id === 'memory-consolidation') {
+
+  // Persist one audit row per run (last 20 kept per task), and refresh the
+  // status columns of still-existing (repeating) tasks.
+  const recordRun = async () => {
+    const durationMs = Date.now() - startedAt;
     try {
-      const consolidator = SystemRegistry.getModule('memory-consolidation');
-      if (consolidator) {
-         await consolidator.run('CONSOLIDATE_MEMORIES', {}, { db });
-      } else {
-         console.warn("[CRON] Memory Consolidator module not found in registry.");
+      await withSqliteRetry('insert-cron-run', db, () => db.prepare(`
+        INSERT INTO cron_run_history (id, task_id, run_at, status, duration_ms, error)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(`cr_${genId(9)}`, id, startedAt, status, durationMs, error));
+      if (repeating) {
+        await withSqliteRetry('update-cron-status', db, () => db.prepare(
+          "UPDATE cron_tasks SET lastRun = ?, last_status = ?, last_error = ? WHERE id = ?"
+        ).run(startedAt, status, error, id));
       }
-    } catch (e: any) {
-      console.error("[CRON] Memory consolidation trigger failed:", e.message || e);
+      await withSqliteRetry('prune-cron-run', db, () => db.prepare(`
+        DELETE FROM cron_run_history WHERE task_id = ? AND id NOT IN (
+          SELECT id FROM cron_run_history WHERE task_id = ? ORDER BY run_at DESC LIMIT 20
+        )
+      `).run(id, id));
+    } catch (persistErr: any) {
+      console.warn("[CRON] Failed to persist run record:", persistErr.message);
+    }
+  };
+
+  try {
+    // CUSTOM OVERRIDES FOR BUILT-IN SYSTEM TASKS
+    if (id === 'memory-consolidation') {
+      try {
+        const consolidator = SystemRegistry.getModule('memory-consolidation');
+        if (consolidator) {
+           await consolidator.run('CONSOLIDATE_MEMORIES', {}, { db });
+        } else {
+           console.warn("[CRON] Memory Consolidator module not found in registry.");
+        }
+      } catch (e: any) {
+        error = e?.message || String(e);
+        console.error("[CRON] Memory consolidation trigger failed:", e.message || e);
+      }
+      
+      if (repeating) {
+        await withSqliteRetry('update-cron-lastrun', db, () => db.prepare("UPDATE cron_tasks SET lastRun = ? WHERE id = ?").run(Date.now(), id));
+      } else {
+        await withSqliteRetry('delete-cron-task', db, () => db.prepare("DELETE FROM cron_tasks WHERE id = ?").run(id));
+        CronModule.getInstance().stopTask(id);
+      }
+      return;
+    }
+
+    if (id === 'heartbeat') {
+      try {
+        const scan = heartbeatScan();
+        const target = resolveHeartbeatTarget(db);
+        if (scan.actionable && target) {
+          console.log(`[HEARTBEAT] Actionable content found; reporting to ${target.chatType}:${target.contextId}`);
+          const reply = await NeuralInterface.processNeuralInput(
+            scan.prompt || '',
+            target.senderName,
+            target.contextId,
+            target.chatType
+          );
+          if (reply && reply.trim() && !/HEARTBEAT_SILENT/i.test(reply)) {
+            dispatchCronReply(reply, target.contextId);
+          }
+        } else {
+          console.log('[HEARTBEAT] Nothing actionable — staying quiet.');
+        }
+      } catch (e: any) {
+        error = e?.message || String(e);
+        console.error("[CRON] Heartbeat failed:", e.message || e);
+      }
+      return;
     }
     
+    await withSqliteRetry('fetch-cron-task', db, () => db.prepare("SELECT context_id, chat_type, sender_name, prompt, action, name FROM cron_tasks WHERE id = ?").get(id));
+    let contextId = 'live_stream';
+    let chatType = 'Live Chat';
+    let senderName = 'System';
+    let storedPrompt = '';
+    let storedAction: string | null = null;
+    try {
+      const task: any = await withSqliteRetry('fetch-cron-task', db, () => db.prepare("SELECT context_id, chat_type, sender_name, prompt, action, name FROM cron_tasks WHERE id = ?").get(id));
+      if (task) {
+        contextId = task.context_id || contextId;
+        chatType = task.chat_type || chatType;
+        senderName = task.sender_name || senderName;
+        storedPrompt = task.prompt || '';
+        storedAction = typeof task.action === 'string' ? task.action : null;
+        if (task.name) taskName = task.name;
+      }
+    } catch (e: any) {
+      console.error("[CRON_ERROR] Failed to fetch task info:", e);
+    }
+
+    // Add memory of the trigger
+    const memoryId = genId(9);
+    await withSqliteRetry('insert-cron-memory', db, () => db.prepare(`
+      INSERT INTO memories (id, type, content, importance, speaker, context, timestamp)
+      VALUES (?, 'system', ?, 0.8, 'System', ?, ?)
+    `).run(memoryId, `[SYSTEM_SIGNAL]: ${taskName} triggered.`, contextId, Date.now()));
+
     if (repeating) {
       await withSqliteRetry('update-cron-lastrun', db, () => db.prepare("UPDATE cron_tasks SET lastRun = ? WHERE id = ?").run(Date.now(), id));
     } else {
       await withSqliteRetry('delete-cron-task', db, () => db.prepare("DELETE FROM cron_tasks WHERE id = ?").run(id));
       CronModule.getInstance().stopTask(id);
     }
-    return;
-  }
-  
-  await withSqliteRetry('fetch-cron-task', db, () => db.prepare("SELECT context_id, chat_type, sender_name, prompt, action, name FROM cron_tasks WHERE id = ?").get(id));
-  let contextId = 'live_stream';
-  let chatType = 'Live Chat';
-  let senderName = 'System';
-  let storedPrompt = '';
-  let storedAction: string | null = null;
-  try {
-    const task: any = await withSqliteRetry('fetch-cron-task', db, () => db.prepare("SELECT context_id, chat_type, sender_name, prompt, action, name FROM cron_tasks WHERE id = ?").get(id));
-    if (task) {
-      contextId = task.context_id || contextId;
-      chatType = task.chat_type || chatType;
-      senderName = task.sender_name || senderName;
-      storedPrompt = task.prompt || '';
-      storedAction = typeof task.action === 'string' ? task.action : null;
-      if (task.name) taskName = task.name;
-    }
-  } catch (e: any) {
-    console.error("[CRON_ERROR] Failed to fetch task info:", e);
-  }
 
-  // Add memory of the trigger
-  const memoryId = genId(9);
-  await withSqliteRetry('insert-cron-memory', db, () => db.prepare(`
-    INSERT INTO memories (id, type, content, importance, speaker, context, timestamp)
-    VALUES (?, 'system', ?, 0.8, 'System', ?, ?)
-  `).run(memoryId, `[SYSTEM_SIGNAL]: ${taskName} triggered.`, contextId, Date.now()));
+    // Process thinking and dispatch response on the server side
+    try {
+      console.log(`[CRON_THINK] Running neural processor for cron task: ${taskName} on channel: ${chatType}:${contextId}`);
 
-  if (repeating) {
-    await withSqliteRetry('update-cron-lastrun', db, () => db.prepare("UPDATE cron_tasks SET lastRun = ? WHERE id = ?").run(Date.now(), id));
-  } else {
-    await withSqliteRetry('delete-cron-task', db, () => db.prepare("DELETE FROM cron_tasks WHERE id = ?").run(id));
-    CronModule.getInstance().stopTask(id);
-  }
+      // Classic cron model: schedule + command. Command = prompt (job body).
+      const prompt = resolveCronJobPrompt({
+        id,
+        name: taskName,
+        prompt: storedPrompt,
+        action: storedAction,
+      });
+      
+      const reply = await NeuralInterface.processNeuralInput(
+         prompt,
+         senderName,
+         contextId,
+         chatType
+      );
 
-  // Process thinking and dispatch response on the server side
-  try {
-    console.log(`[CRON_THINK] Running neural processor for cron task: ${taskName} on channel: ${chatType}:${contextId}`);
-
-    // Classic cron model: schedule + command. Command = prompt (job body).
-    const prompt = resolveCronJobPrompt({
-      id,
-      name: taskName,
-      prompt: storedPrompt,
-      action: storedAction,
-    });
-    
-    const reply = await NeuralInterface.processNeuralInput(
-       prompt,
-       senderName,
-       contextId,
-       chatType
-    );
-
-    if (reply && reply.trim()) {
-      console.log(`[CRON_DISPATCH] Generated reply: ${reply}`);
-
-      // Broadcast to WebView & OBS Overlays (animations, subtitle, state)
-      const replyPayload = {
-        type: "state_update",
-        data: {
-          state: { status: "talking" },
-          activeSubtitle: reply,
-          typedSubtitle: reply,
-          isSubtitleTyping: false,
-          animations: ["TALK", "SMILE"]
-        }
-      };
-
-      try {
-        broadcastToWS(replyPayload);
-      } catch (wsErr) {}
-
-      // Dispatch specifically based on channel (e.g., Telegram)
-      if (contextId.startsWith("tg_")) {
-        const chatId = contextId.replace("tg_", "");
-        try {
-          const bot = getActiveTelegramBot();
-          if (bot) {
-            await bot.telegram.sendMessage(chatId, reply);
-            console.log(`[CRON_DISPATCH] Sent response to Telegram chat ${chatId}`);
-          } else {
-            console.warn("[CRON_DISPATCH] Telegram bot is not active/available.");
-          }
-        } catch (tgErr: any) {
-          console.error("[CRON_DISPATCH] Failed to send message to Telegram:", tgErr.message);
-        }
+      if (reply && reply.trim()) {
+        console.log(`[CRON_DISPATCH] Generated reply: ${reply}`);
+        dispatchCronReply(reply, contextId);
       }
+    } catch (neuralErr: any) {
+      error = neuralErr?.message || String(neuralErr);
+      console.error("[CRON_THINK] Neural processing failed for cron task:", neuralErr);
     }
-  } catch (neuralErr: any) {
-    console.error("[CRON_THINK] Neural processing failed for cron task:", neuralErr);
+  } finally {
+    await recordRun();
   }
 };
+
+/** Broadcast a cron/heartbeat reply to WebView overlays and the target channel. */
+export function dispatchCronReply(reply: string, contextId: string): void {
+  const replyPayload = {
+    type: "state_update",
+    data: {
+      state: { status: "talking" },
+      activeSubtitle: reply,
+      typedSubtitle: reply,
+      isSubtitleTyping: false,
+      animations: ["TALK", "SMILE"]
+    }
+  };
+
+  try {
+    broadcastToWS(replyPayload);
+  } catch (wsErr) {}
+
+  if (contextId.startsWith("tg_")) {
+    const chatId = contextId.replace("tg_", "");
+    try {
+      const bot = getActiveTelegramBot();
+      if (bot) {
+        bot.telegram.sendMessage(chatId, reply).then(() => {
+          console.log(`[CRON_DISPATCH] Sent response to Telegram chat ${chatId}`);
+        }).catch((tgErr: any) => {
+          console.error("[CRON_DISPATCH] Failed to send message to Telegram:", tgErr.message);
+        });
+      } else {
+        console.warn("[CRON_DISPATCH] Telegram bot is not active/available.");
+      }
+    } catch (tgErr: any) {
+      console.error("[CRON_DISPATCH] Failed to send message to Telegram:", tgErr.message);
+    }
+  }
+}
 
 // --- Configuration & Sandbox Settings ---
 const getSystemRoot = () => resolveSystemRoot();
@@ -750,11 +815,25 @@ export function registerAPIRoutes(app: express.Express, db: any) {
   });
 
   // ── Recursive Goal Decomposition API (Stage F) ──
-  app.get("/api/goals", async (_req, res) => {
+  app.get("/api/goals", async (req, res) => {
     try {
-      res.json({ goals: listGoals(200), focus: getFocusGoal() });
+      const contextId = req.query.contextId ? String(req.query.contextId) : null;
+      res.json({
+        goals: contextId ? listActiveGoals(200, contextId) : listGoals(200),
+        focus: getFocusGoal(),
+        active: listActiveGoals(50)
+      });
     } catch (err: any) {
       console.error("[SERVER] GET /api/goals Error:", err?.message || err);
+      res.status(500).json({ error: err?.message || 'unknown' });
+    }
+  });
+
+  app.get("/api/goals/active", async (_req, res) => {
+    try {
+      res.json({ goals: listActiveGoals(50) });
+    } catch (err: any) {
+      console.error("[SERVER] GET /api/goals/active Error:", err?.message || err);
       res.status(500).json({ error: err?.message || 'unknown' });
     }
   });
@@ -763,11 +842,18 @@ export function registerAPIRoutes(app: express.Express, db: any) {
     try {
       const body = req.body || {};
       if (!body.title) return res.status(400).json({ error: 'title required' });
+      const title = String(body.title);
+      // Duplicate guard: never create a goal that clashes with an existing one.
+      const clash = findSimilarActiveGoal(title, body.description ? String(body.description) : '');
+      if (clash) {
+        return res.status(409).json({ error: 'duplicate goal', clash });
+      }
       const goal = createGoal({
-        title: String(body.title),
+        title,
         description: body.description ? String(body.description) : undefined,
         category: body.category ? String(body.category) : undefined,
-        parentId: body.parentId ? String(body.parentId) : null
+        parentId: body.parentId ? String(body.parentId) : null,
+        contextId: body.contextId ? String(body.contextId) : null
       });
       res.json({ goal });
     } catch (err: any) {
@@ -779,11 +865,51 @@ export function registerAPIRoutes(app: express.Express, db: any) {
   app.post("/api/goals/:id/advance", async (req, res) => {
     try {
       const delta = Math.max(-1, Math.min(1, Number(req.body?.delta || 0.1)));
-      const goal = advanceGoal(req.params.id, delta);
+      const note = req.body?.note ? String(req.body.note) : '';
+      const goal = note
+        ? (createGoalCheckin(req.params.id, note, delta) ? getGoal(req.params.id) : null)
+        : advanceGoal(req.params.id, delta);
       if (!goal) return res.status(404).json({ error: 'not found' });
       res.json({ goal });
     } catch (err: any) {
       console.error("[SERVER] POST /api/goals/:id/advance Error:", err?.message || err);
+      res.status(500).json({ error: err?.message || 'unknown' });
+    }
+  });
+
+  app.get("/api/goals/:id/checkins", async (req, res) => {
+    try {
+      const limit = Math.max(1, Math.min(50, Number(req.query.limit || 10)));
+      const goal = getGoal(req.params.id);
+      if (!goal) return res.status(404).json({ error: 'not found' });
+      res.json({ goal, checkins: getGoalCheckins(req.params.id, limit) });
+    } catch (err: any) {
+      console.error("[SERVER] GET /api/goals/:id/checkins Error:", err?.message || err);
+      res.status(500).json({ error: err?.message || 'unknown' });
+    }
+  });
+
+  app.post("/api/goals/:id/checkin", async (req, res) => {
+    try {
+      const body = req.body || {};
+      const delta = Math.max(-1, Math.min(1, Number(body.delta || 0)));
+      const checkin = createGoalCheckin(req.params.id, body.note ? String(body.note) : '', delta);
+      if (!checkin) return res.status(404).json({ error: 'not found' });
+      res.json({ checkin, goal: getGoal(req.params.id) });
+    } catch (err: any) {
+      console.error("[SERVER] POST /api/goals/:id/checkin Error:", err?.message || err);
+      res.status(500).json({ error: err?.message || 'unknown' });
+    }
+  });
+
+  app.post("/api/goals/:id/context", async (req, res) => {
+    try {
+      const contextId = req.body?.contextId ? String(req.body.contextId) : null;
+      const goal = setGoalContext(req.params.id, contextId);
+      if (!goal) return res.status(404).json({ error: 'not found' });
+      res.json({ goal });
+    } catch (err: any) {
+      console.error("[SERVER] POST /api/goals/:id/context Error:", err?.message || err);
       res.status(500).json({ error: err?.message || 'unknown' });
     }
   });

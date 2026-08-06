@@ -177,6 +177,19 @@ export async function seedDefaultCronTask(db: any): Promise<void> {
   } catch (e: any) {
     console.warn("[ONBOARDING] Failed to seed default memory consolidation task:", e.message);
   }
+
+  // Quiet periodic heartbeat: reads agent/HEARTBEAT.md and only reports actionable results.
+  try {
+    await retryDbOperation(() => {
+      db.prepare(`
+        INSERT INTO cron_tasks (id, name, schedule, enabled, repeating, context_id, chat_type, sender_name)
+        VALUES ('heartbeat', 'Heartbeat', '*/30 * * * *', 1, 1, 'live_stream', 'Live Chat', 'System')
+        ON CONFLICT(id) DO NOTHING
+      `).run();
+    }, 'seed heartbeat task');
+  } catch (e: any) {
+    console.warn("[ONBOARDING] Failed to seed heartbeat task:", e.message);
+  }
 }
 
 // --- Onboarding Flow: Extract default and establish folders outside binary if missing ---

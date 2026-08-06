@@ -10,7 +10,7 @@
  */
 
 import { CortexModule, ModuleType, AgentState } from '@shared/include/types';
-import { getFocusGoal, buildGoalDirective, listActiveGoals, advanceGoal, goalKeywordOverlap, createGoal } from '../../core/goalDecomposition';
+import { getFocusGoal, buildGoalDirective, buildActiveGoalsDirective, listActiveGoals, advanceGoal, goalKeywordOverlap, createGoal, findSimilarActiveGoal } from '../../core/goalDecomposition';
 
 /**
  * Detects "add goal" requests from the user input (ID/EN/JP).
@@ -69,6 +69,12 @@ export const GoalDecompositionModule: CortexModule = {
           default: true,
           description: 'Advances the focus goal progress a little when the conversation touches its topics (closed-loop monitoring).'
         },
+        showActiveGoals: {
+          type: 'boolean',
+          label: 'Show Active Goals Overview',
+          default: true,
+          description: 'Lists all active long-horizon goals (with progress) in the mind each cycle to prevent duplicates and keep long-term focus.'
+        },
         advanceStep: {
           type: 'number',
           label: 'Auto-Advance Step',
@@ -98,16 +104,22 @@ export const GoalDecompositionModule: CortexModule = {
       return { ...context };
     }
 
-    // User request to add a goal -> create it directly as the new focus.
+    // User request to add a goal -> reuse an existing clash, or create as new focus.
     let focus = getFocusGoal();
     const requestedTitle = extractGoalTitle(input);
     if (requestedTitle) {
-      const created = createGoal({ title: requestedTitle, category: 'user-request' });
-      if (created) {
-        logs.push(`[GOAL_CREATE] User request -> new goal: "${created.title}" (${created.id})`);
-        focus = created;
+      const clash = findSimilarActiveGoal(requestedTitle, '');
+      if (clash) {
+        logs.push(`[GOAL_CREATE] User request matches existing goal "${clash.title}" (${clash.id}) — reused instead of duplicating.`);
+        focus = clash;
       } else {
-        logs.push(`[GOAL_CREATE] Failed to create goal from request: "${requestedTitle}"`);
+        const created = createGoal({ title: requestedTitle, category: 'user-request' });
+        if (created) {
+          logs.push(`[GOAL_CREATE] User request -> new goal: "${created.title}" (${created.id})`);
+          focus = created;
+        } else {
+          logs.push(`[GOAL_CREATE] Failed to create goal from request: "${requestedTitle}"`);
+        }
       }
     }
 
@@ -135,9 +147,18 @@ export const GoalDecompositionModule: CortexModule = {
     }
 
     const directive = buildGoalDirective(nextContext.currentGoal);
+    let soulDir = `${context.soulDirective || ''}\n${directive}`.trim();
+
+    // Long-horizon overview of ALL active goals (dedupe awareness).
+    const showOverview = config.showActiveGoals !== undefined ? !!config.showActiveGoals : true;
+    if (showOverview) {
+      const overview = buildActiveGoalsDirective(listActiveGoals(15), nextContext.currentGoal.id);
+      if (overview) soulDir = `${soulDir}\n${overview}`.trim();
+    }
+
     nextContext = {
       ...nextContext,
-      soulDirective: `${context.soulDirective || ''}\n${directive}`.trim()
+      soulDirective: soulDir
     };
 
     logs.push(`[GOAL_FOCUS] ${nextContext.currentGoal.title} (${Math.round((nextContext.currentGoal.progress || 0) * 100)}%) — ${listActiveGoals(10).length} active goals.`);

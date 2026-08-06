@@ -1,5 +1,12 @@
 import { getTzOffsetHours, toLocalClock } from '../utils/dualClock.js';
 
+export interface CronRunRecord {
+  runAt: number;
+  status: string;
+  durationMs: number;
+  error: string | null;
+}
+
 export interface CronTask {
   id: string;
   name: string;
@@ -16,11 +23,17 @@ export interface CronTask {
   prompt?: string;
   lastRunMinuteStamp?: string;
   running?: boolean;
+  lastStatus?: string;
+  lastError?: string;
+  runHistory?: CronRunRecord[];
+  /** Optional persistence hook (e.g. writes run history to the DB). */
+  onRunComplete?: (status: string, error: string | null, durationMs: number) => void;
 }
 
 /** Built-in system jobs that do not run as chat prompts. */
 export const SYSTEM_CRON_IDS = new Set([
   'memory-consolidation',
+  'heartbeat',
 ]);
 
 export function isSystemCronTask(id: string | undefined | null): boolean {
@@ -102,6 +115,134 @@ export function normalizeCronPromptForSave(opts: {
   return name;
 }
 
+export function isValidIanaTz(tz: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Offset hours (UTC vs wall clock) of an IANA timezone at a given moment. */
+export function getTzOffsetInIana(tz: string, date?: Date): number {
+  const d = date || new Date();
+  try {
+    const dtf = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz,
+      hour12: false,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
+    const parts: Record<string, string> = {};
+    for (const p of dtf.formatToParts(d)) parts[p.type] = p.value;
+    const asUtc = Date.UTC(
+      Number(parts.year),
+      Number(parts.month) - 1,
+      Number(parts.day),
+      Number(parts.hour),
+      Number(parts.minute),
+      Number(parts.second)
+    );
+    return (asUtc - d.getTime()) / 3600000;
+  } catch {
+    return getTzOffsetHours();
+  }
+}
+
+/**
+ * Parse an absolute (one-shot) datetime schedule.
+ * Accepts `YYYY-MM-DD[T ]HH:MM[:SS]` with optional IANA tz in the parenthesized
+ * part of the original schedule string. Explicit offsets (Z, +07:00) are honored;
+ * naive datetimes are interpreted in the given tz or the user's default local offset.
+ */
+export function parseAbsoluteSchedule(body: string, tz?: string): number | null {
+  const clean = body.trim().replace(/\s+/g, ' ');
+
+  if (/[zZ]$|[+-]\d{2}:?\d{2}$/.test(clean)) {
+    const ms = Date.parse(clean.replace(' ', 'T'));
+    return Number.isFinite(ms) ? ms : null;
+  }
+
+  const m = clean.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2}))?$/);
+  if (!m) return null;
+  const [, y, mo, d, h, mi, s] = m;
+  const offsetHours = tz ? getTzOffsetInIana(tz) : getTzOffsetHours();
+  return Date.UTC(+y, +mo - 1, +d, +h, +mi, +(s || 0)) - offsetHours * 3600000;
+}
+
+export type CronScheduleKind =
+  | { kind: 'relative'; ms: number }
+  | { kind: 'at'; atMs: number; tz?: string }
+  | { kind: 'cron'; expr: string; tz?: string };
+
+/**
+ * Parse a schedule string into a concrete schedule kind.
+ * Supported forms:
+ *  - relative:  `5m`, `30s`, `2h`, `1d`
+ *  - absolute:  `@at 2026-08-07T09:00:00`, `at 2026-08-07 09:00`, or a bare ISO datetime
+ *  - cron:      `0 9 * * *` with optional IANA tz suffix `(Asia/Jakarta)` or `TZ=Asia/Jakarta ...`
+ */
+export function parseCronSchedule(schedule: string): CronScheduleKind | null {
+  const raw = schedule.trim();
+  if (!raw) return null;
+
+  let body = raw;
+  let tz: string | undefined;
+
+  const tzPrefix = body.match(/^TZ\s*=\s*([A-Za-z_\-/]+)\s+(.+)$/);
+  if (tzPrefix) {
+    const maybeTz = tzPrefix[1].trim();
+    if (isValidIanaTz(maybeTz)) {
+      tz = maybeTz;
+      body = tzPrefix[2].trim();
+    }
+  }
+
+  const tzSuffix = body.match(/^(.*?)\s*\(([^()]+)\)\s*$/);
+  if (tzSuffix && !tz) {
+    const maybeTz = tzSuffix[2].trim();
+    if (isValidIanaTz(maybeTz)) {
+      tz = maybeTz;
+      body = tzSuffix[1].trim();
+    }
+  }
+
+  const atMatch = body.match(/^(?:@at|at)\s+(.+)$/i);
+  if (atMatch) {
+    body = atMatch[1].trim();
+    const atMs = parseAbsoluteSchedule(body, tz);
+    return { kind: 'at', atMs: atMs ?? Date.now(), tz };
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}/.test(body)) {
+    const atMs = parseAbsoluteSchedule(body, tz);
+    if (atMs !== null) return { kind: 'at', atMs, tz };
+  }
+
+  const rel = body.match(/^(\d+)([smhd])$/i);
+  if (rel) {
+    const value = parseInt(rel[1], 10);
+    const unit = rel[2].toLowerCase();
+    const ms = ({ s: 1000, m: 60000, h: 3600000, d: 86400000 } as Record<string, number>)[unit] * value;
+    return { kind: 'relative', ms };
+  }
+
+  return { kind: 'cron', expr: body, tz };
+}
+
+/** Wall clock parts for the current moment in a given tz (or the user's default local offset). */
+function currentClockParts(tz?: string): Date {
+  if (tz) {
+    return toLocalClock(getTzOffsetInIana(tz));
+  }
+  return toLocalClock(getTzOffsetHours());
+}
+
 export class CronModule {
   private static instance: CronModule;
   private tasks: Map<string, CronTask> = new Map();
@@ -114,20 +255,6 @@ export class CronModule {
       CronModule.instance = new CronModule();
     }
     return CronModule.instance;
-  }
-
-  private parseScheduleToMs(schedule: string): number | null {
-    const match = schedule.trim().match(/^(\d+)([smhd])$/i);
-    if (!match) return null;
-    const value = parseInt(match[1], 10);
-    const unit = match[2].toLowerCase();
-    switch (unit) {
-      case 's': return value * 1000;
-      case 'm': return value * 60 * 1000;
-      case 'h': return value * 60 * 60 * 1000;
-      case 'd': return value * 24 * 60 * 60 * 1000;
-      default: return null;
-    }
   }
 
   public registerTask(task: CronTask) {
@@ -144,72 +271,49 @@ export class CronModule {
 
     this.stopTask(id);
 
-    // Support relative parsed intervals (e.g. 5m, 30s)
-    const ms = this.parseScheduleToMs(task.schedule);
-    if (ms !== null) {
+    const parsed = parseCronSchedule(task.schedule);
+
+    if (parsed && parsed.kind === 'relative') {
       if (task.repeating) {
-        const interval = setInterval(async () => {
-          if (task.running) {
-            console.warn(`[CRON] Task ${task.name} is still running from previous trigger. Skipping overlapping execution.`);
-            return;
-          }
-          task.running = true;
-          try {
-            await task.action();
-            task.lastRun = Date.now();
-          } catch (e) {
-            console.error(`[CRON] Task ${task.name} failed:`, e);
-          } finally {
-            task.running = false;
-          }
-        }, ms);
-        this.intervals.set(id, interval);
-        console.log(`[CRON] Repeating Interval Task started: ${task.name} (every ${ms}ms)`);
+        const interval = setInterval(() => this.runTask(task), parsed.ms);
+        this.intervals.set(id, interval as any);
+        console.log(`[CRON] Repeating Interval Task started: ${task.name} (every ${parsed.ms}ms)`);
       } else {
-        const timeout = setTimeout(async () => {
-          if (task.running) {
-            console.warn(`[CRON] Task ${task.name} is still running. Skipping overlapping execution.`);
-            return;
-          }
-          task.running = true;
-          try {
-            await task.action();
-            task.lastRun = Date.now();
-          } catch (e) {
-            console.error(`[CRON] Task ${task.name} failed:`, e);
-          } finally {
-            task.running = false;
-            this.removeTask(id);
-          }
-        }, ms);
+        const timeout = setTimeout(() => this.runTask(task, { oneShot: true }), parsed.ms);
         this.intervals.set(id, timeout as any);
-        console.log(`[CRON] One-off Delay Task started: ${task.name} (triggers in ${ms}ms)`);
+        console.log(`[CRON] One-off Delay Task started: ${task.name} (triggers in ${parsed.ms}ms)`);
       }
       return;
     }
 
-    // Fallback basic cron scheduler: check every 20 seconds to prevent drift/misses
+    if (parsed && parsed.kind === 'at') {
+      const delay = Math.max(0, parsed.atMs - Date.now());
+      const timeout = setTimeout(() => this.runTask(task, { oneShot: true }), delay);
+      this.intervals.set(id, timeout as any);
+      console.log(`[CRON] Absolute One-shot Task started: ${task.name} (at ${new Date(parsed.atMs).toISOString()}${parsed.tz ? ` / ${parsed.tz}` : ''}, in ${delay}ms)`);
+      return;
+    }
+
+    if (!parsed || parsed.kind !== 'cron') {
+      console.warn(`[CRON] Unparseable schedule '${task.schedule}' for ${task.name} — task not scheduled.`);
+      return;
+    }
+
+    const tz = parsed.tz;
     const interval = setInterval(async () => {
-      // Evaluate the schedule using the user's LOCAL time (circadian-rhythm.timezoneOffsetHours),
-      // so cron tasks (e.g. "0 8 * * *") follow the user's time, not server UTC.
-      const now = toLocalClock(getTzOffsetHours());
+      const now = currentClockParts(tz);
       const currentMinuteStamp = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}-${now.getHours()}-${now.getMinutes()}`;
-      
+
       if (task.lastRunMinuteStamp === currentMinuteStamp) {
-        return; // Already executed during this minute
+        return;
       }
-      
-      const matchCronField = (value: number, pattern: string, rangeMin: number, rangeMax: number): boolean => {
+
+      const matchCronField = (value: number, pattern: string): boolean => {
         if (pattern === '*') return true;
-        
-        // Handle steps like */5
         const stepMatch = pattern.match(/^\*\/(\d+)$/);
         if (stepMatch) {
-          const step = parseInt(stepMatch[1], 10);
-          return value % step === 0;
+          return value % parseInt(stepMatch[1], 10) === 0;
         }
-        
-        // Handle range step like 0-30/5
         const rangeStepMatch = pattern.match(/^(\d+)-(\d+)\/(\d+)$/);
         if (rangeStepMatch) {
           const start = parseInt(rangeStepMatch[1], 10);
@@ -217,71 +321,69 @@ export class CronModule {
           const step = parseInt(rangeStepMatch[3], 10);
           return value >= start && value <= end && (value - start) % step === 0;
         }
-
-        // Handle lists like 1,2,5
         if (pattern.includes(',')) {
-          const parts = pattern.split(',');
-          return parts.some(part => matchCronField(value, part, rangeMin, rangeMax));
+          return pattern.split(',').some((part) => matchCronField(value, part));
         }
-
-        // Handle ranges like 1-5
         const rangeMatch = pattern.match(/^(\d+)-(\d+)$/);
         if (rangeMatch) {
           const start = parseInt(rangeMatch[1], 10);
           const end = parseInt(rangeMatch[2], 10);
           return value >= start && value <= end;
         }
-
-        // Exact value
-        const exact = parseInt(pattern, 10);
-        return exact === value;
+        return parseInt(pattern, 10) === value;
       };
 
-      const parts = task.schedule.trim().split(/\s+/);
-      let isMatched = false;
-
-      if (parts.length > 0) {
-        const minutePattern = parts[0] || '*';
-        const hourPattern = parts[1] || '*';
-        const dayOfMonthPattern = parts[2] || '*';
-        const monthPattern = parts[3] || '*';
-        const dayOfWeekPattern = parts[4] || '*';
-
-        const minute = now.getMinutes();
-        const hour = now.getHours();
-        const dayOfMonth = now.getDate();
-        const month = now.getMonth() + 1; // 1-12
-        const dayOfWeek = now.getDay(); // 0-6
-
-        isMatched = (
-          matchCronField(minute, minutePattern, 0, 59) &&
-          matchCronField(hour, hourPattern, 0, 23) &&
-          matchCronField(dayOfMonth, dayOfMonthPattern, 1, 31) &&
-          matchCronField(month, monthPattern, 1, 12) &&
-          matchCronField(dayOfWeek, dayOfWeekPattern, 0, 6)
-        );
-      }
+      const parts = parsed.expr.trim().split(/\s+/);
+      if (parts.length === 0) return;
+      const isMatched = (
+        matchCronField(now.getMinutes(), parts[0] || '*') &&
+        matchCronField(now.getHours(), parts[1] || '*') &&
+        matchCronField(now.getDate(), parts[2] || '*') &&
+        matchCronField(now.getMonth() + 1, parts[3] || '*') &&
+        matchCronField(now.getDay(), parts[4] || '*')
+      );
 
       if (isMatched) {
-        if (task.running) {
-          console.warn(`[CRON] Task ${task.name} is still running from previous trigger. Skipping overlapping execution.`);
-          return;
-        }
         task.lastRunMinuteStamp = currentMinuteStamp;
-        task.running = true;
-        try {
-          await task.action();
-          task.lastRun = Date.now();
-        } catch (e) {
-          console.error(`[CRON] Task ${task.name} failed:`, e);
-        } finally {
-          task.running = false;
-        }
+        await this.runTask(task);
       }
-    }, 20000); // Check every 20 seconds
+    }, 20000);
 
-    this.intervals.set(id, interval);
-    console.log(`[CRON] Standard Cron Task started: ${task.name} (${task.schedule})`);
+    this.intervals.set(id, interval as any);
+    console.log(`[CRON] Standard Cron Task started: ${task.name} (${parsed.expr}${tz ? ` / ${tz}` : ''})`);
+  }
+
+  private async runTask(task: CronTask, opts?: { oneShot?: boolean }): Promise<void> {
+    if (task.running) {
+      console.warn(`[CRON] Task ${task.name} is still running from previous trigger. Skipping overlapping execution.`);
+      return;
+    }
+    task.running = true;
+    const start = Date.now();
+    let status = 'ok';
+    let error: string | null = null;
+    try {
+      await task.action();
+    } catch (e: any) {
+      status = 'error';
+      error = e?.message || String(e);
+      console.error(`[CRON] Task ${task.name} failed:`, e);
+    } finally {
+      task.running = false;
+      const durationMs = Date.now() - start;
+      task.lastRun = start;
+      task.lastStatus = status;
+      task.lastError = error;
+      task.runHistory = [...(task.runHistory || []).slice(-19), { runAt: start, status, durationMs, error }];
+      try {
+        task.onRunComplete?.(status, error, durationMs);
+      } catch (persistErr: any) {
+        console.warn('[CRON] Failed to persist run record:', persistErr.message);
+      }
+      if (opts?.oneShot) {
+        this.removeTask(task.id);
+      }
+    }
   }
 
   public stopTask(id: string) {

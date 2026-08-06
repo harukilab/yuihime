@@ -1,6 +1,21 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.303] - 2026-08-06
+### Fix: v4.302 — Adopsi fitur nanobot: Skills, at+timezone, run history, heartbeat, live config reload, dedupe goals
+
+
+## [4.302] - 2026-08-06
+### Feature: Adopsi fitur nanobot: Skills, jadwal at+timezone, run history, heartbeat, live config reload, dedupe goals
+- SKILLS: SkillsRegistry baru (~/.yuihime/skills/<name>/SKILL.md) + module SkillsContextModule (order 3) inject <active_skills>/<loaded_skills>; tool skill.ts kini loader nyata (bukan stub).
+- CRON: parseCronSchedule dukung jadwal at (ISO 2026-08-07T09:00:00) + timezone (TZ=... atau (Asia/Jakarta)); one-shot setTimeout untuk kind 'at'.
+- CRON RUN HISTORY: tabel baru cron_run_history + kolom last_status/last_error di cron_tasks; GET /api/cron & manage_cron list tampilkan runHistory (max 20/task); DELETE tolak system task.
+- HEARTBEAT: src/core/kernel/heartbeat.ts (heartbeatScan + resolveHeartbeatTarget); task cron 'heartbeat' seed */30 * * * * di onboarding; hasil berguna dikirim ke TG user terakhir aktif.
+- LIVE CONFIG RELOAD: endpoint POST /api/settings/reload (load settings + clear cache + PluginManager.loadPlugins + init bots + SkillsRegistry.loadFromDisk + broadcast) dan tombol Reload di ModularSettings UI.
+- GOALS DEDUPE (anti-dobel): findSimilarActiveGoal + guard bawaan createGoal menolak goal baru yang bentrok/duplikat dengan goal aktif existing; /goals add & POST /api/goals kini lapor clash (HTTP 409); GoalDecompositionModule reuse goal yang bentrok & inject LONG-HORIZON GOALS OVERVIEW; REST baru: GET /api/goals/active, GET/POST /api/goals/:id/checkins|checkin|context.
+- GOALS LEDGER: kolom context_id di goals + tabel goal_checkins (note, progress_delta, status_change) + migration; createGoalCheckin/getGoalCheckins; listActiveGoals(contextId).
+
+
 ## [4.301] - 2026-08-06
 ### Fix: Cron double-delivery & greeting salah bahasa/perspektif
 - DIAGNOSIS (cek log prod): '1 cron 2 jawaban' = dua task duplikat 'Greet Al' (LLM memanggil scheduler tool 2x) → keduanya fire & terkirim. Balasan yang salah ('akhirnya kamu sapa Yui lagi~' seolah Al yang menyapa) = prompt fallback resolveCronJobPrompt tidak menginstruksikan Yui sebagai INISIATOR dan tidak meminta match bahasa user.

@@ -1,5 +1,5 @@
 import { ToolModule } from '@shared/include/types';
-import { extractCronPromptFromArgs, normalizeCronPromptForSave } from '../../core/kernel/cron';
+import { extractCronPromptFromArgs, normalizeCronPromptForSave, isSystemCronTask } from '../../core/kernel/cron';
 
 const manifest = {
   "id": "scheduler",
@@ -22,7 +22,7 @@ const manifest = {
       },
       "schedule": { 
         "type": "string", 
-        "description": "When to run: interval (e.g. 5m, 1h) or standard cron (e.g. 0 7 * * *)" 
+        "description": "When to run. Supported formats: interval (5m, 30s, 2h, 1d); absolute one-shot ('2026-08-07T09:00:00' or '@at 2026-08-07 09:00', naive times use the user's local timezone); or standard cron with optional IANA timezone suffix (e.g. '0 7 * * *', '0 9 * * 1-5 (Asia/Jakarta)', 'TZ=America/New_York 0 8 * * *'). One-shot/at tasks delete themselves after firing." 
       },
       "taskId": {
         "type": "string",
@@ -91,10 +91,17 @@ export const CronTool: ToolModule = {
 
         if (args.action === 'list') {
           const tasks = db.prepare("SELECT * FROM cron_tasks").all();
+          const runs = db.prepare("SELECT * FROM cron_run_history ORDER BY run_at DESC LIMIT 200").all() as any[];
+          const runsByTask: Record<string, any[]> = {};
+          for (const r of runs) {
+            if (!runsByTask[r.task_id]) runsByTask[r.task_id] = [];
+            if (runsByTask[r.task_id].length < 20) runsByTask[r.task_id].push(r);
+          }
           return tasks.map((t: any) => ({
             ...t,
             enabled: t.enabled === 1,
-            repeating: t.repeating === 1
+            repeating: t.repeating === 1,
+            runHistory: runsByTask[t.id] || []
           }));
         }
 
@@ -312,8 +319,11 @@ export const CronTool: ToolModule = {
         if (args.action === 'delete') {
           const resolvedId = resolveTaskIdDirect(args.taskId);
           if (!resolvedId) return { error: "taskId (or task name) is required for 'delete'" };
-          
+          if (isSystemCronTask(resolvedId)) {
+            return { error: `Task '${resolvedId}' is a protected system task and cannot be deleted.` };
+          }
           db.prepare("DELETE FROM cron_tasks WHERE id = ?").run(resolvedId);
+          db.prepare("DELETE FROM cron_run_history WHERE task_id = ?").run(resolvedId);
           cron.removeTask(resolvedId);
           return { success: true, message: `Task with ID/Name '${args.taskId}' has been deleted.` };
         }

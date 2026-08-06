@@ -299,6 +299,7 @@ export async function setupSchema(db: any) {
         progress REAL DEFAULT 0,
         category TEXT DEFAULT 'general',
         note TEXT DEFAULT '',
+        context_id TEXT,
         created_at INTEGER,
         updated_at INTEGER
       );
@@ -308,6 +309,16 @@ export async function setupSchema(db: any) {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         source TEXT,
         root_goal_id TEXT,
+        created_at INTEGER
+      );
+    `,
+    goal_checkins: `
+      CREATE TABLE IF NOT EXISTS goal_checkins (
+        id TEXT PRIMARY KEY,
+        goal_id TEXT,
+        note TEXT,
+        progress_delta REAL DEFAULT 0,
+        status_change TEXT DEFAULT '',
         created_at INTEGER
       );
     `,
@@ -348,7 +359,19 @@ export async function setupSchema(db: any) {
         nextRun INTEGER,
         context_id TEXT,
         chat_type TEXT,
-        sender_name TEXT
+        sender_name TEXT,
+        last_status TEXT,
+        last_error TEXT
+      );
+    `,
+    cron_run_history: `
+      CREATE TABLE IF NOT EXISTS cron_run_history (
+        id TEXT PRIMARY KEY,
+        task_id TEXT,
+        run_at INTEGER,
+        status TEXT,
+        duration_ms INTEGER,
+        error TEXT
       );
     `,
     pending_messages: `
@@ -450,6 +473,8 @@ export async function setupSchema(db: any) {
     idx_identities_perceived: "CREATE INDEX IF NOT EXISTS idx_identities_perceived ON identities(perceivedName);",
     idx_history_timestamp: "CREATE INDEX IF NOT EXISTS idx_history_timestamp ON history(timestamp);",
     idx_cron_tasks_next: "CREATE INDEX IF NOT EXISTS idx_cron_tasks_next ON cron_tasks(nextRun);",
+    idx_cron_run_history_task: "CREATE INDEX IF NOT EXISTS idx_cron_run_history_task ON cron_run_history(task_id, run_at);",
+   idx_goal_checkins_goal: "CREATE INDEX IF NOT EXISTS idx_goal_checkins_goal ON goal_checkins(goal_id, created_at);",
     idx_tg_users_last_seen: "CREATE INDEX IF NOT EXISTS idx_tg_users_last_seen ON telegram_users(last_seen);",
     idx_tg_update_ids_chat: "CREATE INDEX IF NOT EXISTS idx_tg_update_ids_chat ON telegram_update_ids(chat_id, processed_at);"
   };
@@ -520,7 +545,7 @@ export async function setupSchema(db: any) {
   }
 
   // Schema Migration
-  const migrationTables = ['agent_state', 'knowledge', 'cron_tasks', 'identities', 'pairing_codes', 'memories', 'pending_messages'];
+  const migrationTables = ['agent_state', 'knowledge', 'cron_tasks', 'identities', 'pairing_codes', 'memories', 'pending_messages', 'goals'];
   for (const table of migrationTables) {
     try {
       const columns = db.prepare(`PRAGMA table_info(${table})`).all() as any[];
@@ -600,7 +625,9 @@ export async function setupSchema(db: any) {
           { name: 'context_id', type: 'TEXT' },
           { name: 'chat_type', type: 'TEXT' },
           { name: 'sender_name', type: 'TEXT' },
-          { name: 'prompt', type: 'TEXT' }
+          { name: 'prompt', type: 'TEXT' },
+          { name: 'last_status', type: 'TEXT' },
+          { name: 'last_error', type: 'TEXT' }
         ];
         for (const col of alterCols) {
           if (!columnNames.includes(col.name)) {
@@ -659,6 +686,20 @@ export async function setupSchema(db: any) {
               db.prepare(`ALTER TABLE pending_messages ADD COLUMN ${col.name} ${col.type}`).run();
             } catch (alterError: any) {
               console.warn(`Migration warn: failed to alter pending_messages and add ${col.name}:`, alterError.message);
+            }
+          }
+        }
+      }
+      if (table === 'goals') {
+        const alterCols = [
+          { name: 'context_id', type: 'TEXT' }
+        ];
+        for (const col of alterCols) {
+          if (!columnNames.includes(col.name)) {
+            try {
+              db.prepare(`ALTER TABLE goals ADD COLUMN ${col.name} ${col.type}`).run();
+            } catch (alterError: any) {
+              console.warn(`Migration warn: failed to alter goals and add ${col.name}:`, alterError.message);
             }
           }
         }

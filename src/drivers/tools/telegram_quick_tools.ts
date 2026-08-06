@@ -7,7 +7,7 @@ import os from 'os';
 import { extractJsonObject } from '../../core/cortex/jsonExtract.js';
 import { injectCharacterName } from '../../core/kernel/characterName';
 import { getTzOffsetHours, formatLocalFullEn, formatLocalDateKey, tzLabel } from '../../core/utils/dualClock.js';
-import { createGoal } from '../../core/goalDecomposition.js';
+import { createGoal, findSimilarActiveGoal } from '../../core/goalDecomposition.js';
 import { SettingsManager } from '../../core/kernel/settings.js';
 
 const manifest = {
@@ -1812,8 +1812,14 @@ export const tgQuickCommands: TgCommandDef[] = [
       if (/^add\s+/i.test(raw)) {
         const title = raw.replace(/^add\s+/i, '').trim();
         if (!title) return { text: '⚠️ Usage: /goals add <title>\n\nExample: /goals add Belajar AI' };
+        const clash = findSimilarActiveGoal(title, '');
+        if (clash) {
+          return {
+            text: `⚠️ Duplicate goal detected!\n\n🎯 "${clash.title}" — ${Math.round((clash.progress || 0) * 100)}% (${clash.status})\n\nA goal like this already exists. Use /goals to view it, or pick a different title.`
+          };
+        }
         const created = createGoal({ title, category: 'user-request' });
-        if (!created) return { text: '⚠️ Failed to create goal.' };
+        if (!created) return { text: '⚠️ Failed to create goal (limit reached or invalid).' };
         return {
           text: `🎯 Goal created!\n\n${created.status === 'in_progress' ? '🔄' : '📌'} ${created.title}\n   ${Math.round((created.progress || 0) * 100)}%\n\nUse /goals to see it in the list.`
         };

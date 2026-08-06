@@ -1666,6 +1666,22 @@ export const ModularSettings: React.FC<ModularSettingsProps> = ({
     }
   };
 
+  const handleReloadConfig = async () => {
+    try {
+      const resp = await fetch('/api/settings/reload', { method: 'POST' });
+      if (!resp.ok) {
+        const body = await resp.json().catch(() => ({}));
+        throw new Error(body?.error || `HTTP ${resp.status}`);
+      }
+      const data = await resp.json();
+      if (data?.settings) setSettings(data.settings);
+      setToast({ message: 'Config reloaded from disk & hot-applied! ✨', type: 'success' });
+      if (onSave) onSave();
+    } catch (e: any) {
+      setToast({ message: `Reload failed: ${e?.message || 'unknown error'}`, type: 'error' });
+    }
+  };
+
   const updateSetting = async (moduleId: string, field: string, value: any) => {
     const targetConfig = {
       ...(settings[moduleId] || {}),
@@ -2362,6 +2378,14 @@ export const ModularSettings: React.FC<ModularSettingsProps> = ({
               <span>Exit</span>
             </button>
           )}
+          <button 
+            type="button"
+            onClick={handleReloadConfig} 
+            className="p-3 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl text-white/60 hover:text-emerald-400 transition-all flex justify-center items-center cursor-pointer"
+            title="Reload config.toml from disk (hot apply)"
+          >
+            <Globe size={15} />
+          </button>
           <button 
             type="button"
             onClick={loadSettings} 

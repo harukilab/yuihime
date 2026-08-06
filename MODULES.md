@@ -187,3 +187,4 @@ Peta struktur direktori pasca-pemisahan Web UI ↔ Daemon (lihat UPDATE_LOG `[4.
 - `scripts/boot.sh` — boot hook reboot (Termux:Boot / UserLAnd / cron @reboot / init.d)
 - `scripts/setup-pm2.sh` / `scripts/restore-pm2.sh` — bootstrap & restore PM2 (fix: `ecosystem.config.cjs`)
 - `tools/dream.py` — **DIHAPUS** (endpoint `/api/system/dream` tidak ada; dream via `/api/cortex/dream`)
+- `SkillsRegistry, SkillsContextModule, goal check-in ledger`

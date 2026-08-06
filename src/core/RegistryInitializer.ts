@@ -75,6 +75,8 @@ import { MemoryRetentionModule } from '../modules/agi/MemoryRetentionModule.js';
 import { AfterActionReviewModule } from '../modules/agi/AfterActionReviewModule.js';
 import { GoalDecompositionModule } from '../modules/agi/GoalDecompositionModule.js';
 import { GoalProposalModule } from '../modules/agi/GoalProposalModule.js';
+import { SkillsContextModule } from '../modules/agi/SkillsContextModule.js';
+import { SkillsRegistry } from './SkillsRegistry.js';
 
 import { LocalProvider } from '../drivers/ai-providers/LocalProvider.js';
 import { GeminiProvider } from '../drivers/ai-providers/GeminiProvider.js';
@@ -477,6 +479,7 @@ export function initializeCortexModules(): Promise<void> {
         CognitiveReflexModule, CognitiveIntegrityGuardianModule, CognitiveHeuristicsModule, CircadianRhythmModule,
         AdaptiveLearningModule, AbstractReasoningModule, MetacognitionReflectModule, SelfAwarenessReflectModule,
         DiaryModule, LifeSimulationModule, FeedbackLoopModule, ConfidenceEstimatorModule, UserModelModule, MemoryRetentionModule, AfterActionReviewModule, GoalDecompositionModule, GoalProposalModule,
+        SkillsContextModule,
         LocalProvider, GeminiProvider, CustomProvider, AnthropicProvider, OpenAIProvider,
         OfficialChatProvider, OpenRouter, OfficialSpeechTTS, ElevenLabsTTS, WebSpeechTTS,
         OpenRouterTTS, OfficialStreamingSpeechTTS, CustomAPITTS, GeminiTTS,
@@ -506,6 +509,14 @@ export function initializeCortexModules(): Promise<void> {
           writeAvailableToolsFile();
         } catch (fileErr) {
           console.warn('[REGISTRY] Non-blocking failure while generating available_tools.json:', fileErr);
+        }
+        try {
+          const skillCount = SkillsRegistry.loadFromDisk();
+          if (skillCount > 0) {
+            console.log(`[SKILLS_REGISTRY] Loaded ${skillCount} skill(s) from disk.`);
+          }
+        } catch (skillErr: any) {
+          console.warn('[SKILLS_REGISTRY] Non-blocking failure while loading skills:', skillErr.message);
         }
       }
 

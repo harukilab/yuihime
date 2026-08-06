@@ -22,8 +22,18 @@ export interface Goal {
   progress: number;
   category: string;
   note: string;
+  context_id: string | null;
   created_at: number;
   updated_at: number;
+}
+
+export interface GoalCheckin {
+  id: string;
+  goal_id: string;
+  note: string;
+  progress_delta: number;
+  status_change: string;
+  created_at: number;
 }
 
 let cache: any = null;
@@ -55,8 +65,8 @@ function stmts(db: any): any {
   cache = {
     get: db.prepare('SELECT * FROM goals WHERE id = ?'),
     insert: db.prepare(
-      `INSERT INTO goals (id, parent_id, title, description, status, progress, category, note, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO goals (id, parent_id, title, description, status, progress, category, note, context_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ),
     children: db.prepare('SELECT * FROM goals WHERE parent_id = ? ORDER BY created_at ASC'),
     active: db.prepare(
@@ -70,7 +80,11 @@ function stmts(db: any): any {
     ),
     insertProposal: db.prepare(
       `INSERT INTO goal_proposals (source, root_goal_id, created_at) VALUES (?, ?, ?)`
-    )
+    ),
+    insertCheckin: db.prepare(
+      `INSERT INTO goal_checkins (id, goal_id, note, progress_delta, status_change, created_at) VALUES (?, ?, ?, ?, ?, ?)`
+    ),
+    checkins: db.prepare('SELECT * FROM goal_checkins WHERE goal_id = ? ORDER BY created_at DESC LIMIT ?')
   };
   return cache;
 }
@@ -94,12 +108,77 @@ function rowToGoal(row: any): Goal | null {
     progress: Number(row.progress || 0),
     category: row.category || 'general',
     note: row.note || '',
+    context_id: row.context_id || null,
     created_at: row.created_at || Date.now(),
     updated_at: row.updated_at || Date.now()
   };
 }
 
-export function createGoal(data: { title: string; description?: string; category?: string; parentId?: string | null }): Goal | null {
+function rowToCheckin(row: any): GoalCheckin | null {
+  if (!row) return null;
+  return {
+    id: row.id,
+    goal_id: row.goal_id,
+    note: row.note || '',
+    progress_delta: Number(row.progress_delta || 0),
+    status_change: row.status_change || '',
+    created_at: row.created_at || Date.now()
+  };
+}
+
+function tokenizeGoalText(text: string): string[] {
+  return Array.from(new Set(
+    (String(text || '').toLowerCase().match(/[a-z0-9]+/g) || [])
+      .filter((w: string) => w.length >= 3)
+  ));
+}
+
+/**
+ * Normalize a goal text into a comparable key (lowercase, alnum, single-space).
+ */
+function normalizeGoalKey(text: string): string {
+  return (String(text || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim());
+}
+
+/**
+ * Token-based overlap ratio between two goal texts (title + description).
+ * Exact / substring matches score 1; otherwise Jaccard over 3+ char tokens.
+ * 0 = unrelated, 1 = identical vocabulary.
+ */
+export function goalTextSimilarity(a: string, b: string): number {
+  const keyA = normalizeGoalKey(a);
+  const keyB = normalizeGoalKey(b);
+  if (!keyA || !keyB) return 0;
+  if (keyA === keyB) return 1;
+  if (keyA.length >= 4 && keyB.length >= 4 && (keyA.includes(keyB) || keyB.includes(keyA))) return 1;
+  const ta = tokenizeGoalText(a);
+  const tb = tokenizeGoalText(b);
+  if (ta.length === 0 || tb.length === 0) return 0;
+  const setB = new Set(tb);
+  const hits = ta.filter((w) => setB.has(w)).length;
+  return hits / Math.max(1, Math.min(ta.length, tb.length));
+}
+
+/**
+ * Find an existing ACTIVE root goal that clashes with a proposed goal
+ * (title/description). Returns the closest match above the overlap threshold,
+ * or null when no existing goal conflicts.
+ */
+export function findSimilarActiveGoal(title: string, description = '', threshold = 0.55): Goal | null {
+  const proposed = `${title} ${description}`;
+  let best: Goal | null = null;
+  let bestScore = threshold;
+  for (const g of listActiveGoals(50)) {
+    const score = goalTextSimilarity(proposed, `${g.title} ${g.description}`);
+    if (score > bestScore) {
+      bestScore = score;
+      best = g;
+    }
+  }
+  return best;
+}
+
+export function createGoal(data: { title: string; description?: string; category?: string; parentId?: string | null; contextId?: string | null; dedupe?: boolean }): Goal | null {
   try {
     const db = getDb();
     const id = uid('goal');
@@ -109,9 +188,17 @@ export function createGoal(data: { title: string; description?: string; category
       console.warn(`[GOAL] Active root goal limit reached (${maxActiveGoals}). Goal "${data.title}" rejected.`);
       return null;
     }
+    const dedupe = data.dedupe !== false;
+    if (dedupe && !parentId) {
+      const clash = findSimilarActiveGoal(data.title, data.description || '');
+      if (clash) {
+        console.warn(`[GOAL] Duplicate guard: "${data.title}" clashes with existing goal "${clash.title}" (${clash.id}). New goal rejected.`);
+        return null;
+      }
+    }
     stmts(db).insert.run(
       id, parentId, data.title, data.description || '', 'active', 0,
-      data.category || 'general', '', now, now
+      data.category || 'general', '', data.contextId || null, now, now
     );
     if (parentId) {
       touchGoal(parentId);
@@ -141,10 +228,27 @@ export function listGoals(limit = 100): Goal[] {
   } catch { return []; }
 }
 
-export function listActiveGoals(limit = 20): Goal[] {
+export function listActiveGoals(limit = 20, contextId?: string | null): Goal[] {
   try {
-    return (stmts(getDb()).active.all(limit) as any[]).map(rowToGoal).filter(Boolean) as Goal[];
+    const db = getDb();
+    if (contextId) {
+      return (db.prepare(
+        `SELECT * FROM goals WHERE status IN ('active','in_progress') AND context_id = ? ORDER BY created_at DESC LIMIT ?`
+      ).all(contextId, limit) as any[]).map(rowToGoal).filter(Boolean) as Goal[];
+    }
+    return (stmts(db).active.all(limit) as any[]).map(rowToGoal).filter(Boolean) as Goal[];
   } catch { return []; }
+}
+
+export function setGoalContext(id: string, contextId: string | null): Goal | null {
+  try {
+    stmts(getDb()).get.get(id);
+    getDb().prepare('UPDATE goals SET context_id = ?, updated_at = ? WHERE id = ?').run(contextId, Date.now(), id);
+    return getGoal(id);
+  } catch (err: any) {
+    console.warn('[GOAL] Failed to set context:', err?.message || err);
+    return getGoal(id);
+  }
 }
 
 export function getGoalChildren(id: string): Goal[] {
@@ -232,12 +336,61 @@ export function abandonGoal(id: string): Goal | null {
 }
 
 /**
+ * Append a progress note to a goal's check-in ledger (long-horizon trail).
+ */
+export function createGoalCheckin(id: string, note: string, progressDelta = 0): GoalCheckin | null {
+  try {
+    const db = getDb();
+    const goal = getGoal(id);
+    if (!goal) return null;
+    const delta = Number.isFinite(progressDelta) ? progressDelta : 0;
+    const before = goal.status;
+    const advanced = delta !== 0 ? advanceGoal(id, delta) : goal;
+    const after = advanced?.status || before;
+    const statusChange = before !== after ? `${before}->${after}` : '';
+    const checkin: GoalCheckin = {
+      id: uid('chk'),
+      goal_id: id,
+      note: String(note || '').slice(0, 500),
+      progress_delta: delta,
+      status_change: statusChange,
+      created_at: Date.now()
+    };
+    stmts(db).insertCheckin.run(checkin.id, checkin.goal_id, checkin.note, checkin.progress_delta, checkin.status_change, checkin.created_at);
+    if (statusChange) {
+      touchGoal(id);
+    }
+    return checkin;
+  } catch (err: any) {
+    console.warn('[GOAL] Failed to create checkin:', err?.message || err);
+    return null;
+  }
+}
+
+/**
+ * Read the check-in ledger of a goal (newest first).
+ */
+export function getGoalCheckins(id: string, limit = 10): GoalCheckin[] {
+  try {
+    return (stmts(getDb()).checkins.all(id, limit) as any[]).map(rowToCheckin).filter(Boolean) as GoalCheckin[];
+  } catch { return []; }
+}
+
+/**
  * Recursive decomposition: split a goal into subgoals.
  */
 export function decomposeGoal(id: string, subgoals: { title: string; description?: string }[]): Goal[] {
   const created: Goal[] = [];
+  const parent = getGoal(id);
   for (const sg of subgoals) {
-    const g = createGoal({ title: sg.title, description: sg.description, category: getGoal(id)?.category, parentId: id });
+    const g = createGoal({
+      title: sg.title,
+      description: sg.description,
+      category: parent?.category,
+      parentId: id,
+      contextId: parent?.context_id,
+      dedupe: false
+    });
     if (g) created.push(g);
   }
   recomputeGoal(id);
@@ -278,6 +431,25 @@ export function buildGoalDirective(goal: Goal): string {
     '',
     '[EN] Keep this goal in mind; if today\'s conversation touches it, nudge it forward naturally. [ID] Ingat goal ini; bila obrolan hari ini menyentuhnya, dorong maju dengan natural. [JP] この目標を心に留め、今日の会話が関係するなら自然に前へ進めてください。'
   ].filter(Boolean).join('\n');
+}
+
+/**
+ * Build a directive listing ALL active goals (long-horizon overview), with the
+ * focus goal marked first. Merged into the soul directive by GoalDecompositionModule.
+ */
+export function buildActiveGoalsDirective(goals: Goal[], focusId: string | null = null): string {
+  if (!goals || goals.length === 0) return '';
+  const lines = [
+    '',
+    '# LONG-HORIZON GOALS OVERVIEW',
+    '[EN] Below are all your active long-horizon goals. Keep them visible; only push the current focus forward in conversation. Do not create duplicate goals for these. [ID] Berikut semua goal jangka-panjang yang aktif. Jangan membuat goal duplikat untuk hal yang sudah ada di sini. [JP] 以下は進行中の長期的目標です。重複する目標を作らないでください。'
+  ];
+  for (const g of goals) {
+    const mark = g.id === focusId ? ' (FOCUS)' : '';
+    lines.push(`- [${g.status === 'in_progress' ? '~' : ' '}] ${Math.round((g.progress || 0) * 100)}% ${g.title}${mark}`);
+  }
+  lines.push('');
+  return lines.join('\n');
 }
 
 /**

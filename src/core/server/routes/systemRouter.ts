@@ -7,7 +7,7 @@ import { promisify } from "util";
 import os from "os";
 import * as toml from "smol-toml";
 import { SettingsManager } from "@/core/kernel/settings";
-import { CronModule, extractCronPromptFromArgs, normalizeCronPromptForSave } from "../../kernel/cron.js";
+import { CronModule, extractCronPromptFromArgs, normalizeCronPromptForSave, isSystemCronTask } from "../../kernel/cron.js";
 import { MultiChannelQueue } from "../../kernel/MultiChannelQueue.js";
 import { GlobalOutputDeduplicator } from "../../kernel/GlobalOutputDeduplicator.js";
 import { closeDatabase, getDb } from "../../database.js";
@@ -22,6 +22,7 @@ import { DynamicLoader } from '../../DynamicLoader.js';
 import { SystemRegistry } from '@shared/core/registry';
 import { resolveDataPath, resolveSystemRoot } from '../../systemPaths.js';
 import { CortexModulesLoader } from '../../CortexModulesLoader.js';
+import { SkillsRegistry } from '../../SkillsRegistry.js';
 import { initializeDiscord } from '../discord.js';
 import { initializeTwitter } from '../twitter.js';
 import { initializeMCP } from '../mcp.js';
@@ -264,6 +265,55 @@ export function registerSystemRoutes(app: express.Express, db: any) {
 
     broadcastToWS({ type: "settings_update", data: req.body });
     res.json({ success: true });
+  });
+
+  // Re-read config.toml from disk and hot-apply (for externally-edited config).
+  app.post("/api/settings/reload", async (req, res) => {
+    try {
+      const settingsInstance = SettingsManager.getInstance();
+      const sets = await settingsInstance.load();
+
+      try {
+        clearCortexSettingsCache();
+      } catch (cacheErr) {
+        console.warn("[SERVER] Failed to clear cortex settings cache on reload:", cacheErr);
+      }
+
+      try {
+        await PluginManager.getInstance().loadPlugins();
+      } catch (pluginErr: any) {
+        console.error("[KERNEL_DYNAMIC] Failed to sync dynamic plugins post-settings reload:", pluginErr.message);
+      }
+
+      try {
+        initializeBot(db, true).catch(err => {
+          console.error("[KERNEL_DYNAMIC] Failed to sync Telegram Bot after settings reload:", err);
+        });
+        initializeDiscord(db, true).catch(err => {
+          console.error("[KERNEL_DYNAMIC] Failed to sync Discord Bot after settings reload:", err);
+        });
+        initializeTwitter(db, true).catch(err => {
+          console.error("[KERNEL_DYNAMIC] Failed to sync Twitter Bot after settings reload:", err);
+        });
+        initializeMCP(true).catch(err => {
+          console.warn("[KERNEL_DYNAMIC] Dynamic MCP syncing connection offline:", err.message || err);
+        });
+      } catch (importErr) {
+        console.error("[KERNEL_DYNAMIC] Failed to import daemon initialization utilities:", importErr);
+      }
+
+      // Reload Skills from disk too (skills are file-based).
+      try {
+        SkillsRegistry.loadFromDisk();
+      } catch (skillErr: any) {
+        console.warn("[SETTINGS_RELOAD] Failed to reload skills:", skillErr.message);
+      }
+
+      broadcastToWS({ type: "settings_update", data: sets });
+      res.json({ success: true, settings: SettingsManager.denormalizeForWeb(sets) });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
   // --- Environment Variables (.env) CRUD APIs ---
@@ -610,7 +660,18 @@ export function registerSystemRoutes(app: express.Express, db: any) {
 
   app.get("/api/cron", (req, res) => {
     const tasks = db.prepare("SELECT * FROM cron_tasks").all();
-    res.json(tasks.map((t: any) => ({ ...t, enabled: t.enabled === 1, repeating: t.repeating === 1 })));
+    const runs = db.prepare("SELECT * FROM cron_run_history ORDER BY run_at DESC LIMIT 200").all() as any[];
+    const runsByTask: Record<string, any[]> = {};
+    for (const r of runs) {
+      if (!runsByTask[r.task_id]) runsByTask[r.task_id] = [];
+      if (runsByTask[r.task_id].length < 20) runsByTask[r.task_id].push(r);
+    }
+    res.json(tasks.map((t: any) => ({
+      ...t,
+      enabled: t.enabled === 1,
+      repeating: t.repeating === 1,
+      runHistory: runsByTask[t.id] || []
+    })));
   });
 
   app.post("/api/cron", (req, res) => {
@@ -737,7 +798,11 @@ export function registerSystemRoutes(app: express.Express, db: any) {
 
   app.delete("/api/cron/:id", (req, res) => {
     const { id } = req.params;
+    if (isSystemCronTask(id)) {
+      return res.status(400).json({ error: `Task '${id}' is a protected system task and cannot be deleted.` });
+    }
     db.prepare("DELETE FROM cron_tasks WHERE id = ?").run(id);
+    db.prepare("DELETE FROM cron_run_history WHERE task_id = ?").run(id);
     CronModule.getInstance().removeTask(id);
     res.json({ success: true });
   });
