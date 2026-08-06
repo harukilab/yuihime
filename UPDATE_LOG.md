@@ -1,6 +1,14 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.305] - 2026-08-06
+### Fix: Cron kirim sampah JSON (thought-dump) & salam generik saat reply gagal; speak sanitasi + fallback inisiator
+- SPEAK SANITASI: saat cron/chat memicu tool speak dengan speech yang bocor berisi envelope JSON internal (mis. {"thought":...} terpotong), teks mentah itu terkirim verbatim ke Telegram (user dapat sampah JSON). FIX: sanitizeSpeech() di LiveStatusToolsModule — ekstrak field speech/text/message dari envelope JSON (juga code fence & string ber-tanda kutip), dan TOLAK pengiriman bila tidak ada teks yang layak kirim (log speak rejected).
+- FALLBACK PERSPEKTIF: bila response utama cron gagal/rumpang, NeuralInterface menghasilkan fallback 'user just sent you a message' (responder) yang mengirim salam generik 'What a lovely surprise' — isi job hilang. FIX: fallback kini awareness isProactive — untuk cron/heartbeat memakai boilerplate ACTIVE INITIATOR dan melampirkan Job instruction (input terpotong) agar isi job tetap dieksekusi.
+- ISPROACTIVE: getCronAction dan heartbeat kini memanggil processNeuralInput dengan isProactive=true — memori dicatat sebagai system event (bukan user interaction) dan fallback memakai sudut pandang inisiator yang benar.
+- VERIFIKASI: cron one-off test (test_speak_sanitize) di-trigger — reply bersih 'Al! Ini Yui~ Jangan lupa minum air...' terkirim 1x, dispatchCronReply deduplicate, run history ok, task auto-delete, tidak ada JSON bocor.
+
+
 ## [4.304] - 2026-08-06
 ### Fix: Cron kirim chat dobel (speak + dispatchCronReply) & sudut pandang salah; hapus tool calendar_reminder
 - DOUBLE DELIVERY: cron reply dikirim 2x ke Telegram — sekali oleh tool speak (LiveStatusToolsModule kirim langsung saat pipeline) dan sekali lagi oleh dispatchCronReply tanpa cek dedup. FIX: export getDedupKey/isDuplicateSend/markDeduplicated dari LiveStatusToolsModule; dispatchCronReply kini cek registry dedup (contextId+teks ternormalisasi, window 5 menit) dan skip bila sudah terkirim oleh speak; speak menandai dedup untuk semua jalur delivery (web/TG/Discord).

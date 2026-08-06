@@ -259,7 +259,8 @@ export const getCronAction = (id: string, name: string, repeating: boolean, db: 
             scan.prompt || '',
             target.senderName,
             target.contextId,
-            target.chatType
+            target.chatType,
+            true
           );
           if (reply && reply.trim() && !/HEARTBEAT_SILENT/i.test(reply)) {
             dispatchCronReply(reply, target.contextId);
@@ -324,7 +325,8 @@ export const getCronAction = (id: string, name: string, repeating: boolean, db: 
          prompt,
          senderName,
          contextId,
-         chatType
+         chatType,
+         true
       );
 
       if (reply && reply.trim()) {

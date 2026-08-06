@@ -18,6 +18,31 @@ export function markDeduplicated(key: string): void {
   dedupRegistry.set(key, Date.now());
 }
 
+export function sanitizeSpeech(raw: string): string | null {
+  let text = (raw || '').trim();
+  if (!text) return null;
+  const fence = text.match(/^```(?:json)?\s*([\s\S]*?)```\s*$/i);
+  if (fence) text = fence[1].trim();
+  if (text.startsWith('{')) {
+    try {
+      const objectMatch = text.match(/\{[\s\S]*\}/);
+      const obj = objectMatch ? JSON.parse(objectMatch[0]) : null;
+      if (obj) {
+        const extracted = typeof obj.speech === 'string' ? obj.speech : typeof obj.text === 'string' ? obj.text : typeof obj.message === 'string' ? obj.message : null;
+        if (extracted && extracted.trim()) return sanitizeSpeech(extracted);
+      }
+    } catch (_) { /* not a valid JSON envelope — treat as leaked internal structure */ }
+    return null;
+  }
+  if (text.startsWith('"') || text.startsWith("'")) {
+    try {
+      const parsed = JSON.parse(text);
+      if (typeof parsed === 'string' && parsed.trim()) return sanitizeSpeech(parsed);
+    } catch (_) { /* keep as-is */ }
+  }
+  return text;
+}
+
 async function sendTelegramMessage(bot: any, chatId: string, text: string): Promise<boolean> {
   const MAX_CHUNK = 4000;
   if ((text || '').length <= MAX_CHUNK) {
@@ -137,12 +162,17 @@ export const SendFinalReplyTool: ToolModule = {
       const hostPort = process.env.PORT || "3000";
       const senderName = context?.userName || context?.state?.relation?.uid || "Unknown";
       const contextId = context?.contextId || "";
-      const dedupKey = getDedupKey(contextId, args.speech);
+      const speech = sanitizeSpeech(args.speech);
+      if (!speech) {
+        console.warn("[LiveStatus] speak rejected: speech contained no deliverable text (internal JSON/thought leaked).");
+        return { status: "rejected", reason: "speech contains no deliverable text (likely internal JSON/thought leaked)", senderName };
+      }
+      const dedupKey = getDedupKey(contextId, speech);
 
       if (isDuplicateSend(dedupKey)) {
         return {
           status: "skipped",
-          info: `Duplicate speak suppressed for: ${args.speech}`,
+          info: `Duplicate speak suppressed for: ${speech}`,
           senderName
         };
       }
@@ -151,8 +181,8 @@ export const SendFinalReplyTool: ToolModule = {
         type: "state_update",
         data: {
           state: { status: "talking" },
-          activeSubtitle: args.speech,
-          typedSubtitle: args.speech,
+          activeSubtitle: speech,
+          typedSubtitle: speech,
           isSubtitleTyping: false,
           animations: args.animations || ["TALK", "SMILE"],
           senderName
@@ -184,7 +214,7 @@ export const SendFinalReplyTool: ToolModule = {
           const bot = (globalThis as any).activeTelegramBot;
           if (bot && bot.telegram) {
             const chatId = contextId.split("|")[0].replace("tg_", "");
-            await sendTelegramMessage(bot, chatId, args.speech);
+            await sendTelegramMessage(bot, chatId, speech);
             sentDirectly = true;
           }
         } catch (tgErr: any) {
@@ -197,7 +227,7 @@ export const SendFinalReplyTool: ToolModule = {
             const channelId = contextId.split("|")[0].replace("dc_", "");
             const channel = await client.channels.fetch(channelId);
             if (channel && channel.isTextBased()) {
-              await channel.send(args.speech);
+              await channel.send(speech);
               sentDirectly = true;
             }
           }
@@ -213,7 +243,7 @@ export const SendFinalReplyTool: ToolModule = {
       return { 
         status: "success", 
         isFinalReply: true, 
-        speech: args.speech, 
+        speech, 
         animations: args.animations || ["TALK", "SMILE"], 
         mood_impact: args.mood_impact || {},
         senderName,

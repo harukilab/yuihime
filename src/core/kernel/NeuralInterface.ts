@@ -648,7 +648,13 @@ export class NeuralInterface {
       console.warn(`[NEURAL_INTERFACE] Empty/short response from cortex for ${senderName} (${chatType}). Generating fallback.`);
       try {
         const fallbackCortex = new Cortex();
-        responseText = await fallbackCortex.thinkSimple(`You are ${getCharacterName()}. The user "${senderName}" just sent you a message on ${chatType}. Reply with a very short, sweet, in-character response in the same language as the user's message (1-2 sentences max). Do not mention being an AI.`);
+        if (isProactive) {
+          responseText = await fallbackCortex.thinkSimple(
+            `${injectCharacterName('${characterName}')} is executing a scheduled cron job that fired on its own in the background. ${injectCharacterName('${characterName}')} is the ACTIVE INITIATOR of this action, not a responder. The user (${senderName}) did NOT just message her — do NOT act as if they did. Execute the job fully and autonomously, speaking as the proactive sender to the addressed user on ${chatType}, in that user's language. Job instruction: ${(input || '').slice(0, 500)}`
+          );
+        } else {
+          responseText = await fallbackCortex.thinkSimple(`You are ${getCharacterName()}. The user "${senderName}" just sent you a message on ${chatType}. Reply with a very short, sweet, in-character response in the same language as the user's message (1-2 sentences max). Do not mention being an AI.`);
+        }
       } catch (fallbackErr) {
         console.warn("[NEURAL_INTERFACE] Fallback response generation failed:", fallbackErr);
         responseText = injectCharacterName("Hai! ${characterName} is a bit busy right now, but always here for you~ ✨");
