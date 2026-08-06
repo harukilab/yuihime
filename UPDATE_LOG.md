@@ -1,6 +1,14 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.292] - 2026-08-06
+### Fix: v4.292: Docs lengkap & detail External Cortex Modules
+- Buat docs/CORTEX_MODULES_EXTERNAL.md — panduan mendalam: konsep & diagram pipeline, direktori/konfigurasi (env YUIHIME_CORTEX_LOADER_PATH), skema JSON + tabel field, penjelasan 6 fase otomatis vs fase manual (tabel lengkap dengan label lama).
+- Dokumen sumber data detail: 21+ key context + 16+ key state + struktur MoodState lengkap, tabel output per action type, penjelasan key yang benar-benar terlihat LLM vs tidak, dan bab khusus key universal context.externalInjection (set/append + contoh render prompt).
+- Bab action types (code/shell/webhook) dengan aturan & limit; 6 contoh lengkap (sederhana, baca data, context.think, kondisional, rantai shell->finalize, gabung multi-modul); API endpoints dengan curl; best practices 8 poin; troubleshooting 10 kasus; referensi kode.
+- README: tambah blok referensi ke docs/CORTEX_MODULES_EXTERNAL.md di section External Cortex Modules.
+
+
 ## [4.291] - 2026-08-06
 ### Fix: v4.291: Key universal context.externalInjection (selalu terlihat LLM)
 - PromptManager: tambah key universal `context.externalInjection` yang SELALU dirender ke system prompt sebagai block <external_module_injections> (apabila diisi) — tanpa perlu tahu key internal lain.
