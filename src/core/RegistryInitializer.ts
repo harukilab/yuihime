@@ -103,7 +103,6 @@ import { PluginInstallerTool } from '../drivers/tools/plugin_installer.js';
 import { ViewLogsTool } from '../drivers/tools/view_logs.js';
 import { WebSnipperTool } from '../drivers/tools/webfetch.js';
 import { CodeInterpreter } from '../drivers/tools/code_interpreter.js';
-import { CalendarReminderTool } from '../drivers/tools/calendar_reminder.js';
 import { EditFileSegmentTool } from '../drivers/tools/edit.js';
 import { DownloadFileTool } from '../drivers/tools/download_file.js';
 import { SendFileTool } from '../drivers/tools/send_file.js';
@@ -484,7 +483,7 @@ export function initializeCortexModules(): Promise<void> {
         OfficialChatProvider, OpenRouter, OfficialSpeechTTS, ElevenLabsTTS, WebSpeechTTS,
         OpenRouterTTS, OfficialStreamingSpeechTTS, CustomAPITTS, GeminiTTS,
         TensorArtGenerateTool, SearchChatHistoryTool, BashTool, FileReadTool, WebSearchTool,
-        PluginInstallerTool, ViewLogsTool, WebSnipperTool, CodeInterpreter, CalendarReminderTool,
+        PluginInstallerTool, ViewLogsTool, WebSnipperTool, CodeInterpreter,
         EditFileSegmentTool, DownloadFileTool, SendFileTool,
         EmotionAdjustTool, FileListTool, CalculatorTool, GitHubTool,
         GetCurrentTimeTool, MessagingTool, BgProcTool, ManageIdentitiesTool, CronTool,

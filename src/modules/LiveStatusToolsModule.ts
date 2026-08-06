@@ -3,18 +3,18 @@ import { ToolModule, ModuleType } from '@shared/include/types';
 const DEDUP_WINDOW_MS = 300_000;
 const dedupRegistry = new Map<string, number>();
 
-function getDedupKey(contextId: string, text: string): string {
+export function getDedupKey(contextId: string, text: string): string {
   const normalized = (text || '').trim().toLowerCase().replace(/\s+/g, ' ');
   return `${contextId || 'unknown'}::${normalized}`;
 }
 
-function isDuplicateSend(key: string): boolean {
+export function isDuplicateSend(key: string): boolean {
   const now = Date.now();
   const last = dedupRegistry.get(key);
   return !!(last && now - last < DEDUP_WINDOW_MS);
 }
 
-function markDeduplicated(key: string): void {
+export function markDeduplicated(key: string): void {
   dedupRegistry.set(key, Date.now());
 }
 
@@ -159,6 +159,8 @@ export const SendFinalReplyTool: ToolModule = {
         }
       };
 
+      let delivered = false;
+
       try {
         const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
         const timeoutId = controller ? setTimeout(() => controller.abort(), 2000) : null;
@@ -171,6 +173,7 @@ export const SendFinalReplyTool: ToolModule = {
         });
 
         if (timeoutId) clearTimeout(timeoutId);
+        delivered = true;
       } catch (fetchErr: any) {
         console.warn("[LiveStatus] Failed to send final reply to stream events (bypassed):", fetchErr.message);
       }
@@ -203,7 +206,7 @@ export const SendFinalReplyTool: ToolModule = {
         }
       }
 
-      if (sentDirectly) {
+      if (delivered || sentDirectly) {
         markDeduplicated(dedupKey);
       }
 

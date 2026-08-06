@@ -1,6 +1,14 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.304] - 2026-08-06
+### Fix: Cron kirim chat dobel (speak + dispatchCronReply) & sudut pandang salah; hapus tool calendar_reminder
+- DOUBLE DELIVERY: cron reply dikirim 2x ke Telegram — sekali oleh tool speak (LiveStatusToolsModule kirim langsung saat pipeline) dan sekali lagi oleh dispatchCronReply tanpa cek dedup. FIX: export getDedupKey/isDuplicateSend/markDeduplicated dari LiveStatusToolsModule; dispatchCronReply kini cek registry dedup (contextId+teks ternormalisasi, window 5 menit) dan skip bila sudah terkirim oleh speak; speak menandai dedup untuk semua jalur delivery (web/TG/Discord).
+- SUDUT PANDANG: resolveCronJobPrompt mengembalikan prompt mentah bila eksplisit sehingga Yui merespons seperti responder ('akhirnya kamu sapa Yui lagi'). FIX: boilerplate inisiator SELALU dipasang (ACTIVE INITIATOR, user tidak baru mengirim pesan, match bahasa user) dan command tersimpan dilampirkan sebagai 'Job command: ...'.
+- CHARACTER NAME: boilerplate cron memakai placeholder ${characterName} yang di-resolve injectCharacterName() dari config (fallback AI_NAME) — bukan nama hardcoded; aturan dicatat di AGENTS.md.
+- HAPUS tool calendar_reminder (sesuai keputusan): file dihapus, registrasi dilepas dari RegistryInitializer, row rem_% dibersihkan, test calendar_ocr dirapikan jadi OCR-only.
+
+
 ## [4.303] - 2026-08-06
 ### Feature: Persistensi target absolute untuk cron one-off relatif (fire_at) — countdown tidak reset saat restart
 - DB: kolom baru cron_tasks.fire_at (INTEGER, epoch ms) + migration alterCols; CronRepository.saveTask ikut fire_at.

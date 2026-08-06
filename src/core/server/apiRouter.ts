@@ -24,6 +24,7 @@ import { deduplicateAndMergeIdentities, getDb } from "../database.js";
 import { APIService } from "@shared/services/api";
 import { initializeCortexModules } from "../RegistryInitializer.js";
 import { genId } from '@shared/core/idGen';
+import { getDedupKey, isDuplicateSend, markDeduplicated } from '../../modules/LiveStatusToolsModule.js';
 
 // Register server-side persistent tool audit log handlers on globalThis
 (globalThis as any).getToolAuditLogs = () => {
@@ -341,6 +342,19 @@ export const getCronAction = (id: string, name: string, repeating: boolean, db: 
 
 /** Broadcast a cron/heartbeat reply to WebView overlays and the target channel. */
 export function dispatchCronReply(reply: string, contextId: string): void {
+  // The speak tool already delivers to Telegram / web during neural processing.
+  // Guard here prevents a second (duplicate) delivery of the same text.
+  try {
+    const dedupKey = getDedupKey(contextId, reply);
+    if (isDuplicateSend(dedupKey)) {
+      console.log('[CRON_DISPATCH] Deduplicated (already sent by speak tool) — skipping duplicate delivery.');
+      return;
+    }
+    markDeduplicated(dedupKey);
+  } catch (dedupErr: any) {
+    console.warn('[CRON_DISPATCH] Dedup check failed (continuing):', dedupErr?.message);
+  }
+
   const replyPayload = {
     type: "state_update",
     data: {

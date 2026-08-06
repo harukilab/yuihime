@@ -1,4 +1,5 @@
 import { getTzOffsetHours, toLocalClock } from '../utils/dualClock.js';
+import { injectCharacterName } from './characterName.js';
 
 export interface CronRunRecord {
   runAt: number;
@@ -59,6 +60,9 @@ export function extractCronPromptFromArgs(args: Record<string, any> | null | und
  * Resolve the instruction to run when a cron fires.
  * Model mirrors classic cron: schedule + command (prompt).
  * Priority: explicit prompt → legacy action text → job name as command.
+ * ALWAYS frames Yui as the ACTIVE INITIATOR (not a responder), and keeps the
+ * stored command as the actionable "job command" — otherwise the LLM replies as
+ * if the user had just messaged it (wrong perspective, wrong language match).
  */
 export function resolveCronJobPrompt(opts: {
   id?: string;
@@ -67,25 +71,21 @@ export function resolveCronJobPrompt(opts: {
   action?: string | null;
 }): string {
   const explicit = (opts.prompt || '').trim();
-  if (explicit) return explicit;
-
   const legacy = typeof opts.action === 'string' ? opts.action.trim() : '';
-  if (legacy && !legacy.startsWith('function') && !legacy.startsWith('()')) {
-    return legacy;
-  }
+  const command = explicit || (legacy && !legacy.startsWith('function') && !legacy.startsWith('()') ? legacy : '') || (opts.name || 'Scheduled job').trim();
 
-  const name = (opts.name || 'Scheduled job').trim();
-  return [
+  return injectCharacterName([
     '[SCHEDULED_JOB]',
-    `Job: ${name}`,
+    `Job: ${(opts.name || 'Scheduled job').trim()}`,
     '',
-    'This is a scheduled cron job firing in the background. You (Yui) are the ACTIVE INITIATOR of this action, not a responder.',
-    'Execute the request described by the job name fully and autonomously, speaking as the proactive sender to the addressed user.',
-    'Do NOT act as if the user just messaged you, do NOT acknowledge a greeting, and do NOT ask why they contacted you.',
-    'If the job name refers to periodic checks, system maintenance, or background tasks, perform them completely using available tools and internal systems.',
+    'This is a scheduled cron job firing on its own in the background. You (${characterName}) are the ACTIVE INITIATOR of this action, not a responder.',
+    'The user below did NOT just message you — do NOT act as if they did, do NOT acknowledge a greeting, and do NOT ask why they contacted you.',
+    'Execute the job command fully and autonomously, speaking as the proactive sender to the addressed user.',
     'Match the language of the addressed user (the user named in the task). When their language is unknown, use your own default language.',
     'Deliver a complete, useful result to the user on this channel — do not only acknowledge the schedule.',
-  ].join('\n');
+    '',
+    `Job command: ${command}`
+  ].join('\n'));
 }
 
 /**
