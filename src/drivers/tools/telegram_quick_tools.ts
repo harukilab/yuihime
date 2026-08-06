@@ -818,6 +818,19 @@ function isAdmin(tc: TgToolContext): boolean {
   return adminId.split(',').map(s => s.trim()).includes(String(fromId));
 }
 
+// Ensure the "✖️ Close Menu" button is ALWAYS present on a quick-tools inline
+// keyboard (added once, never duplicated). Applied to every menu rendered from
+// a '/' command or a qt: callback so the user can always dismiss the menu.
+export function ensureCloseRow(keyboard?: any): any {
+  if (!keyboard || !Array.isArray(keyboard.inline_keyboard)) return keyboard;
+  const rows: any[] = keyboard.inline_keyboard;
+  const hasClose = rows.some((r: any) =>
+    Array.isArray(r) && r.some((b: any) => b && b.callback_data === 'qt:close')
+  );
+  if (hasClose) return keyboard;
+  return { inline_keyboard: [...rows, [{ text: '✖️ Close Menu', callback_data: 'qt:close' }]] };
+}
+
 function menuKeyboard(tc?: TgToolContext) {
   const rows: any[][] = [
     [{ text: '🕒 Time', callback_data: 'qt:time' }, { text: '📌 My ID', callback_data: 'qt:id' }],

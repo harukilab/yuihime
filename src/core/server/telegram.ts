@@ -12,7 +12,7 @@ import { GlobalOutputDeduplicator } from "../kernel/GlobalOutputDeduplicator.js"
 import { extractChannelFileAttachments } from "./channelFileAttachment.js";
 import { describeImageFromBuffer } from "../../modules/YuiVisionModule.js";
 import { eventBus } from "@shared/core/kernel/event-bus";
-import { handleTgQuickCommand, handleTgCallback } from "../../drivers/tools/telegram_quick_tools.js";
+import { handleTgQuickCommand, handleTgCallback, ensureCloseRow } from "../../drivers/tools/telegram_quick_tools.js";
 import { resolveAskCallback } from "../kernel/tgAskChoice.js";
 import { recordOutboundMessage, recordFeedback, lookupOutboundMessage, emojiToReward } from "../feedback.js";
 import { genId } from '@shared/core/idGen';
@@ -637,7 +637,7 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
           maybeDeleteUserCommand(ctx);
           if (quickResult.reply?.text) {
             try {
-              const sent = await ctx.reply(quickResult.reply.text, { reply_markup: quickResult.reply.keyboard });
+              const sent = await ctx.reply(quickResult.reply.text, { reply_markup: ensureCloseRow(quickResult.reply.keyboard) });
               scheduleCleanup(activeTelegramBot, ctx, sent, !!quickResult.reply.keyboard);
             } catch (sendErr: any) {
               console.warn("[TELEGRAM_QUICK_TOOLS] Failed to send quick command reply:", sendErr?.message || sendErr);
@@ -1077,10 +1077,10 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
         return;
       }
       try {
-        await ctx.editMessageText(result.text, { reply_markup: result.keyboard });
+        await ctx.editMessageText(result.text, { reply_markup: ensureCloseRow(result.keyboard) });
       } catch (editErr: any) {
         console.warn("[TELEGRAM_QUICK_TOOLS] Callback edit failed, replying instead:", editErr?.message || editErr);
-        try { await ctx.reply(result.text, { reply_markup: result.keyboard }); } catch (_) {}
+        try { await ctx.reply(result.text, { reply_markup: ensureCloseRow(result.keyboard) }); } catch (_) {}
       }
     } catch (err: any) {
       console.error("[TELEGRAM_CALLBACK] Error handling callback:", err?.message || err);

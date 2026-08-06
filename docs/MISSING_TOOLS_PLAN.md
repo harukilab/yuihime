@@ -205,27 +205,11 @@ This document outlines the implementation plans for tools/modules that are curre
 
 ---
 
-## 9. Dream Engine Script (`tools/dream.py`)
+## 9. Dream Engine Script — ❌ REMOVED
 
-**Purpose**: Virtual tool script referenced in `docs/TOOLS.md` as `python3 tools/dream.py` for performing dream cycles (memory consolidation).
-
-**Architecture**:
-- New file at `tools/dream.py`
-- CLI script that triggers the dream engine consolidation process
-- Reads from SQLite memory DB, processes unconsolidated memories, writes summaries
-- Called by Yui's cognitive loop or manually by the user
-
-**Dependencies**:
-- Python 3.x
-- `sqlite3` (stdlib)
-- Path to YuiHime's `.yuihime/data/` directory
-
-**Implementation Steps**:
-1. Create `tools/dream.py` with dream cycle logic
-2. Add shebang and CLI argument parsing
-3. Implement memory consolidation logic (read unprocessed memories, generate summaries, mark as consolidated)
-4. Update `docs/TOOLS.md` with correct path and usage instructions
-5. Add `tools/dream.py` to `.gitignore` if it contains environment-specific paths
+> `tools/dream.py` telah **dihapus** — endpoint yang dituju (`POST /api/system/dream`)
+> tidak ada di codebase. Dream cycle yang benar di-trigger via Web UI (tab Dreams)
+> atau `POST /api/cortex/dream`; konsolidasi via `POST /api/cortex/consolidate`.
 
 ---
 
@@ -282,5 +266,5 @@ This document outlines the implementation plans for tools/modules that are curre
 | P3 | Video Downloader | Useful but requires external binary (`yt-dlp`) |
 | P3 | Headless Browser Automation | Complex dependency (Puppeteer/Playwright) |
 | P3 | Email Tool | Requires secure credential management |
-| P4 | Dream Engine Script | Documentation fix for existing reference |
+| ~~P4 Dream Engine Script~~ | **Removed** | `tools/dream.py` dihapus (endpoint `/api/system/dream` tidak ada) |
 | P4 | Prompt Registry Audit | Internal quality assurance |

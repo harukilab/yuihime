@@ -169,3 +169,21 @@ Peta struktur direktori pasca-pemisahan Web UI ↔ Daemon (lihat UPDATE_LOG `[4.
 - `AI Gateway / Cortex`
 - `AI Gateway / Cortex`
 - `Telegram Bridge`
+
+## Kelompok tools/ & scripts/ (skrip operasional — lihat docs/TOOLS_SCRIPTS.md)
+- `tools/yuihime` — CLI global (daemon/debug/watchdog/pm2/install/settings/terminal)
+- `tools/yui-daemon.sh` — manajer daemon (start/stop/restart/status/logs/rebuild/autoboot)
+- `tools/yui-watchdog.sh` — supervisor health-probe `/api/health` + auto-restart
+- `tools/yui-debug.sh` — runner daemon bg/fg + log session `~/.yuihime/debug/`
+- `tools/yui-pm2.sh` — manajer app PM2 `yuihime`
+- `tools/yui-boot.sh` — boot launcher lokasi-independen (`~/.yuihime/bin/yui-boot.sh`)
+- `tools/addon-manager.sh` — addon install/uninstall/execute interaktif via REST
+- `tools/push_gh.py` / `tools/update_log.py` — release helper (version + log + push)
+- `tools/db_server.py` — web CRUD + SQL untuk `yuihime.db` (port 5500)
+- `tools/demo_server.py` — HTTP server mini untuk test background task
+- `tools/full_scan_db_prepare.py` — scan repo untuk audit `db.prepare(...)`
+- `tools/tester/` — test standalone (jalankan dengan `tsx`, tanpa framework)
+- `scripts/install.sh` — instal dependensi + perintah global (mode symlink & `--copy`)
+- `scripts/boot.sh` — boot hook reboot (Termux:Boot / UserLAnd / cron @reboot / init.d)
+- `scripts/setup-pm2.sh` / `scripts/restore-pm2.sh` — bootstrap & restore PM2 (fix: `ecosystem.config.cjs`)
+- `tools/dream.py` — **DIHAPUS** (endpoint `/api/system/dream` tidak ada; dream via `/api/cortex/dream`)

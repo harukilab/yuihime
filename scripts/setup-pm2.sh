@@ -3,7 +3,7 @@ set -e
 
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG_DIR="$HOME/.yuihime/data/logs"
-ECOSYSTEM="$PROJECT_DIR/ecosystem.config.js"
+ECOSYSTEM="$PROJECT_DIR/ecosystem.config.cjs"
 
 echo "=== YuiHime PM2 Setup ==="
 

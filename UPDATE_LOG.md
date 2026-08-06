@@ -1,6 +1,20 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.299] - 2026-08-06
+### Feature: Tombol ✖️ Close Menu selalu ada di semua menu Telegram quick tools (dari '/' atau callback apa pun)
+- Helper ensureCloseRow() baru di src/drivers/tools/telegram_quick_tools.ts — menambahkan baris '✖️ Close Menu' (qt:close) ke inline keyboard bila belum ada (tanpa duplikasi).
+- Diterapkan di src/core/server/telegram.ts pada 2 titik render: (1) balasan perintah '/' (ctx.reply) dan (2) hasil edit callback qt: (ctx.editMessageText + fallback reply) — sehingga SEMUA menu yang terbuka (menu utama, admin, daemon, tools, cron, care, inventory, daftar cron, dsb) selalu punya tombol Close, apa pun jalur pemanggilannya.
+
+
+## [4.298] - 2026-08-06
+### Fix: Dokumentasi tools/ & scripts/ (TOOLS_SCRIPTS.md) + hapus tools/dream.py + fix ecosystem.config.cjs
+- Buat docs/TOOLS_SCRIPTS.md — referensi lengkap semua skrip di tools/ & scripts/ hasil audit terhadap kode: ringkasan tabel, rantai daemon/supervision (non-PM2 & PM2), detail per skrip (yuihime, yui-daemon, yui-watchdog, yui-debug, yui-pm2, yui-boot, addon-manager, push_gh, update_log, db_server, demo_server, full_scan_db_prepare, tester, install.sh, boot.sh, setup/restore-pm2), invariants perawatan.
+- HAPUS tools/dream.py — endpoint yang dituju (POST /api/system/dream) tidak ada di codebase. Dream cycle yang benar: tab Dreams di UI atau POST /api/cortex/dream; konsolidasi POST /api/cortex/consolidate; optimasi POST /api/cortex/optimize. Referensi di docs/TOOLS.md & docs/MISSING_TOOLS_PLAN.md (plan #9) diperbarui jadi REMOVED.
+- FIX scripts/setup-pm2.sh & scripts/restore-pm2.sh — referensi ecosystem.config.js -> ecosystem.config.cjs (file asli yang ada; nama .js tidak pernah ada sehingga pm2 start akan gagal).
+- MODULES.md ditambah seksi 'Kelompok tools/ & scripts/' merangkum seluruh skrip operasional; MODULES.md lama mencatat referensi ecosystem.config.cjs yang sama.
+
+
 ## [4.297] - 2026-08-06
 ### Docs: Audit & koreksi akurasi semua dokumentasi terhadap kode (batch final: TOOLS, EXTERNAL_API, MISSING_TOOLS, README, dll)
 - TOOLS.md: daftar built-in tools dikoreksi — file_read/file_write -> read/write; memory_store/recall/forget -> search_chat_history + endpoint REST /api/storage/memories (POST/DELETE).

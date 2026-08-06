@@ -29,8 +29,7 @@ Things like:
 
 ## Virtual Tools (Custom Scripts)
 
-- **Dream Engine** — `python3 tools/dream.py` 
-- Use when: Yui needs to perform a dream cycle to crystallize daily logs into long-term memory.
-- Note: This is a high-level wrapper for the neural consolidation process.
+- **Dream cycle** — triggered via the Web UI (`Dreams` tab) or `POST /api/cortex/dream` (state + memories + dreams). Consolidates daily logs into long-term memory. No dedicated CLI script exists (`tools/dream.py` was removed — it pointed to a non-existent endpoint).
+- **Memory consolidation** — `POST /api/cortex/consolidate` (optimize dreams) and `POST /api/cortex/optimize` (refine memory list).
 
 ---
