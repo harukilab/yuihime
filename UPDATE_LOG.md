@@ -1,6 +1,13 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.289] - 2026-08-06
+### Fix: v4.289: Daftar lengkap key context & state untuk External Cortex Modules
+- README: tambah tabel lengkap key yang tersedia di actionCode — 28 key context (userName, memories, allIdentities, identityContext, userModel, viewerIdentity, contextId/chatType, config, db, think, activePersona, systemPrompt, model, tools, toolExecutionHistory, groundedKnowledge, goals, soulDirective, dreamInsight, waktu/lokasi, weather, logs, processedResponse, moodImpact, dan <id>_output/_error).
+- README: tabel key state (AgentState) — status, energy, mood (MoodState + neurotransmitter), emotion (arousal/valence/focus/rapport), relation (trust/affection/reputation), activePersonaId, tone, currentPlan, activeContext, systemHealth (somatic/homeostasis).
+- Struktur tabel disusun dari tipe aktual (shared/include/types.ts) & pemakaian modul, bukan tebakan.
+
+
 ## [4.288] - 2026-08-06
 ### Fix: v4.288: Dokumentasi lengkap External Cortex Modules (input/output data) + fix fase
 - README: section External Cortex Modules diperkaya — sumber data (input/state/context), tujuan output (context.<id>_output, context.<id>_error), contoh ambil data sistem Yui via actionCode & panggil LLM via context.think, contoh shell & webhook, tabel field lengkap.

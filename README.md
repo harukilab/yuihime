@@ -1,4 +1,4 @@
-# 👑 Yuihime AI v4.288 - Autonomous VTuber Engine (Airi OS Core v2.39)
+# 👑 Yuihime AI v4.289 - Autonomous VTuber Engine (Airi OS Core v2.39)
 
 **Yuihime** adalah engine agen AI otonom untuk VTuber dengan arsitektur *daemon + web UI*.cognitive loop, memory jangka panjang (SQLite), eksekusi tool modular, dan antarmuka web real-time untuk kontrol kepribadian.
 
@@ -130,16 +130,8 @@ menyentuh/build ulang codebase. Cukup taruh file JSON di `~/.yuihime/cortexloade
 Setiap modul dipanggil sebagai `run(input, state, context)` dan menerima **3 sumber data**:
 
 1. **`input` (string)** — teks mentah pesan user pada putaran ini.
-2. **`state`** — `AgentState` Yui: `mood`, `emotion`, `energy`, `relation`,
-   `currentPlan`, `activeContext`, `systemHealth` (CPU/RAM/denyut virtual), dst.
-3. **`context`** — kumpulan data pipeline fase-fase sebelumnya. Yang selalu tersedia:
-   - `context.memories` — daftar memori/riwayat percakapan
-   - `context.userName` / `context.allIdentities` — profil user & identitas yang dikenal
-   - `context.config` — konfigurasi (settings) YuiHime
-   - `context.contextId` / `context.chatType` — kanal tempat pesan masuk
-   - `context.think(prompt, opts?)` — **memanggil LLM Yui** (cocok untuk analisis mandiri)
-   - `context.activePersona`, `context.systemPrompt`, `context.assembledSystemPrompt`
-   - key hasil modul lain (mood, weather, dreamInsight, groundedKnowledge, dst.)
+2. **`state`** — `AgentState` Yui (kondisi kesadaran/emosi persisten).
+3. **`context`** — kumpulan data pipeline fase-fase sebelumnya (data paling kaya).
 
 Hasil modul **dikirim ke `context`** dan langsung tersedia untuk modul berikutnya di
 fase yang sama maupun fase-fase lanjutan:
@@ -151,6 +143,56 @@ fase yang sama maupun fase-fase lanjutan:
   prompt.
 - **Error**: pipeline **tidak putus**. Error disimpan di `context.<id>_error` dan
   modul lanjut ke putaran berikutnya.
+
+##### Key `context` yang tersedia
+
+| Key | Isi |
+|---|---|
+| `context.userName` | Nama yang dipersepsikan user |
+| `context.memories` | `Memory[]` — riwayat/ingatan (content, type, importance, sentiment, dll) |
+| `context.allIdentities` | Daftar identitas/relasi yang dikenal Yui |
+| `context.identityContext` | Konteks identitas ter-resolve untuk LLM |
+| `context.userModel` | Profil persisten user (preferensi, kepribadian) |
+| `context.viewerIdentity` | Identitas viewer/kanal stream |
+| `context.contextId` / `context.chatType` | Kanal pesan (tg_..., live_stream, dll) & tipe (private/group) |
+| `context.config` | Konfigurasi/settings YuiHime (`provider`, `providers`, `subAgentDelegation`, dll) |
+| `context.db` | Koneksi SQLite (bila berjalan di server) |
+| `context.think(prompt, opts?)` | Panggil LLM Yui (opts: `model`, `jsonMode`) |
+| `context.activePersona` | Persona aktif (id, name, systemPrompt, traits) |
+| `context.systemPrompt` / `context.assembledSystemPrompt` | Prompt sistem yang dirakit |
+| `context.model` | Model yang dipilih |
+| `context.tools` / `context.allowedTools` | Tool yang terdaftar / diizinkan |
+| `context.disableTools` / `context.bypassGateway` | Flag kontrol eksekusi |
+| `context.toolExecutionHistory` | Riwayat eksekusi tool di loop ini |
+| `context.lastToolUsed` / `context.lastToolError` | Tool terakhir & error-nya |
+| `context.groundedKnowledge` | Pengetahuan ter-grounding (disuntikkan ke prompt) |
+| `context.knowledge` / `context.heuristics` | Knowledge core & strategi belajar |
+| `context.goals` / `context.activeGoal` / `context.goalPersistencePct` | Sistem goal aktif |
+| `context.soulDirective` | Direktif emosi dari fase soul |
+| `context.dreamInsight` / `context.dreams` / `context.dreamReward` | Hasil simulasi mimpi |
+| `context.timePeriod` / `context.timeOfDay` / `context.localHour` | Waktu lokal Yui |
+| `context.timezoneOffsetHours` / `context.userLocation` | Zona waktu & lokasi user |
+| `context.weatherCondition` / `context.weatherSeverityIndex` | Kondisi cuaca (modul weather) |
+| `context.logs` | Log pipeline putaran ini |
+| `context.processedResponse` / `context.rawResult` | Hasil olahan/mentah dari gateway |
+| `context.moodImpact` / `context.animations` | Dampak mood & animasi (untuk L2D/UI) |
+| `context.<id>_output` / `context.<id>_error` | Hasil/error modul eksternal lain |
+
+##### Key `state` yang tersedia
+
+| Key | Isi |
+|---|---|
+| `state.status` | `awake` / `dreaming` / `learning` / `idle` / `reflecting` / `planning` / `executing` / `sleeping` |
+| `state.energy` | Energi 0–100 |
+| `state.mood` | `MoodState` — emosi berlapis: `joy`, `anger`, `sadness`, `stress`, `irritation`, `excitement`, `curiosity`, `jealousy`, `loneliness`, `playfulness`, neurotransmitter (`dopamine`, `serotonin`, `oxytocin`, `noradrenaline`, dst) |
+| `state.emotion` | `EmotionState` — `arousal` (0–100), `valence` (–100..100), `focus`, `rapport` |
+| `state.relation` | `UserRelation` — `trust`, `affection`, `reputation` (0–100), `lastInteraction` |
+| `state.activePersonaId` | ID persona aktif (`auto`, `hiyori`, `aether`, `nova`, `ero`, dll) |
+| `state.tone` | `pitch`, `speed`, `emotionalBias` |
+| `state.currentPlan` | `TaskPlan` — dekomposisi tugas aktif |
+| `state.activeContext` | Daftar konteks aktif |
+| `state.lastDreamCycle` / `state.lastUpdate` | Timestamp siklus terakhir |
+| `state.systemHealth` | `latency`, `successRate`, `tasksCompleted`, `somatic` (CPU/RAM/denyut/suhu), `homeostasis` |
 
 #### Mengambil data sistem Yui
 
