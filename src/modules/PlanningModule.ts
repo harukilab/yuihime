@@ -8,7 +8,7 @@ export const PlanningModule: CortexModule = {
     version: '1.2.0',
     type: ModuleType.CORTEX,
     order: 5,
-    phase: 'PHASE 1: AGGREGATION'
+    phase: 'aggregation'
   },
   run: async (input, state, context) => {
     const inputLower = (input || "").toLowerCase();

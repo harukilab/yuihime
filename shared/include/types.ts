@@ -10,7 +10,7 @@ export enum ModuleType {
   GATEWAY = 'gateway'
 }
 
-export type ModulePhase = 'pre-process' | 'context-augmentation' | 'post-process' | 'execution' | 'output' | 'logic' | 'PHASE 1: AGGREGATION' | 'PHASE 2: COMPRESSION' | 'PHASE 3: EVALUATION' | 'PHASE 4: EXECUTION' | 'PHASE 2: OPTIMIZATION' | 'PHASE 4: OPTIMIZATION' | 'PHASE 1: MAINTENANCE' | 'PHASE 4: EXPRESSION' | 'SOUL' | 'LOGIC' | 'AGI_REFLECT';
+export type ModulePhase = 'preprocess' | 'context' | 'postprocess' | 'execute' | 'output' | 'logic' | 'aggregation' | 'compression' | 'evaluation' | 'finalize' | 'optimization' | 'optimize-output' | 'maintenance' | 'expression' | 'soul' | 'reflect' | 'context-augment';
 
 export interface BaseModule {
   metadata: BaseModuleMetadata;

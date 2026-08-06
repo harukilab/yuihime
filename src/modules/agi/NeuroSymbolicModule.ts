@@ -39,7 +39,7 @@ export const NeuroSymbolicModule: CortexModule = {
     version: '1.0.0',
     type: ModuleType.CORTEX,
     order: 8, // Executed early in the SOUL phase to guide downstream LLM reasoning
-    phase: 'SOUL',
+    phase: 'soul',
     configSchema: {
       fields: {
         enableNeuroSymbolic: {

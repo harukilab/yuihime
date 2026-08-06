@@ -18,7 +18,7 @@ export const YuiVisionModule: CortexModule = {
     version: '1.2.0',
     type: ModuleType.CORTEX,
     order: 11,
-    phase: 'PHASE 1: AGGREGATION',
+    phase: 'aggregation',
     settingsTab: 'Modules',
     configSchema: {
       fields: {

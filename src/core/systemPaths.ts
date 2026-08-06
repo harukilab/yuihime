@@ -39,6 +39,10 @@ export function resolveAddonsDir(): string {
   return resolveOverride("YUIHIME_ADDONS_PATH") || path.join(resolveSystemRoot(), "addons");
 }
 
+export function resolveCortexLoaderDir(): string {
+  return resolveOverride("YUIHIME_CORTEX_LOADER_PATH") || path.join(resolveSystemRoot(), "cortexloader");
+}
+
 export function resolveDataPath(...segments: string[]): string {
   return path.join(resolveDataDir(), ...segments);
 }

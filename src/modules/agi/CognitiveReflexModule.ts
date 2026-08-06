@@ -18,8 +18,8 @@ export const CognitiveReflexModule: CortexModule = {
     description: 'Handles real-time analysis of rapid greetings, somatic touch gestures, and triggers spontaneous instinctual biases based on user rapport.',
     version: '1.0.0',
     type: ModuleType.CORTEX,
-    order: 1, // Running early in PHASE 1: AGGREGATION
-    phase: 'PHASE 1: AGGREGATION',
+    order: 1, // Running early in aggregation
+    phase: 'aggregation',
     configSchema: {
       fields: {
         enableReflex: {

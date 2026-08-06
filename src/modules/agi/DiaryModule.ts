@@ -53,7 +53,7 @@ export const DiaryModule: CortexModule = {
     version: '1.0.0',
     type: ModuleType.CORTEX,
     order: 51,
-    phase: 'LOGIC',
+    phase: 'logic',
     configSchema: {
       fields: {
         enabled: { type: 'boolean', label: 'Diary Enabled', default: true },

@@ -28,7 +28,7 @@ export const MemoryConsolidationModule: CortexModule = {
     version: '1.0.0',
     type: ModuleType.CORTEX,
     order: 100,
-    phase: 'LOGIC',
+    phase: 'logic',
     configSchema: {
       fields: {
         enabled: { type: 'boolean', label: 'Enabled', default: true },

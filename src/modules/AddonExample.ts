@@ -15,7 +15,7 @@ export const NeuralEchoAddon: CortexModule = {
     version: '1.0.0',
     type: ModuleType.CORTEX,
     order: 50,
-    phase: 'LOGIC',
+    phase: 'logic',
     settingsTab: 'Addons', // Will appear automatically in the Addons tab
     configSchema: {
       fields: {

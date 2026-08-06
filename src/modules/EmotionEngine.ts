@@ -17,7 +17,7 @@ export const EmotionEngine: CortexModule = {
     name: 'Dynamic Emotion Engine (V4 - AGI Ultima)',
     type: ModuleType.CORTEX,
     version: '2.5.0',
-    phase: 'SOUL',
+    phase: 'soul',
     order: 1,
     description: 'Autonomous Neuro-Cognitive Architecture: OCC 22 specific emotions, static OCEAN metrics, Mechanical Regulation, Empathy Sync, and layered emotional tags.',
     configSchema: {

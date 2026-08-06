@@ -10,7 +10,7 @@ export const MemoryModule: CortexModule = {
     version: '1.3.0',
     type: ModuleType.CORTEX,
     order: 4,
-    phase: 'PHASE 1: AGGREGATION'
+    phase: 'aggregation'
   },
   run: async (input, state, context) => {
     const memories = context.memories || [];

@@ -12,7 +12,7 @@ export const TTSSelectorModule: CortexModule = {
     description: 'Centralized Speech Synthesis. Routes text to configured audio providers with automatic failover.',
     version: '1.1.0',
     type: ModuleType.CORTEX,
-    phase: 'PHASE 4: EXPRESSION',
+    phase: 'expression',
     order: 2
   },
   run: async (input: string, _state: AgentState, context: any) => {

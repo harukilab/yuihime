@@ -50,7 +50,7 @@ export const ProactiveVolitionModule: CortexModule = {
     version: '2.0.0',
     type: ModuleType.CORTEX,
     order: 13,
-    phase: 'SOUL',
+    phase: 'soul',
     configSchema: {
       fields: {
         enableProactivity: {

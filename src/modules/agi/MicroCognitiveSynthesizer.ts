@@ -3,7 +3,7 @@ import { CortexModule, ModuleType, AgentState, Memory } from '@shared/include/ty
 /**
  * MODULE: Micro-Cognitive Associative Synthesizer (Retro-Cognition & Cognitive Aura Circuit)
  * 
- * This advanced cognitive module executes in PHASE 2: COMPRESSION.
+ * This advanced cognitive module executes in compression.
  * It acts as a local "Symbolic Subconscious Echo Engine" analyzing incoming stimuli
  * autonomously, running hybrid associative memory retrieval, awakening "Memory Flashbacks",
  * and injecting deep pre-reflective subconscious impressions before sending payload to the Main LLM.
@@ -20,7 +20,7 @@ export const MicroCognitiveSynthesizer: CortexModule = {
     version: '1.0.0',
     type: ModuleType.CORTEX,
     order: 3, // Execution order after Payload Compressor
-    phase: 'PHASE 2: COMPRESSION',
+    phase: 'compression',
     configSchema: {
       fields: {
         enableSynthesizer: {

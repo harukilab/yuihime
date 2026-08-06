@@ -50,7 +50,7 @@ export const SpontaneousProactiveModule: CortexModule = {
     version: '1.0.0',
     type: ModuleType.CORTEX,
     order: 14, // Executed early in the SOUL phase
-    phase: 'SOUL',
+    phase: 'soul',
     configSchema: {
       fields: {
         enableSpontaneousSpam: {

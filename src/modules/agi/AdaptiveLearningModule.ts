@@ -98,12 +98,12 @@ export const AdaptiveLearningModule: CortexModule = {
     version: '1.0.0',
     type: ModuleType.CORTEX,
     order: 2,
-    phase: 'pre-process'
+    phase: 'preprocess'
   },
   run: async (input, state, context) => {
     await engine.init();
     // 1. Determine Reward from the last interaction's mood impact
-    // If the mood analyzer (ran in pre-process) found joy, that's positive reward
+    // If the mood analyzer (ran in preprocess) found joy, that's positive reward
     const moodShift = context?.moodShift || { joy: 0, stress: 0 };
     // Integration: Add dreamReward if present (from simulated learning)
     const dReward = context?.dreamReward || 0;

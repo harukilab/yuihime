@@ -30,7 +30,7 @@ export const HighOrderMetacognitionModule: CortexModule = {
     version: '1.0.0',
     type: ModuleType.CORTEX,
     order: 14, // Executed near the end of the SOUL phase to finalize thought consistency
-    phase: 'SOUL',
+    phase: 'soul',
     configSchema: {
       fields: {
         enableMetacognition: {

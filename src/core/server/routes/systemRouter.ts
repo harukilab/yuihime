@@ -21,6 +21,7 @@ import { PluginManager } from '../../kernel/PluginManager.js';
 import { DynamicLoader } from '../../DynamicLoader.js';
 import { SystemRegistry } from '@shared/core/registry';
 import { resolveDataPath, resolveSystemRoot } from '../../systemPaths.js';
+import { CortexModulesLoader } from '../../CortexModulesLoader.js';
 import { initializeDiscord } from '../discord.js';
 import { initializeTwitter } from '../twitter.js';
 import { initializeMCP } from '../mcp.js';
@@ -1127,6 +1128,63 @@ export function registerSystemRoutes(app: express.Express, db: any) {
       res.json({ stdout, stderr, success: true });
     } catch (error: any) {
       res.status(500).json({ error: error.message, stderr: error.stderr });
+    }
+  });
+
+  // --- External Cortex Modules APIs (~/.yuihime/cortexloader/*.json) ---
+  app.get("/api/cortex-modules", async (_req, res) => {
+    try {
+      const dir = CortexModulesLoader.getLoaderDir();
+      if (!existsSync(dir)) {
+        await fs.mkdir(dir, { recursive: true });
+      }
+      const modules = [];
+      const files = await fs.readdir(dir);
+      for (const file of files) {
+        if (!file.endsWith('.json') || file === 'registry.json') continue;
+        try {
+          const raw = await fs.readFile(path.join(dir, file), 'utf-8');
+          modules.push(JSON.parse(raw));
+        } catch (_) {}
+      }
+      res.json({ success: true, dir, modules });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/cortex-modules", async (req, res) => {
+    try {
+      const def = req.body;
+      if (!def || !def.id || !def.phase) {
+        return res.status(400).json({ error: "id and phase are required." });
+      }
+      if (!/^[a-zA-Z0-9_\-]+$/.test(String(def.id))) {
+        return res.status(400).json({ error: "id may only contain letters, numbers, underscore and dash." });
+      }
+      const dir = CortexModulesLoader.getLoaderDir();
+      await fs.mkdir(dir, { recursive: true });
+      const targetFile = path.join(dir, `${String(def.id)}.json`);
+      await fs.writeFile(targetFile, JSON.stringify(def, null, 2), 'utf-8');
+      CortexModulesLoader.registerModule(def);
+      res.json({ success: true, message: `Cortex module ${def.id} registered (runs on every cycle).`, module: def, file: targetFile });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/cortex-modules/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const dir = CortexModulesLoader.getLoaderDir();
+      const targetFile = path.join(dir, `${id}.json`);
+      if (existsSync(targetFile)) {
+        await fs.unlink(targetFile);
+      }
+      SystemRegistry.unregister(id);
+      res.json({ success: true, message: `Cortex module ${id} unregistered and removed.` });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
     }
   });
 

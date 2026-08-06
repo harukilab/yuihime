@@ -37,7 +37,7 @@ export const YUIAGICoreModule: CortexModule = {
     version: '2.5.0',
     type: ModuleType.CORTEX,
     order: 10, // Executed right before the Soul-Reflection Phase
-    phase: 'SOUL',
+    phase: 'soul',
     configSchema: {
       fields: {
         enableYUIAGI: {

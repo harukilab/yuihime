@@ -20,7 +20,7 @@ export const MemoryRetentionModule: CortexModule = {
     version: '1.0.0',
     type: ModuleType.CORTEX,
     order: 21,
-    phase: 'SOUL',
+    phase: 'soul',
     configSchema: {
       fields: {
         enableRecollection: {

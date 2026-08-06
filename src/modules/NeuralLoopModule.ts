@@ -14,7 +14,7 @@ export const NeuralLoopModule: CortexModule = {
     description: 'Central orchestrator that decodes LLM intent and routes to sub-modules.',
     version: '1.0.0',
     type: ModuleType.CORTEX,
-    phase: 'PHASE 4: EXECUTION',
+    phase: 'finalize',
     order: 1
   },
   run: async (input: string, state: any, context: any) => {

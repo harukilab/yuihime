@@ -57,7 +57,7 @@ export const SOPModule: CortexModule = {
     version: "1.0.0",
     type: ModuleType.CORTEX,
     order: 2,
-    phase: "PHASE 1: AGGREGATION",
+    phase: "aggregation",
   },
   run: async (input: string, state: any, context: any) => {
     const sopsDir = getSopsDir();

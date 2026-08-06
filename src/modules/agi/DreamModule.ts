@@ -42,7 +42,7 @@ export const DreamSimulationModule: CortexModule = {
     version: '2.0.0',
     type: ModuleType.CORTEX,
     order: 50,
-    phase: 'LOGIC',
+    phase: 'logic',
     configSchema: {
       fields: {
         enabled: { type: 'boolean', label: 'Simulation Enabled', default: true },

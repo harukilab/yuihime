@@ -12,7 +12,7 @@ export const McpBridgeModule: CortexModule = {
     description: 'Connects external MCP servers (filesystem, browser, GitHub, etc.) and exposes their tools to Yui as mcp_<server>_<tool>.',
     version: '1.0.0',
     type: ModuleType.CORTEX,
-    phase: 'PHASE 1: AGGREGATION',
+    phase: 'aggregation',
     order: 0,
     configSchema: {
       fields: {

@@ -256,7 +256,7 @@ export async function executeCortexThink(
       }
     }
   } catch (_) {}
-  const preContext = await SystemRegistry.runCortexPhase('PHASE 1: AGGREGATION', input, state, {
+  const preContext = await SystemRegistry.runCortexPhase('aggregation', input, state, {
     memories,
     userName,
     allIdentities,
@@ -297,7 +297,7 @@ export async function executeCortexThink(
   logs.push("[PHASE SOUL] Processing Emotional State...");
   let finalAnswer: string | null = null;
 
-  const soulContext = await SystemRegistry.runCortexPhase('SOUL' as any, input, state, { ...preContext, think });
+  const soulContext = await SystemRegistry.runCortexPhase('soul' as any, input, state, { ...preContext, think });
 
   if (soulContext.subAgentDelegation?.delegated && soulContext.subAgentDelegation?.shouldUseDirectResponse && soulContext.subAgentResponse) {
     console.log(`[CORTEX] Sub-agent delegation successful. Using sub-agent response directly.`);
@@ -354,7 +354,7 @@ export async function executeCortexThink(
   }
 
   logs.push("[PHASE 2] Constructing Compressed Payload...");
-  const augContext = await SystemRegistry.runCortexPhase('PHASE 2: COMPRESSION', input, state, {
+  const augContext = await SystemRegistry.runCortexPhase('compression', input, state, {
     ...soulContext,
     activePersona: resolvedPersona,
     dreams,
@@ -534,8 +534,8 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
     const enableLoopedReflection = agiReflectCfg.enableLoopedReflection === true;
     if (enableLoopedReflection && iteration >= 1) {
       try {
-        logs.push(`[AGI_REFLECT] Running looped self-reflection (iteration ${iteration})...`);
-        const reflectContext = await SystemRegistry.runCortexPhase('AGI_REFLECT' as any, input, state, {
+        logs.push(`[reflect] Running looped self-reflection (iteration ${iteration})...`);
+        const reflectContext = await SystemRegistry.runCortexPhase('reflect' as any, input, state, {
           ...loopContext,
           toolExecutionHistory,
           iteration,
@@ -550,7 +550,7 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
             .filter(Boolean).join('\n\n')
         };
       } catch (reflectErr: any) {
-        logs.push(`[AGI_REFLECT] Non-blocking reflection failure: ${reflectErr?.message || reflectErr}`);
+        logs.push(`[reflect] Non-blocking reflection failure: ${reflectErr?.message || reflectErr}`);
       }
     }
     // --- END AREA 2 ---
@@ -1941,7 +1941,7 @@ if (typeof parsedArgs === 'string') {
   // Continuation in background so delivery is not blocked by post-processing.
   setImmediate(async () => {
     try {
-      const postContext = await SystemRegistry.runCortexPhase('PHASE 4: EXECUTION', finalAnswer, state, {
+      const postContext = await SystemRegistry.runCortexPhase('finalize', finalAnswer, state, {
         ...augContext,
         rawResult: loopContext.parsedData || { final_answer: finalAnswer }
       });
@@ -1951,7 +1951,7 @@ if (typeof parsedArgs === 'string') {
         mergedMemories.push(...postContext.newMemories);
       }
 
-      const logicContext = await SystemRegistry.runCortexPhase('LOGIC', finalAnswer, state, {
+      const logicContext = await SystemRegistry.runCortexPhase('logic', finalAnswer, state, {
         ...postContext,
         systemConfig: cortexInstance.getConfig(),
         think: (p: string, opts?: { model?: string; jsonMode?: boolean }) => cortexInstance.thinkSimple(p, opts?.jsonMode ?? false, opts?.model)

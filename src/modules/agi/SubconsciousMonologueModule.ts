@@ -19,8 +19,8 @@ export const SubconsciousMonologueModule: CortexModule = {
     description: 'Constructs hidden subconscious streams of consciousness based on active soul state to mature Cortex cognition.',
     version: '1.0.0',
     type: ModuleType.CORTEX,
-    order: 3, // Running in PHASE 2: COMPRESSION
-    phase: 'PHASE 2: COMPRESSION',
+    order: 3, // Running in compression
+    phase: 'compression',
     configSchema: {
       fields: {
         enableMonologue: {

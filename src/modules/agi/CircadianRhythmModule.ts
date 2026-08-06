@@ -38,7 +38,7 @@ export const CircadianRhythmModule: CortexModule = {
     version: '1.0.0',
     type: ModuleType.CORTEX,
     order: 11, // Runs early in the SOUL phase before emotional circuits and final responses
-    phase: 'SOUL',
+    phase: 'soul',
     configSchema: {
       fields: {
         enableCircadianInfluence: {

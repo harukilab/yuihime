@@ -1,6 +1,7 @@
 import { SystemRegistry } from '@shared/core/registry';
 import { ModuleType, ModulePhase } from '@shared/include/types';
 import { CustomToolsLoader } from './CustomToolsLoader';
+import { CortexModulesLoader } from './CortexModulesLoader';
 import { CreativeAgent } from './agents/definitions/creativeAgent.js';
 import { ResearchAgent } from './agents/definitions/researchAgent.js';
 import { ExplorerAgent } from './agents/definitions/explorerAgent.js';
@@ -150,7 +151,7 @@ export function initializeCortexModules(): Promise<void> {
             id: 'identity-mapping',
             name: 'yui-router: Signals Ingestion',
             type: ModuleType.CORTEX,
-            phase: 'PHASE 1: AGGREGATION',
+            phase: 'aggregation',
             order: 1,
             description: 'Maps incoming channel signals (Telegram/Web/Discord/LiveChat) to high-fidelity user profiles, including cross-platform matching.',
             configSchema: {
@@ -171,7 +172,7 @@ export function initializeCortexModules(): Promise<void> {
             id: 'memory-recall',
             name: 'yui-memory: Relational Recall',
             type: ModuleType.CORTEX,
-            phase: 'PHASE 1: AGGREGATION',
+            phase: 'aggregation',
             order: 2,
             description: 'Pulls relational history and conversational continuity markers, mapping cross-platform identities.',
             configSchema: {
@@ -192,7 +193,7 @@ export function initializeCortexModules(): Promise<void> {
             id: 'payload-compressor',
             name: 'yui-parser: Synaptic Constructor',
             type: ModuleType.CORTEX,
-            phase: 'PHASE 2: COMPRESSION',
+            phase: 'compression',
             order: 1,
             description: 'Bundles System Prompt, Soul Identity, Tools, and History into a dense instruction packet.'
           },
@@ -203,7 +204,7 @@ export function initializeCortexModules(): Promise<void> {
             id: 'cache-optimizer',
             name: 'yui-llm-client: Cache Layer',
             type: ModuleType.CORTEX,
-            phase: 'PHASE 2: OPTIMIZATION',
+            phase: 'optimization',
             order: 2,
             description: 'Manages Provider-side Context Caching for static soul/tool metadata.'
           },
@@ -214,7 +215,7 @@ export function initializeCortexModules(): Promise<void> {
             id: 'history-pruner',
             name: 'yui-router: Context Pruner',
             type: ModuleType.CORTEX,
-            phase: 'PHASE 1: AGGREGATION',
+            phase: 'aggregation',
             order: 0,
             description: 'Recursive history compaction to maintain neural context integrity.'
           },
@@ -225,7 +226,7 @@ export function initializeCortexModules(): Promise<void> {
             id: 'context-analyze',
             name: 'yui-runtime: Priority Classifier',
             type: ModuleType.CORTEX,
-            phase: 'PHASE 3: EVALUATION',
+            phase: 'evaluation',
             order: 0,
             description: 'Analyzes intent, semantic weight, and priority of incoming contexts.'
           },
@@ -236,7 +237,7 @@ export function initializeCortexModules(): Promise<void> {
             id: 'personality-core',
             name: 'yui-core: Soul Directive',
             type: ModuleType.CORTEX,
-            phase: 'SOUL',
+            phase: 'soul',
             order: 2,
             description: 'Hard-coded behavioral markers and unique linguistic fingerprints.',
             configSchema: {
@@ -274,7 +275,7 @@ export function initializeCortexModules(): Promise<void> {
             id: 'system-cronjob',
             name: 'yui-core: Loop Scheduler',
             type: ModuleType.CORTEX,
-            phase: 'LOGIC',
+            phase: 'logic',
             order: 100,
             description: 'Schedules periodic maintenance cycles or recurring agent checks.'
           },
@@ -285,7 +286,7 @@ export function initializeCortexModules(): Promise<void> {
             id: 'hearing',
             name: 'yui-hearing: Auditory Capture',
             type: ModuleType.CORTEX,
-            phase: 'PHASE 1: AGGREGATION',
+            phase: 'aggregation',
             order: 10,
             description: 'Speech-to-text and auditory capture. Configure how speech recognition works.',
             configSchema: {
@@ -303,7 +304,7 @@ export function initializeCortexModules(): Promise<void> {
             id: 'vision',
             name: 'yui-vision: Optical Frame Analysis',
             type: ModuleType.CORTEX,
-            phase: 'PHASE 1: AGGREGATION',
+            phase: 'aggregation',
             order: 11,
             description: 'Configure camera calibrations and image processing capabilities.',
             configSchema: {
@@ -332,7 +333,7 @@ export function initializeCortexModules(): Promise<void> {
             id: 'artistry',
             name: 'yui-artistry: Creative Imagery',
             type: ModuleType.CORTEX,
-            phase: 'SOUL',
+            phase: 'soul',
             order: 12,
             description: 'Artistic Canvas Synthesizer Configs.',
             configSchema: {
@@ -366,7 +367,7 @@ export function initializeCortexModules(): Promise<void> {
             id: 'short_term_memory',
             name: 'yui-memory: STM Recency Buffer',
             type: ModuleType.CORTEX,
-            phase: 'PHASE 2: CONTEXT',
+            phase: 'context-augment',
             order: 13,
             description: 'Episodic Recency Buffer limits.',
             configSchema: {
@@ -383,7 +384,7 @@ export function initializeCortexModules(): Promise<void> {
             id: 'long_term_memory',
             name: 'yui-memory: LTM Knowledge Graph',
             type: ModuleType.CORTEX,
-            phase: 'PHASE 2: CONTEXT',
+            phase: 'context-augment',
             order: 14,
             description: 'Vector Database & Knowledge Graph Configs.',
             configSchema: {
@@ -409,7 +410,7 @@ export function initializeCortexModules(): Promise<void> {
             id: 'discord_bridge',
             name: 'yui-conduit: Discord Bridge',
             type: ModuleType.CORTEX,
-            phase: 'SOUL',
+            phase: 'soul',
             order: 15,
             description: 'Let your VTuber read, listen, and participate directly in Discord guilds!',
             configSchema: {
@@ -427,7 +428,7 @@ export function initializeCortexModules(): Promise<void> {
             id: 'twitter_bridge',
             name: 'yui-conduit: Twitter Bridge',
             type: ModuleType.CORTEX,
-            phase: 'SOUL',
+            phase: 'soul',
             order: 16,
             description: 'Allow your digital vtuber agent to self-publish replies and scrape/quote timeline tweets automatically!',
             configSchema: {
@@ -446,7 +447,7 @@ export function initializeCortexModules(): Promise<void> {
             id: 'mcp_servers',
             name: 'yui-conduit: MCP Server Integration',
             type: ModuleType.CORTEX,
-            phase: 'SOUL',
+            phase: 'soul',
             order: 19,
             description: 'Configure external MCP servers endpoints to expose dynamic micro-services.',
             configSchema: {
@@ -509,6 +510,7 @@ export function initializeCortexModules(): Promise<void> {
       }
 
       await CustomToolsLoader.loadAndRegisterAll();
+      await CortexModulesLoader.loadAndRegisterAll();
 
       if (typeof window === 'undefined') {
         try {

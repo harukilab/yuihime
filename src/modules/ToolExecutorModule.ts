@@ -12,7 +12,7 @@ export const ToolExecutorModule: CortexModule = {
     description: 'Securely dispatches and executes tool calls requested by the AI core.',
     version: '1.2.0',
     type: ModuleType.CORTEX,
-    phase: 'PHASE 4: EXECUTION',
+    phase: 'finalize',
     order: 2,
     configSchema: {
       fields: {

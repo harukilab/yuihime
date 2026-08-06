@@ -48,7 +48,7 @@ export const GoalDecompositionModule: CortexModule = {
     version: '1.0.0',
     type: ModuleType.CORTEX,
     order: 26,
-    phase: 'SOUL',
+    phase: 'soul',
     configSchema: {
       fields: {
         enableGoalFocus: {

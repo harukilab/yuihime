@@ -20,7 +20,7 @@ export const UserModelModule: CortexModule = {
     version: '1.0.0',
     type: ModuleType.CORTEX,
     order: 22,
-    phase: 'SOUL',
+    phase: 'soul',
     configSchema: {
       fields: {
         enableUserModel: {

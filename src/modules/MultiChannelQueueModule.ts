@@ -15,7 +15,7 @@ export const MultiChannelQueueModule: CortexModule = {
     description: 'Unified cross-channel message queue. Controls the pending-wait feedback shown when the LLM connection is busy or offline.',
     version: '1.0.0',
     type: ModuleType.CORTEX,
-    phase: 'PHASE 4: EXPRESSION',
+    phase: 'expression',
     order: 99,
     trigger: () => false,
     configSchema: {

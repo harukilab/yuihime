@@ -9,7 +9,7 @@ export const SandboxFSModule: CortexModule = {
     version: '1.0.0',
     type: ModuleType.CORTEX,
     order: 1,
-    phase: 'execution'
+    phase: 'execute'
   },
   run: async (input: any, state: any, context: any) => {
     // Input should contain action, name, content
@@ -26,7 +26,7 @@ export const SandboxTerminalModule: CortexModule = {
     version: '1.0.0',
     type: ModuleType.CORTEX,
     order: 2,
-    phase: 'execution'
+    phase: 'execute'
   },
   run: async (input: any, state: any, context: any) => {
     const command = typeof input === 'string' ? input : (input.command || "");

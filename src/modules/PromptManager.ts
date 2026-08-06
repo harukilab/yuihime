@@ -210,7 +210,7 @@ export const PromptManagerModule: CortexModule = {
     description: 'Consolidates system prompt, character lore, and context into a unified LLM instruction.',
     version: '1.2.0',
     type: ModuleType.CORTEX,
-    phase: 'PHASE 2: COMPRESSION',
+    phase: 'compression',
     order: 5, // Runs after other aggregations
     configSchema: {
       fields: {

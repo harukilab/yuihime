@@ -32,7 +32,7 @@ export const NeuralVerifierModule: CortexModule = {
     description: 'Unified integrity check ensuring LLM outputs are free of errors and structurally compliant.',
     version: '2.0.0', // Standardized API version increment protocol
     type: ModuleType.CORTEX,
-    phase: 'PHASE 3: EVALUATION',
+    phase: 'evaluation',
     order: 2,
     configSchema: {
       fields: {

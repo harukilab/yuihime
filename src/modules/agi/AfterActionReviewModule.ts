@@ -25,7 +25,7 @@ export const AfterActionReviewModule: CortexModule = {
     version: '1.0.0',
     type: ModuleType.CORTEX,
     order: 29,
-    phase: 'SOUL',
+    phase: 'soul',
     configSchema: {
       fields: {
         enableReview: {

@@ -47,7 +47,7 @@ export const ConfidenceEstimatorModule: CortexModule = {
     version: '1.0.0',
     type: ModuleType.CORTEX,
     order: 24,
-    phase: 'SOUL',
+    phase: 'soul',
     configSchema: {
       fields: {
         enableConfidenceAbstain: {

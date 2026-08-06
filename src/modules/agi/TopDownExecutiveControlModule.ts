@@ -49,7 +49,7 @@ export const TopDownExecutiveControlModule: CortexModule = {
     version: '1.0.0',
     type: ModuleType.CORTEX,
     order: 7, // Executed very early in the SOUL phase to direct downstream attention biases
-    phase: 'SOUL',
+    phase: 'soul',
     configSchema: {
       fields: {
         enableTopDownControl: {

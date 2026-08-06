@@ -171,7 +171,7 @@ export const LifeSimulationModule: CortexModule = {
     version: '1.0.0',
     type: ModuleType.CORTEX,
     order: 13, // SOUL phase, after circadian-rhythm (11) and before bridge modules
-    phase: 'SOUL',
+    phase: 'soul',
     configSchema: {
       fields: {
         enableLifeSimulation: {

@@ -17,7 +17,7 @@ export const MemoryResonanceModule: CortexModule = {
     version: '1.0.0',
     type: ModuleType.CORTEX,
     order: 3, // Running in PHASE 1 after identity-greetings
-    phase: 'PHASE 1: AGGREGATION',
+    phase: 'aggregation',
     configSchema: {
       fields: {
         enableSocialResonance: {

@@ -17,8 +17,8 @@ export const CognitiveHeuristicsModule: CortexModule = {
     description: 'Deep linguistic analysis engine (Indonesian/English) designed to measure user satisfaction, categorize messages, and calculate active emotional deltas.',
     version: '1.0.0',
     type: ModuleType.CORTEX,
-    order: 2, // Running in PHASE 1: AGGREGATION (after signals-ingestion)
-    phase: 'PHASE 1: AGGREGATION',
+    order: 2, // Running in aggregation (after signals-ingestion)
+    phase: 'aggregation',
     configSchema: {
       fields: {
         enableHeuristics: {

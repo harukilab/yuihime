@@ -14,7 +14,7 @@ export const FileManipulationModule: CortexModule = {
     version: '1.0.0',
     type: ModuleType.CORTEX,
     order: 6,
-    phase: 'context-augmentation',
+    phase: 'context',
     configSchema: {
       fields: {
         autoInjectOnKeywords: {

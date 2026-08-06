@@ -38,7 +38,7 @@ export const ContinuousLearningMemoryModule: CortexModule = {
     version: '1.0.0',
     type: ModuleType.CORTEX,
     order: 12, // Executed immediately after SelfAwarenessMirrorModule (order 11) to stabilize core memory anchors
-    phase: 'SOUL',
+    phase: 'soul',
     configSchema: {
       fields: {
         enableContinuousLearning: {

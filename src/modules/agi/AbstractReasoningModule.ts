@@ -34,7 +34,7 @@ export const AbstractReasoningModule: CortexModule = {
     version: '1.0.0',
     type: ModuleType.CORTEX,
     order: 9, // Executed right before the YUIAGICoreModule (order 10) in the SOUL phase
-    phase: 'SOUL',
+    phase: 'soul',
     configSchema: {
       fields: {
         enableAbstractReasoning: {

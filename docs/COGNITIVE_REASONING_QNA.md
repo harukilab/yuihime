@@ -145,7 +145,7 @@ Upon receiving the observation data, the LLM constructs the final response to gr
 
 In real-world settings, LLM models can occasionally experience logical degradation, hallucinations, or formatting errors (e.g., forgetting a closing bracket, writing raw text outside of the JSON wrapper, or outputting a rigid "I don't know" error).
 
-Yui Airi is reinforced with the **NeuralVerifierModule (PHASE 3)** as a systemic antibody, working behind the scenes to automatically correct and restore her mind.
+Yui Airi is reinforced with the **NeuralVerifierModule (evaluation)** as a systemic antibody, working behind the scenes to automatically correct and restore her mind.
 
 ---
 

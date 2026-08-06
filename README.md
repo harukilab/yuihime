@@ -1,4 +1,4 @@
-# 👑 Yuihime AI v4.286 - Autonomous VTuber Engine (Airi OS Core v2.39)
+# 👑 Yuihime AI v4.287 - Autonomous VTuber Engine (Airi OS Core v2.39)
 
 **Yuihime** adalah engine agen AI otonom untuk VTuber dengan arsitektur *daemon + web UI*.cognitive loop, memory jangka panjang (SQLite), eksekusi tool modular, dan antarmuka web real-time untuk kontrol kepribadian.
 
@@ -109,6 +109,80 @@ Semua module (driver, tool, addon) **otomatis terdaftar** via `RegistryInitializ
 - Eksekusi: `POST /api/addons/execute/:id` (addon biasa = run entry point; skill = `action:"instructions"` atau `action:"run_script"`)
 - Tool addon otomatis didaftarkan ke `available_tools.json` dan terlihat oleh agent via prompt builder
 
+### External Cortex Modules (`~/.yuihime/cortexloader/`)
+Modul Cortex eksternal yang **selalu dijalankan setiap putaran** pipeline — tanpa perlu
+menyentuh/build ulang codebase. Cukup taruh file JSON di `~/.yuihime/cortexloader/`
+(mulai ulang daemon, atau `POST /api/cortex-modules` untuk registrasi langsung).
+
+- Format: satu file JSON per modul: `~/.yuihime/cortexloader/<id>.json`
+- Phase tersedia: `preprocess`, `soul`, `aggregation`, `compression`,
+  `logic`, `finalize`, `reflect`, dll. (lihat tabel fase di bawah)
+- Modul **tanpa `trigger` selalu jalan tiap siklus**; hasilnya bisa disuntikkan ke `context`
+  sehingga terlihat LLM di putaran tersebut.
+- Action type: `code` (JS sandbox), `shell` (bash, `{{arg}}`), `webhook` (POST JSON).
+- API: `GET /api/cortex-modules`, `POST /api/cortex-modules`, `DELETE /api/cortex-modules/:id`.
+
+Contoh `~/.yuihime/cortexloader/example_status.json`:
+
+```json
+{
+  "id": "example_status",
+  "name": "Example Status Check",
+  "description": "Runs on every cycle and injects a status note.",
+  "version": "1.0.0",
+  "phase": "preprocess",
+  "order": 1,
+  "actionType": "code",
+  "actionCode": "context.example_status_report = '[STATUS] OK at ' + new Date().toISOString(); return context;"
+}
+```
+
+Contoh shell (cek status layanan, argumen di-inject via `{{...}}`):
+
+```json
+{
+  "id": "service_status",
+  "name": "Service Status",
+  "description": "Check service health every turn.",
+  "phase": "preprocess",
+  "order": 2,
+  "actionType": "shell",
+  "actionCode": "systemctl status {{service_name}} --no-pager | head -20",
+  "parameters": { "service_name": "yuihime" }
+}
+```
+
+> Catatan: `code`/`shell` dieksekusi penuh di daemon — sama seperti custom tools.
+
+### Tabel Fase Cortex
+
+Setiap modul Cortex (termasuk external cortex module) mendeklarasikan `phase` untuk
+menentukan kapan dijalankan dalam pipeline. Nama fase kini seragam & mudah dibaca
+(rename dari label lama):
+
+| Fase (`phase`) | Label lama | Penjelasan |
+|---|---|---|
+| `preprocess` | `pre-process` | Persiapan/penyaringan sinyal sebelum agregasi |
+| `aggregation` | `PHASE 1: AGGREGATION` | Kumpulkan & agregasi semua sinyal input |
+| `context` | `context-augmentation` | Augmentasi konteks percakapan |
+| `context-augment` | `PHASE 2: CONTEXT` | Fase augmentasi konteks terarah |
+| `soul` | `SOUL` | Proses kondisi emosional / kepribadian |
+| `compression` | `PHASE 2: COMPRESSION` | Kompresi payload sebelum gateway |
+| `optimization` | `PHASE 2: OPTIMIZATION` | Optimasi payload |
+| `reflect` | `AGI_REFLECT` | Refleksi diri per-iterasi di loop ReAct |
+| `logic` | `LOGIC` | Pemikiran lanjutan / penalaran non-blok |
+| `postprocess` | `post-process` | Pasca-proses setelah fase inti |
+| `evaluation` | `PHASE 3: EVALUATION` | Verifikasi & evaluasi hasil |
+| `execute` | `execution` | Eksekusi aksi/tool |
+| `finalize` | `PHASE 4: EXECUTION` | Penyelesaian jawaban akhir |
+| `optimize-output` | `PHASE 4: OPTIMIZATION` | Optimasi output akhir |
+| `expression` | `PHASE 4: EXPRESSION` | Ekspresi/penyajian output |
+| `output` | `output` | Kirim hasil ke kanal output |
+| `maintenance` | `PHASE 1: MAINTENANCE` | Perawatan sistem |
+
+> Pipeline utama memanggil 6 fase: `aggregation` → `soul` → `compression` →
+> `reflect` → `finalize` → `logic`. Fase lain dieksekusi sesuai mekanisme modul masing-masing.
+
 ---
 
 ## 📡 Integrasi & I/O
@@ -138,6 +212,7 @@ File konfigurasi dan data disimpan **di luar binary**:
 - `yuihime.db` — SQLite memori jangka panjang
 - `agent/` — Berkas kepribadian (`character.md`, `lore.md`, `IDENTITY.md`, `SOUL.md`, `MEMORY.md`)
 - `addons/` — Plugin kustom
+- `cortexloader/` — Modul Cortex eksternal yang selalu jalan tiap putaran (JSON)
 
 ### CLI Override
 ```bash

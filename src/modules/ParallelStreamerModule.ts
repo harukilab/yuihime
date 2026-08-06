@@ -12,7 +12,7 @@ export const ParallelStreamerModule: CortexModule = {
     description: 'A dual-IO hub that synchronizes data between verification gates and parsers.',
     version: '1.0.0',
     type: ModuleType.CORTEX,
-    phase: 'PHASE 4: OPTIMIZATION',
+    phase: 'optimize-output',
     order: 2
   },
   run: async (input: string, _state: any, context: any) => {

@@ -35,7 +35,7 @@ export const SelfAwarenessMirrorModule: CortexModule = {
     version: '2.1.0',
     type: ModuleType.CORTEX,
     order: 11, // Executed immediately after YUIAGICoreModule (order 10) in the SOUL Phase
-    phase: 'SOUL',
+    phase: 'soul',
     configSchema: {
       fields: {
         enableMirror: {

@@ -9,7 +9,7 @@ export const RAGModule: CortexModule = {
     version: '2.0.0',
     type: ModuleType.CORTEX,
     order: 4,
-    phase: 'PHASE 2: COMPRESSION'
+    phase: 'compression'
   },
   run: async (input, state, context) => {
     const logs = context.logs || [];

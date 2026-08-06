@@ -1,6 +1,14 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.287] - 2026-08-06
+### Fix: v4.287: Rename fase Cortex menjadi nama umum yang mudah dibaca
+- Semua ID fase Cortex di-rename 1:1 menjadi nama tunggal mudah dibaca: aggregation/soul/compression/reflect/finalize/logic/preprocess/context/context-augment/optimization/evaluation/execute/optimize-output/expression/maintenance (menggantikan PHASE 1: AGGREGATION, SOUL, PHASE 2: COMPRESSION, AGI_REFLECT, PHASE 4: EXECUTION, LOGIC, dst).
+- ModulePhase union (shared/include/types.ts), metadata semua modul, runCortexPhase call sites (cortexThinkEngine.ts, cortex.ts) ikut di-update; mapping bijective tanpa penggabungan fase.
+- SOUL.md knowledge file, tab UI 'SOUL', dan errorType: 'execution' tetap tidak berubah (bukan fase).
+- README: tabel fase baru (fase -> label lama -> penjelasan); contoh cortexloader JSON memakai preprocess; docs aktif disinkronkan, catatan historis dibiarkan.
+
+
 ## [4.286] - 2026-08-05
 ### feature: v4.286: Perintah rahasia /retry (manual re-proses jawaban Yui)
 - telegram.ts: cache pesan terakhir per contextId (lastMessageCache) — pesan user non-command selalu diingat

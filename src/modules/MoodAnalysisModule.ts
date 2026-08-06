@@ -8,7 +8,7 @@ export const MoodAnalysisModule: CortexModule = {
     version: '1.0.0',
     type: ModuleType.CORTEX,
     order: 1,
-    phase: 'pre-process'
+    phase: 'preprocess'
   },
   run: async (input: string, state: any, context: any) => {
     const stressKeywords = ['bad', 'hate', 'stupid', 'bored', 'angry', 'error', 'wrong'];

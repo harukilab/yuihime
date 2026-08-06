@@ -39,7 +39,7 @@ export const LocalNanoNLPModule: CortexModule = {
     description: 'Autonomous local NLP classifier and offline Markov Chain engine for extremely fast, token-free responses and dynamic context compression.',
     version: '1.0.0',
     type: ModuleType.CORTEX,
-    phase: 'PHASE 1: AGGREGATION',
+    phase: 'aggregation',
     order: 3, // Runs right after core recall modules
     configSchema: {
       fields: {

@@ -101,7 +101,7 @@ export const GoalProposalModule: CortexModule = {
     version: '1.0.0',
     type: ModuleType.CORTEX,
     order: 25,
-    phase: 'SOUL',
+    phase: 'soul',
     configSchema: {
       fields: {
         enableSelfProposal: {

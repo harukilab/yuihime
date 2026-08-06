@@ -205,7 +205,7 @@ export const MyCustomProvider: ProviderModule & {
 
 ### B. Mengonsumsi Stream dalam Cortex Pipeline
 
-Kognisi Yuihime beroperasi menggunakan alur berurutan (*Cortex Modules Pipeline*). `ParallelStreamerModule` bertindak sebagai dual-IO Hub kognitif di fase `PHASE 4: OPTIMIZATION`. 
+Kognisi Yuihime beroperasi menggunakan alur berurutan (*Cortex Modules Pipeline*). `ParallelStreamerModule` bertindak sebagai dual-IO Hub kognitif di fase `optimize-output`. 
 
 Jika Anda membuat modul kognitif kustom dan ingin menangkap output asinkron hasil konvergensi sinyal sebelum dialirkan ke live HUD, ikuti arsitektur berikut:
 
@@ -224,7 +224,7 @@ export const LiveModeratorModule: CortexModule = {
     description: 'Memantau obrolan sensitif penonton dan mengirimkan signal peringatan ke visual overlay.',
     version: '1.0.0',
     type: ModuleType.CORTEX,
-    phase: 'PHASE 3: EVALUATION',
+    phase: 'evaluation',
     order: 1
   },
   run: async (input: string, state: any, context: any) => {

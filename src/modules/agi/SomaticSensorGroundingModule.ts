@@ -43,7 +43,7 @@ export const SomaticSensorGroundingModule: CortexModule = {
     version: '1.0.1',
     type: ModuleType.CORTEX,
     order: 9, // Run early in the SOUL phase to ground her immediate physical existence variables
-    phase: 'SOUL',
+    phase: 'soul',
     configSchema: {
       fields: {
         enableSomaticGrounding: {

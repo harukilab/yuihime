@@ -37,7 +37,7 @@ export const CognitiveIntegrityGuardianModule: CortexModule = {
     version: '1.0.0',
     type: ModuleType.CORTEX,
     order: 6, // Runs very early in the SOUL phase to acts as an immunological filter for downstream prompt streams
-    phase: 'SOUL',
+    phase: 'soul',
     configSchema: {
       fields: {
         enableMentalAntibodies: {

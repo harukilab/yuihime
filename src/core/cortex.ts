@@ -104,7 +104,7 @@ export class Cortex {
       const currentDreams = await StorageService.getDreams();
 
       // Run the dream simulation module directly via the registry
-      const result = await SystemRegistry.runCortexPhase('LOGIC' as any, 'SIMULATE_DREAM', state as any, {
+      const result = await SystemRegistry.runCortexPhase('logic' as any, 'SIMULATE_DREAM', state as any, {
         memories,
         dreams: currentDreams,
         systemConfig: this.config,
@@ -208,7 +208,7 @@ export class Cortex {
 
   async dream(memories: Memory[], currentDreams: Dream[], state: AgentState): Promise<{ dreams: Dream[], reflections: string }> {
      await Cortex.ensureInitialized();
-     const logicContext = await SystemRegistry.runCortexPhase('LOGIC' as any, 'SIMULATE_DREAM', state, {
+     const logicContext = await SystemRegistry.runCortexPhase('logic' as any, 'SIMULATE_DREAM', state, {
         memories,
         dreams: currentDreams,
         systemConfig: this.config,

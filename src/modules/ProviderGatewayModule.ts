@@ -28,7 +28,7 @@ export const ProviderGatewayModule: CortexModule = {
     description: 'Centralized AI Gateway. All LLM requests must pass through this node.',
     version: '2.0.0',
     type: ModuleType.CORTEX,
-    phase: 'PHASE 3: EVALUATION',
+    phase: 'evaluation',
     order: 1,
     configSchema: {
       fields: {

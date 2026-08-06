@@ -46,7 +46,7 @@ export const SubAgentDelegationModule: CortexModule = {
     version: '1.0.0',
     type: ModuleType.CORTEX,
     order: 15,
-    phase: 'SOUL',
+    phase: 'soul',
     configSchema: {
       fields: {
         enableSubAgents: {

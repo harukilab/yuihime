@@ -17,7 +17,7 @@ export const SoulDriftModule: CortexModule = {
     version: '1.0.0',
     type: ModuleType.CORTEX,
     order: 52, // Running right after DreamIntegratorModule in LOGIC phase
-    phase: 'LOGIC',
+    phase: 'logic',
     configSchema: {
       fields: {
         enableSoulDrift: {

@@ -35,7 +35,7 @@ export const WeatherNewsEmpathyModule: CortexModule = {
     version: '1.0.0',
     type: ModuleType.CORTEX,
     order: 12, // Runs after circadian rhythm and before proactive volition
-    phase: 'SOUL',
+    phase: 'soul',
     configSchema: {
       fields: {
         enableWeatherEmpathy: {

@@ -127,7 +127,7 @@ export const L2DExpressionTranslatorModule: CortexModule = {
     description: 'Automatically translates text speech from the mini-LLM/local NLP into Live2D gestures & expressions when the animation tag is empty.',
     version: '1.0.0',
     type: ModuleType.CORTEX,
-    phase: 'PHASE 4: EXPRESSION',
+    phase: 'expression',
     order: 5,
     settingsTab: 'Neural',
     configSchema: {
