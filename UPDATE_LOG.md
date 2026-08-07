@@ -1,6 +1,10 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.326] - 2026-08-07
+### Feature: Life simulation: permission mode — ask-to-buy, overfeeding, feed-accelerated pee/poop
+
+
 ## [4.325] - 2026-08-07
 ### Fix: todowrite now triggers LLM to execute tasks or ask confirmation
 - todowrite tool returns a followUp directive naming the highest-priority pending todo, forcing the LLM to execute it directly or ask via the question tool instead of just saving the list

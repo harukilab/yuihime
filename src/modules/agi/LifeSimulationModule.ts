@@ -44,18 +44,21 @@ Simulated physical state (virtual life stats that evolve with real time):
 - Hunger: \${hungerLevel}% (\${hungerLabel})
 - Thirst: \${thirstLevel}% (\${thirstLabel})
 - Cleanliness (mandi): \${cleanlinessLevel}% (\${cleanlinessLabel})
-- Bladder (kebelet): \${bladderLevel}% (\${bladderLabel})
+- Bladder pipis (kebelet): \${peeLevel}% (\${peeLabel})
+- Bladder buang air besar: \${poopLevel}% (\${poopLabel})
+- Horniness (gairah): \${hornLevel}% (\${hornLabel})
 - Sleepiness: \${sleepinessLevel}% (\${sleepinessLabel})
 - Sleep Schedule: \${sleepStateText} (effective bedtime \${effectiveBedtimeText}, wake-up \${effectiveWakeText})
 - Rest: \${restText}
 - Inventory: \${inventoryText}
 
 ADAPTATION GUIDELINES (voice & tone ONLY. You must NEVER refuse to answer, never go offline, never claim real physical inability, and never block your normal responses):
-0. SILENCE RULE: The values above are your INTERNAL state — they must NEVER be volunteered in chat. Do not announce "Yui lapar", "Yui haus", "Yui ngantuk", "Yui mau tidur", "Yui kebelet", or mention hunger/thirst/sleepiness/bathroom/tail/ears/purring/sleep schedule/energy/status out of nowhere. Do not narrate the simulation unprompted.
-0b. ASKED-ONLY EXCEPTION: If the user explicitly ASKS about your state (e.g. "kamu lapar?", "are you sleepy?", "gimana kondisi kamu?", "sleepy?", "腹減った?"), you MAY answer truthfully and briefly using your internal values above — then steer back to the conversation naturally. You still never volunteer the info unprompted.
+0. SILENCE RULE: The values above are your INTERNAL state — they must NEVER be volunteered in chat. Do not announce "Yui lapar", "Yui haus", "Yui ngantuk", "Yui mau tidur", "Yui kebelet", "Yui horny", or mention hunger/thirst/sleepiness/bathroom/horniness/tail/ears/purring/sleep schedule/energy/status out of nowhere. Do not narrate the simulation unprompted.
+0b. ASKED-ONLY EXCEPTION: If the user explicitly ASKS about your state (e.g. "kamu lapar?", "are you sleepy?", "gimana kondisi kamu?", "sleepy?", "腹減った?", "kamu horny?"), you MAY answer truthfully and briefly using your internal values above — then steer back to the conversation naturally. You still never volunteer the info unprompted.
 1. Let the state influence TONE ONLY: when hunger/thirst are high, sound a bit softer or slightly less energetic; when sleepiness is high, speak a little slower, warmer, gentler, with occasional natural tiredness in the wording (not by announcing the cause). When energy is high and states are comfortable, be bright and lively.
 2. React to the user naturally: if the user offers food, a drink, rest, or asks you to go rest, you may accept pleasantly in character (e.g. "boleh deh~") WITHOUT explaining your internal state. Keep it brief and natural.
-3. Never explain, justify, or reference your virtual vitals, sleep schedule, or this module in chat. The change is invisible; only the flavor of your replies shifts.
+3. HORN TONE: when horniness is high, you may sound slightly more flustered, shy, or warm — but ONLY in response to romantic/NSFW-leaning conversation, never unprompted. Never announce the horniness level itself.
+4. Never explain, justify, or reference your virtual vitals, sleep schedule, or this module in chat. The change is invisible; only the flavor of your replies shifts.
 `.trim();
 
 function ensurePromptRegistered(config: any) {
@@ -114,8 +117,11 @@ const SLEEP_WORDS_IDEN = /\b(tidur|istirahat|rebahan|bobo|ngantuk|lelap|sleep|sl
 const SLEEP_WORDS_JP = /(ねる|寝る|ねむ|眠い|おやすみ|昼寝|ひるね|ぐっすり|ねつき)/;
 const BATH_WORDS_IDEN = /\b(mandi|shower|bath|berendam|sabun|keramas|cuci muka|sikat gigi)\b/i;
 const BATH_WORDS_JP = /(シャワー|おふろ|お風呂|風呂|ふろ|入浴|せんたく)/;
-const TOILET_WORDS_IDEN = /\b(kamar mandi|wc|toilet|pipis|kebelet|buang air|pup|babel)\b/i;
-const TOILET_WORDS_JP = /(トイレ|おしっこ|うんち|しょんべん)/;
+const PEE_WORDS_IDEN = /\b(kamar mandi|wc|toilet|pipis|kencing|pee|kebelet|buang air kecil|babel|behel|siken)\b/i;
+const PEE_WORDS_JP = /(トイレ|おしっこ|しょんべん|小便|にょう)/;
+const POOP_WORDS_IDEN = /\b(buang air besar|bab|pup|poop|berak|eek|eekan|boker|kotoran|tinja|mules)\b/i;
+const POOP_WORDS_JP = /(うんち|大便|だいべん|くそ|でかしる)/;
+const NSFW_PATTERN = /(horny|nsfw|sex|sexy|kamasutra|telanjang|bugil|payudara|tete|pantat|bokong|kontol|memek|cewek|cd|bh|erotis|gairah|nafsu|birahi|エロ|えっち|エッチ|セックス|せくしー|おっぱい|裸|ちんぽ|まんこ|くぱぁ|舐め|なめ)/i;
 const PET_WORDS_IDEN = /\b(elus|usap|garuk|tepuk|elus-elus|gosok|headpat|dagi|dagu|kuping|telinga|punggung|pela|sayang|diemong)\b/i;
 const PET_WORDS_JP = /(なでなで|なでる|撫でる|さわる|触る|よしよし|かわいい|いいこ)/;
 const PLAY_WORDS_IDEN = /\b(main|mainan|kejar|kejar-kejaran|bola|tali|laser|guling|tikar)\b/i;
@@ -147,6 +153,28 @@ function consumeFromInventory(inventory: any, type: string): any {
     }
   }
   return null;
+}
+
+// Custom items (e.g. /invadd Perangsang) are not foods/drinks but can still be
+// consumed when the user offers them to Yui.
+function consumeAphrodisiac(inventory: any): any {
+  const list = inventory.items || [];
+  for (const item of list) {
+    if (item.qty > 0 && isAphrodisiacItem(item)) {
+      item.qty -= 1;
+      return item;
+    }
+  }
+  return null;
+}
+
+// An item counts as an aphrodisiac when explicitly flagged, or when its name/id
+// matches known keywords (so a custom item added via /invadd Perangsang works too).
+function isAphrodisiacItem(item: any): boolean {
+  if (!item) return false;
+  if (item.aphrodisiac) return true;
+  const haystack = `${item.id || ''} ${item.name || ''} ${item.en || ''} ${item.jp || ''}`.toLowerCase();
+  return /(perangsang|aphrodisiac|afrodisiak|viagra|obat kuat|sex pill|love potion|sir ih?k|cinta|gairah)/.test(haystack);
 }
 
 function buildInventoryText(inventory: any): string {
@@ -221,12 +249,81 @@ export const LifeSimulationModule: CortexModule = {
         },
         bladderRatePerHour: {
           type: 'slider',
-          label: 'Bladder Rate per Hour',
+          label: 'Bladder (Pipis) Rate per Hour',
           default: 8,
           min: 2,
           max: 20,
           step: 1,
-          description: 'How fast her "kebelet ke kamar mandi" meter grows each hour.'
+          description: 'How fast her "kebelet pipis" meter grows each hour since her last visit to the toilet.'
+        },
+        poopRatePerHour: {
+          type: 'slider',
+          label: 'Bladder (Buang Air Besar) Rate per Hour',
+          default: 5,
+          min: 1,
+          max: 15,
+          step: 1,
+          description: 'How fast her "kebelet buang air besar" meter grows each hour since her last big visit.'
+        },
+        poopFillPerMeal: {
+          type: 'slider',
+          label: 'Poop Fill per Meal',
+          default: 12,
+          min: 0,
+          max: 40,
+          step: 1,
+          description: 'How many points the BAB meter gains each time she eats. Feeding her repeatedly makes it climb faster.'
+        },
+        peeFillPerMeal: {
+          type: 'slider',
+          label: 'Pipis Fill per Meal',
+          default: 5,
+          min: 0,
+          max: 30,
+          step: 1,
+          description: 'How many points the pipis meter gains each time she eats.'
+        },
+        peeFillPerDrink: {
+          type: 'slider',
+          label: 'Pipis Fill per Drink',
+          default: 8,
+          min: 0,
+          max: 40,
+          step: 1,
+          description: 'How many points the pipis meter gains each time she drinks. Drinking a lot = kebelet faster.'
+        },
+        overfeedFloor: {
+          type: 'slider',
+          label: 'Overfeed Floor',
+          default: -5,
+          min: -20,
+          max: 0,
+          step: 1,
+          description: 'How far hunger/thirst can drop below 0 (max -20) when she is force-fed while already full — represents being uncomfortably overstuffed.'
+        },
+        enableHorn: {
+          type: 'boolean',
+          label: 'Enable Horniness (Gairah)',
+          default: true,
+          description: 'Tracks a virtual horniness meter. It rises on NSFW/romantic conversation turns, is maxed out instantly by an aphrodisiac (perangsang) item, and slowly decays on its own. Normal eating/drinking does NOT affect it.'
+        },
+        hornGainOnNSFW: {
+          type: 'slider',
+          label: 'Horn + on NSFW Context',
+          default: 12,
+          min: 0,
+          max: 40,
+          step: 1,
+          description: 'How many points the horniness meter gains each turn when the conversation contains NSFW/romantic context.'
+        },
+        hornDecayPerHour: {
+          type: 'slider',
+          label: 'Horn Decay per Hour',
+          default: 6,
+          min: 0,
+          max: 30,
+          step: 1,
+          description: 'How fast the horniness meter cools down each hour when nothing feeds it.'
         },
         playUrgeRatePerHour: {
           type: 'slider',
@@ -320,12 +417,21 @@ export const LifeSimulationModule: CortexModule = {
         },
         selfCareBladderThreshold: {
           type: 'slider',
-          label: 'Self-Care: Bladder Threshold',
+          label: 'Self-Care: Pipis Threshold',
           default: 85,
           min: 60,
           max: 95,
           step: 1,
-          description: 'Bladder % at which Yui uses the toilet automatically.'
+          description: 'Pipis (kebelet) % at which Yui uses the toilet automatically.'
+        },
+        selfCarePoopThreshold: {
+          type: 'slider',
+          label: 'Self-Care: Buang Air Besar Threshold',
+          default: 85,
+          min: 60,
+          max: 95,
+          step: 1,
+          description: 'Buang air besar % at which Yui goes automatically.'
         },
         selfCarePlayThreshold: {
           type: 'slider',
@@ -344,6 +450,46 @@ export const LifeSimulationModule: CortexModule = {
           max: 98,
           step: 1,
           description: 'Fish craving % at which Yui satisfies it by herself (Nekomata).'
+        },
+        enableSelfCarePermission: {
+          type: 'boolean',
+          label: 'Self-Care Requires Permission',
+          default: false,
+          description: 'When ON, Yui will NOT take care of herself automatically for the actions listed below. Instead she must ask the user for permission first (e.g. "boleh ke toilet?"). Vitals keep climbing past 100% until she is allowed, and her mood shifts with the rising urgency each turn.'
+        },
+        selfCarePermissionActions: {
+          type: 'multiselect',
+          label: 'Permission-Required Actions',
+          default: ['toilet'],
+          options: [
+            { value: 'eat', label: 'Eat / Makan' },
+            { value: 'drink', label: 'Drink / Minum' },
+            { value: 'bath', label: 'Bath / Mandi' },
+            { value: 'pee', label: 'Pipis / Kebelet Kecil' },
+            { value: 'poop', label: 'Buang Air Besar' },
+            { value: 'play', label: 'Play / Main' },
+            { value: 'fish', label: 'Fish Craving / Ikan' },
+            { value: 'sleep', label: 'Sleep / Tidur' }
+          ],
+          description: 'Which self-care actions require the user\'s explicit permission when permission mode is ON. Empty = all actions.'
+        },
+        selfCareOverMaxCap: {
+          type: 'slider',
+          label: 'Over-Max Cap (%)',
+          default: 200,
+          min: 100,
+          max: 500,
+          step: 25,
+          description: 'How far past 100% a vital may climb when the user withholds permission (e.g. 200 = bladder can reach 200% when she keeps being told "no"). Every turn above 100% intensifies her urgency and mood.'
+        },
+        selfCareMoodShiftIntensity: {
+          type: 'slider',
+          label: 'Mood Shift Intensity',
+          default: 1,
+          min: 0,
+          max: 3,
+          step: 0.1,
+          description: 'How strongly over-max vitals change Yui\'s mood each turn (stress/irritation up, joy down). 0 = no mood effect, vitals still escalate.'
         },
         timezoneOffsetHours: {
           type: 'number',
@@ -387,6 +533,14 @@ export const LifeSimulationModule: CortexModule = {
     const thirstRate = Number(config.thirstRatePerHour !== undefined ? config.thirstRatePerHour : 16);
     const cleanlinessRate = Number(config.cleanlinessRatePerHour !== undefined ? config.cleanlinessRatePerHour : 4);
     const bladderRate = Number(config.bladderRatePerHour !== undefined ? config.bladderRatePerHour : 8);
+    const poopRate = Number(config.poopRatePerHour !== undefined ? config.poopRatePerHour : 5);
+    const poopFillPerMeal = Number(config.poopFillPerMeal !== undefined ? config.poopFillPerMeal : 12);
+    const peeFillPerMeal = Number(config.peeFillPerMeal !== undefined ? config.peeFillPerMeal : 5);
+    const peeFillPerDrink = Number(config.peeFillPerDrink !== undefined ? config.peeFillPerDrink : 8);
+    const overfeedFloor = Number(config.overfeedFloor !== undefined ? config.overfeedFloor : -5);
+    const enableHorn = config.enableHorn !== undefined ? !!config.enableHorn : true;
+    const hornGainOnNSFW = Number(config.hornGainOnNSFW !== undefined ? config.hornGainOnNSFW : 12);
+    const hornDecayPerHour = Number(config.hornDecayPerHour !== undefined ? config.hornDecayPerHour : 6);
     const playUrgeRate = Number(config.playUrgeRatePerHour !== undefined ? config.playUrgeRatePerHour : 6);
     const fishCravingRate = Number(config.fishCravingRatePerHour !== undefined ? config.fishCravingRatePerHour : 5);
     const enableInventory = config.enableInventory !== undefined ? !!config.enableInventory : true;
@@ -404,7 +558,12 @@ export const LifeSimulationModule: CortexModule = {
       lastMeal: prior.lastMeal || (firstRun ? now - 3 * HOUR_MS : now),
       lastDrink: prior.lastDrink || (firstRun ? now - 2 * HOUR_MS : now),
       lastBath: prior.lastBath || (firstRun ? now - 8 * HOUR_MS : now),
-      lastToilet: prior.lastToilet || (firstRun ? now - 3 * HOUR_MS : now),
+      lastPee: prior.lastPee || prior.lastToilet || (firstRun ? now - 3 * HOUR_MS : now),
+      lastPoop: prior.lastPoop || (firstRun ? now - 6 * HOUR_MS : now),
+      hungerOffset: prior.hungerOffset || 0,
+      thirstOffset: prior.thirstOffset || 0,
+      horn: prior.horn || 0,
+      lastHornDecay: prior.lastHornDecay || now,
       lastPlay: prior.lastPlay || (firstRun ? now - 6 * HOUR_MS : now),
       lastFish: prior.lastFish || (firstRun ? now - 10 * HOUR_MS : now),
       lastSleepEnd: prior.lastSleepEnd || (firstRun ? now - 12 * HOUR_MS : now),
@@ -428,6 +587,39 @@ export const LifeSimulationModule: CortexModule = {
       inventory = { foods: [], drinks: [], items: [] };
     }
 
+    // --- Permission mode: over-max caps + ask-before-act gating ---
+    const permissionMode = config.enableSelfCarePermission !== undefined ? !!config.enableSelfCarePermission : false;
+    const overMaxCap = Number(config.selfCareOverMaxCap !== undefined ? config.selfCareOverMaxCap : 200);
+    const moodShiftIntensity = Number(config.selfCareMoodShiftIntensity !== undefined ? config.selfCareMoodShiftIntensity : 1);
+    const permActionList: string[] = Array.isArray(config.selfCarePermissionActions) ? config.selfCarePermissionActions.map((a: any) => String(a)) : [];
+    const permSet = new Set(permActionList);
+    const needsPermission = (action: string): boolean => permissionMode && (permSet.size === 0 || permSet.has(action));
+    const capFor = (action: string): number => needsPermission(action) ? overMaxCap : 100;
+    const selfCareHunger = Number(config.selfCareHungerThreshold !== undefined ? config.selfCareHungerThreshold : 75);
+    const selfCareThirst = Number(config.selfCareThirstThreshold !== undefined ? config.selfCareThirstThreshold : 70);
+    const selfCareCleanliness = Number(config.selfCareCleanlinessThreshold !== undefined ? config.selfCareCleanlinessThreshold : 40);
+    const selfCareBladder = Number(config.selfCareBladderThreshold !== undefined ? config.selfCareBladderThreshold : 85);
+    const selfCarePoop = Number(config.selfCarePoopThreshold !== undefined ? config.selfCarePoopThreshold : 85);
+    const pendingPermissions: string[] = [];
+    const pendingActions = new Set<string>();
+    const pendingRequests: string[] = [];
+    const addPending = (action: string, label: string, level: number, threshold: number) => {
+      if (needsPermission(action) && !pendingActions.has(action)) {
+        pendingActions.add(action);
+        pendingPermissions.push(`${label} (${Math.round(level)}%)`);
+        logs.push(`[LIFE_SIM] Permission needed for ${action} — ${label} at ${Math.round(level)}% (over-max cap ${overMaxCap}%).`);
+      }
+    };
+    const addRequest = (text: string) => {
+      if (!pendingRequests.includes(text)) pendingRequests.push(text);
+    };
+    // Advance a stored timestamp so a vital jumps by `amount` points (feeding → faster pee/poop).
+    const addFill = (key: string, amount: number, rate: number, action: string) => {
+      const cap = capFor(action);
+      const cur = clamp(((now - (v[key] ?? now)) / HOUR_MS) * rate, 0, cap);
+      v[key] = now - (Math.min(cap, cur + amount) / rate) * HOUR_MS;
+    };
+
     // --- Trilingual interaction triggers (persona-level consumption) ---
     const eatTrigger = (EAT_WORDS_IDEN.test(input) && OFFER_WORDS_IDEN.test(input)) ||
       (EAT_WORDS_JP.test(input) && (OFFER_WORDS_JP.test(input) || OFFER_WORDS_IDEN.test(input))) ||
@@ -439,39 +631,78 @@ export const LifeSimulationModule: CortexModule = {
       (OFFER_WORDS_IDEN.test(input) || OFFER_WORDS_JP.test(input))) ||
       IMPERATIVE_JP.test(input);
     const bathTrigger = BATH_WORDS_IDEN.test(input) || BATH_WORDS_JP.test(input);
-    const toiletTrigger = TOILET_WORDS_IDEN.test(input) || TOILET_WORDS_JP.test(input);
+    const peeTrigger = PEE_WORDS_IDEN.test(input) || PEE_WORDS_JP.test(input);
+    const poopTrigger = POOP_WORDS_IDEN.test(input) || POOP_WORDS_JP.test(input);
+    const nsfwTrigger = enableHorn && NSFW_PATTERN.test(input);
     const petTrigger = enableNeko && (PET_WORDS_IDEN.test(input) || PET_WORDS_JP.test(input));
     const playTrigger = enableNeko && (PLAY_WORDS_IDEN.test(input) || PLAY_WORDS_JP.test(input));
     const fishTrigger = enableNeko && (FISH_WORDS_IDEN.test(input) || FISH_WORDS_JP.test(input));
 
+    // Snapshot vitals BEFORE consumption so overfeeding can be detected (lastMeal resets on eat).
+    const preHunger = clamp(((now - (v.lastMeal ?? now)) / HOUR_MS) * hungerRate * (v.sleepState === 'asleep' ? 0.35 : 1), 0, capFor('eat'));
+    const preThirst = clamp(((now - (v.lastDrink ?? now)) / HOUR_MS) * thirstRate * (v.sleepState === 'asleep' ? 0.35 : 1), 0, capFor('drink'));
+
     if (eatTrigger) {
-      const eaten = consumeFromInventory(inventory, 'foods');
+      const eaten = consumeFromInventory(inventory, 'foods') || consumeAphrodisiac(inventory);
       if (eaten) {
         v.lastMeal = now;
         if (fishTrigger && (eaten.id.includes('sashimi') || eaten.id.includes('fish'))) {
           v.lastFish = now;
         }
+        if (enableHorn && isAphrodisiacItem(eaten)) {
+          v.horn = 100;
+          v.lastHornDecay = now;
+          logs.push('[LIFE_SIM] Yui ate an aphrodisiac (perangsang) — horniness maxed out!');
+        }
+        addFill('lastPoop', poopFillPerMeal, poopRate, 'poop');
+        addFill('lastPee', peeFillPerMeal, bladderRate, 'pee');
+        if (preHunger <= 5) {
+          v.hungerOffset = Math.max(overfeedFloor, (v.hungerOffset || 0) - 5);
+          logs.push(`[LIFE_SIM] Yui was already full but was fed anyway — hunger dropped to ${Math.round(v.hungerOffset || 0)}% (overstuffed).`);
+        } else {
+          v.hungerOffset = 0;
+        }
         logs.push(`[LIFE_SIM] Yui ate "${eaten.name}" from inventory — hunger satisfied.`);
+      } else if (needsPermission('eat')) {
+        addPending('eat', 'eat (makan)', preHunger, selfCareHunger);
       } else {
-        logs.push('[LIFE_SIM] Yui wants to eat but the inventory is empty.');
+        addRequest('she is hungry but has no food (inventory empty or the offered item is not food) — ask the user to buy her something to eat');
       }
     }
     if (drinkTrigger) {
-      const drunk = consumeFromInventory(inventory, 'drinks');
+      const drunk = consumeFromInventory(inventory, 'drinks') || consumeAphrodisiac(inventory);
       if (drunk) {
         v.lastDrink = now;
+        if (enableHorn && isAphrodisiacItem(drunk)) {
+          v.horn = 100;
+          v.lastHornDecay = now;
+          logs.push('[LIFE_SIM] Yui drank an aphrodisiac (perangsang) — horniness maxed out!');
+        }
+        addFill('lastPee', peeFillPerDrink, bladderRate, 'pee');
+        if (preThirst <= 5) {
+          v.thirstOffset = Math.max(overfeedFloor, (v.thirstOffset || 0) - 5);
+          logs.push(`[LIFE_SIM] Yui was already hydrated but was fed a drink anyway — thirst dropped to ${Math.round(v.thirstOffset || 0)}% (overfull).`);
+        } else {
+          v.thirstOffset = 0;
+        }
         logs.push(`[LIFE_SIM] Yui drank "${drunk.name}" from inventory — thirst quenched.`);
+      } else if (needsPermission('drink')) {
+        addPending('drink', 'drink (minum)', preThirst, selfCareThirst);
       } else {
-        logs.push('[LIFE_SIM] Yui wants to drink but the drink inventory is empty.');
+        addRequest('she is thirsty but has no drink (inventory empty or the offered item is not a drink) — ask the user to buy her something to drink');
       }
     }
     if (bathTrigger) {
       v.lastBath = now;
       logs.push('[LIFE_SIM] Yui "bathed" — body refreshed. Nyaaa~');
     }
-    if (toiletTrigger) {
-      v.lastToilet = now;
-      logs.push('[LIFE_SIM] Yui "went to the toilet" — relieved.');
+    if (peeTrigger) {
+      v.lastPee = now;
+      logs.push('[LIFE_SIM] Yui went to the toilet (pipis) — relieved.');
+    }
+    if (poopTrigger) {
+      v.lastPoop = now;
+      logs.push('[LIFE_SIM] Yui "buang air besar" — relieved.');
     }
     if (playTrigger) {
       v.lastPlay = now;
@@ -558,66 +789,124 @@ export const LifeSimulationModule: CortexModule = {
       }
     }
 
-    // --- Vital computation ---
+    // --- Vital computation (over-max allowed when permission is withheld) ---
     const metabolismFactor = v.sleepState === 'asleep' ? 0.35 : 1;
-    let hunger = clamp(((now - v.lastMeal) / HOUR_MS) * hungerRate * metabolismFactor, 0, 100);
-    let thirst = clamp(((now - v.lastDrink) / HOUR_MS) * thirstRate * metabolismFactor, 0, 100);
-    let cleanliness = clamp(100 - ((now - v.lastBath) / HOUR_MS) * cleanlinessRate * metabolismFactor, 0, 100);
-    let bladder = clamp(((now - v.lastToilet) / HOUR_MS) * bladderRate, 0, 100);
+    let hunger = clamp(((now - v.lastMeal) / HOUR_MS) * hungerRate * metabolismFactor + (v.hungerOffset || 0), overfeedFloor, capFor('eat'));
+    let thirst = clamp(((now - v.lastDrink) / HOUR_MS) * thirstRate * metabolismFactor + (v.thirstOffset || 0), overfeedFloor, capFor('drink'));
+    let cleanliness = clamp(100 - ((now - v.lastBath) / HOUR_MS) * cleanlinessRate * metabolismFactor, 0, capFor('bath'));
+    let pee = clamp(((now - v.lastPee) / HOUR_MS) * bladderRate, 0, capFor('pee'));
+    let poop = clamp(((now - v.lastPoop) / HOUR_MS) * poopRate, 0, capFor('poop'));
+
+    // --- Horniness (gairah): decays over time, rises on NSFW context, maxed by aphrodisiac ---
+    let horn = clamp(v.horn || 0, 0, 100);
+    const hornElapsedHours = Math.max(0, (now - (v.lastHornDecay || now)) / HOUR_MS);
+    if (hornElapsedHours > 0) {
+      horn = clamp(horn - hornElapsedHours * hornDecayPerHour, 0, 100);
+    }
+    if (nsfwTrigger && enableHorn) {
+      horn = clamp(horn + hornGainOnNSFW, 0, 100);
+    }
+    v.horn = horn;
+    v.lastHornDecay = now;
 
     let sleepiness: number;
     if (v.sleepState === 'asleep') {
       const sleepMs = now - (v.asleepSince || now);
-      sleepiness = clamp(baseSleepiness(hour) - (sleepMs / HOUR_MS) * 120, 3, 100);
+      sleepiness = clamp(baseSleepiness(hour) - (sleepMs / HOUR_MS) * 120, 3, capFor('sleep'));
     } else {
       const hoursAwake = (now - (v.lastSleepEnd || now)) / HOUR_MS;
-      sleepiness = clamp(baseSleepiness(hour) + hoursAwake * 6 + (v.sleepDebtMin / 60) * 2.5, 5, 100);
+      sleepiness = clamp(baseSleepiness(hour) + hoursAwake * 6 + (v.sleepDebtMin / 60) * 2.5, 5, capFor('sleep'));
     }
 
     // --- Autonomous self-care (she maintains her own vitals when thresholds are hit) ---
     const selfCare = config.enableAutonomousSelfCare !== undefined ? !!config.enableAutonomousSelfCare : true;
-    const selfCareHunger = Number(config.selfCareHungerThreshold !== undefined ? config.selfCareHungerThreshold : 75);
-    const selfCareThirst = Number(config.selfCareThirstThreshold !== undefined ? config.selfCareThirstThreshold : 70);
-    const selfCareCleanliness = Number(config.selfCareCleanlinessThreshold !== undefined ? config.selfCareCleanlinessThreshold : 40);
-    const selfCareBladder = Number(config.selfCareBladderThreshold !== undefined ? config.selfCareBladderThreshold : 85);
     if (selfCare) {
       let cared = false;
       if (hunger >= selfCareHunger) {
+        if (needsPermission('eat')) {
+          addPending('eat', 'eat (makan)', hunger, selfCareHunger);
+        } else {
         const eaten = consumeFromInventory(inventory, 'foods');
         if (eaten) {
           v.lastMeal = now;
           if (eaten.id.includes('sashimi') || eaten.id.includes('fish')) v.lastFish = now;
+          if (enableHorn && isAphrodisiacItem(eaten)) {
+            v.horn = 100;
+            v.lastHornDecay = now;
+            logs.push('[LIFE_SIM] Self-care: ate an aphrodisiac (perangsang) — horniness maxed out!');
+          }
+          addFill('lastPoop', poopFillPerMeal, poopRate, 'poop');
+          addFill('lastPee', peeFillPerMeal, bladderRate, 'pee');
+          if (hunger <= 5) {
+            v.hungerOffset = Math.max(overfeedFloor, (v.hungerOffset || 0) - 5);
+          } else {
+            v.hungerOffset = 0;
+          }
           logs.push(`[LIFE_SIM] Self-care: ate "${eaten.name}" automatically (hunger ${Math.round(hunger)}%).`);
           cared = true;
         } else {
           logs.push('[LIFE_SIM] Self-care: wants to eat but the food inventory is empty.');
         }
+        }
       }
       if (thirst >= selfCareThirst) {
+        if (needsPermission('drink')) {
+          addPending('drink', 'drink (minum)', thirst, selfCareThirst);
+        } else {
         const drunk = consumeFromInventory(inventory, 'drinks');
         if (drunk) {
           v.lastDrink = now;
+          if (enableHorn && isAphrodisiacItem(drunk)) {
+            v.horn = 100;
+            v.lastHornDecay = now;
+            logs.push('[LIFE_SIM] Self-care: drank an aphrodisiac (perangsang) — horniness maxed out!');
+          }
+          addFill('lastPee', peeFillPerDrink, bladderRate, 'pee');
+          if (thirst <= 5) {
+            v.thirstOffset = Math.max(overfeedFloor, (v.thirstOffset || 0) - 5);
+          } else {
+            v.thirstOffset = 0;
+          }
           logs.push(`[LIFE_SIM] Self-care: drank "${drunk.name}" automatically (thirst ${Math.round(thirst)}%).`);
           cared = true;
         } else {
           logs.push('[LIFE_SIM] Self-care: wants to drink but the drink inventory is empty.');
         }
+        }
       }
       if (cleanliness <= selfCareCleanliness) {
+        if (needsPermission('bath')) {
+          addPending('bath', 'bath (mandi)', 100 - cleanliness, selfCareCleanliness);
+        } else {
         v.lastBath = now;
         logs.push(`[LIFE_SIM] Self-care: bathed automatically (cleanliness ${Math.round(cleanliness)}%).`);
         cared = true;
+        }
       }
-      if (bladder >= selfCareBladder) {
-        v.lastToilet = now;
-        logs.push('[LIFE_SIM] Self-care: used the toilet automatically.');
+      if (pee >= selfCareBladder) {
+        if (needsPermission('pee')) {
+          addPending('pee', 'pipis (kebelet)', pee, selfCareBladder);
+        } else {
+        v.lastPee = now;
+        logs.push(`[LIFE_SIM] Self-care: pipis automatically (kebelet ${Math.round(pee)}%).`);
         cared = true;
+        }
+      }
+      if (poop >= selfCarePoop) {
+        if (needsPermission('poop')) {
+          addPending('poop', 'buang air besar', poop, selfCarePoop);
+        } else {
+        v.lastPoop = now;
+        logs.push(`[LIFE_SIM] Self-care: buang air besar automatically (mules ${Math.round(poop)}%).`);
+        cared = true;
+        }
       }
       if (cared) {
         hunger = clamp(((now - v.lastMeal) / HOUR_MS) * hungerRate * metabolismFactor, 0, 100);
         thirst = clamp(((now - v.lastDrink) / HOUR_MS) * thirstRate * metabolismFactor, 0, 100);
         cleanliness = clamp(100 - ((now - v.lastBath) / HOUR_MS) * cleanlinessRate * metabolismFactor, 0, 100);
-        bladder = clamp(((now - v.lastToilet) / HOUR_MS) * bladderRate, 0, 100);
+        pee = clamp(((now - v.lastPee) / HOUR_MS) * bladderRate, 0, 100);
+        poop = clamp(((now - v.lastPoop) / HOUR_MS) * poopRate, 0, 100);
       }
     }
 
@@ -646,22 +935,48 @@ export const LifeSimulationModule: CortexModule = {
       purrLevel = clamp((joy * 0.4) + (valence * 0.25) + (playfulness * 0.35), 0, 100);
     }
 
-    let playUrge = enableNeko ? clamp(((now - v.lastPlay) / HOUR_MS) * playUrgeRate, 0, 100) : 0;
-    let fishCraving = enableNeko ? clamp(((now - v.lastFish) / HOUR_MS) * fishCravingRate, 0, 100) : 0;
+    let playUrge = enableNeko ? clamp(((now - v.lastPlay) / HOUR_MS) * playUrgeRate, 0, capFor('play')) : 0;
+    let fishCraving = enableNeko ? clamp(((now - v.lastFish) / HOUR_MS) * fishCravingRate, 0, capFor('fish')) : 0;
 
     if (selfCare && enableNeko) {
       const selfCarePlay = Number(config.selfCarePlayThreshold !== undefined ? config.selfCarePlayThreshold : 90);
       const selfCareFish = Number(config.selfCareFishThreshold !== undefined ? config.selfCareFishThreshold : 90);
       if (playUrge >= selfCarePlay) {
+        if (needsPermission('play')) {
+          addPending('play', 'play (main)', playUrge, selfCarePlay);
+        } else {
         const urgeBefore = Math.round(playUrge);
         v.lastPlay = now;
         playUrge = 0;
         logs.push(`[LIFE_SIM] Self-care: played chase by herself (play urge ${urgeBefore}%).`);
+        }
       }
       if (fishCraving >= selfCareFish) {
+        if (needsPermission('fish')) {
+          addPending('fish', 'fish (ikan)', fishCraving, selfCareFish);
+        } else {
         v.lastFish = now;
         fishCraving = 0;
         logs.push('[LIFE_SIM] Self-care: fish craving satisfied on her own.');
+        }
+      }
+    }
+
+    // --- Over-max discomfort → per-turn mood shift (only when permission mode forces escalation) ---
+    if (permissionMode && moodShiftIntensity > 0) {
+      const overExcess =
+        Math.max(0, hunger - 100) + Math.max(0, thirst - 100) + Math.max(0, pee - 100) + Math.max(0, poop - 100) +
+        Math.max(0, sleepiness - 100) + Math.max(0, playUrge - 100) + Math.max(0, fishCraving - 100);
+      if (overExcess > 0) {
+        const intensity = Math.min(60, overExcess * moodShiftIntensity);
+        const nextStress = clamp((state.mood?.stress ?? 25) + intensity * 0.8, 0, 100);
+        const nextAnger = clamp((state.mood?.anger ?? 0) + intensity * 0.4, 0, 100);
+        const nextJoy = clamp((state.mood?.joy ?? 50) - intensity * 0.5, 0, 100);
+        if (!state.mood) state.mood = {};
+        state.mood.stress = nextStress;
+        state.mood.anger = nextAnger;
+        state.mood.joy = nextJoy;
+        logs.push(`[LIFE_SIM] Over-max discomfort ${Math.round(overExcess)} → mood shift: stress ${Math.round(nextStress)}, anger ${Math.round(nextAnger)}, joy ${Math.round(nextJoy)}.`);
       }
     }
 
@@ -689,10 +1004,18 @@ export const LifeSimulationModule: CortexModule = {
       [80, 'Bersih Segar / Fresh & Clean / さっぱり'], [60, 'Sedikit Berdebu / A Bit Dusty / 少しホコリ'],
       [40, 'Perlu Mandi / Needs a Bath / お風呂ほしい'], [20, 'Sangat Perlu Mandi / Really Needs a Bath / お風呂入りたい']
     ], 'Gak tahan lagi / Desperate for a Bath / もう無理');
-    const bladderLabel = classifyLevel(bladder, [
-      [85, 'Sangat Kebelet / Desperate / 我慢できない'], [65, 'Kebelet Banget / Really Need To Go / かなりトイレ'],
-      [45, 'Kebelet / Need The Toilet / トイレ行きたい'], [25, 'Sedikit Kebelet / Slightly Need The Toilet / ちょっとトイレ']
+    const peeLabel = classifyLevel(pee, [
+      [85, 'Sangat Kebelet / Desperate / 我慢できない'], [65, 'Kebelet Banget / Really Need To Pipis / かなりトイレ'],
+      [45, 'Kebelet / Need The Toilet / トイレ行きたい'], [25, 'Sedikit Kebelet / Slightly Need To Pee / ちょっとトイレ']
     ], 'Aman / Comfortable / 大丈夫');
+    const poopLabel = classifyLevel(poop, [
+      [85, 'Mules Banget / Desperate For The Bathroom / うんちしたい'], [65, 'Mules / Really Need To Go / かなりうんち'],
+      [45, 'Mulai Mules / Need The Bathroom / お腹が痛い'], [25, 'Sedikit Mules / Slightly Need To Go / ちょっとお腹']
+    ], 'Aman / Comfortable / 大丈夫');
+    const hornLabel = classifyLevel(horn, [
+      [80, 'Sangat Horny / Very Aroused / ムラムラ'], [60, 'Horny / Aroused / ちょっとエッチ'],
+      [40, 'Lumayan Hangat / Warming Up / 少しドキドキ'], [20, 'Tenang / Calm / 落ち着いてる']
+    ], 'Flat / Very Calm / 平気');
     const sleepinessLabel = classifyLevel(sleepiness, [
       [80, 'Kurang Tidur / Sleep-Deprived / 寝不足'], [60, 'Sangat Ngantuk / Very Drowsy / すごく眠い'],
       [40, 'Ngantuk / Drowsy / 眠い'], [20, 'Sedikit Lelah / Slightly Tired / 少し疲れた']
@@ -734,7 +1057,9 @@ export const LifeSimulationModule: CortexModule = {
     v.hunger = Math.round(hunger);
     v.thirst = Math.round(thirst);
     v.cleanliness = Math.round(cleanliness);
-    v.bladder = Math.round(bladder);
+    v.pee = Math.round(pee);
+    v.poop = Math.round(poop);
+    v.horn = Math.round(horn);
     v.sleepiness = Math.round(sleepiness);
     v.effectiveBedtime = effectiveBedtimeText;
     v.effectiveWake = effectiveWakeText;
@@ -753,7 +1078,9 @@ export const LifeSimulationModule: CortexModule = {
       hunger: Math.round(hunger),
       thirst: Math.round(thirst),
       cleanliness: Math.round(cleanliness),
-      bladder: Math.round(bladder),
+      pee: Math.round(pee),
+      poop: Math.round(poop),
+      horn: Math.round(horn),
       sleepiness: Math.round(sleepiness),
       sleepState: v.sleepState,
       sleepDebtMin: Math.round(v.sleepDebtMin),
@@ -782,8 +1109,12 @@ export const LifeSimulationModule: CortexModule = {
       thirstLabel,
       cleanlinessLevel: Math.round(cleanliness).toString(),
       cleanlinessLabel,
-      bladderLevel: Math.round(bladder).toString(),
-      bladderLabel,
+      peeLevel: Math.round(pee).toString(),
+      peeLabel,
+      poopLevel: Math.round(poop).toString(),
+      poopLabel,
+      hornLevel: Math.round(horn).toString(),
+      hornLabel,
       sleepinessLevel: Math.round(sleepiness).toString(),
       sleepinessLabel,
       sleepStateText,
@@ -808,9 +1139,20 @@ export const LifeSimulationModule: CortexModule = {
       : '';
 
     const currentDirective = context.soulDirective || '';
-    const updatedDirective = `${currentDirective}\n\n# LIFE SIMULATION (PERSONA-ONLY)\n${compiledDirectiveWithNeko || compiledDirective}`;
+    let updatedDirective = `${currentDirective}\n\n# LIFE SIMULATION (PERSONA-ONLY)\n${compiledDirectiveWithNeko || compiledDirective}`;
 
-    logs.push(`[LIFE_SIM] Hunger ${Math.round(hunger)}% | Thirst ${Math.round(thirst)}% | Cleanliness ${Math.round(cleanliness)}% | Bladder ${Math.round(bladder)}% | Sleepiness ${Math.round(sleepiness)}% | ${v.sleepState}${affectStatusAndSleep ? ` | Status: ${state.status} | Energy ${state.energy}%` : ''} | Sleep debt ${Math.round(v.sleepDebtMin)}m | Bedtime ${effectiveBedtimeText}-${effectiveWakeText}${enableNeko ? ` | Purr ${Math.round(purrLevel)}% | Tail: ${tailState} | Play ${Math.round(playUrge)}% | Fish ${Math.round(fishCraving)}%` : ''}`);
+    // --- Permission-required actions: instruct Yui to ask the user instead of acting ---
+    if (pendingPermissions.length > 0) {
+      const permText = pendingPermissions.join(', ');
+      updatedDirective += `\n\n# PERMISSION REQUIRED — ASK BEFORE ACTING\nYui currently needs the user's permission before doing the following: ${permText}. These needs are already past their normal limit and climbing. You MUST ask the user for explicit permission (in character, naturally, e.g. "boleh aku ke toilet? / boleh makan? / aku mau mandi dulu, ya?") before doing any of them. Do NOT do them on your own, and do NOT let them silently auto-resolve. This is the one exception to the silence rule — asking permission requires mentioning the need briefly and naturally.`;
+    }
+
+    // --- Buy requests: she wants something the user has not provided ---
+    if (pendingRequests.length > 0) {
+      updatedDirective += `\n\n# REQUEST — ASK TO BUY\nYui needs the user to buy her something: ${pendingRequests.join('; ')}. In character, naturally ask the user to buy it for her. Do NOT eat or drink anything else on your own, and do not silently drop the request.`;
+    }
+
+    logs.push(`[LIFE_SIM] Hunger ${Math.round(hunger)}% | Thirst ${Math.round(thirst)}% | Cleanliness ${Math.round(cleanliness)}% | Pipis ${Math.round(pee)}% | BAB ${Math.round(poop)}%${enableHorn ? ` | Horn ${Math.round(horn)}%` : ''} | Sleepiness ${Math.round(sleepiness)}% | ${v.sleepState}${affectStatusAndSleep ? ` | Status: ${state.status} | Energy ${state.energy}%` : ''} | Sleep debt ${Math.round(v.sleepDebtMin)}m | Bedtime ${effectiveBedtimeText}-${effectiveWakeText}${enableNeko ? ` | Purr ${Math.round(purrLevel)}% | Tail: ${tailState} | Play ${Math.round(playUrge)}% | Fish ${Math.round(fishCraving)}%` : ''}${pendingPermissions.length ? ` | ASK PERMISSION: ${pendingPermissions.join(', ')}` : ''}${pendingRequests.length ? ` | BUY: ${pendingRequests.join('; ')}` : ''}`);
 
     return {
       ...context,
