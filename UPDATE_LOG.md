@@ -1,6 +1,15 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.320] - 2026-08-07
+### Feature: Virtual body: add pose field (persisted + injected + foto SOP sync)
+- config.toml v1.3.0: change_clothes tool now accepts pose (current body pose/position, e.g. standing, on all fours) in valid fields + parameters
+- main.js: pose already in FIELDS; live state set to 'standing'
+- virtual_body_state.json v1.4.0: default state includes pose=standing; description updated
+- virtual_body_inject.json v1.4.0: [VIRTUAL BODY] block now injects 'Your current body pose: ...' into the LLM prompt
+- foto SOPs (foto.md, foto_sop/prompt/karakter/pose_sfw/pose_nsfw): mirror pose field for <POSE> placeholder, virtual body pose overrides unless user requests a different pose
+
+
 ## [4.319] - 2026-08-07
 ### Fix: SOP cleanup: EN rewrite + virtual body sync + always-on chat_sop
 - Rewrote all user SOP files to English (chat_sop, default, coding, foto, foto_sop/*) using ${characterName} placeholder
