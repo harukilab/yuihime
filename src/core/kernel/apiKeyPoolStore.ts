@@ -13,7 +13,9 @@
  *   {
  *     overloaded:  Record<apiKey, expiryMs>,
  *     rateLimited: Record<apiKey, expiryMs>,
- *     cooldowns:   Record<providerId, Record<"key::model", { until: number; reason: string }>>
+ *     cooldowns:   Record<providerId, Record<"key::model", { until: number; reason: string }>>,
+ *     failedModels: Record<modelId, expiryMs>,
+ *     failedProviders: Record<providerId, expiryMs>
  *   }
  */
 
@@ -32,6 +34,8 @@ export interface KeyPoolStateFile {
   overloaded?: Record<string, number>;
   rateLimited?: Record<string, number>;
   cooldowns?: Record<string, Record<string, PersistedCooldown>>;
+  failedModels?: Record<string, number>;
+  failedProviders?: Record<string, number>;
 }
 
 function statePath(): string {

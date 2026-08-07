@@ -3,6 +3,34 @@ import { extractJsonObject } from './cortex/jsonExtract.js';
 import { genId } from '@shared/core/idGen';
 
 /**
+ * Build a plain-text tool catalog for models that do NOT support the native
+ * `tools`/`tool_calls` API channel (e.g. Gemma). Each tool is rendered as an
+ * inline callable of the form `functions.<name>:<n>{...}` — the exact syntax
+ * `readNativeToolCalls` already understands generically — so a converter model
+ * can still invoke tools by emitting them as text in its reply.
+ */
+export function buildInlineToolsText(tools: any[]): string {
+  if (!tools) return '';
+  let decls = Array.isArray(tools) ? tools : (tools as any).functionDeclarations;
+  if (!Array.isArray(decls) || decls.length === 0) return '';
+  const lines = [
+    '[CONVERTED NATIVE TOOLS (call by emitting inline text)]',
+    'You may call tools ONLY by outputting a line in EXACTLY this format:',
+    'functions.<toolName>:<index>{ "argName": "value", ... }',
+    'The <index> is the tool\'s position in the list below (starting at 0). After a tool line, wait for its result before replying.',
+    'Available tools:'
+  ];
+  decls.forEach((t: any, i: number) => {
+    const fn: any = t?.function || t || {};
+    const name = fn.name || t.name || `tool_${i}`;
+    const description = fn.description || t.description || '';
+    const params = fn.parameters || t.parameters || { type: 'object', properties: {} };
+    lines.push(`- functions.${name}:${i} — ${description} | arguments schema: ${JSON.stringify(params)}`);
+  });
+  return lines.join('\n');
+}
+
+/**
  * Convert registered Yuihime tool metadata into the native OpenAI
  * `tools` array (`[{ type: 'function', function: { name, description, parameters } }]`).
  * Used to enable native OpenAI-compatible function calling on providers.
@@ -204,10 +232,33 @@ export function readNativeToolCalls(rawResult: any, providerId: string): any[] |
       const parsed = JSON.parse(jsonMatch[0]);
       if (Array.isArray(parsed.tool_calls)) return parsed.tool_calls;
       const normalized = normalizeToolCallsToOpenAI(parsed, providerId);
-      return Array.isArray(normalized) && normalized.length > 0 ? normalized : null;
+      if (Array.isArray(normalized) && normalized.length > 0) return normalized;
     } catch {
-      return null;
+      // fall through to inline fragment detection below
     }
+
+    // Inline Gemini-style fragments (`functions.<name>:<n>{...}`) are emitted as
+    // plain text by some OpenAI-compatible models (e.g. kilo openrouter/free).
+    // Detect and convert each occurrence into a canonical tool call so the tool
+    // channel can consume it on every provider, not just kilo.
+    const inlineCalls: any[] = [];
+    const inlinePattern = /functions\.([A-Za-z0-9_-]+):(\d+)\{([\s\S]*?)\}/g;
+    let m: RegExpExecArray | null;
+    while ((m = inlinePattern.exec(trimmed)) !== null) {
+      try {
+        const argsMatch = (m[3] || '').match(/\{[\s\S]*\}/);
+        const args = argsMatch ? JSON.parse(argsMatch[0]) : {};
+        inlineCalls.push({
+          id: `call_${m[1]}_${m[2]}_${genId(8)}`,
+          type: 'function',
+          function: { name: m[1], arguments: args }
+        });
+      } catch {
+        // skip malformed inline fragment
+      }
+    }
+    if (inlineCalls.length > 0) return inlineCalls;
+    return null;
   }
 
   if (typeof rawResult === 'object') {
@@ -219,6 +270,36 @@ export function readNativeToolCalls(rawResult: any, providerId: string): any[] |
   }
 
   return null;
+}
+
+/**
+ * Gemini's generateContent rejects several JSON-Schema keywords that the
+ * OpenAI-compatible tool builder emits (e.g. `additionalProperties`, `strict`,
+ * `outputSchema`). Recursively strip them so native functionDeclarations stay
+ * within the Gemini schema vocabulary.
+ */
+export function sanitizeGeminiSchema(schema: any): any {
+  if (Array.isArray(schema)) return schema.map(sanitizeGeminiSchema);
+  if (schema === null || typeof schema !== 'object') return schema;
+  const cleaned: any = {};
+  for (const [key, value] of Object.entries(schema)) {
+    if (key === 'additionalProperties' || key === 'strict' || key === 'outputSchema' || key === '$schema') {
+      continue;
+    }
+    if (key === 'properties' && value && typeof value === 'object') {
+      cleaned.properties = {};
+      for (const [propName, propSchema] of Object.entries(value)) {
+        cleaned.properties[propName] = sanitizeGeminiSchema(propSchema);
+      }
+    } else if (key === 'items') {
+      cleaned.items = sanitizeGeminiSchema(value);
+    } else if (Array.isArray(value)) {
+      cleaned[key] = value.map((v) => (v && typeof v === 'object' ? sanitizeGeminiSchema(v) : v));
+    } else {
+      cleaned[key] = value;
+    }
+  }
+  return cleaned;
 }
 
 /**
@@ -234,14 +315,14 @@ export function normalizeToolsForProvider(tools: any[], providerId: string): any
       return tools.map((t: any) => ({
         name: t.function?.name || t.name,
         description: t.function?.description || t.description || '',
-        input_schema: t.function?.parameters || t.parameters || { type: 'object', properties: {} }
+        input_schema: sanitizeGeminiSchema(t.function?.parameters || t.parameters || { type: 'object', properties: {} })
       }));
     case 'gemini':
       return {
         functionDeclarations: tools.map((t: any) => ({
           name: t.function?.name || t.name,
           description: t.function?.description || t.description || '',
-          parameters: t.function?.parameters || t.parameters || { type: 'object', properties: {} }
+          parameters: sanitizeGeminiSchema(t.function?.parameters || t.parameters || { type: 'object', properties: {} })
         }))
       };
     default:
@@ -397,4 +478,15 @@ export function buildChatMessages(
   }
   messages.push({ role: 'user', content: opts.user });
   return messages;
+}
+
+/**
+ * Strip inline Gemini-style function-call fragments (`functions.<name>:<n>{...}`)
+ * that some models emit as plain text from a final answer. When a model produces
+ * tool calls as literal text instead of the structured `tool_calls` array, those
+ * fragments leak into the user-facing reply; this removes them cleanly.
+ */
+export function stripInlineToolCallFragments(text: string): string {
+  if (typeof text !== 'string') return text;
+  return text.replace(/functions\.[A-Za-z0-9_-]+:\d+\{[\s\S]*?\}/g, '').trim();
 }

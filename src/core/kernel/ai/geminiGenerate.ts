@@ -3,61 +3,20 @@ import { AIConfig } from './aiTypes.js';
 import { toKeyArray, toSingleString } from '../configNormalizer.js';
 import { SystemRegistry } from '@shared/core/registry';
 import { LlmIoAuditor } from '../../server/llmAuditor.js';
-import { loadKeyPoolState, saveKeyPoolState, pruneExpiryMap } from '../keyPoolStateStore.js';
-import { normalizeToolCallsToOpenAI } from '../../openaiTools.js';
-
-const keyPool = {
-  configure: (_providerId: string, _config: any, _settings: any) => {},
-  next: (_providerId: string, _primaryKey: string, _modelId: string) => _primaryKey,
-  reportFailure: (_providerId: string, _key: string, _modelId: string, _msg: string) => {}
-};
+import { keyPool } from '../apiKeyPool.js';
+import { normalizeToolCallsToOpenAI, buildInlineToolsText } from '../../openaiTools.js';
 
 const OVERLOADED_KEY_TTL_MS = 5 * 60 * 1000;
 const RATE_LIMITED_KEY_TTL_MS = 15 * 60 * 1000;
+const FAILED_MODEL_TTL_MS = 30 * 60 * 1000;
 const PRIMARY_STALL_MS = 90_000; // first (expected-healthy) attempt gets the full header+body window
 const FALLBACK_STALL_MS = 30_000; // fallback attempts fail fast so rotation can't burn the pipeline budget
-const persistentOverloadedKeys = new Map<string, number>();
-const persistentRateLimitedKeys = new Map<string, number>();
 
-// Restore persisted busy-key state across restarts so known-bad keys (429/503/403)
-// are skipped immediately instead of being retried first on every boot.
-(function hydrateKeyPoolState(): void {
-  try {
-    const state = loadKeyPoolState();
-    if (state.overloaded) {
-      for (const [k, expiry] of Object.entries(pruneExpiryMap(state.overloaded))) {
-        persistentOverloadedKeys.set(k, expiry);
-      }
-    }
-    if (state.rateLimited) {
-      for (const [k, expiry] of Object.entries(pruneExpiryMap(state.rateLimited))) {
-        persistentRateLimitedKeys.set(k, expiry);
-      }
-    }
-    if (persistentOverloadedKeys.size > 0 || persistentRateLimitedKeys.size > 0) {
-      console.log(`[SERVER_AI] Restored ${persistentOverloadedKeys.size} overloaded + ${persistentRateLimitedKeys.size} rate-limited key(s) from disk.`);
-    }
-  } catch (err: any) {
-    console.warn('[SERVER_AI] Failed to hydrate busy-key state:', err?.message || err);
-  }
-})();
-
-function persistBusyKeyState(): void {
-  try {
-    const now = Date.now();
-    const overloaded: Record<string, number> = {};
-    for (const [k, expiry] of persistentOverloadedKeys) {
-      if (expiry > now) overloaded[k] = expiry;
-    }
-    const rateLimited: Record<string, number> = {};
-    for (const [k, expiry] of persistentRateLimitedKeys) {
-      if (expiry > now) rateLimited[k] = expiry;
-    }
-    saveKeyPoolState({ overloaded, rateLimited });
-  } catch (err: any) {
-    console.warn('[SERVER_AI] Failed to persist busy-key state:', err?.message || err);
-  }
-}
+// Busy-key / failed-model bookkeeping lives in the shared ApiKeyPool
+// (persisted to key_pool_state.json) so every provider driver gets the same
+// temporary skip behavior — see `keyPool.markKeyRateLimited` /
+// `markKeyOverloaded` / `markModelFailed` and the `isKey*` / `isModelFailed`
+// predicates. hydrate + persist are handled internally by the pool.
 
 function summarizeAiError(error: any): string {
   const raw = error?.message || String(error);
@@ -197,6 +156,14 @@ export function buildGeminiHistoryContents(history: any): any[] {
       });
     }
   }
+  // Gemini requires the conversation to start with a user turn. A reloaded
+  // native history may begin with an assistant(tool_calls) block (no persisted
+  // user prompt precedes it), which would surface as a leading functionCall
+  // content and be rejected with a 400 "function call turn" error. Seed a
+  // synthetic user turn so the alternation user -> model(functionCall) holds.
+  if (contents.length > 0 && contents[0].role !== 'user') {
+    contents.unshift({ role: 'user', parts: [{ text: '[Continued conversation]' }] });
+  }
   return contents;
 }
 
@@ -232,6 +199,12 @@ export async function generateContent(
   if (mergedApiKeys.length > 0) {
     geminiSettings.apiKey = mergedApiKeys;
   }
+  // Keep the durable ApiKeyPool in sync with the resolved Gemini key set so the
+  // per key::model cooldown rotation (apiKeyPool.ts) drives the same pool that
+  // this circuit iterates.
+  try {
+    keyPool.configure('gemini', geminiSettings, settings.getAll?.() || {});
+  } catch (_) { /* pool is advisory; never break generation */ }
   let defaultGeminiModel = '';
   try {
      const geminiModule = SystemRegistry.getProvider('gemini');
@@ -394,17 +367,15 @@ export async function generateContent(
       }
     }
 
+    console.log(`[SERVER_AI] Pool: ${allKeys.length} key(s) x ${allModels.length} model(s) ~ ${attemptsToTry.length} attempt(s)`);
+
     const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-    const now = Date.now();
-    for (const [k, expiry] of persistentOverloadedKeys) {
-      if (expiry <= now) persistentOverloadedKeys.delete(k);
-    }
-    for (const [k, expiry] of persistentRateLimitedKeys) {
-      if (expiry <= now) persistentRateLimitedKeys.delete(k);
-    }
     // Per-call state: models confirmed overloaded (503) this cycle so we don't
     // waste the remaining keys against a model that is down for everyone.
     const overloadedModelsThisCall = new Set<string>();
+    // Per-call model skip: once a model 429s on MULTIPLE keys this cycle, it is
+    // quota-exhausted pool-wide (not a single bad key) — stop burning the rest.
+    const modelQuotaFailCount = new Map<string, number>();
     let lastError: any = null;
     let attemptIndex = 0;
     for (const attempt of attemptsToTry) {
@@ -416,15 +387,40 @@ export async function generateContent(
         continue;
       }
 
-      if (persistentRateLimitedKeys.has(attempt.apiKey)) {
-        const hasOtherGoodKey = attemptsToTry.some(a => a.apiKey && a.apiKey !== attempt.apiKey && !persistentRateLimitedKeys.has(a.apiKey) && !persistentOverloadedKeys.has(a.apiKey));
+      // Fast-skip: once a model 429s on enough keys this cycle, it is
+      // exhausted for the whole pool — skip the remaining keys too.
+      const quotaFailCount = modelQuotaFailCount.get(attempt.modelId) || 0;
+      if (quotaFailCount >= 2) {
+        continue;
+      }
+
+      // Durable model-level skip: a model confirmed unavailable (404 not-found
+      // / deprecated / no longer available) is marked failed for TTL minutes so
+      // every key in the pool stops wasting attempts against it across calls.
+      if (keyPool.isModelFailed('gemini', attempt.modelId)) {
+        continue;
+      }
+
+      if (keyPool.isKeyRateLimited('gemini', attempt.apiKey)) {
+        const hasOtherGoodKey = attemptsToTry.some(a => a.apiKey && a.apiKey !== attempt.apiKey && !keyPool.isKeyRateLimited('gemini', a.apiKey) && !keyPool.isKeyOverloaded('gemini', a.apiKey));
         if (hasOtherGoodKey) {
           continue;
         }
       }
 
-      if (persistentOverloadedKeys.has(attempt.apiKey)) {
-        const hasOtherGoodKey = attemptsToTry.some(a => a.apiKey && a.apiKey !== attempt.apiKey && !persistentRateLimitedKeys.has(a.apiKey) && !persistentOverloadedKeys.has(a.apiKey));
+      if (keyPool.isKeyOverloaded('gemini', attempt.apiKey)) {
+        const hasOtherGoodKey = attemptsToTry.some(a => a.apiKey && a.apiKey !== attempt.apiKey && !keyPool.isKeyRateLimited('gemini', a.apiKey) && !keyPool.isKeyOverloaded('gemini', a.apiKey));
+        if (hasOtherGoodKey) {
+          continue;
+        }
+      }
+
+      // Durable ApiKeyPool cooldown (per key::model pair): skip cooled pairs for
+      // this model when a healthier key exists in the pool. Falls back to trying
+      // the soonest-releasing pair when every pair is cooled, matching the
+      // persistent busy-key behavior above.
+      if (keyPool.isCooledDown('gemini', attempt.apiKey, attempt.modelId)) {
+        const hasOtherGoodKey = attemptsToTry.some(a => a.apiKey && a.apiKey !== attempt.apiKey && !keyPool.isCooledDown('gemini', a.apiKey, a.modelId));
         if (hasOtherGoodKey) {
           continue;
         }
@@ -451,11 +447,11 @@ export async function generateContent(
               }
             }
 
-            console.log(`[SERVER_AI] Retrying attempt ${attempt.label} (retry #${retryCount}) in ${backoffMs}ms...`);
+            console.log(`[SERVER_AI] Retry ${attempt.label} (retry #${retryCount}) in ${backoffMs}ms...`);
             await sleep(backoffMs);
           }
 
-          console.log(`[SERVER_AI] Trying cognitive circuit: ${attempt.label} (Attempt #${retryCount + 1})...`);
+          console.log(`[SERVER_AI] Trying ${attempt.label}`);
           
           const finalBaseUrl = (geminiSettings.baseUrl || geminiSettings.endpoint || 'https://generativelanguage.googleapis.com').replace(/\/$/, '');
           const apiVersion = geminiSettings.apiVersion || 'v1beta';
@@ -520,11 +516,25 @@ export async function generateContent(
             generationConfig: genConfig,
           };
 
+          // Gemma models do not support the native `tools`/functionDeclarations
+          // API channel (Gemini returns 500 INTERNAL or silently ignores the
+          // declarations). Instead of attaching API tools, convert the schema
+          // catalog into inline text (functions.<name>:<n>{...}) appended to the
+          // prompt; the loop's readNativeToolCalls already parses that format.
+          const gemmaNative = attempt.modelId.includes('gemma') || attempt.modelId.includes('gemma-4');
           if (config.tools) {
-            requestBody.tools = config.tools;
+            if (gemmaNative) {
+              const toolText = buildInlineToolsText(config.tools);
+              if (toolText && partsToUse[0]?.text) {
+                partsToUse[0].text += `\n\n${toolText}`;
+                requestBody.contents = [...historyContents, { role: 'user', parts: partsToUse }];
+              }
+            } else {
+              requestBody.tools = config.tools;
+            }
           }
 
-          if (config.toolConfig) {
+          if (config.toolConfig && !gemmaNative) {
             requestBody.toolConfig = config.toolConfig;
           }
 
@@ -808,6 +818,7 @@ export async function generateContent(
           lastError = error;
           const errorBody = error.message || String(error);
           // console.error(`[SERVER_AI] Circuit ${attempt.label} failed on Attempt #${retryCount + 1}:`, summarizeAiError(error));
+          console.error(`[SERVER_AI] Circuit ${attempt.label} failed (${errorBody.slice(0, 200)})`);
 
           // Truncation is a healthy-but-incomplete generation, NOT a key/model
           // fault: skip quota/overload classification (the partial sample inside
@@ -840,20 +851,45 @@ export async function generateContent(
           
           // If out of quota, register API key in blocklist temporarily for this cycle
           if (isQuotaOrRateLimit) {
-            persistentRateLimitedKeys.set(attempt.apiKey, now + RATE_LIMITED_KEY_TTL_MS);
-            persistBusyKeyState();
+            keyPool.markKeyRateLimited('gemini', attempt.apiKey, RATE_LIMITED_KEY_TTL_MS);
+            // Count quota failures per model: 2+ keys 429ing on the same model
+            // this cycle means the model is exhausted pool-wide, so the pool
+            // skips its remaining keys instead of burning them.
+            const failCount = (modelQuotaFailCount.get(attempt.modelId) || 0) + 1;
+            modelQuotaFailCount.set(attempt.modelId, failCount);
+            if (failCount >= 2) {
+              console.warn(`[SERVER_AI] Model '${attempt.modelId}' quota-exhausted across ${failCount} key(s). Skipping remaining pool keys for it this cycle.`);
+            }
+            // Also cool the pair in the durable ApiKeyPool so future cycles
+            // rotate to a healthy key instead of retrying the exhausted one.
+            try {
+              keyPool.reportFailure('gemini', attempt.apiKey, attempt.modelId, errorBody);
+            } catch (_) { /* advisory */ }
           }
 
           // If API is overloaded (503/unavailable), register key so pool can skip it after exhausting retries
           if (isRetriable && !isQuotaOrRateLimit && retryCount === maxRetriesPerAttempt - 1) {
             console.warn(`[SERVER_AI] API Key ${attempt.apiKey.substring(0, 6)}... keeps receiving overload (503). Adding to the busy-keys list to be skipped by the pool.`);
-            persistentOverloadedKeys.set(attempt.apiKey, now + OVERLOADED_KEY_TTL_MS);
-            persistBusyKeyState();
+            keyPool.markKeyOverloaded('gemini', attempt.apiKey, OVERLOADED_KEY_TTL_MS);
             // A 503 is model-wide (not key-specific) — skip the rest of this
             // model's keys for the remainder of the cycle.
             if (errorBody.includes('503') || errorBody.toLowerCase().includes('overloaded') || errorBody.toLowerCase().includes('unavailable')) {
               overloadedModelsThisCall.add(attempt.modelId);
             }
+          }
+
+          // Model-level failure (404 not-found / deprecated / no longer
+          // available): the model is unusable for EVERY key in the pool, not
+          // just this one — mark it failed for the TTL so the remaining keys
+          // and future calls stop wasting attempts against it.
+          const modelLevelFail =
+            !isQuotaOrRateLimit &&
+            (errorBody.includes('404') || errorBody.toLowerCase().includes('not found') || errorBody.toLowerCase().includes('no longer available')) &&
+            (errorBody.toLowerCase().includes('model') || errorBody.toLowerCase().includes('models/'));
+          if (modelLevelFail) {
+            keyPool.markModelFailed('gemini', attempt.modelId, FAILED_MODEL_TTL_MS);
+            overloadedModelsThisCall.add(attempt.modelId);
+            console.warn(`[SERVER_AI] Model '${attempt.modelId}' confirmed unavailable (${errorBody.slice(0, 120)}). Marking failed for ${Math.round(FAILED_MODEL_TTL_MS / 60000)}m — skipping remaining keys.`);
           }
 
           // Force fail fast for quota/rate limits to jump immediately to the next fallback candidate/model instead of sleeping for 60 seconds

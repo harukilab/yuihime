@@ -14,7 +14,7 @@ export async function proxyAIRequest(options: {
     'openrouter.ai', 'anthropic.com', 'openai.com', 'groq.com', 
     'google.com', 'googleapis.com', 'deepseek.com', 'sambanova.ai', 
     'together.ai', 'together.xyz', 'mistral.ai', 'hyperbolic.xyz',
-    'cerebras.ai', 'novita.ai', 'nebius.ai'
+    'cerebras.ai', 'novita.ai', 'nebius.ai', 'kilo.ai'
   ];
   const isAllowed = allowedDomains.some(domain => url.toLowerCase().includes(domain)) || 
                     url.includes('localhost') || 

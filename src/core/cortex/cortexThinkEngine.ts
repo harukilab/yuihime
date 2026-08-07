@@ -26,7 +26,7 @@ import { eventBus } from '@shared/core/kernel/event-bus';
 import { stateMachine } from '../kernel/state-machine';
 import { CognitiveScheduler } from '../kernel/CognitiveScheduler';
 import { normalizeToolCall } from './toolNormalizer';
-import { buildToolResultMessages, readNativeToolCalls } from '../openaiTools';
+import { buildToolResultMessages, readNativeToolCalls, stripInlineToolCallFragments } from '../openaiTools';
 import { StreamExtractor } from './streamExtractors';
 import { toSingleString } from '@/core/kernel/configNormalizer';
 import { stripCodeFences, isolateBraceBlock, liftNestedProperties } from './jsonRepairer';
@@ -444,7 +444,11 @@ export async function executeCortexThink(
   // Gemini): Gemini's generateContent now converts the interleaved turn blocks
   // into functionCall/functionResponse contents, so it no longer needs the
   // JSON-in-prompt path when the flag is on.
-  const activeProviderId = settings.provider || 'gemini';
+  // The active provider is resolved by the provider gateway (which may auto-
+  // switch across the system pool when the primary fails). It starts from the
+  // configured provider and is updated to the gateway-reported winner on each
+  // iteration so subsequent turns keep using the healthy provider.
+  let activeProviderId = settings.provider || 'gemini';
   const usesJsonPrompt = !nativeTransportEnabled;
 
   if (!state.systemHealth) {
@@ -575,8 +579,9 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
 
     const loopSettings = {
       ...settings,
-      [settings.provider]: {
-        ...(settings[settings.provider] || {}),
+      provider: activeProviderId,
+      [activeProviderId]: {
+        ...(settings[activeProviderId] || {}),
         isJson: iterationUsesNative ? false : true
       }
     };
@@ -716,6 +721,10 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
         }
       });
       console.log(`[DEBUG_TRACE] gateway.run returned after ${((Date.now() - gwT0) / 1000).toFixed(1)}s, rawResult length=${(loopContext.rawResult || "").length}`);
+      if (loopContext.activeProvider && loopContext.activeProvider !== activeProviderId) {
+        activeProviderId = loopContext.activeProvider;
+        logs.push(`[CORTEX_LOOP] Gateway auto-switched active provider to: ${activeProviderId}`);
+      }
     }
     logs.push(`[CORTEX_LOOP] Iteration ${iteration} Gateway routed via: ${loopContext.activeProvider || 'unknown'}`);
 
@@ -754,7 +763,7 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
         };
         logs.push(`[CORTEX_NATIVE] Detected ${nativeCalls.length} native tool call(s) from '${loopContext.activeProvider || 'unknown'}' and consuming them via the tool channel.`);
       } else if (rawResultStr.trim().length > 0) {
-        processedResponse = rawResultStr;
+        processedResponse = stripInlineToolCallFragments(rawResultStr);
         logs.push(`[CORTEX_NATIVE] No native tool calls; captured plain-text final reply (${rawResultStr.length} chars).`);
         break;
       }
@@ -979,7 +988,7 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
       };
 
       loopContext.rawResult = rawResultStr;
-      loopContext.processedResponse = rawResultStr;
+      loopContext.processedResponse = stripInlineToolCallFragments(rawResultStr);
       loopContext.thought = parsedPayload.thought;
       loopContext.animations = parsedPayload.animations;
       loopContext.moodImpact = {};

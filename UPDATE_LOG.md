@@ -1,6 +1,80 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.318] - 2026-08-07
+### Fix: yui-watchdog log lanjut ke file baru saat restart (tail -F) + marker restart
+- ganti tail -f -> tail -F pada subcommand log agar live tail mengikuti file baru setelah rotate/restart, bukan berhenti
+- tambah marker '===== RESTART (manual/auto-hang/crash) =====' ber-timestamp di cmd_restart & restart_daemon
+
+
+## [4.317] - 2026-08-07
+### Fix: Provider-level temporary skip in gateway
+- ProviderGatewayModule now skips a provider that failed end-to-end for TTL (5 min): primary attempt, system pool failover, and fallback chain all check the shared failedProviders blocklist (persisted in key_pool_state.json, providerId-keyed). Cleared on success.
+- apiKeyPoolStore extends state file with failedProviders field; ApiKeyPool.persistToDisk preserves it.
+
+
+## [4.316] - 2026-08-07
+### Fix: Shared provider key-pool skip layer (all providers)
+- ApiKeyPool now exposes generic temporary-skip API: markKeyRateLimited / markKeyOverloaded / markModelFailed + isKeyRateLimited / isKeyOverloaded / isKeyBusy / isModelFailed, persisted in key_pool_state.json (failedModels keyed with providerId:: prefix).
+- geminiGenerate.ts delegates busy-key & failed-model bookkeeping to the shared pool (module-local maps + persistBusyKeyState removed); model quota-exhaustion across 2+ keys this cycle skips remaining keys, and 404/deprecated models are marked failed for TTL so every key stops wasting attempts.
+
+
+## [4.315] - 2026-08-07
+### Fix: Fix Gemini native transport 400 turn-structure
+- buildGeminiHistoryContents now seeds a synthetic user turn when reloaded history starts with a model(functionCall) block (persisted native_messages contain no leading user prompt), restoring the required user->functionCall alternation.
+- Native transport (nativeTransfer=true) + provider gemini verified end-to-end: addon virtual_body auto-triggers on natural commands without errors.
+
+
+## [4.314] - 2026-08-06
+### Feature: Optional inline-text tool converter for non-native Gemini models (Gemma)
+- Gemma models (gemma-4-26b-a4b-it, gemma-4-31b-it) do not support the native functionDeclarations channel: 26b returns 500 INTERNAL, 31b silently ignores tools.
+- Added buildInlineToolsText() in src/core/openaiTools.ts: converts the tool schema catalog into inline text (functions.<name>:<n>{...}) that readNativeToolCalls already parses generically.
+- geminiGenerate.ts: for gemma model ids the request skips requestBody.tools/toolConfig and appends the converted tool text to the prompt instead; other Gemini models keep the native API tools path.
+
+
+## [4.313] - 2026-08-06
+### Refactor: Concise Gemini pool console logging
+- Add one-line pool summary before the circuit loop: key count x model count ~ total attempts (e.g. Pool: 7 key(s) x 14 model(s) ~ 98 attempt(s)).
+- Shorten per-attempt log lines (Trying cognitive circuit: ... (Attempt #N)... -> Trying ...) and retry logs to reduce log spam on 7-key x 14-model pools.
+
+
+## [4.312] - 2026-08-06
+### Fix: Generic OpenAI-compatible native tool-calling support (opencode-style transport)
+- readNativeToolCalls() now detects Gemini-style inline functions.<name>:<n>{...} fragments for ALL OpenAI-compatible providers, converting them into canonical tool_calls so the tool channel consumes them on any provider (openai/openrouter/custom/local), not just kilo.
+- stripInlineToolCallFragments() applied at every final-reply capture point (native plain-text path + format-error recovery) so leaked inline fragments never reach the user-facing answer.
+- Verified addon auto-trigger on natural language via the native tools array when a healthy provider is available; system pool failover correctly cascades gemini->local->custom.
+
+
+## [4.311] - 2026-08-06
+### Fix: Native tool-calling inline fragment leakage (opencode-style transport)
+- Re-enabled nativeTransport under the custom (kilo.ai, OpenAI-compatible) provider; addons now auto-trigger on natural language via the native tools array.
+- Root cause of earlier native failures was Gemini free-tier quota exhaustion (RESOURCE_EXHAUSTED), not the transport format itself.
+- Added stripInlineToolCallFragments() in src/core/openaiTools.ts to remove Gemini-style inline functions.<name>:<n>{...} call fragments leaked into plain-text final replies.
+- cortexThinkEngine.ts: native plain-text final replies are sanitized through the new stripper before capture.
+
+
+## [4.310] - 2026-08-06
+### Feature: System provider pool failover (opencode-style) + durable key rotation
+- ProviderGatewayModule: setelah primary gagal, auto-switch/cascade ke seluruh provider di SystemRegistry yang punya kredensial valid (skip disabled + tanpa apiKey kecuali local), yang pertama sehat dipakai (configSchema baru systemPoolFailover, default ON)
+- cortexThinkEngine: activeProviderId kini mutable dan di-sinkronkan dari hasil gateway (loopContext.activeProvider) tiap iterasi; loopSettings/providerSpecificConfig mengikuti provider aktif, bukan hardcode settings.provider
+- ApiKeyPool (apiKeyPool.ts) kini benar-benar ter-wire: geminiGenerate.configure di generateContent, reportFailure saat 429/quota, isCooledDown di-skip di loop attempt (per key::model)
+- Fix persist key_pool_state.json: persistBusyKeyState & ApiKeyPool saling merge (overloaded/rateLimited/cooldowns), tidak menimpa satu sama lain
+- Verifikasi: lint + build:server + restart daemon sehat; enumerasi pool = gemini, local (anthropic/openai/openrouter tanpa key di-skip)
+
+
+## [4.309] - 2026-08-06
+### Refactor: Rename core kernel AI files for clarity (provider + purpose)
+- generateSegment.ts -> ai/geminiGenerate.ts (Gemini cognitive circuit / LLM generation core)
+- keyPool.ts -> apiKeyPool.ts (multi-key rotation pool)
+- keyPoolStateStore.ts -> apiKeyPoolStore.ts (persisted pool-state store)
+- All importers updated (ai.ts, testSearchGrounding.ts, web_search_zero_key.test.ts, native_gemini_test.ts); lint + build + daemon restart verified
+
+
+## [4.308] - 2026-08-06
+### feat: Add kilo.ai to AI proxy allowed domains
+- Enables CustomProvider to route requests through Kilo Gateway (https://api.kilo.ai/api/gateway)
+
+
 ## [4.307] - 2026-08-06
 ### Fix: Fix: LLM output terpotong (truncated JSON) bocor ke reply; deteksi truncation + auto-retry di generateContent
 - ROOT CAUSE: saat provider mengembalikan response terpotong di tengah JSON envelope (mis. 59 char: {"thought": "I am the active initiator of this scheduled - finishReason MAX_TOKENS/stream putus), kode lama langsung meneruskan teks parsial itu tanpa cek. Potongan >5 karakter lolos dari KERNEL_FAIL_SAFE sehingga terkirim ke Telegram / jadi argumen tool speak.

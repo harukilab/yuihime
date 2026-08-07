@@ -20,7 +20,7 @@
  */
 
 import { keyResetScheduler } from './keyResetScheduler.js';
-import { loadKeyPoolState, saveKeyPoolState, PersistedCooldown } from './keyPoolStateStore.js';
+import { loadKeyPoolState, saveKeyPoolState, PersistedCooldown } from './apiKeyPoolStore.js';
 
 interface CooldownEntry {
   until: number; // epoch ms when this key::model pair becomes usable again
@@ -34,6 +34,14 @@ type ProviderKeyState = {
   // Composite key: `${apiKey}::${modelId}`. Enables one key to serve many
   // models while each model's quota is cooled independently.
   cooldowns: Map<string, CooldownEntry>;
+  // Key-wide temporary blocklist entries: key -> expiry. These survive across
+  // calls and restarts so a key that is quota-exhausted / overloaded for a
+  // while is skipped by every provider using the pool, not just one driver.
+  rateLimited: Map<string, number>;
+  overloaded: Map<string, number>;
+  // Model-wide temporary blocklist entries: modelId -> expiry. A model that is
+  // 404/deprecated/unavailable is skipped across all keys of the provider.
+  failedModels: Map<string, number>;
 };
 
 const pairKey = (key: string, model: string) => `${key}::${model || '*'}`;
@@ -61,11 +69,13 @@ export class ApiKeyPool {
     this.hydratedProviders.add(providerId);
     try {
       const state = loadKeyPoolState();
-      const pairs = (state.cooldowns || {})[providerId] || {};
       const pool = this.pools.get(providerId);
       if (!pool) return;
       const now = Date.now();
       let restored = 0;
+
+      // Per-pair cooldowns (key::model).
+      const pairs = (state.cooldowns || {})[providerId] || {};
       for (const [compositeKey, entry] of Object.entries(pairs)) {
         if (entry && typeof entry.until === 'number' && entry.until > now) {
           const ownerKey = compositeKey.split('::')[0];
@@ -74,8 +84,37 @@ export class ApiKeyPool {
           restored++;
         }
       }
+
+      // Key-wide rate-limit / overload blocklist (shared across providers).
+      const restoreExpiryMap = (src: Record<string, number> | undefined, target: Map<string, number>): number => {
+        let n = 0;
+        if (!src) return 0;
+        for (const [k, expiry] of Object.entries(src)) {
+          if (typeof expiry === 'number' && expiry > now) {
+            target.set(k, expiry);
+            n++;
+          }
+        }
+        return n;
+      };
+      restored += restoreExpiryMap(state.rateLimited, pool.rateLimited);
+      restored += restoreExpiryMap(state.overloaded, pool.overloaded);
+
+      // Model-wide blocklist: persisted with a providerId:: prefix so pools of
+      // different providers never collide on the same model name.
+      const modelPrefix = `${providerId}::`;
+      if (state.failedModels) {
+        for (const [k, expiry] of Object.entries(state.failedModels)) {
+          if (typeof expiry === 'number' && expiry > now && k.startsWith(modelPrefix)) {
+            const modelId = k.slice(modelPrefix.length);
+            pool.failedModels.set(modelId, expiry);
+            restored++;
+          }
+        }
+      }
+
       if (restored > 0) {
-        console.log(`[KEYPOOL] Provider ${providerId}: restored ${restored} persisted cooldown(s) from disk.`);
+        console.log(`[KEYPOOL] Provider ${providerId}: restored ${restored} persisted cooldown / busy-key / failed-model entry(s) from disk.`);
       }
     } catch (err: any) {
       console.warn(`[KEYPOOL] Failed to hydrate cooldowns for ${providerId}:`, err?.message || err);
@@ -86,20 +125,130 @@ export class ApiKeyPool {
   private persistToDisk(): void {
     try {
       const now = Date.now();
-      const cooldowns: Record<string, Record<string, PersistedCooldown>> = {};
+      const existing = loadKeyPoolState();
+      const cooldowns: Record<string, Record<string, PersistedCooldown>> = existing?.cooldowns || {};
+      const rateLimited: Record<string, number> = { ...(existing?.rateLimited || {}) };
+      const overloaded: Record<string, number> = { ...(existing?.overloaded || {}) };
+      const failedModels: Record<string, number> = { ...(existing?.failedModels || {}) };
       for (const [providerId, pool] of this.pools.entries()) {
-        const pairs: Record<string, PersistedCooldown> = {};
+        const pairs: Record<string, PersistedCooldown> = { ...(cooldowns[providerId] || {}) };
         for (const [compositeKey, entry] of pool.cooldowns.entries()) {
           if (entry.until > now) {
             pairs[compositeKey] = { until: entry.until, reason: entry.reason };
+          } else {
+            delete pairs[compositeKey];
           }
         }
         if (Object.keys(pairs).length > 0) cooldowns[providerId] = pairs;
+        else delete cooldowns[providerId];
+        // Key-wide blocklists: prune expired, keep live.
+        for (const [k, expiry] of pool.rateLimited.entries()) {
+          if (expiry > now) rateLimited[k] = expiry;
+          else delete rateLimited[k];
+        }
+        for (const [k, expiry] of pool.overloaded.entries()) {
+          if (expiry > now) overloaded[k] = expiry;
+          else delete overloaded[k];
+        }
+        // Model-wide blocklist: prefix with providerId:: to avoid collisions.
+        for (const [modelId, expiry] of pool.failedModels.entries()) {
+          if (expiry > now) failedModels[`${providerId}::${modelId}`] = expiry;
+          else delete failedModels[`${providerId}::${modelId}`];
+        }
       }
-      saveKeyPoolState({ cooldowns });
+      saveKeyPoolState({
+        overloaded,
+        rateLimited,
+        failedModels,
+        ...(existing?.failedProviders ? { failedProviders: existing.failedProviders } : {}),
+        cooldowns
+      });
     } catch (err: any) {
       console.warn('[KEYPOOL] Failed to persist cooldowns to disk:', err?.message || err);
     }
+  }
+
+  /**
+   * True when the given key::model pair is currently under cooldown. Model '*' is
+   * honored as a key-wide marker (auth failures cool the entire key).
+   */
+  public isCooledDown(providerId: string, key: string, modelId: string = '*'): boolean {
+    const pool = this.pools.get(providerId);
+    if (!pool) return false;
+    const now = Date.now();
+    const cd = pool.cooldowns.get(pairKey(key, modelId)) || pool.cooldowns.get(pairKey(key, '*'));
+    return !!(cd && cd.until > now);
+  }
+
+  /**
+   * True when the given key is temporarily blocklisted provider-wide for
+   * rate-limit / quota exhaustion (429/403). Shared across every provider.
+   */
+  public isKeyRateLimited(providerId: string, key: string): boolean {
+    const pool = this.pools.get(providerId);
+    if (!pool) return false;
+    const expiry = pool.rateLimited.get(key);
+    return !!(expiry && expiry > Date.now());
+  }
+
+  /** True when the given key is temporarily blocklisted provider-wide for overload (503). */
+  public isKeyOverloaded(providerId: string, key: string): boolean {
+    const pool = this.pools.get(providerId);
+    if (!pool) return false;
+    const expiry = pool.overloaded.get(key);
+    return !!(expiry && expiry > Date.now());
+  }
+
+  /** True when the given key is busy in any sense (rate-limited or overloaded). */
+  public isKeyBusy(providerId: string, key: string): boolean {
+    return this.isKeyRateLimited(providerId, key) || this.isKeyOverloaded(providerId, key);
+  }
+
+  /** True when the given model is temporarily blocklisted for the provider (404/deprecated/unavailable). */
+  public isModelFailed(providerId: string, modelId: string): boolean {
+    const pool = this.pools.get(providerId);
+    if (!pool) return false;
+    const expiry = pool.failedModels.get(modelId);
+    return !!(expiry && expiry > Date.now());
+  }
+
+  /** Mark a key as rate-limited / quota-exhausted for `ttlMs`. Persists to disk. */
+  public markKeyRateLimited(providerId: string, key: string, ttlMs: number): void {
+    const pool = this.pools.get(providerId);
+    if (!pool) return;
+    pool.rateLimited.set(key, Date.now() + ttlMs);
+    this.persistToDisk();
+  }
+
+  /** Mark a key as overloaded (503) for `ttlMs`. Persists to disk. */
+  public markKeyOverloaded(providerId: string, key: string, ttlMs: number): void {
+    const pool = this.pools.get(providerId);
+    if (!pool) return;
+    pool.overloaded.set(key, Date.now() + ttlMs);
+    this.persistToDisk();
+  }
+
+  /** Mark a model as failed for the provider for `ttlMs`. Persists to disk. */
+  public markModelFailed(providerId: string, modelId: string, ttlMs: number): void {
+    const pool = this.pools.get(providerId);
+    if (!pool) return;
+    pool.failedModels.set(modelId, Date.now() + ttlMs);
+    this.persistToDisk();
+  }
+
+  /** Drop a model from the failed list (used on scheduled quota resets). */
+  public clearModelFailure(providerId: string, modelId: string): void {
+    const pool = this.pools.get(providerId);
+    if (!pool) return;
+    if (pool.failedModels.delete(modelId)) {
+      this.persistToDisk();
+    }
+  }
+
+  /** Return the keys registered for a provider, or [] if never configured. */
+  public getKeys(providerId: string): string[] {
+    const pool = this.pools.get(providerId);
+    return pool ? pool.keys : [];
   }
 
   /**
@@ -127,7 +276,10 @@ export class ApiKeyPool {
         keys,
         primary: keys[0] ?? '',
         cursor: 0,
-        cooldowns: new Map()
+        cooldowns: new Map(),
+        rateLimited: new Map(),
+        overloaded: new Map(),
+        failedModels: new Map()
       });
     } else {
       // Preserve cooldown state across hot-reloads of settings.
@@ -139,6 +291,13 @@ export class ApiKeyPool {
       for (const ck of Array.from(existing.cooldowns.keys())) {
         const ownerKey = ck.split('::')[0];
         if (!keys.includes(ownerKey)) existing.cooldowns.delete(ck);
+      }
+      // Drop key-wide blocklist entries for keys that no longer exist.
+      for (const k of Array.from(existing.rateLimited.keys())) {
+        if (!keys.includes(k)) existing.rateLimited.delete(k);
+      }
+      for (const k of Array.from(existing.overloaded.keys())) {
+        if (!keys.includes(k)) existing.overloaded.delete(k);
       }
     }
 

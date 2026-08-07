@@ -24,6 +24,7 @@
 - `python3 tools/push_gh.py` — update logs + git add/commit/push
 - Deploy & verify after every change (build → restart daemon → health check):
   `npm run build 2>&1 | tail -3 && tools/yui-daemon.sh restart 2>&1 | tail -3 && curl -s http://127.0.0.1:3000/api/health; echo`
+- **Build server-only**: jika perubahan hanya di sisi server/daemon (bukan `web/`), pakai `npm run build:server` (jauh lebih cepat dari `npm run build`). Jika menyentuh `web/` atau `shared/`, tetap `npm run build`.
 
 ## Paths & Config
 - Path aliases (tsconfig.json): `@/*` → `src/*`, `@shared/*` → `shared/*`, `@web/*` → `web/src/*`

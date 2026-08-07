@@ -138,6 +138,7 @@ health_ok() {
 
 # restart_daemon <mode> [extra...] — PM2: pm2 restart; non-PM2: force kill + start ulang
 restart_daemon() {
+  log "===== RESTART (auto-hang/crash) $(date '+%Y-%m-%d %H:%M:%S') ====="
   if [ "$PM2_MODE" = "1" ]; then
     log "RESTART(PM2): pm2 restart '$PM2_APP' ..."
     if pm2 restart "$PM2_APP" >/dev/null 2>&1; then
@@ -418,6 +419,9 @@ cmd_restart() {
 
   local pmarg="--no-pm2"; [ "$pm2_mode" = "1" ] && pmarg="--pm2"
 
+  # Marker restart di log (dibaca live oleh `log` dari terminal lain).
+  log "===== RESTART (manual, mode=$mode) $(date '+%Y-%m-%d %H:%M:%S') ====="
+
   # 1) Hentikan watchdog (daemon dibiarkan jalan).
   stop_watchdog
   # 2) Stop daemon (PM2-aware) agar restart memuat build terbaru.
@@ -438,7 +442,7 @@ case "${1:-help}" in
   restart)    shift; cmd_restart "$@";;
   stop)       cmd_stop;;
   status)     cmd_status;;
-  log)        tail -f "$WATCHDOG_LOG" 2>/dev/null || echo "Belum ada log.";;
+  log)        tail -F "$WATCHDOG_LOG" 2>/dev/null || echo "Belum ada log.";;
   __run)      shift; run_watchdog "$@";;
   help|-h)    sed -n '2,20p' "${BASH_SOURCE[0]}";;
   *) echo "Perintah tidak dikenal: '${1:-}'"; sed -n '2,20p' "${BASH_SOURCE[0]}"; exit 1;;

@@ -152,6 +152,8 @@ Peta struktur direktori pasca-pemisahan Web UI ↔ Daemon (lihat UPDATE_LOG `[4.
 - `src/core/kernel/ai/generateSegment.ts — buildGeminiHistoryContents + config.history; src/drivers/ai-providers/GeminiProvider.ts — teruskan nativeTurnBlocks; src/core/kernel/ai/aiTypes.ts — AIConfig.history; src/core/cortex/cortexThinkEngine.ts — cabut gate gemini; tools/tester/native_gemini_test.ts — test baru.`
 - `src/drivers/tools/delegate.ts — Delegate Tool (opencode-style parallel sub-agent sessions): spawn 1+ sub-agent via Promise.allSettled, promptOverride direct session di SubAgentManager.ts.`
 - `src/core/kernel/ai/generateSegment.ts — Pool rotation: fast-skip model on 503 (overloadedModelsThisCall) + adaptive stall (90s primary / 30s fallback).`
+- `src/core/kernel/apiKeyPool.ts — Shared temporary skip layer for ALL providers: markKeyRateLimited / markKeyOverloaded / markModelFailed + isKeyRateLimited / isKeyOverloaded / isKeyBusy / isModelFailed (persisted to key_pool_state.json via apiKeyPoolStore). geminiGenerate.ts now delegates busy-key/failed-model bookkeeping to this pool instead of module-local maps.`
+- `src/modules/ProviderGatewayModule.ts — Provider-level temporary skip: a provider that fails end-to-end is marked failed for TTL (failedProviders in key_pool_state.json, providerId-keyed). Skipped in primary attempt, system pool failover, and fallback chain; cleared on success.`
 - `src/core/kernel/MultiChannelQueue.ts — Two-phase deadline ala opencode: soft queueTimeoutMs → signal.shutdownRequested (no abort), hard processing watchdog → force abort + fallback.`
 - `src/core/cortex/cortexThinkEngine.ts — Loop honors signal.shutdownRequested: next iteration becomes graceful shutdown turn (tools disabled + MAX_STEPS_PROMPT).`
 - `core`
@@ -173,7 +175,7 @@ Peta struktur direktori pasca-pemisahan Web UI ↔ Daemon (lihat UPDATE_LOG `[4.
 ## Kelompok tools/ & scripts/ (skrip operasional — lihat docs/TOOLS_SCRIPTS.md)
 - `tools/yuihime` — CLI global (daemon/debug/watchdog/pm2/install/settings/terminal)
 - `tools/yui-daemon.sh` — manajer daemon (start/stop/restart/status/logs/rebuild/autoboot)
-- `tools/yui-watchdog.sh` — supervisor health-probe `/api/health` + auto-restart
+- `tools/yui-watchdog.sh` — supervisor health-probe `/api/health` + auto-restart; `log` memakai `tail -F` (ikut file baru saat rotate/restart, ada marker restart)
 - `tools/yui-debug.sh` — runner daemon bg/fg + log session `~/.yuihime/debug/`
 - `tools/yui-pm2.sh` — manajer app PM2 `yuihime`
 - `tools/yui-boot.sh` — boot launcher lokasi-independen (`~/.yuihime/bin/yui-boot.sh`)

@@ -8,10 +8,75 @@ import { LlmIoAuditor } from '../core/server/llmAuditor.js';
 import { buildOpenAITools } from '../core/openaiTools.js';
 import { SettingsManager } from '../core/kernel/settings.js';
 import { injectCharacterName } from '../core/kernel/characterName';
+import { loadKeyPoolState, saveKeyPoolState, pruneExpiryMap } from '../core/kernel/apiKeyPoolStore.js';
 
 const DEFAULT_OFFLINE_FALLBACK = `Hi user! \${characterName}'s cognitive circuit is currently on an internet diet (the server is busy/out of quota)`;
 
 const DEFAULT_NANO_NLP_THOUGHT = `<thought>Online cognitive circuit failed. Subconscious offline path activated dynamically.</thought>\${localResponse}`;
+
+// Provider-level temporary blocklist: a provider that failed end-to-end (all of
+// its keys / attempts exhausted) is skipped by the gateway for a few minutes so
+// the pool does not retry a dead provider on every request. Persisted to
+// key_pool_state.json under `failedProviders`, keyed by providerId.
+const PROVIDER_FAIL_TTL_MS = 5 * 60 * 1000;
+const failedProviders = new Map<string, number>();
+
+// Restore persisted provider-level blocklist across restarts.
+(function hydrateProviderFailures(): void {
+  try {
+    const state = loadKeyPoolState();
+    if (state.failedProviders) {
+      for (const [k, expiry] of Object.entries(pruneExpiryMap(state.failedProviders))) {
+        failedProviders.set(k, expiry);
+      }
+    }
+    if (failedProviders.size > 0) {
+      console.log(`[GATEWAY] Restored ${failedProviders.size} temporarily-failed provider(s) from disk.`);
+    }
+  } catch (err: any) {
+    console.warn('[GATEWAY] Failed to hydrate provider failure state:', err?.message || err);
+  }
+})();
+
+function persistProviderFailures(): void {
+  try {
+    const now = Date.now();
+    const failed: Record<string, number> = {};
+    for (const [k, expiry] of failedProviders) {
+      if (expiry > now) failed[k] = expiry;
+    }
+    const existing = loadKeyPoolState();
+    saveKeyPoolState({
+      ...(existing?.overloaded ? { overloaded: existing.overloaded } : {}),
+      ...(existing?.rateLimited ? { rateLimited: existing.rateLimited } : {}),
+      ...(existing?.cooldowns ? { cooldowns: existing.cooldowns } : {}),
+      ...(existing?.failedModels ? { failedModels: existing.failedModels } : {}),
+      failedProviders: failed
+    });
+  } catch (err: any) {
+    console.warn('[GATEWAY] Failed to persist provider failure state:', err?.message || err);
+  }
+}
+
+/** True while a provider is temporarily blocklisted by the gateway. */
+function isProviderFailed(providerId: string): boolean {
+  const expiry = failedProviders.get(providerId);
+  return !!(expiry && expiry > Date.now());
+}
+
+/** Mark a provider as failed end-to-end for the TTL (persisted). */
+function markProviderFailed(providerId: string): void {
+  failedProviders.set(providerId, Date.now() + PROVIDER_FAIL_TTL_MS);
+  persistProviderFailures();
+  console.warn(`[GATEWAY] Provider '${providerId}' marked temporarily failed (${Math.round(PROVIDER_FAIL_TTL_MS / 60000)}m) — skipping it on subsequent requests.`);
+}
+
+/** Clear a provider from the blocklist when it succeeds again. */
+function clearProviderFailure(providerId: string): void {
+  if (failedProviders.delete(providerId)) {
+    persistProviderFailures();
+  }
+}
 
 PromptRegistry.getInstance().register('provider-gateway:offline_fallback', DEFAULT_OFFLINE_FALLBACK);
 PromptRegistry.getInstance().register('provider-gateway:nano_nlp_offline', DEFAULT_NANO_NLP_THOUGHT);
@@ -43,6 +108,12 @@ export const ProviderGatewayModule: CortexModule = {
           label: 'Offline Fallback Message',
           default: DEFAULT_OFFLINE_FALLBACK,
           description: 'Message spoken when all providers and local NLP fail. Keep the <thought> internal note in English; the spoken part may use the user language.'
+        },
+        systemPoolFailover: {
+          type: 'boolean',
+          label: 'System Pool Failover (opencode-style)',
+          default: true,
+          description: 'When the primary provider fails, auto-switch across every configured provider in the system pool (Gemini, Custom, OpenRouter, Anthropic, OpenAI, Local, ...) and use the first healthy one. Disable to keep strict single-provider behavior.'
         }
       }
     }
@@ -123,7 +194,7 @@ export const ProviderGatewayModule: CortexModule = {
 
     // 1. Attempt the primary provider chosen in context
     const primaryProvider = SystemRegistry.getProvider(selectedProviderId);
-    if (primaryProvider) {
+    if (primaryProvider && !isProviderFailed(selectedProviderId)) {
       const providerConfig = context.config?.providers?.[selectedProviderId] || context.config?.[selectedProviderId] || context.config || {};
       const actualModelOfProvider = toSingleString(context.model || providerConfig.model) || (primaryProvider.metadata?.models ? primaryProvider.metadata.models[0] : 'unknown');
       try {
@@ -136,6 +207,7 @@ export const ProviderGatewayModule: CortexModule = {
         });
 
         console.log(`[GATEWAY] Provider ${selectedProviderId} response successfully captured.`);
+        clearProviderFailure(selectedProviderId);
         
         await triggerSelfLearning(input, result);
         await recordNonGeminiLog(selectedProviderId, actualModelOfProvider, result);
@@ -149,6 +221,80 @@ export const ProviderGatewayModule: CortexModule = {
         lastError = error;
         // console.error(`[GATEWAY] Primary Provider ${selectedProviderId} failed:`, error.message || String(error));
         await recordNonGeminiLog(selectedProviderId, actualModelOfProvider, undefined, error.message || String(error));
+        markProviderFailed(selectedProviderId);
+      }
+    } else if (primaryProvider && isProviderFailed(selectedProviderId)) {
+      console.log(`[GATEWAY] Skipping primary provider '${selectedProviderId}' (temporarily failed). Trying system pool failover...`);
+    }
+
+    // opencode-style System Pool Failover: pull every configured provider from
+    // the registry, skipping the primary already attempted, providers explicitly
+    // disabled, and providers with no usable credential. The first healthy one
+    // wins (auto-switch to the provider already set in settings). Config sources
+    // mirror the primary lookup: context.config.providers.<id> -> context.config.<id>.
+    const gatewayPoolConfig = await SystemRegistry.getConfig('provider-gateway').catch(() => ({}));
+    const systemPoolEnabled = gatewayPoolConfig?.systemPoolFailover !== false;
+    const providerAttempted = new Set<string>([selectedProviderId]);
+    const poolProviderIds: string[] = [];
+
+    if (systemPoolEnabled) {
+      for (const prov of SystemRegistry.getProviders()) {
+        const pId = prov.metadata.id;
+        if (!pId || providerAttempted.has(pId)) continue;
+        const pCfg = context.config?.providers?.[pId] || context.config?.[pId] || {};
+        const explicitlyDisabled = pCfg.enabled === false;
+        const keyRaw = pCfg.apiKey || pCfg.api_key || pCfg.apiKeys || '';
+        const hasApiKey = typeof keyRaw === 'string' ? keyRaw.trim().length > 0 : (Array.isArray(keyRaw) ? keyRaw.some((k: any) => k && String(k).trim().length > 0) : Boolean(keyRaw));
+        // Local providers run without an API key; everyone else must present a
+        // real credential to avoid burning pool time on a guaranteed 401.
+        const needsKey = pId !== 'local';
+        const hasCredential = needsKey ? hasApiKey : Boolean(pCfg.baseUrl || pCfg.endpoint);
+        const pModel = toSingleString(pCfg.model) || (prov.metadata?.models && prov.metadata.models[0]);
+        if (!explicitlyDisabled && hasCredential && pModel) {
+          poolProviderIds.push(pId);
+          providerAttempted.add(pId);
+        }
+      }
+      console.log(`[GATEWAY] System pool failover enabled — ${poolProviderIds.length} candidate provider(s): ${poolProviderIds.join(', ') || 'none'}`);
+    }
+
+    if (poolProviderIds.length > 0) {
+      for (const poolProviderId of poolProviderIds) {
+        if (isProviderFailed(poolProviderId)) {
+          console.log(`[GATEWAY_POOL] Skipping provider '${poolProviderId}' (temporarily failed).`);
+          continue;
+        }
+        const poolProvider = SystemRegistry.getProvider(poolProviderId);
+        if (!poolProvider) continue;
+        const poolProviderConfig = context.config?.providers?.[poolProviderId] || context.config?.[poolProviderId] || {};
+        const poolModel = toSingleString(poolProviderConfig.model) || (poolProvider.metadata?.models ? poolProvider.metadata.models[0] : 'unknown');
+        try {
+          console.log(`[GATEWAY_POOL] Auto-switching to system pool provider: ${poolProviderId} (model: ${poolModel})`);
+
+          const result = await poolProvider.generate(input, {
+            ...context,
+            config: poolProviderConfig,
+            tools: context.disableTools ? [] : buildOpenAITools(context.allowedTools)
+          });
+
+          console.log(`[GATEWAY_POOL] Provider ${poolProviderId} response successfully captured (system pool failover).`);
+          clearProviderFailure(poolProviderId);
+
+          await triggerSelfLearning(input, result);
+          await recordNonGeminiLog(poolProviderId, poolModel, result);
+
+          return {
+            ...context,
+            rawResult: result,
+            activeProvider: poolProviderId,
+            poolFailoverTriggered: true
+          };
+        } catch (error: any) {
+          lastError = error;
+          console.warn(`[GATEWAY_POOL] Provider ${poolProviderId} failed (system pool failover):`, error.message || String(error));
+          await recordNonGeminiLog(poolProviderId, poolModel, undefined, error.message || String(error));
+          markProviderFailed(poolProviderId);
+        }
       }
     }
 
@@ -169,6 +315,11 @@ export const ProviderGatewayModule: CortexModule = {
              continue;
           }
 
+          if (isProviderFailed(providerId)) {
+            console.log(`[GATEWAY_FALLBACK] Skipping fallback provider '${providerId}' (temporarily failed).`);
+            continue;
+          }
+
           try {
             console.log(`[GATEWAY_FALLBACK] Routing to fallback step: ${providerId} (model: ${item.model})`);
 
@@ -185,6 +336,7 @@ export const ProviderGatewayModule: CortexModule = {
             });
 
             console.log(`[GATEWAY_FALLBACK] Fallback Step ${providerId} succeeded!`);
+            clearProviderFailure(providerId);
             
             await triggerSelfLearning(input, result);
             await recordNonGeminiLog(providerId, item.model || 'unknown', result);
@@ -197,6 +349,7 @@ export const ProviderGatewayModule: CortexModule = {
           } catch (error: any) {
             console.error(`[GATEWAY_FALLBACK] Fallback step to ${providerId} failed:`, error.message || String(error));
             await recordNonGeminiLog(providerId, item.model || 'unknown', undefined, error.message || String(error));
+            markProviderFailed(providerId);
           }
         }
       }

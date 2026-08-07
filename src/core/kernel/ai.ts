@@ -1,6 +1,6 @@
 import { SettingsManager } from './settings.js';
 import { AIConfig } from './ai/aiTypes.js';
-import { generateContent } from './ai/generateSegment.js';
+import { generateContent } from './ai/geminiGenerate.js';
 import { executeGoogleSearch } from './ai/web_search.js';
 import { listModels as listModelsSeg } from './ai/listModelsSegment.js';
 import { proxyAIRequest } from './ai/proxySegment.js';

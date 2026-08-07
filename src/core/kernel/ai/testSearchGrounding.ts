@@ -3,7 +3,7 @@
  * Run with: npx tsx src/core/kernel/ai/testSearchGrounding.ts
  */
 
-import { executeGoogleSearch } from './generateSegment';
+import { executeGoogleSearch } from './geminiGenerate';
 
 async function scrapeHtmlResults(html: string, selectors: { resultBlock: RegExp; title: RegExp; link: RegExp; snippet: RegExp }, maxResults = 5): Promise<any[]> {
   const results: any[] = [];
