@@ -328,7 +328,7 @@ cmd_status() {
 }
 
 # --- Logs --------------------------------------------------------------------
-cmd_logs() { tail -f "$CURRENT_LOG" 2>/dev/null || err "Belum ada session log. Jalankan 'start' dulu."; }
+cmd_logs() { tail -F "$CURRENT_LOG" 2>/dev/null || err "Belum ada session log. Jalankan 'start' dulu."; }
 
 cmd_show() {
   local n="${1:-60}"

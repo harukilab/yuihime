@@ -1,6 +1,12 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.323] - 2026-08-07
+### Fix: yui-debug.sh: tail -F so live log survives daemon restarts
+- cmd_logs() used tail -f (follow by inode), so when yui-daemon.sh restart rotates current.log -> sessions/session-*.log and creates a fresh file, a live tail would freeze on the old (unwritten) file
+- Switched to tail -F (follow by name) so the live log keeps streaming across restarts; verified: tail survived a rotation and captured both pre-restart and post-restart boot lines
+
+
 ## [4.322] - 2026-08-07
 ### Fix: Virtual body: merge DEFAULTS so saved JSON is always complete
 - main.js load() now merges with DEFAULTS (all 11 fields + lastUpdated) instead of returning {} on missing/empty file, so action=set never writes a partial schema
