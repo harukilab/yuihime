@@ -1,6 +1,16 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.324] - 2026-08-07
+### Feature: Virtual body: add location field (park/crowded test)
+- main.js: new 'location' field (FIELDS + DEFAULTS 'at home') so Yui can feel/describe where she currently is and the atmosphere around her
+- config.toml v1.4.0: change_clothes tool description + valid fields + parameters now include location; example 'kita ke taman' -> set location=at the park, crowded with people
+- virtual_body_state.json v1.5.0: seed + description include location
+- virtual_body_inject.json v1.5.0: [VIRTUAL BODY] prompt now leads with "Right now you are: <location>" before clothing/inserts/pose
+- Live state set to 'at the park, crowded with many people'; daemon restarted, both cortex modules loaded v1.5.0
+- Tested via /api/stream/chat ("kita ke taman, sekarang, lagi ramai"): Yui's generated image reflected live state (sitting on park bench in crowded park, inserts, current outfit), confirming injection reads live JSON not seed
+
+
 ## [4.323] - 2026-08-07
 ### Fix: yui-debug.sh: tail -F so live log survives daemon restarts
 - cmd_logs() used tail -f (follow by inode), so when yui-daemon.sh restart rotates current.log -> sessions/session-*.log and creates a fresh file, a live tail would freeze on the old (unwritten) file
