@@ -1,6 +1,14 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.331] - 2026-08-07
+### feature: Chat drink quantity in 3 languages: 'minum 5 gelas' / 'drink 5 glasses' / '水を5杯' now consumes N drinks with per-glass fill & overfeed
+
+
+## [4.330] - 2026-08-07
+### bugfix: Care buttons recompute vitals from timestamps (hours-based) so status updates immediately; over-max cap honored in permission mode; inventory: long name row + small +1/+5/+10 below
+
+
 ## [4.329] - 2026-08-07
 ### Feature: Care menu: persistent buttons, scaled overfeed (Poop/Pee climb faster), inventory +1/+5/+10 & Use per item, English Pee/Poop names, split Telegram quick menu helpers
 

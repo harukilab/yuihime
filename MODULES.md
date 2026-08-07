@@ -193,3 +193,4 @@ Peta struktur direktori pasca-pemisahan Web UI ↔ Daemon (lihat UPDATE_LOG `[4.
 - `cron fire_at persistence`
 - `SOPModule — added always/ subfolder for always-on SOPs; improved keyword matching (GENERIC_WORDS filter + token match); EN header; injectCharacterName applied`
 - `todowrite tool`
+- `LifeSimulation — trilingual drink quantity parsing ('minum 5 gelas' / 'drink 5 glasses' / '水を5杯') consumes N drinks with per-glass fill, overfeed depth scaling, and loop over the inventory

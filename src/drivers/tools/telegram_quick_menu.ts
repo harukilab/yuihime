@@ -213,25 +213,54 @@ export function runCareAction(action: string, tc: TgToolContext): TgReply {
   const now = Date.now();
   let text = '';
 
+  // --- Life-simulation config (mirrors LifeSimulationModule) ---
+  const HOUR_MS = 3600000;
+  const lsCfg = (tc.settings?.['life-simulation'] || {}) as any;
+  const hungerRate = Number(lsCfg.hungerRatePerHour ?? 9);
+  const thirstRate = Number(lsCfg.thirstRatePerHour ?? 16);
+  const cleanlinessRate = Number(lsCfg.cleanlinessRatePerHour ?? 4);
+  const bladderRate = Number(lsCfg.bladderRatePerHour ?? 8);
+  const poopRate = Number(lsCfg.poopRatePerHour ?? 5);
+  const poopFill = Number(lsCfg.poopFillPerMeal ?? 12);
+  const peeFillMeal = Number(lsCfg.peeFillPerMeal ?? 5);
+  const peeFillDrink = Number(lsCfg.peeFillPerDrink ?? 8);
+  const overfeedFloor = Number(lsCfg.overfeedFloor ?? -5);
+  const permissionMode = lsCfg.enableSelfCarePermission !== undefined ? !!lsCfg.enableSelfCarePermission : false;
+  const overMaxCap = Number(lsCfg.selfCareOverMaxCap !== undefined ? lsCfg.selfCareOverMaxCap : 200);
+  const permSet = new Set(Array.isArray(lsCfg.selfCarePermissionActions) ? lsCfg.selfCarePermissionActions.map((x: any) => String(x)) : []);
+  const capFor = (action: string): number =>
+    (permissionMode && (permSet.size === 0 || permSet.has(action))) ? overMaxCap : 100;
+  // Recompute the numeric vitals from timestamps so the status stays in sync
+  // immediately (LifeSimulationModule only re-writes them on chat turns).
+  const refreshVitals = () => {
+    const n2 = Date.now();
+    const mf = v.sleepState === 'asleep' ? 0.35 : 1;
+    const cl = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
+    v.hunger = Math.round(cl(((n2 - (v.lastMeal ?? n2)) / HOUR_MS) * hungerRate * mf + (v.hungerOffset || 0), overfeedFloor, capFor('eat')));
+    v.thirst = Math.round(cl(((n2 - (v.lastDrink ?? n2)) / HOUR_MS) * thirstRate * mf + (v.thirstOffset || 0), overfeedFloor, capFor('drink')));
+    v.cleanliness = Math.round(cl(100 - ((n2 - (v.lastBath ?? n2)) / HOUR_MS) * cleanlinessRate * mf, 0, capFor('bath')));
+    v.pee = Math.round(cl(((n2 - (v.lastPee ?? n2)) / HOUR_MS) * bladderRate, 0, capFor('pee')));
+    v.poop = Math.round(cl(((n2 - (v.lastPoop ?? n2)) / HOUR_MS) * poopRate, 0, capFor('poop')));
+  };
+  const persist = () => {
+    refreshVitals();
+    sh.lifeVitals = v;
+    sh.lifeInventory = inv;
+    db.prepare('UPDATE agent_state SET systemHealth = ? WHERE id = 1').run(JSON.stringify(sh));
+  };
+
   const feedItem = (food: any): string => {
     food.qty -= 1;
-    const lsCfg = (tc.settings?.['life-simulation'] || {}) as any;
-    const hungerRate = Number(lsCfg.hungerRatePerHour ?? 9);
-    const bladderRate = Number(lsCfg.bladderRatePerHour ?? 8);
-    const poopRate = Number(lsCfg.poopRatePerHour ?? 5);
-    const poopFill = Number(lsCfg.poopFillPerMeal ?? 12);
-    const peeFill = Number(lsCfg.peeFillPerMeal ?? 5);
-    const overfeedFloor = Number(lsCfg.overfeedFloor ?? -5);
-    const HOUR_MS = 3600000;
-    const addFill = (key: string, amount: number, rate: number) => {
+    const addFill = (key: string, amount: number, rate: number, action: string) => {
       const elapsed = (now - (v[key] ?? now)) / HOUR_MS;
-      const cur = Math.max(0, Math.min(100, elapsed * rate));
-      const newVal = Math.max(0, Math.min(100, cur + amount));
+      const cap = capFor(action);
+      const cur = Math.max(0, Math.min(cap, elapsed * rate));
+      const newVal = Math.max(0, Math.min(cap, cur + amount));
       v[key] = now - (newVal / rate) * HOUR_MS;
     };
     const doFill = (mult: number) => {
-      addFill('lastPoop', poopFill * mult, poopRate);
-      addFill('lastPee', peeFill * mult, bladderRate);
+      addFill('lastPoop', poopFill * mult, poopRate, 'poop');
+      addFill('lastPee', peeFillMeal * mult, bladderRate, 'pee');
     };
     const preHunger = Math.max(0, ((now - (v.lastMeal ?? now)) / HOUR_MS) * hungerRate);
     const overfed = preHunger <= 5;
@@ -241,26 +270,21 @@ export function runCareAction(action: string, tc: TgToolContext): TgReply {
       const depth = Math.max(1, Math.floor(Math.abs(v.hungerOffset) / 5));
       doFill(1 + depth);
       v.hunger = v.hungerOffset;
-      return `🍽️ Yuihime was already full but ate "${food.name}" anyway — overstuffed (hunger ${Math.round(v.hungerOffset)}%)! Poop +${poopFill * (1 + depth)}%, Pee +${peeFill * (1 + depth)}%. (${food.qty} left)`;
+      return `🍽️ Yuihime was already full but ate "${food.name}" anyway — overstuffed (hunger ${Math.round(v.hungerOffset)}%)! Poop +${poopFill * (1 + depth)}%, Pee +${peeFillMeal * (1 + depth)}%. (${food.qty} left)`;
     }
     v.hungerOffset = 0;
     doFill(1);
     v.hunger = 0;
-    return `🍽️ Yuihime eats "${food.name}" — hunger 0%! Poop +${poopFill}%, Pee +${peeFill}%. (${food.qty} left)`;
+    return `🍽️ Yuihime eats "${food.name}" — hunger 0%! Poop +${poopFill}%, Pee +${peeFillMeal}%. (${food.qty} left)`;
   };
 
   const drinkItem = (drink: any): string => {
     drink.qty -= 1;
-    const lsCfg = (tc.settings?.['life-simulation'] || {}) as any;
-    const thirstRate = Number(lsCfg.thirstRatePerHour ?? 16);
-    const bladderRate = Number(lsCfg.bladderRatePerHour ?? 8);
-    const peeFill = Number(lsCfg.peeFillPerDrink ?? 8);
-    const overfeedFloor = Number(lsCfg.overfeedFloor ?? -5);
-    const HOUR_MS = 3600000;
-    const addFill = (key: string, amount: number, rate: number) => {
+    const addFill = (key: string, amount: number, rate: number, action: string) => {
       const elapsed = (now - (v[key] ?? now)) / HOUR_MS;
-      const cur = Math.max(0, Math.min(100, elapsed * rate));
-      const newVal = Math.max(0, Math.min(100, cur + amount));
+      const cap = capFor(action);
+      const cur = Math.max(0, Math.min(cap, elapsed * rate));
+      const newVal = Math.max(0, Math.min(cap, cur + amount));
       v[key] = now - (newVal / rate) * HOUR_MS;
     };
     const preThirst = Math.max(0, ((now - (v.lastDrink ?? now)) / HOUR_MS) * thirstRate);
@@ -269,14 +293,14 @@ export function runCareAction(action: string, tc: TgToolContext): TgReply {
     if (overfed) {
       v.thirstOffset = Math.max(overfeedFloor, (v.thirstOffset || 0) - 5);
       const depth = Math.max(1, Math.floor(Math.abs(v.thirstOffset) / 5));
-      addFill('lastPee', peeFill * (1 + depth), bladderRate);
+      addFill('lastPee', peeFillDrink * (1 + depth), bladderRate, 'pee');
       v.thirst = v.thirstOffset;
-      return `💧 Yuihime was already hydrated but drank "${drink.name}" anyway — overfull (thirst ${Math.round(v.thirstOffset)}%)! Pee +${peeFill * (1 + depth)}%. (${drink.qty} left)`;
+      return `💧 Yuihime was already hydrated but drank "${drink.name}" anyway — overfull (thirst ${Math.round(v.thirstOffset)}%)! Pee +${peeFillDrink * (1 + depth)}%. (${drink.qty} left)`;
     }
     v.thirstOffset = 0;
-    addFill('lastPee', peeFill, bladderRate);
+    addFill('lastPee', peeFillDrink, bladderRate, 'pee');
     v.thirst = 0;
-    return `💧 Yuihime drinks "${drink.name}" — thirst 0%! Pee +${peeFill}%. (${drink.qty} left)`;
+    return `💧 Yuihime drinks "${drink.name}" — thirst 0%! Pee +${peeFillDrink}%. (${drink.qty} left)`;
   };
 
   if (a.startsWith('invuse:')) {
@@ -301,9 +325,7 @@ export function runCareAction(action: string, tc: TgToolContext): TgReply {
         text = `✨ Yuihime uses "${item.name}" — done! (${item.qty} left)`;
       }
     }
-    sh.lifeVitals = v;
-    sh.lifeInventory = inv;
-    db.prepare('UPDATE agent_state SET systemHealth = ? WHERE id = 1').run(JSON.stringify(sh));
+    persist();
     const view = careInventoryView(inv);
     return { text: `${text}\n\n${view.text}`, keyboard: view.keyboard };
   }
@@ -317,9 +339,7 @@ export function runCareAction(action: string, tc: TgToolContext): TgReply {
     }
     const addQty = Math.max(1, Math.min(99, Number(qtyStr) || 1));
     item.qty = Number(item.qty || 0) + addQty;
-    sh.lifeVitals = v;
-    sh.lifeInventory = inv;
-    db.prepare('UPDATE agent_state SET systemHealth = ? WHERE id = 1').run(JSON.stringify(sh));
+    persist();
     const view = careInventoryView(inv);
     return { text: `➕ Added +${addQty} ${item.emoji || ''} ${item.name || item.id} (now x${item.qty}).\n\n${view.text}`, keyboard: view.keyboard };
   }
@@ -332,9 +352,7 @@ export function runCareAction(action: string, tc: TgToolContext): TgReply {
       return { text: '⚠️ Item not found.', keyboard: careMenuKeyboard() };
     }
     item.qty = Number(item.qty || 0) + 1;
-    sh.lifeVitals = v;
-    sh.lifeInventory = inv;
-    db.prepare('UPDATE agent_state SET systemHealth = ? WHERE id = 1').run(JSON.stringify(sh));
+    persist();
     const view = careInventoryView(inv);
     return { text: `➕ Added +1 ${item.emoji || ''} ${item.name || item.id}.\n\n${view.text}`, keyboard: view.keyboard };
   }
@@ -350,9 +368,7 @@ export function runCareAction(action: string, tc: TgToolContext): TgReply {
     if (item.qty <= 0) {
       list.splice(Number(idxStr), 1);
     }
-    sh.lifeVitals = v;
-    sh.lifeInventory = inv;
-    db.prepare('UPDATE agent_state SET systemHealth = ? WHERE id = 1').run(JSON.stringify(sh));
+    persist();
     const view = careInventoryView(inv);
     return {
       text: `${item.qty > 0 ? `🗑️ Removed 1x from ${item.emoji || ''} ${item.name} (${item.qty} left).` : `🗑️ Removed ${item.emoji || ''} ${item.name} entirely.`}\n\n${view.text}`,
@@ -428,9 +444,7 @@ export function runCareAction(action: string, tc: TgToolContext): TgReply {
     default:
       return { text: `⚠️ Unknown action: "${action}".\n\nUsage: /care <eat|drink|bath|pee|poop|sleep|play|fish|inventory>` };
   }
-  sh.lifeVitals = v;
-  sh.lifeInventory = inv;
-  db.prepare('UPDATE agent_state SET systemHealth = ? WHERE id = 1').run(JSON.stringify(sh));
+  persist();
   return {
     text: `${yuiStatusText(tc)}\n\n${text}\n\nTap the 🧬 Care buttons below to repeat — the menu stays open.`,
     keyboard: careMenuKeyboard(),
@@ -468,29 +482,33 @@ export function careInventoryView(inv: any): TgReply {
   const total = (inv.foods || []).concat(inv.drinks || []).concat(inv.items || []).reduce((s, it) => s + Number(it.qty || 0), 0);
   sections.push('', `Total items: ${total}`, '', 'Tap an item button to use it (menu stays open for repeat use):');
 
-  const shortName = (it: any) => String(it.name || it.id || '?').slice(0, 14);
+  const longName = (it: any) => String(it.name || it.id || '?').slice(0, 32);
   const keyboard: any[][] = [];
   const pushUseRows = (type: string, useEmoji: string) => {
     (inv[type] || []).forEach((it: any, i: number) => {
       keyboard.push([
-        { text: `${useEmoji} ${it.emoji || '·'} ${shortName(it)}`, callback_data: `qt:care:invuse:${type}:${i}` },
+        { text: `${useEmoji} ${it.emoji || '·'} ${longName(it)}`, callback_data: `qt:care:invuse:${type}:${i}` }
+      ]);
+      keyboard.push([
         { text: '+1', callback_data: `qt:care:invaddqty:${type}:${i}:1` },
         { text: '+5', callback_data: `qt:care:invaddqty:${type}:${i}:5` },
-        { text: '+10', callback_data: `qt:care:invaddqty:${type}:${i}:10` }
+        { text: '+10', callback_data: `qt:care:invaddqty:${type}:${i}:10` },
+        { text: '🗑️', callback_data: `qt:care:invdel:${type}:${i}` }
       ]);
-      keyboard.push([{ text: `🗑️ Remove 1 ${it.emoji || '·'} ${shortName(it)}`, callback_data: `qt:care:invdel:${type}:${i}` }]);
     });
   };
   pushUseRows('foods', '🍽️');
   pushUseRows('drinks', '🥤');
   (inv.items || []).forEach((it: any, i: number) => {
     keyboard.push([
-      { text: `✨ ${it.emoji || '·'} ${shortName(it)}`, callback_data: `qt:care:invuse:items:${i}` },
+      { text: `✨ ${it.emoji || '·'} ${longName(it)}`, callback_data: `qt:care:invuse:items:${i}` }
+    ]);
+    keyboard.push([
       { text: '+1', callback_data: `qt:care:invaddqty:items:${i}:1` },
       { text: '+5', callback_data: `qt:care:invaddqty:items:${i}:5` },
-      { text: '+10', callback_data: `qt:care:invaddqty:items:${i}:10` }
+      { text: '+10', callback_data: `qt:care:invaddqty:items:${i}:10` },
+      { text: '🗑️', callback_data: `qt:care:invdel:items:${i}` }
     ]);
-    keyboard.push([{ text: `🗑️ Remove 1 ${it.emoji || '·'} ${shortName(it)}`, callback_data: `qt:care:invdel:items:${i}` }]);
   });
   keyboard.push([{ text: '➕ Custom item', callback_data: 'qt:care:invnew' }]);
   keyboard.push([{ text: '« Care', callback_data: 'qt:care' }, { text: '« Menu', callback_data: 'qt:menu' }]);

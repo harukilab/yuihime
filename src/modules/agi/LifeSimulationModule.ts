@@ -131,6 +131,9 @@ const FISH_WORDS_JP = /(さかな|魚|すし|しゃけ|さしみ|おさかな)/;
 const OFFER_WORDS_IDEN = /\b(yuk|ayo|mari|sana|lah|aja|nih|ini|sekarang|bareng|barengan|buat kamu|untuk kamu|pesenin|beliin|traktir|dulu)\b/i;
 const OFFER_WORDS_JP = /(どうぞ|あげる|食べて|たべて|おいで|あるよ|あるから|飲んで|のんで|寝ていいよ|寝なさい|いいよ|どぞ)/;
 const IMPERATIVE_JP = /(食べて|たべて|どうぞ食べて|飲んで|のんで|どうぞ飲んで|寝ていいよ|寝なさい|おやすみ)/;
+// Trilingual drink-quantity units: "minum 5 gelas", "drink 5 glasses/cups",
+// "水を5杯飲んで", etc. The first unit/number pair found sets the count.
+const DRINK_QTY_UNITS = 'gelas|cangkir|botol|glass|glasses|cup|cups|bottle|bottles|mug|杯|グラス|カップ';
 
 // --- In-chat permission commands (e.g. "yui ga boleh pipis" bans it, "boleh pipis" allows it) ---
 const PERM_ACTION_WORDS = '(pipis|kencing|kebelet|toilet|kamar mandi|wc|pee|buang air kecil|トイレ|おしっこ|小便|buang air besar|bab|pup|poop|berak|mules|うんち|大便|makan|makanan|eat|ごはん|minum|minuman|drink|水|のむ|mandi|shower|bath|お風呂|tidur|ngantuk|sleep|寝る|main|bermain|play|あそぶ|ikan|fish|さかな)';
@@ -164,6 +167,21 @@ const STARTER_DRINKS = [
   { id: 'milk-coffee', name: 'Kopi Susu', en: 'Milk Coffee', jp: 'カフェラテ', emoji: '☕', qty: 2 },
   { id: 'milk', name: 'Susu Segar', en: 'Fresh Milk', jp: '牛乳', emoji: '🥛', qty: 2 }
 ];
+
+// Parses how many drinks were offered in the message, e.g. "minum 5 gelas",
+// "drink 5 glasses", "水を5杯", "cups 3". Falls back to 1 (single glass).
+function parseDrinkQty(s: string): number {
+  const text = String(s || '');
+  const cap = (n: number) => Math.max(1, Math.min(10, n));
+  const units = `(?:${DRINK_QTY_UNITS})`;
+  let m = text.match(new RegExp(`(\\d{1,2})\\s*(?:x|X|×)?\\s*${units}`, 'i'));
+  if (m) return cap(parseInt(m[1], 10));
+  m = text.match(new RegExp(`${units}\\s*(\\d{1,2})`, 'i'));
+  if (m) return cap(parseInt(m[1], 10));
+  m = text.match(/(\d{1,2})\s*[xX×](?=\s|$|[.,!?;])/);
+  if (m) return cap(parseInt(m[1], 10));
+  return 1;
+}
 
 function consumeFromInventory(inventory: any, type: string): any {
   const list = inventory[type] || [];
@@ -720,24 +738,40 @@ export const LifeSimulationModule: CortexModule = {
       }
     }
     if (drinkTrigger) {
-      const drunk = consumeFromInventory(inventory, 'drinks') || consumeAphrodisiac(inventory);
-      if (drunk) {
-        v.lastDrink = now;
+      const drinkQty = parseDrinkQty(input);
+      let consumed = 0;
+      let lastName = '';
+      let aphrodisiacHit = false;
+      let overfullDepthSum = 0;
+      for (let i = 0; i < drinkQty; i++) {
+        const drunk = consumeFromInventory(inventory, 'drinks') || consumeAphrodisiac(inventory);
+        if (!drunk) break;
+        consumed += 1;
+        lastName = drunk.name;
         if (enableHorn && isAphrodisiacItem(drunk)) {
           v.horn = 100;
           v.lastHornDecay = now;
-          logs.push('[LIFE_SIM] Yui drank an aphrodisiac (perangsang) — horniness maxed out!');
+          aphrodisiacHit = true;
         }
-        addFill('lastPee', peeFillPerDrink, bladderRate, 'pee');
-        if (preThirst <= 5) {
+        const curThirst = ((now - (v.lastDrink ?? now)) / HOUR_MS) * thirstRate;
+        const overfed = curThirst <= 5;
+        v.lastDrink = now;
+        if (overfed) {
           v.thirstOffset = Math.max(overfeedFloor, (v.thirstOffset || 0) - 5);
           const depth = Math.max(1, Math.floor(Math.abs(v.thirstOffset) / 5));
+          overfullDepthSum += depth;
           addFill('lastPee', peeFillPerDrink * depth, bladderRate, 'pee');
-          logs.push(`[LIFE_SIM] Yui was already hydrated but was fed a drink anyway — thirst dropped to ${Math.round(v.thirstOffset || 0)}% (overfull, level ${depth}). Extra Pee +${peeFillPerDrink * depth}%.`);
         } else {
           v.thirstOffset = 0;
+          addFill('lastPee', peeFillPerDrink, bladderRate, 'pee');
         }
-        logs.push(`[LIFE_SIM] Yui drank "${drunk.name}" from inventory — thirst quenched.`);
+      }
+      if (consumed > 0) {
+        if (aphrodisiacHit) logs.push('[LIFE_SIM] Yui drank an aphrodisiac (perangsang) — horniness maxed out!');
+        logs.push(`[LIFE_SIM] Yui drank "${lastName}" ×${consumed} from inventory — thirst quenched.`);
+        if (overfullDepthSum > 0) {
+          logs.push(`[LIFE_SIM] Yui was already hydrated but drank ${consumed} drink(s) anyway — thirst dropped to ${Math.round(v.thirstOffset || 0)}% (overfull, level ${Math.max(1, overfullDepthSum)}). Extra Pee +${peeFillPerDrink * overfullDepthSum}%.`);
+        }
       } else if (needsPermission('drink')) {
         addPending('drink', 'drink (minum)', preThirst, selfCareThirst);
       } else {
