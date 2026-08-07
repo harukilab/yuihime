@@ -1,6 +1,16 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.322] - 2026-08-07
+### Fix: Virtual body: merge DEFAULTS so saved JSON is always complete
+- main.js load() now merges with DEFAULTS (all 11 fields + lastUpdated) instead of returning {} on missing/empty file, so action=set never writes a partial schema
+- Previously, if virtual_body.json was missing/partial, a set only persisted the single edited field + lastUpdated, silently dropping toys/accessories/pussy_insert/anal_insert/nipples
+- Default state cleaned: Yui starts with default clothes only, no sex toys carried or worn (toys/used/clit = nothing)
+- Merge is additive only: setting one field (e.g. only changing top) never resets other already-set fields back to default
+- virtual_body_state.json bumped to v1.4.1 so a fresh seed uses the same no-toy default; live state reset to clean default
+- Verified round-trip: read returns all 11 keys (daemon path via POST /api/addons/execute/virtual_body), set persists complete JSON on disk, single-field change preserves the rest
+
+
 ## [4.321] - 2026-08-07
 ### Refactor: Console log tidy: timestamp + level color + module tags
 - server.ts: global console wrapper now prefixes every daemon log with [HH:MM:SS][LEVEL] and colors by severity (error=red, warn=yellow, info=cyan, debug=gray); NO_COLOR / YUIHIME_NO_COLOR disables color; pre-formatted ANSI UI lines (TUI wizards) pass through untouched
