@@ -4,8 +4,8 @@ import { StorageServer } from '@shared/drivers/storageServer';
 const manifest = {
   id: 'todowrite',
   name: 'TodoWrite',
-  description: 'Create and maintain a structured task list for the current conversation. Todos are persisted per-conversation so progress can be tracked across messages. Use this whenever the user requests a todo/task list, a multi-step plan, or hands you a complex assignment to track.',
-  version: '1.0.0',
+  description: 'Create and maintain a structured task list for the current conversation. Todos are persisted per-conversation so progress can be tracked across messages. Use this whenever the user requests a todo/task list, a multi-step plan, or hands you a complex assignment to track. IMPORTANT: right after creating or updating todos, you MUST follow up immediately — either begin executing the highest-priority pending todo with your available tools, or ask the user for confirmation (via the question tool) whether they want you to work on it now. Never just save the list and stop.',
+  version: '1.1.0',
   type: 'TOOL',
   order: 55,
   parameters: {
@@ -66,6 +66,13 @@ export const TodoWriteTool: ToolModule = {
     }
 
     await StorageServer.saveCustom(key, merged);
-    return { success: true, mode: 'update', todos: merged };
+
+    const pending = merged.filter((t: any) => t.status === 'pending' || t.status === 'in_progress');
+    const firstPending = pending[0]?.content || '';
+    const followUp = pending.length > 0
+      ? `You have ${pending.length} pending todo item(s). The highest-priority pending one is: "${firstPending}". You MUST act now: either start working on it directly using your available tools (execute the task, don't just talk about it), or if you need the user's confirmation first, ask them via the question tool whether to proceed. Do not end the turn with only a confirmation that the todo list was saved.`
+      : '';
+
+    return { success: true, mode: 'update', todos: merged, pendingCount: pending.length, followUp };
   }
 };

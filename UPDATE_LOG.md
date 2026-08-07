@@ -1,6 +1,11 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.325] - 2026-08-07
+### Fix: todowrite now triggers LLM to execute tasks or ask confirmation
+- todowrite tool returns a followUp directive naming the highest-priority pending todo, forcing the LLM to execute it directly or ask via the question tool instead of just saving the list
+
+
 ## [4.324] - 2026-08-07
 ### Feature: Virtual body: add location field (park/crowded test)
 - main.js: new 'location' field (FIELDS + DEFAULTS 'at home') so Yui can feel/describe where she currently is and the atmosphere around her
