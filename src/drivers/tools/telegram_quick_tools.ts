@@ -946,15 +946,19 @@ function yuiStatusText(tc?: TgToolContext): string {
 
   let state = { status: 'idle' } as any;
   let relation = {} as any;
+  let mood = {} as any;
+  let emotion = {} as any;
   let life = {} as any;
   let goals = 0;
 
   try {
     if (db) {
-      const row = db.prepare('SELECT status, relation, mood, systemHealth FROM agent_state LIMIT 1').get() as any;
+      const row = db.prepare('SELECT status, relation, mood, emotion, systemHealth FROM agent_state LIMIT 1').get() as any;
       if (row) {
         state = { ...state, ...row };
         if (row.relation) { try { relation = JSON.parse(row.relation); } catch {} }
+        if (row.mood) { try { mood = JSON.parse(row.mood); } catch {} }
+        if (row.emotion) { try { emotion = JSON.parse(row.emotion); } catch {} }
         if (row.systemHealth) {
           try { life = JSON.parse(row.systemHealth).lifeVitals || {}; } catch {}
         }
@@ -1011,19 +1015,48 @@ function yuiStatusText(tc?: TgToolContext): string {
     lines.push(
       ``,
       `*🧬 LIFE SIMULATION*`,
-      `🍽️  Hunger       ${val(life.hunger)}%  ${bar(life.hunger)} ${markBad(life.hunger, 70, 40)} ${txtBad(life.hunger, 'Starving', 'Hungry', 'Full')}`,
-      `💧  Thirst       ${val(life.thirst)}%  ${bar(life.thirst)} ${markBad(life.thirst, 70, 40)} ${txtBad(life.thirst, 'Very Thirsty', 'Thirsty', 'Fresh')}`,
-      `🚿  Cleanliness  ${val(life.cleanliness)}%  ${bar(life.cleanliness)} ${markGood(life.cleanliness, 40, 70)} ${txtGood(life.cleanliness, 'Needs Bath', 'Slightly Dirty', 'Clean')}`,
-      `🚽  Bladder      ${val(life.bladder)}%  ${bar(life.bladder)} ${markBad(life.bladder, 70, 40)} ${txtBad(life.bladder, 'Urgent', 'Need To Go', 'Safe')}`,
-      `😴  Sleepiness   ${val(life.sleepiness)}%  ${bar(life.sleepiness)} ${markBad(life.sleepiness, 70, 40)} ${txtBad(life.sleepiness, 'Sleep Deprived', 'Drowsy', 'Fresh')}`,
-      `🔋  Energy       ${val(life.energy)}%  ${bar(life.energy)} ${markGood(life.energy, 30, 60)} ${txtGood(life.energy, 'Exhausted', 'Tired', 'Sufficient')}`,
-      `🛏️  Sleep        ${life.sleepState === 'asleep' ? '😴 Asleep' : '🙂 Awake'} (${val(life.effectiveBedtime)}–${val(life.effectiveWake)})`
+      `🍽️ Hunger: *${val(life.hunger)}%* ${bar(life.hunger)} ${markBad(life.hunger, 70, 40)} _${txtBad(life.hunger, 'Starving', 'Hungry', 'Full')}_`,
+      `💧 Thirst: *${val(life.thirst)}%* ${bar(life.thirst)} ${markBad(life.thirst, 70, 40)} _${txtBad(life.thirst, 'Very Thirsty', 'Thirsty', 'Fresh')}_`,
+      `🚿 Cleanliness: *${val(life.cleanliness)}%* ${bar(life.cleanliness)} ${markGood(life.cleanliness, 40, 70)} _${txtGood(life.cleanliness, 'Needs Bath', 'Slightly Dirty', 'Clean')}_`,
+      `🚽 Pipis: *${val(life.pee)}%* ${bar(life.pee)} ${markBad(life.pee, 70, 40)} _${txtBad(life.pee, 'Urgent', 'Need To Go', 'Safe')}_`,
+      `💩 BAB: *${val(life.poop)}%* ${bar(life.poop)} ${markBad(life.poop, 70, 40)} _${txtBad(life.poop, 'Urgent', 'Need To Go', 'Safe')}_`,
+      `😴 Sleepiness: *${val(life.sleepiness)}%* ${bar(life.sleepiness)} ${markBad(life.sleepiness, 70, 40)} _${txtBad(life.sleepiness, 'Sleep Deprived', 'Drowsy', 'Fresh')}_`,
+      `🔋 Energy: *${val(life.energy)}%* ${bar(life.energy)} ${markGood(life.energy, 30, 60)} _${txtGood(life.energy, 'Exhausted', 'Tired', 'Sufficient')}_`,
+      `🛏️ Sleep: ${life.sleepState === 'asleep' ? '😴 _Asleep_' : '🙂 _Awake_'} (${val(life.effectiveBedtime)}–${val(life.effectiveWake)})`
     );
     if (life.playUrge !== undefined || life.fishCraving !== undefined) {
       lines.push(
-        `🎾  Play urge    ${val(life.playUrge)}%  ${bar(life.playUrge)} ${markBad(life.playUrge, 70, 40)} · 🐟 Fish ${val(life.fishCraving)}% ${markBad(life.fishCraving, 70, 40)}`
+        `🎾 Play: *${val(life.playUrge)}%* ${bar(life.playUrge)} ${markBad(life.playUrge, 70, 40)} · 🐟 Fish: *${val(life.fishCraving)}%* ${bar(life.fishCraving)} ${markBad(life.fishCraving, 70, 40)}`
       );
     }
+  }
+
+  // ── Mood & emotion ──
+  const moodFields: Array<[string, string, any]> = [
+    ['😊', 'Joy', mood.joy],
+    ['😰', 'Stress', mood.stress],
+    ['😠', 'Anger', mood.anger],
+    ['😤', 'Irritation', mood.irritation],
+    ['😢', 'Sadness', mood.sadness],
+    ['🤩', 'Excitement', mood.excitement],
+    ['😳', 'Embarrassment', mood.embarrassment],
+    ['🤔', 'Curiosity', mood.curiosity],
+    ['🎮', 'Playfulness', mood.playfulness]
+  ];
+  const hasMood = moodFields.some(([, , v]) => v !== undefined && v !== null);
+  if (hasMood) {
+    const moodRows: string[] = [];
+    for (const [e, label, v] of moodFields) {
+      const num = Number(v);
+      if (v === undefined || v === null || isNaN(num)) continue;
+      moodRows.push(`${e} ${label}: *${Math.round(num)}%* ${bar(num)}`);
+    }
+    lines.push(``, `*💖 MOOD*`, ...moodRows);
+  }
+  if (emotion && (emotion.arousal !== undefined || emotion.valence !== undefined || emotion.focus !== undefined)) {
+    if (emotion.arousal !== undefined) lines.push(`🔥 Arousal: *${Math.round(Number(emotion.arousal))}%* ${bar(Number(emotion.arousal))}`);
+    if (emotion.valence !== undefined) lines.push(`⚖️ Valence: *${Math.round(Number(emotion.valence))}* ${Number(emotion.valence) >= 0 ? '😊' : '😞'}`);
+    if (emotion.focus !== undefined) lines.push(`🎯 Focus: *${Math.round(Number(emotion.focus))}%* ${bar(Number(emotion.focus))}`);
   }
 
   // ── Relation ──
@@ -1050,9 +1083,9 @@ function careMenuKeyboard() {
   return {
     inline_keyboard: [
       [{ text: '🍽️ Feed', callback_data: 'qt:care:eat' }, { text: '💧 Drink', callback_data: 'qt:care:drink' }, { text: '🚿 Bath', callback_data: 'qt:care:bath' }],
-      [{ text: '🚽 Toilet', callback_data: 'qt:care:toilet' }, { text: '😴 Sleep', callback_data: 'qt:care:sleep' }, { text: '🎾 Play', callback_data: 'qt:care:play' }],
-      [{ text: '🐟 Fish', callback_data: 'qt:care:fish' }, { text: '🎒 Inventory', callback_data: 'qt:care:inventory' }, { text: '📊 Status', callback_data: 'qt:care:status' }],
-      [{ text: '« Menu', callback_data: 'qt:menu' }]
+      [{ text: '🚽 Pipis', callback_data: 'qt:care:pee' }, { text: '💩 BAB', callback_data: 'qt:care:poop' }, { text: '😴 Sleep', callback_data: 'qt:care:sleep' }],
+      [{ text: '🎾 Play', callback_data: 'qt:care:play' }, { text: '🐟 Fish', callback_data: 'qt:care:fish' }, { text: '🎒 Inventory', callback_data: 'qt:care:inventory' }],
+      [{ text: '📊 Status', callback_data: 'qt:care:status' }, { text: '« Menu', callback_data: 'qt:menu' }]
     ]
   };
 }
@@ -1135,10 +1168,17 @@ function runCareAction(action: string, tc: TgToolContext): TgReply {
       v.cleanliness = 100;
       text = '🚿 Yuihime takes a bath — cleanliness 100%! Nyaaa~';
       break;
+    case 'pee':
     case 'toilet':
-      v.lastToilet = now;
-      v.bladder = 0;
-      text = '🚽 Yuihime uses the bathroom — relieved (bladder 0%).';
+      v.lastPee = now;
+      v.pee = 0;
+      text = '🚽 Yuihime uses the bathroom — pipis relieved (0%).';
+      break;
+    case 'poop':
+    case 'bab':
+      v.lastPoop = now;
+      v.poop = 0;
+      text = '💩 Yuihime uses the bathroom — buang air besar relieved (0%).';
       break;
     case 'sleep':
       v.sleepState = 'asleep';
@@ -1169,7 +1209,7 @@ function runCareAction(action: string, tc: TgToolContext): TgReply {
         keyboard: careInventoryView(inv).keyboard
       };
     default:
-      return { text: `⚠️ Unknown action: "${action}".\n\nUsage: /care <eat|drink|bath|toilet|sleep|play|fish|inventory>` };
+      return { text: `⚠️ Unknown action: "${action}".\n\nUsage: /care <eat|drink|bath|pee|poop|sleep|play|fish|inventory>` };
   }
   sh.lifeVitals = v;
   sh.lifeInventory = inv;
@@ -1680,21 +1720,41 @@ export const tgQuickCommands: TgCommandDef[] = [
       // ── Life simulation vitals from persisted agent_state ──
       let lifeSection = '';
       try {
-        const row = tc.db ? tc.db.prepare('SELECT status, systemHealth FROM agent_state LIMIT 1').get() : null;
+        const row = tc.db ? tc.db.prepare('SELECT status, mood, emotion, systemHealth FROM agent_state LIMIT 1').get() : null;
         const systemHealth = row && row.systemHealth ? JSON.parse(row.systemHealth) : {};
         const lv = systemHealth.lifeVitals || {};
         const inv = systemHealth.lifeInventory;
+        let moodObj: any = {};
+        let emotionObj: any = {};
+        if (row?.mood) { try { moodObj = JSON.parse(row.mood); } catch {} }
+        if (row?.emotion) { try { emotionObj = JSON.parse(row.emotion); } catch {} }
+        const bar = (v: number) => {
+          const n = Math.max(0, Math.min(10, Math.round((v ?? 0) / 10)));
+          return '█'.repeat(n) + '░'.repeat(10 - n);
+        };
         if (lv && (lv.hunger !== undefined || lv.thirst !== undefined || lv.sleepiness !== undefined)) {
-          const bar = (v: number) => {
-            const n = Math.max(0, Math.min(10, Math.round((v ?? 0) / 10)));
-            return '█'.repeat(n) + '░'.repeat(10 - n);
-          };
           const sleepDot = lv.sleepState === 'asleep' ? '😴' : '🙂';
           const foodQty = Array.isArray(inv?.foods) ? inv.foods.reduce((a: number, i: any) => a + (i.qty || 0), 0) : 0;
           const drinkQty = Array.isArray(inv?.drinks) ? inv.drinks.reduce((a: number, i: any) => a + (i.qty || 0), 0) : 0;
           const energyText = row?.status === 'sleeping' ? 'Sleeping 💤' : (lv.energy !== undefined ? `${lv.energy}%` : 'Active');
-          lifeSection = `\n\n🧬 Life Simulation\n🍽️ Hunger: ${lv.hunger ?? '—'}% ${bar(lv.hunger)}\n💧 Thirst: ${lv.thirst ?? '—'}% ${bar(lv.thirst)}\n🚿 Cleanliness: ${lv.cleanliness ?? '—'}% ${bar(lv.cleanliness)}\n🚽 Bladder: ${lv.bladder ?? '—'}% ${bar(lv.bladder)}\n😴 Sleepiness: ${lv.sleepiness ?? '—'}% ${bar(lv.sleepiness)}\n🛏️ Sleep: ${sleepDot} ${lv.sleepState === 'asleep' ? 'Asleep' : 'Awake'} | Schedule ${lv.effectiveBedtime || '—'}-${lv.effectiveWake || '—'}\n🐟 Fish craving: ${lv.fishCraving ?? '—'}% | Play urge: ${lv.playUrge ?? '—'}%\n🎒 Inventory: ${foodQty} food | ${drinkQty} drinks\n🔋 Status: ${energyText}`;
+          lifeSection = `\n\n*🧬 Life Simulation*\n🍽️ Hunger: *${lv.hunger ?? '—'}%* ${bar(lv.hunger)}\n💧 Thirst: *${lv.thirst ?? '—'}%* ${bar(lv.thirst)}\n🚿 Cleanliness: *${lv.cleanliness ?? '—'}%* ${bar(lv.cleanliness)}\n🚽 Pipis: *${lv.pee ?? '—'}%* ${bar(lv.pee)}\n💩 BAB: *${lv.poop ?? '—'}%* ${bar(lv.poop)}\n😴 Sleepiness: *${lv.sleepiness ?? '—'}%* ${bar(lv.sleepiness)}\n🛏️ Sleep: ${sleepDot} ${lv.sleepState === 'asleep' ? '_Asleep_' : '_Awake_'} | Schedule ${lv.effectiveBedtime || '—'}-${lv.effectiveWake || '—'}\n🐟 Fish craving: *${lv.fishCraving ?? '—'}%* | Play urge: *${lv.playUrge ?? '—'}%*\n🎒 Inventory: ${foodQty} food | ${drinkQty} drinks\n🔋 Status: ${energyText}`;
         }
+        const moodRow = (e: string, label: string, v: any) => {
+          const num = Number(v);
+          if (v === undefined || v === null || isNaN(num)) return null;
+          return `${e} ${label}: *${Math.round(num)}%* ${bar(Number(v))}`;
+        };
+        const moodParts: string[] = [];
+        for (const [e, label, key] of [['😊', 'Joy', 'joy'], ['😰', 'Stress', 'stress'], ['😠', 'Anger', 'anger'], ['😤', 'Irritation', 'irritation'], ['😢', 'Sadness', 'sadness'], ['🤩', 'Excitement', 'excitement'], ['🎮', 'Playfulness', 'playfulness']] as Array<[string, string, string]>) {
+          const r = moodRow(e, label, moodObj[key]);
+          if (r) moodParts.push(r);
+        }
+        if (emotionObj && (emotionObj.arousal !== undefined || emotionObj.valence !== undefined || emotionObj.focus !== undefined)) {
+          if (emotionObj.arousal !== undefined) moodParts.push(`🔥 Arousal: *${Math.round(Number(emotionObj.arousal))}%* ${bar(Number(emotionObj.arousal))}`);
+          if (emotionObj.valence !== undefined) moodParts.push(`⚖️ Valence: *${Math.round(Number(emotionObj.valence))}* ${Number(emotionObj.valence) >= 0 ? '😊' : '😞'}`);
+          if (emotionObj.focus !== undefined) moodParts.push(`🎯 Focus: *${Math.round(Number(emotionObj.focus))}%* ${bar(Number(emotionObj.focus))}`);
+        }
+        if (moodParts.length > 0) lifeSection += `\n\n*💖 Mood*\n${moodParts.join('\n')}`;
       } catch (e: any) {
         lifeSection = `\n\n🧬 Life Simulation: (not active yet — ${e?.message || 'error'})`;
       }

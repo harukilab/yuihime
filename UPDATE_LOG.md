@@ -1,6 +1,10 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.328] - 2026-08-07
+### Feature: Telegram status: markdown neat layout + mood/emotion display, split care toilet into pee/BAB
+
+
 ## [4.327] - 2026-08-07
 ### Feature: Chat permission commands + markdown status in Telegram
 
