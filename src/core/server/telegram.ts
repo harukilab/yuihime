@@ -929,7 +929,7 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
         }
       );
     } catch (error: any) {
-       console.error("Bot Error:", error);
+       console.error("[TELEGRAM] Bot error:", error);
        try {
          if (error.code !== 403 && error.code !== 400) {
            const dedup = GlobalOutputDeduplicator.getInstance();
@@ -941,7 +941,7 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
            }
          }
        } catch (e) {
-         console.error("Critical: Failed to send even the error report.", e);
+         console.error("[TELEGRAM] Failed to send the error report:", e);
        }
     }
   });

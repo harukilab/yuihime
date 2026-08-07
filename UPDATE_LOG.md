@@ -1,6 +1,14 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.321] - 2026-08-07
+### Refactor: Console log tidy: timestamp + level color + module tags
+- server.ts: global console wrapper now prefixes every daemon log with [HH:MM:SS][LEVEL] and colors by severity (error=red, warn=yellow, info=cyan, debug=gray); NO_COLOR / YUIHIME_NO_COLOR disables color; pre-formatted ANSI UI lines (TUI wizards) pass through untouched
+- Logger.log (shared/core/kernel/logger.ts) now dispatches by severity (error/warn/info) so colors stay consistent across modules
+- Standardized error/warn prefixes to [MODULE] tags across daemon: [DB] database.ts (migration/init errors), [STORAGE] storage.ts + storageRouter.ts, [API] apiRouter.ts, [TELEGRAM] telegram.ts, [CIRCUIT] NeuralCircuitFramework.ts
+- Boot banner (YUIHIME KERNEL ONLINE) now prints as LOG instead of WARN (not an error)
+
+
 ## [4.320] - 2026-08-07
 ### Feature: Virtual body: add pose field (persisted + injected + foto SOP sync)
 - config.toml v1.3.0: change_clothes tool now accepts pose (current body pose/position, e.g. standing, on all fours) in valid fields + parameters

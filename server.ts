@@ -48,7 +48,10 @@ import os from "os";
   } as any;
 }
 
-// --- Global EPIPE Protection for cron/background tasks ---
+// --- Global Console Formatting: timestamp + level color + EPIPE protection ---
+// Every daemon log line gets "[HH:MM:SS][LEVEL]" prefix and a level color
+// (error=red, warn=yellow, info=cyan, debug=gray) so debugging is easier:
+// you can see WHEN a line was written and WHICH severity it carries at a glance.
 const originalConsoleFns = {
   log: console.log,
   warn: console.warn,
@@ -56,12 +59,37 @@ const originalConsoleFns = {
   info: console.info,
   debug: console.debug
 };
+const LOG_STYLES: Record<string, { color: string; reset: string; label: string }> = {
+  log:   { color: "",        reset: "",        label: "LOG" },
+  info:  { color: "\x1b[36m", reset: "\x1b[0m", label: "INFO" },
+  warn:  { color: "\x1b[33m", reset: "\x1b[0m", label: "WARN" },
+  error: { color: "\x1b[31m", reset: "\x1b[0m", label: "ERROR" },
+  debug: { color: "\x1b[90m", reset: "\x1b[0m", label: "DEBUG" }
+};
+const LOG_NO_COLOR = process.env.NO_COLOR !== undefined || ["1", "true", "yes"].includes(String(process.env.YUIHIME_NO_COLOR || "").toLowerCase());
+function logTimeStamp(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
 let __globalServer: any = null;
 let __globalWss: any = null;
 ['log', 'warn', 'error', 'info', 'debug'].forEach((method) => {
   (console as any)[method] = (...args: any[]) => {
     try {
-      (originalConsoleFns as any)[method].apply(console, args);
+      const st = LOG_STYLES[method] || LOG_STYLES.log;
+      const prefix = `[${logTimeStamp()}][${st.label}]`;
+      // Pre-formatted UI lines (TUI wizards) already carry their own ANSI codes;
+      // pass them through untouched so box drawings are not corrupted.
+      if (typeof args[0] === "string" && args[0].includes("\x1b")) {
+        (originalConsoleFns as any)[method].apply(console, args);
+      } else if (typeof args[0] === "string") {
+        args[0] = LOG_NO_COLOR ? `${prefix} ${args[0]}` : `${st.color}${prefix} ${args[0]}${st.reset}`;
+        (originalConsoleFns as any)[method].apply(console, args);
+      } else {
+        args.unshift(LOG_NO_COLOR ? prefix : `${st.color}${prefix}${st.reset}`);
+        (originalConsoleFns as any)[method].apply(console, args);
+      }
     } catch (e: any) {
       if (e.code !== 'EPIPE' && e.errno !== -32) throw e;
     }
@@ -774,11 +802,11 @@ app.use("/models", express.static(modelsDir));
       ["SQLite Path", dbPath],
     ];
 
-    console.warn(`\n[SYSTEM] === YUIHIME KERNEL ONLINE ===`);
+    console.log(`\n[SYSTEM] === YUIHIME KERNEL ONLINE ===`);
     for (const [label, value] of bootRows) {
-      console.warn(`[SYSTEM] ${label.padEnd(12)}: ${value}`);
+      console.log(`[SYSTEM] ${label.padEnd(12)}: ${value}`);
     }
-    console.warn(`[SYSTEM] =============================\n`);
+    console.log(`[SYSTEM] =============================\n`);
   });
 
   server.on("error", (err: any) => {

@@ -64,13 +64,13 @@ export function initializeDatabase() {
     cachedDb = db;
     return db;
   } catch (error) {
-    console.error("CRITICAL: Database initialization failed. Attempting recovery...", error);
+    console.error("[DB] Database initialization failed. Attempting recovery...", error);
     
     try {
       if (existsSync(dbPath)) {
         const backupPath = `${dbPath}.backup.${Date.now()}`;
         renameSync(dbPath, backupPath);
-        console.log(`Successfully backed up corrupted database to ${backupPath}`);
+        console.log(`[DB] Backed up corrupted database to ${backupPath}`);
       }
       
       const db = new Database(dbPath, { timeout: 15000 });
@@ -79,7 +79,7 @@ export function initializeDatabase() {
       cachedDb = db;
       return db;
     } catch (recoveryError) {
-      console.error("FATAL: Database recovery failed.", recoveryError);
+      console.error("[DB] Database recovery failed.", recoveryError);
       throw recoveryError;
     }
   }
@@ -443,7 +443,7 @@ export async function setupSchema(db: any) {
     try {
       db.exec(ddl);
     } catch (e: any) {
-      console.error(`ERROR: Failed to create table "${tableName}":`, e.message);
+      console.error(`[DB] Failed to create table "${tableName}":`, e.message);
     }
   }
 
@@ -484,7 +484,7 @@ export async function setupSchema(db: any) {
     try {
       db.exec(ddl);
     } catch (e: any) {
-      console.error(`ERROR: Failed to create index "${indexName}":`, e.message);
+      console.error(`[DB] Failed to create index "${indexName}":`, e.message);
     }
   }
 
@@ -542,7 +542,7 @@ export async function setupSchema(db: any) {
       }
     }
   } catch (ftsErr: any) {
-    console.error("ERROR: Failed to initialize FTS5 memory index:", ftsErr.message);
+    console.error("[DB] Failed to initialize FTS5 memory index:", ftsErr.message);
   }
 
   // Schema Migration
@@ -562,7 +562,7 @@ export async function setupSchema(db: any) {
             try {
               db.prepare(`ALTER TABLE memories ADD COLUMN ${col.name} ${col.type}`).run();
             } catch (alterError: any) {
-              console.warn(`Migration warn: failed to alter memories and add ${col.name}:`, alterError.message);
+              console.warn(`[DB] Migration failed: add ${col.name} to memories:`, alterError.message);
             }
           }
         }
@@ -583,7 +583,7 @@ export async function setupSchema(db: any) {
             try {
               db.prepare(`ALTER TABLE agent_state ADD COLUMN ${col.name} ${col.type}`).run();
             } catch (alterError: any) {
-              console.warn(`Migration warn: failed to alter agent_state and add ${col.name}:`, alterError.message);
+              console.warn(`[DB] Migration failed: add ${col.name} to agent_state:`, alterError.message);
             }
           }
         }
@@ -600,7 +600,7 @@ export async function setupSchema(db: any) {
             try {
               db.prepare(`ALTER TABLE identities ADD COLUMN ${col.name} ${col.type}`).run();
             } catch (alterError: any) {
-              console.warn(`Migration warn: failed to alter identities and add ${col.name}:`, alterError.message);
+              console.warn(`[DB] Migration failed: add ${col.name} to identities:`, alterError.message);
             }
           }
         }
@@ -615,7 +615,7 @@ export async function setupSchema(db: any) {
             try {
               db.prepare(`ALTER TABLE knowledge ADD COLUMN ${col.name} ${col.type}`).run();
             } catch (alterError: any) {
-              console.warn(`Migration warn: failed to alter knowledge and add ${col.name}:`, alterError.message);
+              console.warn(`[DB] Migration failed: add ${col.name} to knowledge:`, alterError.message);
             }
           }
         }
@@ -636,7 +636,7 @@ export async function setupSchema(db: any) {
             try {
               db.prepare(`ALTER TABLE cron_tasks ADD COLUMN ${col.name} ${col.type}`).run();
             } catch (alterError: any) {
-              console.warn(`Migration warn: failed to alter cron_tasks and add ${col.name}:`, alterError.message);
+              console.warn(`[DB] Migration failed: add ${col.name} to cron_tasks:`, alterError.message);
             }
           }
         }
@@ -658,7 +658,7 @@ export async function setupSchema(db: any) {
             `).run();
           }
         } catch (backfillErr: any) {
-          console.warn('Migration warn: cron prompt backfill skipped:', backfillErr.message);
+          console.warn('[DB] Cron prompt backfill skipped:', backfillErr.message);
         }
       }
       if (table === 'pairing_codes') {
@@ -670,7 +670,7 @@ export async function setupSchema(db: any) {
             try {
               db.prepare(`ALTER TABLE pairing_codes ADD COLUMN ${col.name} ${col.type}`).run();
             } catch (alterError: any) {
-              console.warn(`Migration warn: failed to alter pairing_codes and add ${col.name}:`, alterError.message);
+              console.warn(`[DB] Migration failed: add ${col.name} to pairing_codes:`, alterError.message);
             }
           }
         }
@@ -687,7 +687,7 @@ export async function setupSchema(db: any) {
             try {
               db.prepare(`ALTER TABLE pending_messages ADD COLUMN ${col.name} ${col.type}`).run();
             } catch (alterError: any) {
-              console.warn(`Migration warn: failed to alter pending_messages and add ${col.name}:`, alterError.message);
+              console.warn(`[DB] Migration failed: add ${col.name} to pending_messages:`, alterError.message);
             }
           }
         }
@@ -701,13 +701,13 @@ export async function setupSchema(db: any) {
             try {
               db.prepare(`ALTER TABLE goals ADD COLUMN ${col.name} ${col.type}`).run();
             } catch (alterError: any) {
-              console.warn(`Migration warn: failed to alter goals and add ${col.name}:`, alterError.message);
+              console.warn(`[DB] Migration failed: add ${col.name} to goals:`, alterError.message);
             }
           }
         }
       }
     } catch (tableInfoError: any) {
-      console.error(`ERROR: Migration checks failed for table "${table}":`, tableInfoError.message);
+      console.error(`[DB] Migration checks failed for table "${table}":`, tableInfoError.message);
     }
   }
   

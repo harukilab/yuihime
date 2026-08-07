@@ -25,7 +25,7 @@ export class StorageService {
   }
 
   static async signInWithGoogle(): Promise<void> {
-    console.warn("Google Login disabled in Local Mode");
+    console.warn("[STORAGE] Google Login disabled in Local Mode");
   }
 
   static onAuthStateChanged(callback: (user: any) => void): () => void {
@@ -39,7 +39,7 @@ export class StorageService {
   }
 
   static async logout(): Promise<void> {
-    console.warn("Logout disabled in Local Mode");
+    console.warn("[STORAGE] Logout disabled in Local Mode");
   }
 
   static isCloudEnabled(): boolean {
@@ -201,7 +201,7 @@ export class StorageService {
     try {
       text = await res.text();
     } catch (e) {
-      console.error("Failed to read response stream:", e);
+      console.error("[STORAGE] Failed to read response stream:", e);
       return null;
     }
 
@@ -209,7 +209,7 @@ export class StorageService {
     if (cleanText.startsWith('<!doctype') || cleanText.startsWith('<html')) {
         // Suppress repeated logs if it's likely a dev server restart
         if (text.length < 5000) {
-          console.warn(`HTML Response from API [${res.url}] - likely server maintenance or 404. Snippet:`, text.substring(0, 150));
+          console.warn(`[STORAGE] HTML Response from API [${res.url}] - likely server maintenance or 404. Snippet:`, text.substring(0, 150));
         }
         return null;
     }
@@ -219,7 +219,7 @@ export class StorageService {
     } catch (e) {
         // If content-type said JSON but we failed to parse, log it
         if (contentType && contentType.includes('application/json')) {
-          console.error("JSON parsing failed despite content-type. Response snippet:", text.substring(0, 100));
+          console.error("[STORAGE] JSON parsing failed. Response snippet:", text.substring(0, 100));
         }
         return null;
     }
@@ -229,13 +229,13 @@ export class StorageService {
     try {
       const res = await this.fetchWithRetry('/api/storage/knowledge');
       if (!res.ok) {
-        console.error(`Fetch Knowledge failed: ${res.status} ${res.statusText}`);
+        console.error(`[STORAGE] Fetch knowledge failed: ${res.status} ${res.statusText}`);
         return [];
       }
       return await this.safeJson<CoreKnowledge[]>(res) || [];
     } catch (e: any) {
       if (e.message !== 'Failed to fetch') {
-        console.error("Failed to fetch knowledge:", e);
+        console.error("[STORAGE] Failed to fetch knowledge:", e);
       }
       return [];
     }
@@ -250,7 +250,7 @@ export class StorageService {
       });
     } catch (e: any) {
       if (e.message !== 'Failed to fetch') {
-        console.error("Failed to save knowledge:", e);
+        console.error("[STORAGE] Failed to save knowledge:", e);
       }
     }
   }
@@ -265,13 +265,13 @@ export class StorageService {
       const url = ctx ? `/api/storage/memories?context=${encodeURIComponent(ctx)}` : '/api/storage/memories';
       const res = await this.fetchWithRetry(url);
       if (!res.ok) {
-        console.error(`Fetch Memories failed: ${res.status} ${res.statusText}`);
+        console.error(`[STORAGE] Fetch memories failed: ${res.status} ${res.statusText}`);
         return [];
       }
       return await this.safeJson<Memory[]>(res) || [];
     } catch (e: any) {
       if (e.message !== 'Failed to fetch') {
-        console.error("Failed to fetch memories:", e);
+        console.error("[STORAGE] Failed to fetch memories:", e);
       }
       return [];
     }
@@ -290,7 +290,7 @@ export class StorageService {
       return data;
     } catch (e: any) {
       if (e.message !== 'Failed to fetch') {
-        console.error("Failed to save memory:", e);
+        console.error("[STORAGE] Failed to save memory:", e);
       }
       throw e;
     }
@@ -305,7 +305,7 @@ export class StorageService {
       return res.ok;
     } catch (e: any) {
       if (e.message !== 'Failed to fetch') {
-        console.error("Failed to delete memories by context:", e);
+        console.error("[STORAGE] Failed to delete memories by context:", e);
       }
       return false;
     }
@@ -326,7 +326,7 @@ export class StorageService {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return await this.safeJson<any>(res) || { success: false, deletedCount: 0 };
     } catch (e: any) {
-      console.error("Failed to delete memories:", e);
+      console.error("[STORAGE] Failed to delete memories:", e);
       return { success: false, deletedCount: 0 };
     }
   }
@@ -335,13 +335,13 @@ export class StorageService {
     try {
       const res = await this.fetchWithRetry('/api/storage/identities');
       if (!res.ok) {
-        console.error(`Fetch Identities failed: ${res.status} ${res.statusText}`);
+        console.error(`[STORAGE] Fetch identities failed: ${res.status} ${res.statusText}`);
         return [];
       }
       return await this.safeJson<Identity[]>(res) || [];
     } catch (e: any) {
       if (e.message !== 'Failed to fetch') {
-        console.error("Failed to fetch identities:", e);
+        console.error("[STORAGE] Failed to fetch identities:", e);
       }
       return [];
     }
@@ -356,7 +356,7 @@ export class StorageService {
       });
     } catch (e: any) {
       if (e.message !== 'Failed to fetch') {
-        console.error("Failed to save identity:", e);
+        console.error("[STORAGE] Failed to save identity:", e);
       }
     }
   }
@@ -373,7 +373,7 @@ export class StorageService {
       return await this.safeJson<Dream[]>(res) || [];
     } catch (e: any) {
       if (e.message !== 'Failed to fetch') {
-        console.error("Failed to fetch dreams:", e);
+        console.error("[STORAGE] Failed to fetch dreams:", e);
       }
       return [];
     }
@@ -388,7 +388,7 @@ export class StorageService {
       });
     } catch (e: any) {
       if (e.message !== 'Failed to fetch') {
-        console.error("Failed to save dreams:", e);
+        console.error("[STORAGE] Failed to save dreams:", e);
       }
     }
   }
@@ -402,11 +402,11 @@ export class StorageService {
       });
       if (!res.ok) {
         const errorText = await res.text();
-        console.error(`Save State failed: ${res.status} ${errorText}`);
+        console.error(`[STORAGE] Save state failed: ${res.status} ${errorText}`);
       }
     } catch (e: any) {
       if (e.message !== 'Failed to fetch') {
-        console.error(`Failed to save state: ${e.message}`, e);
+        console.error(`[STORAGE] Failed to save state: ${e.message}`, e);
       }
     }
   }
@@ -416,13 +416,13 @@ export class StorageService {
       const res = await this.fetchWithRetry('/api/storage/state');
       if (!res.ok) {
         const errorText = await res.text();
-        console.error(`Fetch State failed: ${res.status} ${errorText}`);
+        console.error(`[STORAGE] Fetch state failed: ${res.status} ${errorText}`);
         return null;
       }
       return await this.safeJson<Partial<AgentState>>(res);
     } catch (e: any) {
       if (e.message !== 'Failed to fetch') {
-        console.error("Failed to fetch state:", e.message, e);
+        console.error("[STORAGE] Failed to fetch state:", e.message, e);
       }
       return null;
     }
@@ -435,7 +435,7 @@ export class StorageService {
       return await this.safeJson<LearnedStrategy[]>(res) || [];
     } catch (e: any) {
       if (e.message !== 'Failed to fetch') {
-        console.error("Failed to fetch strategies:", e);
+        console.error("[STORAGE] Failed to fetch strategies:", e);
       }
       return [];
     }
@@ -450,7 +450,7 @@ export class StorageService {
       });
     } catch (e: any) {
       if (e.message !== 'Failed to fetch') {
-        console.error("Failed to save strategies:", e);
+        console.error("[STORAGE] Failed to save strategies:", e);
       }
     }
   }
@@ -473,7 +473,7 @@ export class StorageService {
         body: JSON.stringify(capability)
       });
     } catch (e) {
-      console.error("Failed to add capability:", e);
+      console.error("[STORAGE] Failed to add capability:", e);
     }
   }
 
@@ -486,7 +486,7 @@ export class StorageService {
       });
     } catch (e: any) {
       if (e.message !== 'Failed to fetch') {
-        console.error("Failed to log performance:", e);
+        console.error("[STORAGE] Failed to log performance:", e);
       }
     }
   }
@@ -505,7 +505,7 @@ export class StorageService {
       return res.ok;
     } catch (e: any) {
       if (e.message !== 'Failed to fetch') {
-        console.error("Failed to purge:", e);
+        console.error("[STORAGE] Failed to purge:", e);
       }
       return false;
     }
@@ -518,7 +518,7 @@ export class StorageService {
       return await this.safeJson<any[]>(res) || [];
     } catch (e: any) {
       if (e.message !== 'Failed to fetch') {
-        console.error("Failed to fetch performance summary:", e);
+        console.error("[STORAGE] Failed to fetch performance summary:", e);
       }
       return [];
     }
@@ -538,7 +538,7 @@ export class StorageService {
       return await this.safeJson<PerformanceMetric[]>(res) || [];
     } catch (e: any) {
       if (e.message !== 'Failed to fetch') {
-        console.error("Failed to fetch performance history:", e);
+        console.error("[STORAGE] Failed to fetch performance history:", e);
       }
       return [];
     }
@@ -578,7 +578,7 @@ export class StorageService {
         body: JSON.stringify(sanitized)
       });
     } catch (e) {
-      console.error("Failed to save AI config:", e);
+      console.error("[STORAGE] Failed to save AI config:", e);
     }
   }
 
@@ -600,7 +600,7 @@ export class StorageService {
         body: JSON.stringify(settings)
       });
     } catch (e) {
-      console.error("Failed to save modular settings:", e);
+      console.error("[STORAGE] Failed to save modular settings:", e);
     }
   }
 
@@ -622,7 +622,7 @@ export class StorageService {
         body: JSON.stringify(workflow)
       });
     } catch (e) {
-      console.error("Failed to save workflow:", e);
+      console.error("[STORAGE] Failed to save workflow:", e);
     }
   }
 
@@ -644,7 +644,7 @@ export class StorageService {
         body: JSON.stringify({ entry })
       });
     } catch (e) {
-      console.error("Failed to append history:", e);
+      console.error("[STORAGE] Failed to append history:", e);
     }
   }
 
@@ -667,7 +667,7 @@ export class StorageService {
         body: JSON.stringify({ entry: {}, cursor })
       });
     } catch (e) {
-      console.error("Failed to set history cursor:", e);
+      console.error("[STORAGE] Failed to set history cursor:", e);
     }
   }
 
@@ -732,7 +732,7 @@ export class StorageService {
       if (!res.ok) return [];
       return await this.safeJson<any[]>(res) || [];
     } catch (e) {
-      console.error("Failed to fetch pending messages:", e);
+      console.error("[STORAGE] Failed to fetch pending messages:", e);
       return [];
     }
   }
@@ -756,7 +756,7 @@ export class StorageService {
       });
       return res.ok;
     } catch (e) {
-      console.error("Failed to clear pending queue:", e);
+      console.error("[STORAGE] Failed to clear pending queue:", e);
       return false;
     }
   }
@@ -768,7 +768,7 @@ export class StorageService {
       });
       return res.ok;
     } catch (e) {
-      console.error("Failed to trigger pending queue retry:", e);
+      console.error("[STORAGE] Failed to trigger pending queue retry:", e);
       return false;
     }
   }
@@ -859,7 +859,7 @@ export class StorageService {
         body: JSON.stringify(config)
       });
     } catch (e) {
-      console.error("Failed to save avatar config:", e);
+      console.error("[STORAGE] Failed to save avatar config:", e);
     }
   }
 }

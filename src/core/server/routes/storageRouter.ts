@@ -214,7 +214,7 @@ export function registerStorageRoutes(app: express.Express, db: any) {
         currentPlan: safeParse(row.currentPlan, null)
       });
     } catch (error: any) {
-      console.error("GET State Error:", error);
+      console.error("[STORAGE] GET state error:", error);
       res.status(500).json({ error: error.message });
     }
   });
@@ -243,7 +243,7 @@ export function registerStorageRoutes(app: express.Express, db: any) {
         }))
       });
     } catch (error: any) {
-      console.error("GET Quantum Backups Error:", error);
+      console.error("[STORAGE] GET quantum backups error:", error);
       res.status(500).json({ error: error.message });
     }
   });
@@ -315,7 +315,7 @@ export function registerStorageRoutes(app: express.Express, db: any) {
         }))
       });
     } catch (error: any) {
-      console.error("POST Quantum Backup Error:", error);
+      console.error("[STORAGE] POST quantum backup error:", error);
       res.status(500).json({ error: error.message });
     }
   });
@@ -350,7 +350,7 @@ export function registerStorageRoutes(app: express.Express, db: any) {
         message: `Soul restored utilizing recovery shard ${backupId} successfully.`
       });
     } catch (error: any) {
-      console.error("POST Quantum Restore Error:", error);
+      console.error("[STORAGE] POST quantum restore error:", error);
       res.status(500).json({ error: error.message });
     }
   });
@@ -388,7 +388,7 @@ export function registerStorageRoutes(app: express.Express, db: any) {
       broadcastToWS({ type: "state_update", data: { state } });
       res.json({ success: true });
     } catch (error: any) {
-      console.error("POST State Error:", error);
+      console.error("[STORAGE] POST state error:", error);
       res.status(500).json({ error: error.message });
     }
   });
@@ -643,7 +643,7 @@ export function registerStorageRoutes(app: express.Express, db: any) {
       broadcastToWS({ type: "purge_update", data: { mode, timestamp: Date.now() } });
       res.json({ success: true, mode });
     } catch (error: any) {
-      console.error("Purge Error:", error);
+      console.error("[STORAGE] Purge error:", error);
       res.status(500).json({ error: error.message || "Failed to purge database." });
     }
   });
@@ -690,7 +690,7 @@ export function registerStorageRoutes(app: express.Express, db: any) {
       broadcastToWS({ type: "import_update", data: { timestamp: Date.now() } });
       res.json({ success: true, importedHistory: (history || []).length, importedMemories: (memories || []).length });
     } catch (error: any) {
-      console.error("Import Error:", error);
+      console.error("[STORAGE] Import error:", error);
       res.status(500).json({ error: error.message || "Failed to import database." });
     }
   });

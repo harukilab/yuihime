@@ -32,7 +32,12 @@ export class Logger {
     }
     const lvl = (LogLevel as any)[level] || LogLevel.INFO;
     if (lvl >= this.level) {
-      console.log(`[${level}][${context}] ${msg}`, ...args);
+      const formatted = `[${level}][${context}] ${msg}`;
+      // Dispatch by severity so the global color scheme (error=red, warn=yellow,
+      // info=cyan) stays consistent regardless of which logger entry is used.
+      if (lvl >= LogLevel.ERROR) console.error(formatted, ...args);
+      else if (lvl >= LogLevel.WARN) console.warn(formatted, ...args);
+      else console.log(formatted, ...args);
     }
   }
 

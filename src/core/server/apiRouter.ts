@@ -415,7 +415,7 @@ try {
     systemConfig = JSON.parse(readFileSync(configPath, 'utf-8'));
   }
 } catch (e) {
-  console.warn("Failed to load system.config.json, using defaults:", e);
+  console.warn("[API] Failed to load system.config.json, using defaults:", e);
 }
 
 export const sandboxCfg: any = systemConfig.sandbox || systemConfig;
@@ -427,7 +427,7 @@ export const getDynamicSandboxRoot = () => {
       const settings = SettingsManager.getInstance().getAll();
       rawPath = settings.sandbox_paths?.user_data_path;
     } catch (e) {
-      console.warn("Failed to retrieve sandbox_paths.user_data_path from SettingsManager:", e);
+      console.warn("[API] Failed to read user_data_path from SettingsManager:", e);
     }
   }
 

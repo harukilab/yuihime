@@ -46,7 +46,7 @@ export class NeuralCircuitManager {
       if (this.intervals.has(circuit.config.id)) return;
       
       const interval = setInterval(() => {
-        circuit.execute().catch(err => console.error(`Circuit ${circuit.config.id} failed to execute:`, err));
+        circuit.execute().catch(err => console.error(`[CIRCUIT] ${circuit.config.id} failed to execute:`, err));
       }, circuit.config.intervalMs);
       
       this.intervals.set(circuit.config.id, interval);
