@@ -1,6 +1,10 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.327] - 2026-08-07
+### Feature: Chat permission commands + markdown status in Telegram
+
+
 ## [4.326] - 2026-08-07
 ### Feature: Life simulation: permission mode — ask-to-buy, overfeeding, feed-accelerated pee/poop
 

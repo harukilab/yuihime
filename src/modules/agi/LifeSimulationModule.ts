@@ -132,6 +132,27 @@ const OFFER_WORDS_IDEN = /\b(yuk|ayo|mari|sana|lah|aja|nih|ini|sekarang|bareng|b
 const OFFER_WORDS_JP = /(どうぞ|あげる|食べて|たべて|おいで|あるよ|あるから|飲んで|のんで|寝ていいよ|寝なさい|いいよ|どぞ)/;
 const IMPERATIVE_JP = /(食べて|たべて|どうぞ食べて|飲んで|のんで|どうぞ飲んで|寝ていいよ|寝なさい|おやすみ)/;
 
+// --- In-chat permission commands (e.g. "yui ga boleh pipis" bans it, "boleh pipis" allows it) ---
+const PERM_ACTION_WORDS = '(pipis|kencing|kebelet|toilet|kamar mandi|wc|pee|buang air kecil|トイレ|おしっこ|小便|buang air besar|bab|pup|poop|berak|mules|うんち|大便|makan|makanan|eat|ごはん|minum|minuman|drink|水|のむ|mandi|shower|bath|お風呂|tidur|ngantuk|sleep|寝る|main|bermain|play|あそぶ|ikan|fish|さかな)';
+const PERMISSION_BAN_PATTERN = new RegExp(`(ga|gak|nggak|ngga|tidak|dilarang|jangan|stop|no|だめ)\\s*(boleh\\s*)?${PERM_ACTION_WORDS}`, 'i');
+const PERMISSION_ALLOW_PATTERN = new RegExp(`(boleh|silakan|silahkan|boleh deh|udah boleh|iya boleh|ok boleh|いいよ|おけ)\\s*${PERM_ACTION_WORDS}`, 'i');
+const PERM_ACTION_FROM_WORD: Array<[RegExp, string]> = [
+  [/(pipis|kencing|kebelet|toilet|kamar mandi|wc|pee|buang air kecil|トイレ|おしっこ|小便)/i, 'pee'],
+  [/(buang air besar|bab|pup|poop|berak|mules|うんち|大便)/i, 'poop'],
+  [/(makan|makanan|eat|ごはん)/i, 'eat'],
+  [/(minum|minuman|drink|水|のむ)/i, 'drink'],
+  [/(mandi|shower|bath|お風呂)/i, 'bath'],
+  [/(tidur|ngantuk|sleep|寝る)/i, 'sleep'],
+  [/(main|bermain|play|あそぶ)/i, 'play'],
+  [/(ikan|fish|さかな)/i, 'fish']
+];
+function actionFromPermText(text: string): string | null {
+  for (const [re, action] of PERM_ACTION_FROM_WORD) {
+    if (re.test(text)) return action;
+  }
+  return null;
+}
+
 // --- Starter inventory (foundation of Yui's inventory system) ---
 const STARTER_FOODS = [
   { id: 'sashimi', name: 'Sashimi Ikan', en: 'Fish Sashimi', jp: 'お刺身', emoji: '🐟', qty: 3 },
@@ -562,6 +583,7 @@ export const LifeSimulationModule: CortexModule = {
       lastPoop: prior.lastPoop || (firstRun ? now - 6 * HOUR_MS : now),
       hungerOffset: prior.hungerOffset || 0,
       thirstOffset: prior.thirstOffset || 0,
+      forbid: Array.isArray(prior.forbid) ? prior.forbid.slice(0, 12) : [],
       horn: prior.horn || 0,
       lastHornDecay: prior.lastHornDecay || now,
       lastPlay: prior.lastPlay || (firstRun ? now - 6 * HOUR_MS : now),
@@ -593,7 +615,32 @@ export const LifeSimulationModule: CortexModule = {
     const moodShiftIntensity = Number(config.selfCareMoodShiftIntensity !== undefined ? config.selfCareMoodShiftIntensity : 1);
     const permActionList: string[] = Array.isArray(config.selfCarePermissionActions) ? config.selfCarePermissionActions.map((a: any) => String(a)) : [];
     const permSet = new Set(permActionList);
-    const needsPermission = (action: string): boolean => permissionMode && (permSet.size === 0 || permSet.has(action));
+    const ruleNotes: string[] = [];
+    // In-chat overrides: "ga boleh X" adds to the ban list, "boleh X" removes it.
+    const forbidList: string[] = Array.isArray(v.forbid) ? [...v.forbid] : [];
+    const banMatch = input.match(PERMISSION_BAN_PATTERN);
+    const allowMatch = input.match(PERMISSION_ALLOW_PATTERN);
+    if (banMatch) {
+      const action = actionFromPermText(banMatch[0]);
+      if (action && !forbidList.includes(action)) {
+        forbidList.push(action);
+        v.forbid = forbidList;
+        ruleNotes.push(`the user just told you to STOP doing: ${action} (e.g. "ga boleh ${action}"). Acknowledge briefly in character and do NOT do it — you must ask the user's permission first if you need to.`);
+        logs.push(`[LIFE_SIM] Chat permission rule: user banned "${action}" — Yui must ask permission before doing it.`);
+      }
+    }
+    if (allowMatch) {
+      const action = actionFromPermText(allowMatch[0]);
+      if (action && forbidList.includes(action)) {
+        const idx = forbidList.indexOf(action);
+        forbidList.splice(idx, 1);
+        v.forbid = forbidList;
+        ruleNotes.push(`the user just allowed ${action} again (e.g. "boleh ${action}"). You may do it normally now, no need to ask.`);
+        logs.push(`[LIFE_SIM] Chat permission rule: user allowed "${action}" again.`);
+      }
+    }
+    const needsPermission = (action: string): boolean =>
+      (permissionMode && (permSet.size === 0 || permSet.has(action))) || forbidList.includes(action);
     const capFor = (action: string): number => needsPermission(action) ? overMaxCap : 100;
     const selfCareHunger = Number(config.selfCareHungerThreshold !== undefined ? config.selfCareHungerThreshold : 75);
     const selfCareThirst = Number(config.selfCareThirstThreshold !== undefined ? config.selfCareThirstThreshold : 70);
@@ -1145,6 +1192,11 @@ export const LifeSimulationModule: CortexModule = {
     if (pendingPermissions.length > 0) {
       const permText = pendingPermissions.join(', ');
       updatedDirective += `\n\n# PERMISSION REQUIRED — ASK BEFORE ACTING\nYui currently needs the user's permission before doing the following: ${permText}. These needs are already past their normal limit and climbing. You MUST ask the user for explicit permission (in character, naturally, e.g. "boleh aku ke toilet? / boleh makan? / aku mau mandi dulu, ya?") before doing any of them. Do NOT do them on your own, and do NOT let them silently auto-resolve. This is the one exception to the silence rule — asking permission requires mentioning the need briefly and naturally.`;
+    }
+
+    // --- Rule changes made in this same turn (ban/allow) ---
+    if (ruleNotes.length > 0) {
+      updatedDirective += `\n\n# PERMISSION RULE UPDATE (THIS TURN)\n- ${ruleNotes.join('\n- ')}`;
     }
 
     // --- Buy requests: she wants something the user has not provided ---

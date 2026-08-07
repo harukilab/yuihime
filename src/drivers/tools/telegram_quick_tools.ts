@@ -60,6 +60,7 @@ const manifest = {
 export interface TgReply {
   text: string;
   keyboard?: any;
+  parse_mode?: string;
 }
 
 export interface TgToolContext {
@@ -977,7 +978,7 @@ function yuiStatusText(tc?: TgToolContext): string {
     : '🟢';
 
   const lines: string[] = [
-    `✦ YUI STATUS ✦`,
+    `*✦ YUI STATUS ✦*`,
     ``
   ];
 
@@ -1009,7 +1010,7 @@ function yuiStatusText(tc?: TgToolContext): string {
 
     lines.push(
       ``,
-      `🧬 LIFE SIMULATION`,
+      `*🧬 LIFE SIMULATION*`,
       `🍽️  Hunger       ${val(life.hunger)}%  ${bar(life.hunger)} ${markBad(life.hunger, 70, 40)} ${txtBad(life.hunger, 'Starving', 'Hungry', 'Full')}`,
       `💧  Thirst       ${val(life.thirst)}%  ${bar(life.thirst)} ${markBad(life.thirst, 70, 40)} ${txtBad(life.thirst, 'Very Thirsty', 'Thirsty', 'Fresh')}`,
       `🚿  Cleanliness  ${val(life.cleanliness)}%  ${bar(life.cleanliness)} ${markGood(life.cleanliness, 40, 70)} ${txtGood(life.cleanliness, 'Needs Bath', 'Slightly Dirty', 'Clean')}`,
@@ -1028,7 +1029,7 @@ function yuiStatusText(tc?: TgToolContext): string {
   // ── Relation ──
   lines.push(
     ``,
-    `💗 RELATION`,
+    `*💗 RELATION*`,
     `❤️  Affection   ${val(relation.affection)}`,
     `🤝  Trust       ${val(relation.trust)}`
   );
@@ -1157,7 +1158,7 @@ function runCareAction(action: string, tc: TgToolContext): TgReply {
       break;
     case 'status':
     case '':
-      return { text: yuiStatusText(tc) };
+      return { text: yuiStatusText(tc), parse_mode: 'Markdown' };
     case 'inventory':
     case 'inv':
     case 'bag':
@@ -1585,7 +1586,7 @@ export const tgQuickCommands: TgCommandDef[] = [
     name: 'menu',
     aliases: ['help', 'bantuan', 'perintah'],
     description: 'Open the inline keyboard menu',
-    handler: async (tc) => ({ text: menuText(tc), keyboard: menuKeyboard(tc) })
+    handler: async (tc) => ({ text: menuText(tc), keyboard: menuKeyboard(tc), parse_mode: 'Markdown' })
   },
   {
     name: 'ping',
@@ -1699,7 +1700,8 @@ export const tgQuickCommands: TgCommandDef[] = [
       }
 
       return {
-        text: `⚙️ System Status\n\n🤖 Telegram Bot: ${botActive ? '🟢 ACTIVE' : '🔴 INACTIVE'}\n🧠 LLM Engine: ${llmEngine}\n🗄️ Database: ${dbActive ? '🟢 CONNECTED' : '🔴 DISCONNECTED'}\n⏱️ Daemon uptime: ${fmtUptime(uptimeSec * 1000)}\n⏳ Pending confirmations: ${pending}${lifeSection}`
+        text: `*⚙️ System Status*\n\n🤖 Telegram Bot: ${botActive ? '🟢 ACTIVE' : '🔴 INACTIVE'}\n🧠 LLM Engine: ${llmEngine}\n🗄️ Database: ${dbActive ? '🟢 CONNECTED' : '🔴 DISCONNECTED'}\n⏱️ Daemon uptime: ${fmtUptime(uptimeSec * 1000)}\n⏳ Pending confirmations: ${pending}${lifeSection}`,
+        parse_mode: 'Markdown'
       };
     }
   },
@@ -1727,7 +1729,7 @@ export const tgQuickCommands: TgCommandDef[] = [
     handler: async (tc, args) => {
       const a = args.trim();
       if (!a) {
-        return { text: `${yuiStatusText(tc)}\n\n🧬 CARE MENU\nPick an action:`, keyboard: careMenuKeyboard() };
+        return { text: `${yuiStatusText(tc)}\n\n🧬 CARE MENU\nPick an action:`, keyboard: careMenuKeyboard(), parse_mode: 'Markdown' };
       }
       return runCareAction(a, tc);
     }
@@ -2104,16 +2106,17 @@ export interface TgCallbackResult {
   action: 'edit' | 'close';
   text?: string;
   keyboard?: any;
+  parse_mode?: string;
 }
 
 export async function handleTgCallback(data: string, tc: TgToolContext): Promise<TgCallbackResult | null> {
   if (!String(data).startsWith('qt:')) return null;
   const cmd = String(data).slice(3).toLowerCase();
   if (cmd === 'close') return { action: 'close' };
-  if (cmd === 'menu') return { action: 'edit', text: menuText(tc), keyboard: menuKeyboard(tc) };
+  if (cmd === 'menu') return { action: 'edit', text: menuText(tc), keyboard: menuKeyboard(tc), parse_mode: 'Markdown' };
 
   if (cmd === 'care') {
-    return { action: 'edit', text: `${yuiStatusText(tc)}\n\n🧬 CARE MENU\nPick an action:`, keyboard: careMenuKeyboard() };
+    return { action: 'edit', text: `${yuiStatusText(tc)}\n\n🧬 CARE MENU\nPick an action:`, keyboard: careMenuKeyboard(), parse_mode: 'Markdown' };
   }
   if (cmd === 'admin') {
     if (!isAdmin(tc)) return { action: 'edit', text: '⛔ This section is for the bot admin only.', keyboard: backToMenuKeyboard() };

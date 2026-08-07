@@ -637,7 +637,9 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
           maybeDeleteUserCommand(ctx);
           if (quickResult.reply?.text) {
             try {
-              const sent = await ctx.reply(quickResult.reply.text, { reply_markup: ensureCloseRow(quickResult.reply.keyboard) });
+              const replyOpts: any = { reply_markup: ensureCloseRow(quickResult.reply.keyboard) };
+              if (quickResult.reply.parse_mode) replyOpts.parse_mode = quickResult.reply.parse_mode;
+              const sent = await ctx.reply(quickResult.reply.text, replyOpts);
               scheduleCleanup(activeTelegramBot, ctx, sent, !!quickResult.reply.keyboard);
             } catch (sendErr: any) {
               console.warn("[TELEGRAM_QUICK_TOOLS] Failed to send quick command reply:", sendErr?.message || sendErr);
@@ -1076,11 +1078,13 @@ export async function initializeBot(activeDb?: any, force = false, dropPending =
         try { await ctx.deleteMessage(); } catch (_) {}
         return;
       }
+      const editOpts: any = { reply_markup: ensureCloseRow(result.keyboard) };
+      if (result.parse_mode) editOpts.parse_mode = result.parse_mode;
       try {
-        await ctx.editMessageText(result.text, { reply_markup: ensureCloseRow(result.keyboard) });
+        await ctx.editMessageText(result.text, editOpts);
       } catch (editErr: any) {
         console.warn("[TELEGRAM_QUICK_TOOLS] Callback edit failed, replying instead:", editErr?.message || editErr);
-        try { await ctx.reply(result.text, { reply_markup: ensureCloseRow(result.keyboard) }); } catch (_) {}
+        try { await ctx.reply(result.text, editOpts); } catch (_) {}
       }
     } catch (err: any) {
       console.error("[TELEGRAM_CALLBACK] Error handling callback:", err?.message || err);
