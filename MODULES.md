@@ -191,3 +191,4 @@ Peta struktur direktori pasca-pemisahan Web UI ↔ Daemon (lihat UPDATE_LOG `[4.
 - `tools/dream.py` — **DIHAPUS** (endpoint `/api/system/dream` tidak ada; dream via `/api/cortex/dream`)
 - `SkillsRegistry, SkillsContextModule, goal check-in ledger`
 - `cron fire_at persistence`
+- `SOPModule — added always/ subfolder for always-on SOPs; improved keyword matching (GENERIC_WORDS filter + token match); EN header; injectCharacterName applied`

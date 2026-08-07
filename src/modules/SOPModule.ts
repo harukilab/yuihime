@@ -4,6 +4,7 @@ import os from "os";
 import { readFileSync, readdirSync, existsSync } from "fs";
 import { fileURLToPath } from "url";
 import { resolveSystemRoot, expandHomePath } from "../core/systemPaths.js";
+import { injectCharacterName } from "../core/kernel/characterName.js";
 
 function getSopsDir(): string {
   const customSystemRoot = resolveSystemRoot();
@@ -26,21 +27,31 @@ function getSourceSopsDir(): string {
   return path.join(os.homedir(), ".yuihime", "user_data", "sops");
 }
 
+const GENERIC_WORDS = new Set([
+  "sop", "default", "general", "main", "base", "basic", "rule", "rules",
+  "guide", "guidelines", "file", "folder", "sub", "extra", "example", "examples"
+]);
+
 function extractKeywords(filename: string): string[] {
   const base = filename.replace(/\.md$/i, "");
   return base
     .split(/[-_\s]+/)
     .map((w) => w.toLowerCase())
-    .filter((w) => w.length > 2);
+    .filter((w) => w.length > 2 && !GENERIC_WORDS.has(w));
 }
 
 function matchSopFiles(sopFiles: string[], input: string): string[] {
   const inputLower = (input || "").toLowerCase();
+  const inputTokens = new Set(inputLower.split(/[^a-z0-9_]+/).filter(Boolean));
   const matched: string[] = [];
 
   for (const file of sopFiles) {
     const keywords = extractKeywords(file);
-    if (keywords.some((kw) => inputLower.includes(kw))) {
+    if (keywords.length === 0) continue;
+    if (
+      keywords.some((kw) => inputLower.includes(kw)) ||
+      keywords.some((kw) => inputTokens.has(kw))
+    ) {
       matched.push(file);
     }
   }
@@ -53,19 +64,24 @@ export const SOPModule: CortexModule = {
     id: "dynamic-sop-loader",
     name: "Dynamic SOP Loader",
     description:
-      "Loads relevant SOP files from user_data/sops/ based on user input keywords and injects them as high-priority directives.",
-    version: "1.0.0",
+      "Loads relevant SOP files from user_data/sops/ based on user input keywords and injects them as high-priority directives. Files in user_data/sops/always/ are always injected on every cycle.",
+    version: "1.1.0",
     type: ModuleType.CORTEX,
     order: 2,
     phase: "aggregation",
   },
   run: async (input: string, state: any, context: any) => {
     const sopsDir = getSopsDir();
+    const alwaysDir = path.join(sopsDir, "always");
     let sopFiles: string[] = [];
+    let alwaysFiles: string[] = [];
 
     try {
       if (existsSync(sopsDir)) {
         sopFiles = readdirSync(sopsDir).filter((f) => f.endsWith(".md"));
+      }
+      if (existsSync(alwaysDir)) {
+        alwaysFiles = readdirSync(alwaysDir).filter((f) => f.endsWith(".md"));
       }
     } catch (err) {
       return { ...context };
@@ -81,36 +97,39 @@ export const SOPModule: CortexModule = {
       sourceSopFiles = [];
     }
 
-    let matchedFiles = matchSopFiles([...new Set([...sopFiles, ...sourceSopFiles])], input);
+    const matchedFiles = matchSopFiles([...new Set([...sopFiles, ...sourceSopFiles])], input);
+    const selectedFiles = [...alwaysFiles, ...matchedFiles];
 
-    if (matchedFiles.length === 0) {
+    if (selectedFiles.length === 0) {
       const allSops = [...sopFiles, ...sourceSopFiles];
       const defaultSop = allSops.find((f) =>
         f.toLowerCase().includes("default")
       );
       if (defaultSop) {
-        matchedFiles = [defaultSop];
+        selectedFiles.push(defaultSop);
       }
     }
 
-    if (matchedFiles.length === 0) {
+    if (selectedFiles.length === 0) {
       return { ...context };
     }
 
     let sopContent = "";
-    for (const file of matchedFiles) {
+    for (const file of selectedFiles) {
       let content: string | null = null;
-      let filePath = path.join(sopsDir, file);
+      let filePath = alwaysFiles.includes(file)
+        ? path.join(alwaysDir, file)
+        : path.join(sopsDir, file);
       
       try {
-        if (sopFiles.includes(file) && existsSync(filePath)) {
+        if (existsSync(filePath)) {
           content = readFileSync(filePath, "utf8").trim();
         }
       } catch (err) {
         content = null;
       }
 
-      if (!content) {
+      if (!content && !alwaysFiles.includes(file)) {
         filePath = path.join(sopSourceDir, file);
         try {
           if (sourceSopFiles.includes(file) && existsSync(filePath)) {
@@ -122,7 +141,7 @@ export const SOPModule: CortexModule = {
       }
 
       if (content) {
-        sopContent += `\n\n# PRIORITAS UTAMA OPERASIONAL (SOP): ${file}\n${content}`;
+        sopContent += `\n\n# HIGH-PRIORITY OPERATING PROCEDURE (SOP): ${file}\n${injectCharacterName(content)}`;
       }
     }
 
@@ -132,8 +151,8 @@ export const SOPModule: CortexModule = {
     return {
       ...context,
       soulDirective: updatedDirective,
-      sopInjected: matchedFiles.length > 0,
-      matchedSops: matchedFiles,
+      sopInjected: selectedFiles.length > 0,
+      matchedSops: selectedFiles,
     };
   },
 };

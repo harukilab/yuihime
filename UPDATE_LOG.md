@@ -1,6 +1,14 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.319] - 2026-08-07
+### Fix: SOP cleanup: EN rewrite + virtual body sync + always-on chat_sop
+- Rewrote all user SOP files to English (chat_sop, default, coding, foto, foto_sop/*) using ${characterName} placeholder
+- foto SOPs now mirror current virtual body state (top/bottom/underwear/pussy_insert/anal_insert/nipples/clit) from user_data/virtual_body.json
+- SOPModule.ts: injectCharacterName() resolution, GENERIC_WORDS keyword filter + token matching, EN header
+- New always/ subfolder convention in user_data/sops/ for SOPs injected on every cycle (chat_sop moved there)
+
+
 ## [4.318] - 2026-08-07
 ### Fix: yui-watchdog log lanjut ke file baru saat restart (tail -F) + marker restart
 - ganti tail -f -> tail -F pada subcommand log agar live tail mengikuti file baru setelah rotate/restart, bukan berhenti
