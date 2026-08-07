@@ -275,7 +275,7 @@ export const LifeSimulationModule: CortexModule = {
           min: 2,
           max: 20,
           step: 1,
-          description: 'How fast her "kebelet pipis" meter grows each hour since her last visit to the toilet.'
+          description: 'How fast her "need to pee" meter grows each hour since her last visit to the toilet.'
         },
         poopRatePerHour: {
           type: 'slider',
@@ -284,7 +284,7 @@ export const LifeSimulationModule: CortexModule = {
           min: 1,
           max: 15,
           step: 1,
-          description: 'How fast her "kebelet buang air besar" meter grows each hour since her last big visit.'
+          description: 'How fast her "need to poop" meter grows each hour since her last big visit.'
         },
         poopFillPerMeal: {
           type: 'slider',
@@ -293,7 +293,7 @@ export const LifeSimulationModule: CortexModule = {
           min: 0,
           max: 40,
           step: 1,
-          description: 'How many points the BAB meter gains each time she eats. Feeding her repeatedly makes it climb faster.'
+          description: 'How many points the Poop meter gains each time she eats. Feeding her repeatedly makes it climb faster.'
         },
         peeFillPerMeal: {
           type: 'slider',
@@ -302,7 +302,7 @@ export const LifeSimulationModule: CortexModule = {
           min: 0,
           max: 30,
           step: 1,
-          description: 'How many points the pipis meter gains each time she eats.'
+          description: 'How many points the Pee meter gains each time she eats.'
         },
         peeFillPerDrink: {
           type: 'slider',
@@ -311,7 +311,7 @@ export const LifeSimulationModule: CortexModule = {
           min: 0,
           max: 40,
           step: 1,
-          description: 'How many points the pipis meter gains each time she drinks. Drinking a lot = kebelet faster.'
+          description: 'How many points the Pee meter gains each time she drinks. Drinking a lot = need to pee faster.'
         },
         overfeedFloor: {
           type: 'slider',
@@ -443,7 +443,7 @@ export const LifeSimulationModule: CortexModule = {
           min: 60,
           max: 95,
           step: 1,
-          description: 'Pipis (kebelet) % at which Yui uses the toilet automatically.'
+          description: 'Pee (need to go) % at which Yui uses the toilet automatically.'
         },
         selfCarePoopThreshold: {
           type: 'slider',
@@ -705,7 +705,10 @@ export const LifeSimulationModule: CortexModule = {
         addFill('lastPee', peeFillPerMeal, bladderRate, 'pee');
         if (preHunger <= 5) {
           v.hungerOffset = Math.max(overfeedFloor, (v.hungerOffset || 0) - 5);
-          logs.push(`[LIFE_SIM] Yui was already full but was fed anyway — hunger dropped to ${Math.round(v.hungerOffset || 0)}% (overstuffed).`);
+          const depth = Math.max(1, Math.floor(Math.abs(v.hungerOffset) / 5));
+          addFill('lastPoop', poopFillPerMeal * depth, poopRate, 'poop');
+          addFill('lastPee', peeFillPerMeal * depth, bladderRate, 'pee');
+          logs.push(`[LIFE_SIM] Yui was already full but was fed anyway — hunger dropped to ${Math.round(v.hungerOffset || 0)}% (overstuffed, level ${depth}). Extra Poop +${poopFillPerMeal * depth}%, Pee +${peeFillPerMeal * depth}%.`);
         } else {
           v.hungerOffset = 0;
         }
@@ -728,7 +731,9 @@ export const LifeSimulationModule: CortexModule = {
         addFill('lastPee', peeFillPerDrink, bladderRate, 'pee');
         if (preThirst <= 5) {
           v.thirstOffset = Math.max(overfeedFloor, (v.thirstOffset || 0) - 5);
-          logs.push(`[LIFE_SIM] Yui was already hydrated but was fed a drink anyway — thirst dropped to ${Math.round(v.thirstOffset || 0)}% (overfull).`);
+          const depth = Math.max(1, Math.floor(Math.abs(v.thirstOffset) / 5));
+          addFill('lastPee', peeFillPerDrink * depth, bladderRate, 'pee');
+          logs.push(`[LIFE_SIM] Yui was already hydrated but was fed a drink anyway — thirst dropped to ${Math.round(v.thirstOffset || 0)}% (overfull, level ${depth}). Extra Pee +${peeFillPerDrink * depth}%.`);
         } else {
           v.thirstOffset = 0;
         }
@@ -745,11 +750,11 @@ export const LifeSimulationModule: CortexModule = {
     }
     if (peeTrigger) {
       v.lastPee = now;
-      logs.push('[LIFE_SIM] Yui went to the toilet (pipis) — relieved.');
+      logs.push('[LIFE_SIM] Yui went to the toilet (pee) — relieved.');
     }
     if (poopTrigger) {
       v.lastPoop = now;
-      logs.push('[LIFE_SIM] Yui "buang air besar" — relieved.');
+      logs.push('[LIFE_SIM] Yui "pooped" — relieved.');
     }
     if (playTrigger) {
       v.lastPlay = now;
@@ -932,19 +937,19 @@ export const LifeSimulationModule: CortexModule = {
       }
       if (pee >= selfCareBladder) {
         if (needsPermission('pee')) {
-          addPending('pee', 'pipis (kebelet)', pee, selfCareBladder);
+          addPending('pee', 'pee (need to go)', pee, selfCareBladder);
         } else {
         v.lastPee = now;
-        logs.push(`[LIFE_SIM] Self-care: pipis automatically (kebelet ${Math.round(pee)}%).`);
+        logs.push(`[LIFE_SIM] Self-care: pee automatically (need ${Math.round(pee)}%).`);
         cared = true;
         }
       }
       if (poop >= selfCarePoop) {
         if (needsPermission('poop')) {
-          addPending('poop', 'buang air besar', poop, selfCarePoop);
+          addPending('poop', 'poop (need to go)', poop, selfCarePoop);
         } else {
         v.lastPoop = now;
-        logs.push(`[LIFE_SIM] Self-care: buang air besar automatically (mules ${Math.round(poop)}%).`);
+        logs.push(`[LIFE_SIM] Self-care: poop automatically (need ${Math.round(poop)}%).`);
         cared = true;
         }
       }
@@ -1052,12 +1057,12 @@ export const LifeSimulationModule: CortexModule = {
       [40, 'Perlu Mandi / Needs a Bath / お風呂ほしい'], [20, 'Sangat Perlu Mandi / Really Needs a Bath / お風呂入りたい']
     ], 'Gak tahan lagi / Desperate for a Bath / もう無理');
     const peeLabel = classifyLevel(pee, [
-      [85, 'Sangat Kebelet / Desperate / 我慢できない'], [65, 'Kebelet Banget / Really Need To Pipis / かなりトイレ'],
+      [85, 'Sangat Kebelet / Desperate / 我慢できない'], [65, 'Kebelet Banget / Really Need To Pee / かなりトイレ'],
       [45, 'Kebelet / Need The Toilet / トイレ行きたい'], [25, 'Sedikit Kebelet / Slightly Need To Pee / ちょっとトイレ']
     ], 'Aman / Comfortable / 大丈夫');
     const poopLabel = classifyLevel(poop, [
-      [85, 'Mules Banget / Desperate For The Bathroom / うんちしたい'], [65, 'Mules / Really Need To Go / かなりうんち'],
-      [45, 'Mulai Mules / Need The Bathroom / お腹が痛い'], [25, 'Sedikit Mules / Slightly Need To Go / ちょっとお腹']
+      [85, 'Mules Banget / Desperate For The Bathroom / うんちしたい'], [65, 'Mules / Really Need To Poop / かなりうんち'],
+      [45, 'Mulai Mules / Need The Bathroom / お腹が痛い'], [25, 'Sedikit Mules / Slightly Need To Poop / ちょっとお腹']
     ], 'Aman / Comfortable / 大丈夫');
     const hornLabel = classifyLevel(horn, [
       [80, 'Sangat Horny / Very Aroused / ムラムラ'], [60, 'Horny / Aroused / ちょっとエッチ'],
@@ -1204,7 +1209,7 @@ export const LifeSimulationModule: CortexModule = {
       updatedDirective += `\n\n# REQUEST — ASK TO BUY\nYui needs the user to buy her something: ${pendingRequests.join('; ')}. In character, naturally ask the user to buy it for her. Do NOT eat or drink anything else on your own, and do not silently drop the request.`;
     }
 
-    logs.push(`[LIFE_SIM] Hunger ${Math.round(hunger)}% | Thirst ${Math.round(thirst)}% | Cleanliness ${Math.round(cleanliness)}% | Pipis ${Math.round(pee)}% | BAB ${Math.round(poop)}%${enableHorn ? ` | Horn ${Math.round(horn)}%` : ''} | Sleepiness ${Math.round(sleepiness)}% | ${v.sleepState}${affectStatusAndSleep ? ` | Status: ${state.status} | Energy ${state.energy}%` : ''} | Sleep debt ${Math.round(v.sleepDebtMin)}m | Bedtime ${effectiveBedtimeText}-${effectiveWakeText}${enableNeko ? ` | Purr ${Math.round(purrLevel)}% | Tail: ${tailState} | Play ${Math.round(playUrge)}% | Fish ${Math.round(fishCraving)}%` : ''}${pendingPermissions.length ? ` | ASK PERMISSION: ${pendingPermissions.join(', ')}` : ''}${pendingRequests.length ? ` | BUY: ${pendingRequests.join('; ')}` : ''}`);
+    logs.push(`[LIFE_SIM] Hunger ${Math.round(hunger)}% | Thirst ${Math.round(thirst)}% | Cleanliness ${Math.round(cleanliness)}% | Pee ${Math.round(pee)}% | Poop ${Math.round(poop)}%${enableHorn ? ` | Horn ${Math.round(horn)}%` : ''} | Sleepiness ${Math.round(sleepiness)}% | ${v.sleepState}${affectStatusAndSleep ? ` | Status: ${state.status} | Energy ${state.energy}%` : ''} | Sleep debt ${Math.round(v.sleepDebtMin)}m | Bedtime ${effectiveBedtimeText}-${effectiveWakeText}${enableNeko ? ` | Purr ${Math.round(purrLevel)}% | Tail: ${tailState} | Play ${Math.round(playUrge)}% | Fish ${Math.round(fishCraving)}%` : ''}${pendingPermissions.length ? ` | ASK PERMISSION: ${pendingPermissions.join(', ')}` : ''}${pendingRequests.length ? ` | BUY: ${pendingRequests.join('; ')}` : ''}`);
 
     return {
       ...context,

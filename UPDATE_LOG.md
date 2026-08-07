@@ -1,6 +1,10 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.329] - 2026-08-07
+### Feature: Care menu: persistent buttons, scaled overfeed (Poop/Pee climb faster), inventory +1/+5/+10 & Use per item, English Pee/Poop names, split Telegram quick menu helpers
+
+
 ## [4.328] - 2026-08-07
 ### Feature: Telegram status: markdown neat layout + mood/emotion display, split care toilet into pee/BAB
 
