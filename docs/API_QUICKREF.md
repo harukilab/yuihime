@@ -74,6 +74,16 @@
 | POST | `/api/tts/gemini` | TTS via Gemini. |
 | POST | `/api/cortex/think` | Run a think cycle. |
 
+### POST `/api/ai/generate`
+- **Body:** `{ "prompt": string, "systemInstruction"?: string, "model"?: string, "config"?: object }`
+- **Response:** `{ "text": string }`
+- Model falls back to the provider's configured default (`gemini-flash-latest`); any configured Gemini pool model may be requested.
+
+### POST `/api/cortex/think`
+- **Body:** `{ "input": string, "userName"?: string, "contextId"?: string, "chatType"?: "web"|"telegram"|"discord", "stream"?: boolean, "attachments"?: Array }`
+- **Headers:** `x-yui-user-name`, `x-yui-context-id`, `x-yui-chat-type` (override body identity/routing).
+- **Response:** `{ "success": true, "result": { "text": string, "mood": object, ... } }` — full cognitive audit log when `stream: true` (SSE chunks).
+
 ## OpenAI-compatible layer
 
 | Method | Path | Purpose |

@@ -519,7 +519,7 @@ Provides direct admin configurations, workspace backups management, environment 
     "character_name": "Yui",
     "stream_sampling_rate": 0.8,
     "gemini": {
-      "model": "gemini-2.5-flash",
+      "model": "gemini-flash-latest",
       "temperature": 0.7
     }
   }
@@ -781,7 +781,7 @@ Interacts as a gateway proxy mapping request parameters to AI providers, handlin
   {
     "prompt": "Beri sapaan singkat.",
     "systemInstruction": "You are Yui.",
-    "model": "gemini-2.5-flash"
+    "model": "gemini-flash-latest"
   }
   ```
 * **Response (JSON):**
@@ -826,7 +826,7 @@ Interacts as a gateway proxy mapping request parameters to AI providers, handlin
   {
     "image": "data:image/jpeg;base64,/9j/4AAQSk...",
     "prompt": "Apa yang Kakak perlihatkan kepadamu?",
-    "model": "gemini-2.5-flash"
+    "model": "gemini-flash-latest"
   }
   ```
 * **Response (JSON):**

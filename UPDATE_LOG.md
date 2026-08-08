@@ -1,6 +1,12 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.343] - 2026-08-09
+### Fix: Update API docs to gemini-flash-latest + document ai/cortex endpoints
+- docs/API_ENDPOINTS.md: examples updated from legacy gemini-2.5-flash to gemini-flash-latest (settings, ai/generate, ai/vision)
+- docs/API_QUICKREF.md: added request/response/header details for POST /api/ai/generate and POST /api/cortex/think
+
+
 ## [4.342] - 2026-08-09
 ### Fix: Standardize all hardcoded Gemini models to gemini-flash-latest
 - Replaced all hardcoded text-model defaults/fallbacks (gemini-3.5-flash, gemini-2.5-flash, gemini-2.0-flash, gemini-1.5-flash, gemini-3-flash-preview) with gemini-flash-latest
