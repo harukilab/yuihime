@@ -1,6 +1,38 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.336] - 2026-08-08
+### feature: KERNEL_FAIL_SAFE dizzy reply now carries a Telegram Retry button
+- cortexThinkEngine: kernel failsafe fallback sets fallbackTriggered=true so the 'inner circuit dizzy' reply gets the 🔄 Retry button on Telegram (re-runs the original user message)
+
+
+## [4.335] - 2026-08-08
+### feature: Toggleable asterisk-action stripping via [dialogue] strip_asterisk_actions
+- New config.toml [dialogue] section: strip_asterisk_actions = true (default) — set to false to preserve Yui's action/gesture blocks when she needs to describe doing something
+- Both sanitizeSpeech (LiveStatusToolsModule) and sanitizeOutput (processor) gate the *...* strip behind this setting
+
+
+## [4.334] - 2026-08-08
+### feature: Runtime-enforced ban on asterisk action/gesture lines in spoken dialogue
+- sanitizeSpeech (LiveStatusToolsModule) + sanitizeOutput (processor): strip full-line *...* action blocks and inline *pout*/*giggles* fragments, drop emoji-only residue lines
+- system_prompt.md (repo + live agent copy): No Narrative Filler + No Text-Based Actions now ban ALL action/gesture/movement narration in dialogue, not just asterisks
+
+
+## [4.333] - 2026-08-07
+### feature: Telegram self-care permission menu: 🛡️ Perm button in care menu toggles permission mode + per-action chips from chat
+- telegram_quick_menu: permMenuKeyboard with Permission Mode master toggle + Eat/Drink/Bath/Pee/Poop/Play/Fish/Sleep chips; runCareAction handles perm/permmode/permtoggle:<action>
+- Settings persisted to config.toml via SettingsManager.save() with load guard; menu reflects fresh state
+- careMenuKeyboard: new 🛡️ Perm row; callback routing qt:care:perm* awaited
+
+
+## [4.332] - 2026-08-07
+### feature: Life Simulation settings menu in web UI: selfCarePermissionActions clickable toggle chips (inline multiselect) + full life-simulation config card in Modules tab
+- ModularSettings: MultiSelectField supports inline toggle-chip mode (field.inline), one-click enable/disable per action
+- LifeSimulationModule schema: selfCarePermissionActions rendered as inline chips (Eat/Drink/Bath/Pee/Poop/Play/Fish/Sleep)
+- ModulesTab: new 'Life Simulation' category under Core AI renders the module configSchema via renderFields
+- shared types: ConfigField gains inline flag
+
+
 ## [4.331] - 2026-08-07
 ### feature: Chat drink quantity in 3 languages: 'minum 5 gelas' / 'drink 5 glasses' / '水を5杯' now consumes N drinks with per-glass fill & overfeed
 

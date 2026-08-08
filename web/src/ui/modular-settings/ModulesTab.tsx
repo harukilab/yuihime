@@ -5,7 +5,7 @@ import {
   Sparkles, Cpu, Radio, Brain, Zap, Terminal, Plus, Trash2, Clock, 
   RefreshCw, Search, Layers, Volume2, Mic, Eye, Palette, 
   ClipboardList, Database, Send, MessageSquare, Share2, Server,
-  Sliders, ShieldAlert, SlidersHorizontal, CheckCircle2, Bot, Sliders as SlidersIcon
+  Sliders, ShieldAlert, SlidersHorizontal, CheckCircle2, Bot, Sliders as SlidersIcon, Heart
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { VoiceCalibration } from './voiceCalibration';
@@ -406,6 +406,7 @@ export const ModulesTab: React.FC<ModulesTabProps> = ({
   const moduleCategories = [
     { id: 'consciousness', group: 'core', title: 'Consciousness', desc: 'Personality, provider, models, & resilience pipeline', icon: Sparkles, color: 'text-amber-400', bg: 'bg-amber-500/10' },
     { id: 'agi_mind', group: 'core', title: 'AGI Mind Engine', desc: 'Neurotransmitters, self-awareness, EWC, & emotion rules', icon: Brain, color: 'text-orange-400', bg: 'bg-orange-500/10' },
+    { id: 'life_simulation', group: 'core', title: 'Life Simulation', desc: 'Body vitals, self-care permission mode & inventory', icon: Heart, color: 'text-pink-400', bg: 'bg-pink-500/10' },
     { id: 'speech', group: 'perception', title: 'Speech (TTS)', desc: 'Configure voice synthesis models & voice calibration', icon: Volume2, color: 'text-cyan-400', bg: 'bg-cyan-500/10' },
     { id: 'hearing', group: 'perception', title: 'Hearing (STT)', desc: 'Speech-to-text, microphone thresholds & voice capture', icon: Mic, color: 'text-pink-400', bg: 'bg-pink-500/10' },
     { id: 'vision', group: 'perception', title: 'Vision', desc: 'Camera frame analysis, optical model & intervals', icon: Eye, color: 'text-purple-400', bg: 'bg-purple-500/10' },
@@ -1091,6 +1092,30 @@ export const ModulesTab: React.FC<ModulesTabProps> = ({
                 </div>
               </div>
             )}
+          </div>
+        );
+      }
+
+      case 'life_simulation': {
+        const lifeSimModule = allRegModules.find(m => m.metadata.id === 'life-simulation');
+        const lifeSimConfig = settings['life-simulation'] || {};
+
+        return (
+          <div className="space-y-5">
+            <div className="bg-[#0e0e14]/55 border border-white/5 p-5 rounded-2xl space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-xs font-bold text-white">Life Simulation (Nekomata Body)</h4>
+                  <p className="text-[10px] text-zinc-400 font-mono uppercase mt-0.5">Vitals, self-care permission mode, sleep & inventory</p>
+                </div>
+                <span className="text-[8px] font-mono px-2 py-0.5 rounded bg-pink-500/10 text-pink-400 border border-pink-500/20 font-bold uppercase">Soul Module</span>
+              </div>
+              {lifeSimModule ? (
+                <div className="pt-2">{renderFields(lifeSimModule, lifeSimConfig)}</div>
+              ) : (
+                <p className="text-xs font-mono text-zinc-500">Life Simulation module not registered in this build.</p>
+              )}
+            </div>
           </div>
         );
       }

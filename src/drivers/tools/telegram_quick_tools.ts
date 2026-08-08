@@ -1872,7 +1872,7 @@ export async function handleTgCallback(data: string, tc: TgToolContext): Promise
   }
   if (cmd.startsWith('care:')) {
     const sub = cmd.slice(5);
-    const reply = runCareAction(sub, tc);
+    const reply = await runCareAction(sub, tc);
     return { action: 'edit', text: reply.text, keyboard: reply.keyboard || careMenuKeyboard() };
   }
 

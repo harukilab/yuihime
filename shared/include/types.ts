@@ -53,6 +53,7 @@ export interface ModuleConfigSchema {
       step?: number;
       options?: { label: string; value: any }[];
       dynamicOptions?: boolean; // Flag to indicate options should be fetched from module
+      inline?: boolean; // Render multiselect options as clickable toggle chips (no dropdown)
       required?: boolean;
     };
   };

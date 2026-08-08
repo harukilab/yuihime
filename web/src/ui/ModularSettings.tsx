@@ -74,7 +74,8 @@ const MultiSelectField: React.FC<{
   onFetch?: () => void;
   customMode?: boolean;
   onToggleCustom?: () => void;
-}> = ({ options, value, onChange, placeholder, isFetching, onFetch, customMode, onToggleCustom }) => {
+  inline?: boolean;
+}> = ({ options, value, onChange, placeholder, isFetching, onFetch, customMode, onToggleCustom, inline }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [customValue, setCustomValue] = useState('');
@@ -88,6 +89,40 @@ const MultiSelectField: React.FC<{
   const toggle = (v: string) => {
     onChange(selected.includes(v) ? selected.filter(x => x !== v) : [...selected, v]);
   };
+
+  if (inline) {
+    return (
+      <div className="flex flex-wrap gap-1.5">
+        {options.map(opt => {
+          const on = selected.includes(opt.value);
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => toggle(opt.value)}
+              className={`px-2.5 py-1.5 rounded-full text-[10px] font-mono border transition-all cursor-pointer flex items-center gap-1.5 ${
+                on
+                  ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/40'
+                  : 'bg-black/30 text-zinc-400 border-white/10 hover:border-white/25 hover:text-white'
+              }`}
+            >
+              <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${
+                on ? 'bg-cyan-500 border-cyan-500' : 'border-white/25'
+              }`}>
+                {on && <Check size={8} className="text-black" />}
+              </span>
+              {opt.label}
+            </button>
+          );
+        })}
+        {selected.length === 0 && (
+          <span className="text-[9px] text-zinc-600 font-mono italic self-center">
+            {placeholder || 'None selected'}
+          </span>
+        )}
+      </div>
+    );
+  }
 
   const removeTag = (e: React.MouseEvent, v: string) => {
     e.stopPropagation();
@@ -2036,7 +2071,7 @@ export const ModularSettings: React.FC<ModularSettingsProps> = ({
                     {customInputMode[`${module.metadata.id}:${key}`] ? 'Use Dropdown' : 'Type Custom'}
                   </button>
                 )}
-                {field.type === 'multiselect' && (
+                {field.type === 'multiselect' && !field.inline && (
                   <button
                     type="button"
                     onClick={() => {
@@ -2140,6 +2175,7 @@ export const ModularSettings: React.FC<ModularSettingsProps> = ({
                     const fetchingKey = `${module.metadata.id}:${key}`;
                     setCustomInputMode(prev => ({ ...prev, [fetchingKey]: !prev[fetchingKey] }));
                   }}
+                  inline={field.inline === true}
                 />
               ) : field.type === 'boolean' ? (
                 <div className="flex items-center gap-3 mt-1">

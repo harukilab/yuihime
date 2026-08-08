@@ -519,6 +519,32 @@ export class NeuralProcessor {
       return match;
     });
 
+    // Remove full-line asterisk-wrapped action blocks (e.g. "*Yui melangkah pelan...*",
+    // "*Yui menggenggam tangannya erat...*") — the model must speak in clean plain text
+    // without describing physical actions/gestures/movements in dialogue.
+    // Controlled by [dialogue] strip_asterisk_actions in config.toml (default: true).
+    const stripActions = (() => {
+      try {
+        const dialogue = SettingsManager.getInstance().get('dialogue') || {};
+        return dialogue.strip_asterisk_actions !== false;
+      } catch (_) { return true; }
+    })();
+    if (stripActions) {
+      clean = clean.replace(/^\s*\*[\s\S]*?\*\s*$/gm, '');
+      // Remove inline asterisk action fragments (e.g. *pout*, *giggles*)
+      clean = clean.replace(/\*[^*\n]+\*/g, '');
+      // Drop lines that are now only emoji/punctuation residue left from removed action blocks
+      clean = clean.split('\n').map((l: string) => {
+        const t = l.trim();
+        if (t && !/[a-zA-Z0-9]/.test(t) && !/[:=;8][\-~]?[\)\]D\(\[pP3O0o@\*]/.test(t)) {
+          return '';
+        }
+        return l;
+      }).join('\n');
+      // Collapse leftover blank lines produced by removed action blocks
+      clean = clean.replace(/\n{3,}/g, '\n\n');
+    }
+
     // Strip ALL double asterisks formatting (**text** -> text) to prevent raw bold markdown leak
     clean = clean.replace(/\*\*([^*]+)\*\*/g, '$1');
 

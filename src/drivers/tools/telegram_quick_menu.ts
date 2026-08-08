@@ -1,4 +1,5 @@
 import type { TgReply, TgToolContext } from './telegram_quick_tools.js';
+import { SettingsManager } from '../../core/kernel/settings.js';
 
 /**
  * Telegram Quick Menu helpers — status text, care menu, inventory, and the
@@ -184,9 +185,121 @@ export function careMenuKeyboard() {
       [{ text: '🍽️ Feed', callback_data: 'qt:care:eat' }, { text: '💧 Drink', callback_data: 'qt:care:drink' }, { text: '🚿 Bath', callback_data: 'qt:care:bath' }],
       [{ text: '🚽 Pee', callback_data: 'qt:care:pee' }, { text: '💩 Poop', callback_data: 'qt:care:poop' }, { text: '😴 Sleep', callback_data: 'qt:care:sleep' }],
       [{ text: '🎾 Play', callback_data: 'qt:care:play' }, { text: '🐟 Fish', callback_data: 'qt:care:fish' }, { text: '🎒 Inventory', callback_data: 'qt:care:inventory' }],
-      [{ text: '📊 Status', callback_data: 'qt:care:status' }, { text: '« Menu', callback_data: 'qt:menu' }]
+      [{ text: '🛡️ Perm', callback_data: 'qt:care:perm' }, { text: '📊 Status', callback_data: 'qt:care:status' }, { text: '« Menu', callback_data: 'qt:menu' }]
     ]
   };
+}
+
+// ───────────────────────── Self-care permission menu ─────────────────────────
+// Toggles `enableSelfCarePermission` and `selfCarePermissionActions` from the
+// Telegram care menu (persisted to config.toml via SettingsManager.save()).
+
+const PERM_ACTIONS: Array<{ value: string; label: string }> = [
+  { value: 'eat', label: '🍽️ Eat' },
+  { value: 'drink', label: '💧 Drink' },
+  { value: 'bath', label: '🚿 Bath' },
+  { value: 'pee', label: '🚽 Pee' },
+  { value: 'poop', label: '💩 Poop' },
+  { value: 'play', label: '🎾 Play' },
+  { value: 'fish', label: '🐟 Fish' },
+  { value: 'sleep', label: '😴 Sleep' }
+];
+
+function lifeSimConfig(tc?: TgToolContext): any {
+  let cfg = tc?.settings?.['life-simulation'] || {};
+  try {
+    const all = SettingsManager.getInstance().getAll();
+    if (all && all['life-simulation']) cfg = all['life-simulation'];
+  } catch {}
+  return cfg;
+}
+
+function permActionList(cfg: any): string[] {
+  return Array.isArray(cfg?.selfCarePermissionActions) ? cfg.selfCarePermissionActions.map(String) : [];
+}
+
+function permActionOn(cfg: any, value: string): boolean {
+  if (!(cfg?.enableSelfCarePermission !== undefined ? !!cfg.enableSelfCarePermission : false)) return false;
+  const list = permActionList(cfg);
+  return list.length === 0 || list.includes(value);
+}
+
+function permMenuText(tc?: TgToolContext): string {
+  const cfg = lifeSimConfig(tc);
+  const modeOn = cfg?.enableSelfCarePermission !== undefined ? !!cfg.enableSelfCarePermission : false;
+  const list = permActionList(cfg);
+  const checkedCount = modeOn ? (list.length === 0 ? PERM_ACTIONS.length : list.length) : 0;
+  return [
+    '🛡️ SELF-CARE PERMISSION',
+    '',
+    `Mode: ${modeOn ? '✅ ON' : '⬜ OFF'}`,
+    '',
+    'When ON, Yui asks permission before auto-caring for the checked actions. Empty list = ALL actions.',
+    '',
+    `Checked: ${checkedCount}/${PERM_ACTIONS.length}`,
+    '',
+    'Tap a chip to toggle (auto-saved to config.toml).'
+  ].join('\n');
+}
+
+export function permMenuKeyboard(tc?: TgToolContext) {
+  const cfg = lifeSimConfig(tc);
+  const modeOn = cfg?.enableSelfCarePermission !== undefined ? !!cfg.enableSelfCarePermission : false;
+  const keyboard: any[][] = [[{ text: `${modeOn ? '✅' : '⬜'} Permission Mode`, callback_data: 'qt:care:permmode' }]];
+  for (let i = 0; i < PERM_ACTIONS.length; i += 2) {
+    const row: any[] = [];
+    for (const act of PERM_ACTIONS.slice(i, i + 2)) {
+      row.push({
+        text: `${permActionOn(cfg, act.value) ? '✅' : '⬜'} ${act.label}`,
+        callback_data: `qt:care:permtoggle:${act.value}`
+      });
+    }
+    keyboard.push(row);
+  }
+  keyboard.push([{ text: '« Back to Care', callback_data: 'qt:care' }]);
+  return { inline_keyboard: keyboard };
+}
+
+async function togglePermMode(tc: TgToolContext): Promise<string | null> {
+  const sm = SettingsManager.getInstance();
+  if (!sm.getAll() || Object.keys(sm.getAll()).length === 0) {
+    try { await sm.load(); } catch {}
+  }
+  const all = sm.getAll();
+  const ls = { ...(all['life-simulation'] || {}) };
+  const current = ls.enableSelfCarePermission !== undefined ? !!ls.enableSelfCarePermission : false;
+  ls.enableSelfCarePermission = !current;
+  all['life-simulation'] = ls;
+  try {
+    await sm.save(all);
+    if (tc.settings) tc.settings['life-simulation'] = ls;
+    return null;
+  } catch (e: any) {
+    return e?.message || String(e);
+  }
+}
+
+async function togglePermAction(tc: TgToolContext, value: string): Promise<string | null> {
+  const sm = SettingsManager.getInstance();
+  if (!sm.getAll() || Object.keys(sm.getAll()).length === 0) {
+    try { await sm.load(); } catch {}
+  }
+  const all = sm.getAll();
+  const ls = { ...(all['life-simulation'] || {}) };
+  const list = permActionList(ls);
+  if (list.includes(value)) {
+    ls.selfCarePermissionActions = list.filter(x => x !== value);
+  } else {
+    ls.selfCarePermissionActions = [...list, value];
+  }
+  all['life-simulation'] = ls;
+  try {
+    await sm.save(all);
+    if (tc.settings) tc.settings['life-simulation'] = ls;
+    return null;
+  } catch (e: any) {
+    return e?.message || String(e);
+  }
 }
 
 /**
@@ -202,7 +315,7 @@ export function careMenuKeyboard() {
  * overfeed level, so repeatedly feeding a full Yui visibly raises her Poop/Pee
  * stats.
  */
-export function runCareAction(action: string, tc: TgToolContext): TgReply {
+export async function runCareAction(action: string, tc: TgToolContext): Promise<TgReply> {
   const db = tc?.db;
   if (!db) return { text: 'Database unavailable.' };
   const row = db.prepare('SELECT systemHealth FROM agent_state LIMIT 1').get() as any;
@@ -376,6 +489,16 @@ export function runCareAction(action: string, tc: TgToolContext): TgReply {
     };
   }
 
+  if (a.startsWith('permtoggle:')) {
+    const value = a.slice('permtoggle:'.length);
+    const valid = PERM_ACTIONS.some(p => p.value === value);
+    if (!valid) {
+      return { text: '⚠️ Unknown permission action.', keyboard: permMenuKeyboard(tc) };
+    }
+    const err = await togglePermAction(tc, value);
+    return { text: err ? `⚠️ Failed to toggle: ${err}` : permMenuText(tc), keyboard: permMenuKeyboard(tc) };
+  }
+
   switch (a) {
     case 'eat':
     case 'feed': {
@@ -432,6 +555,12 @@ export function runCareAction(action: string, tc: TgToolContext): TgReply {
     case 'status':
     case '':
       return { text: yuiStatusText(tc), parse_mode: 'Markdown' };
+    case 'perm':
+      return { text: permMenuText(tc), keyboard: permMenuKeyboard(tc) };
+    case 'permmode': {
+      const err = await togglePermMode(tc);
+      return { text: err ? `⚠️ Failed to toggle permission mode: ${err}` : permMenuText(tc), keyboard: permMenuKeyboard(tc) };
+    }
     case 'inventory':
     case 'inv':
     case 'bag':

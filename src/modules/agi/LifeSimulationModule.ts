@@ -498,6 +498,7 @@ export const LifeSimulationModule: CortexModule = {
         },
         selfCarePermissionActions: {
           type: 'multiselect',
+          inline: true,
           label: 'Permission-Required Actions',
           default: ['toilet'],
           options: [
@@ -510,7 +511,7 @@ export const LifeSimulationModule: CortexModule = {
             { value: 'fish', label: 'Fish Craving / Ikan' },
             { value: 'sleep', label: 'Sleep / Tidur' }
           ],
-          description: 'Which self-care actions require the user\'s explicit permission when permission mode is ON. Empty = all actions.'
+          description: 'Which self-care actions require the user\'s explicit permission when permission mode is ON. Empty = all actions. Click each chip to toggle.'
         },
         selfCareOverMaxCap: {
           type: 'slider',

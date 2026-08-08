@@ -194,3 +194,8 @@ Peta struktur direktori pasca-pemisahan Web UI ↔ Daemon (lihat UPDATE_LOG `[4.
 - `SOPModule — added always/ subfolder for always-on SOPs; improved keyword matching (GENERIC_WORDS filter + token match); EN header; injectCharacterName applied`
 - `todowrite tool`
 - `LifeSimulation — trilingual drink quantity parsing ('minum 5 gelas' / 'drink 5 glasses' / '水を5杯') consumes N drinks with per-glass fill, overfeed depth scaling, and loop over the inventory
+- `ModulesTab + ModularSettings: inline multiselect toggle chips; LifeSimulationModule: selfCarePermissionActions inline chips`
+- `telegram_quick_menu: self-care permission toggle menu (perm/permmode/permtoggle:<action>)`
+- `processor: stripAsteriskActions enforcement; system_prompt.md: no action narration in dialogue`
+- `processor/sanitizeSpeech: [dialogue] strip_asterisk_actions toggle`
+- `cortexThinkEngine: failsafe fallback marks fallbackTriggered`

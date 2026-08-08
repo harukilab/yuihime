@@ -1897,9 +1897,12 @@ if (typeof parsedArgs === 'string') {
     }
   }
 
+  let kernelFailsafeTriggered = false;
+
   if (!isIntentionalEmpty && (!finalAnswer || finalAnswer.length < 5)) {
     logs.push("[KERNEL_FAIL_SAFE] Critical: Reprocessing LLM retry failed to produce a valid response. Falling back to cute in-character error response.");
     finalAnswer = injectCharacterName("Oh no... sorry user, ${characterName}'s inner circuit felt a bit dizzy just now while processing your request... 🥺 But ${characterName} is still here! Is there anything ${characterName} can help with again? 💕");
+    kernelFailsafeTriggered = true;
   }
 
   const speakCall = toolsToCall.find((tc: any) => tc.tool === 'final_answer');
@@ -1940,7 +1943,7 @@ if (typeof parsedArgs === 'string') {
      moodDelta: {},
      relationDelta: {},
      queuedIdentityUpdate: {},
-     fallbackTriggered: loopContext.fallbackTriggered || false,
+      fallbackTriggered: kernelFailsafeTriggered || loopContext.fallbackTriggered || false,
      systemHealth: state.systemHealth,
      status: 'completed' as const,
      pendingToolRef: undefined

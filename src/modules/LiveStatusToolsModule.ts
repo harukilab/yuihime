@@ -1,4 +1,5 @@
 import { ToolModule, ModuleType } from '@shared/include/types';
+import { SettingsManager } from '@/core/kernel/settings';
 
 const DEDUP_WINDOW_MS = 300_000;
 const dedupRegistry = new Map<string, number>();
@@ -16,6 +17,32 @@ export function isDuplicateSend(key: string): boolean {
 
 export function markDeduplicated(key: string): void {
   dedupRegistry.set(key, Date.now());
+}
+
+export function stripAsteriskActions(text: string): string {
+  // Controlled by [dialogue] strip_asterisk_actions in config.toml (default: true).
+  const stripActions = (() => {
+    try {
+      const dialogue = SettingsManager.getInstance().get('dialogue') || {};
+      return dialogue.strip_asterisk_actions !== false;
+    } catch (_) { return true; }
+  })();
+  if (!stripActions) return text;
+  // Remove full-line asterisk-wrapped action blocks (e.g. "*Yui melangkah...*")
+  let out = text.replace(/^\s*\*[\s\S]*?\*\s*$/gm, '');
+  // Remove inline asterisk action fragments (e.g. *pout*, *giggles*)
+  out = out.replace(/\*[^*\n]+\*/g, '');
+  // Drop lines that are now only emoji/punctuation residue left from removed action blocks
+  out = out.split('\n').map((l: string) => {
+    const t = l.trim();
+    if (t && !/[a-zA-Z0-9]/.test(t) && !/[:=;8][\-~]?[\)\]D\(\[pP3O0o@\*]/.test(t)) {
+      return '';
+    }
+    return l;
+  }).join('\n');
+  // Collapse leftover blank lines produced by removed action blocks
+  out = out.replace(/\n{2,}/g, '\n').trim();
+  return out;
 }
 
 export function sanitizeSpeech(raw: string): string | null {
@@ -40,7 +67,7 @@ export function sanitizeSpeech(raw: string): string | null {
       if (typeof parsed === 'string' && parsed.trim()) return sanitizeSpeech(parsed);
     } catch (_) { /* keep as-is */ }
   }
-  return text;
+  return stripAsteriskActions(text);
 }
 
 async function sendTelegramMessage(bot: any, chatId: string, text: string): Promise<boolean> {
