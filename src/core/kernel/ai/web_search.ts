@@ -3,7 +3,7 @@ import { toKeyArray, toSingleString } from '../configNormalizer.js';
 import { SystemRegistry } from '@shared/core/registry';
 import { WebSearchRunner } from './webSearchRunner.js';
 
-const FALLBACK_MODELS = ['gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-1.5-flash'];
+const FALLBACK_MODELS = ['gemini-flash-latest', 'gemini-3.1-flash-lite'];
 
 function toModelString(raw: any): string {
   if (typeof raw === 'string') return raw;

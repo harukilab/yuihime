@@ -37,7 +37,7 @@ class DatasetSynthesizer {
     intervalSeconds: 15,
     maxRetries: 3,
     provider: 'gemini',
-    model: 'gemini-3.5-flash',
+    model: 'gemini-flash-latest',
     systemPrompt: `You are the Yuihime Core Synaptic SFT Transmutation Engine.
 Your sole purpose is to convert raw input-output dialogue pairs into a highly detailed Cognitive Cortex JSON dataset.
 
@@ -338,7 +338,7 @@ Your response must be STRICTLY valid JSON ONLY. No markdown wraps, no extra prea
     
     try {
       const targetProvider = this.config.provider || 'gemini';
-      const targetModel = toSingleString(this.config.model) || 'gemini-3.5-flash';
+      const targetModel = toSingleString(this.config.model) || 'gemini-flash-latest';
       const prefixedModel = targetProvider === 'gemini' ? targetModel : `${targetProvider}:${targetModel}`;
 
       this.addLog(`🧠 Calling LLM Provider [${targetProvider.toUpperCase()} / ${targetModel}] for record: "[User: ${userQuery.substring(0, 30)}...]"...`);

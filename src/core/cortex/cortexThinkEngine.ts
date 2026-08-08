@@ -568,7 +568,7 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
     // Anthropic tool_use, Gemini functionCall) instead of JSON-in-prompt.
     const iterationUsesNative = nativeTransportEnabled;
     const providerSpecificConfig = settings[activeProviderId] || {};
-    const targetModelId = toSingleString(providerSpecificConfig.model) || 'gemini-3.5-flash';
+    const targetModelId = toSingleString(providerSpecificConfig.model) || 'gemini-flash-latest';
 
     if (!iterationUsesNative && iteration > 1 && toolExecutionHistory.length > 0) {
       const lastExecuted = toolExecutionHistory[toolExecutionHistory.length - 1];

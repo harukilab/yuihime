@@ -127,7 +127,7 @@ export const ProvidersTab: React.FC<ProvidersTabProps> = ({
     const newRow = {
       id: genId(9),
       provider: 'gemini',
-      model: 'gemini-2.0-flash',
+      model: 'gemini-flash-latest',
       apiKey: ''
     };
     updateFallbackChain([...currentChain, newRow]);

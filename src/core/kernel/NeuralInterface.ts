@@ -337,6 +337,101 @@ export class NeuralInterface {
       `).all(...dbQueryParams);
       historyRows = recentRows.reverse();
 
+      // Per-user continuity fallback: pull the most recent interactions whose
+      // speaker matches THIS user (perceivedName/realName/linked account
+      // aliases) even if they happened under a different context/channel.
+      // Keeps 1 user = 1 person: other users' conversations are never mixed in.
+      try {
+        const userAliases = new Set<string>([senderName.toLowerCase()]);
+        if (receiverIdentity) {
+          for (const name of [receiverIdentity.perceivedName, receiverIdentity.realName]) {
+            if (name && typeof name === "string") userAliases.add(name.toLowerCase());
+          }
+          if (Array.isArray(receiverIdentity.linkedAccounts)) {
+            for (const acc of receiverIdentity.linkedAccounts) {
+              const cleanAcc = String(acc || "").toLowerCase();
+              const colonIdx = cleanAcc.lastIndexOf(":");
+              if (colonIdx > -1) userAliases.add(cleanAcc.slice(colonIdx + 1));
+              userAliases.add(cleanAcc);
+            }
+          }
+        }
+        const aliasList = Array.from(userAliases).filter(Boolean);
+        const aliasClauses = aliasList.map(() => "LOWER(speaker) = ?").join(" OR ");
+        const aliasRows = aliasClauses
+          ? this.db.prepare(`
+            SELECT * FROM memories
+            WHERE type = 'interaction'
+              AND (${aliasClauses})
+            ORDER BY timestamp DESC
+            LIMIT 60
+          `).all(...aliasList)
+          : [];
+        const seenIds = new Set(historyRows.map((r: any) => r.id));
+        for (const row of aliasRows) {
+          if (!seenIds.has(row.id)) {
+            historyRows.push(row);
+            seenIds.add(row.id);
+          }
+        }
+        historyRows.sort((a: any, b: any) => (a.timestamp || 0) - (b.timestamp || 0));
+      } catch (aliasErr: any) {
+        console.warn('[NEURAL] Per-user continuity fallback failed:', aliasErr?.message || aliasErr);
+      }
+
+      // Temporal proximity recall: interactions from ANY context within the
+      // recent window are treated as "just now" activity, so Yui can answer
+      // "what am I doing / who was I talking to" with current facts.
+      try {
+        const temporalWindowMs = 2 * 60 * 60 * 1000;
+        const temporalCutoff = Date.now() - temporalWindowMs;
+        const temporalRows = this.db.prepare(`
+          SELECT * FROM memories
+          WHERE type = 'interaction'
+            AND timestamp >= ?
+          ORDER BY timestamp DESC
+          LIMIT 40
+        `).all(temporalCutoff);
+        const seenIds = new Set(historyRows.map((r: any) => r.id));
+        for (const row of temporalRows) {
+          if (!seenIds.has(row.id)) {
+            historyRows.push(row);
+            seenIds.add(row.id);
+          }
+        }
+        historyRows.sort((a: any, b: any) => (a.timestamp || 0) - (b.timestamp || 0));
+
+        // Same-room expansion: when multiple users talk around the same time,
+        // treat their contexts as ONE room. Pull full recent history of every
+        // context that had activity in the temporal window, so Yui keeps
+        // consistent facts across users without denying recent exchanges.
+        const roomContexts = new Set<string>();
+        for (const row of temporalRows) {
+          if (row.context && !targetContexts.has(row.context)) {
+            roomContexts.add(row.context);
+          }
+        }
+        if (roomContexts.size > 0) {
+          const roomClauses = Array.from(roomContexts).map(() => "context LIKE ?").join(" OR ");
+          const roomParams = Array.from(roomContexts).map(c => `%${c}%`);
+          const roomRows = this.db.prepare(`
+            SELECT * FROM memories
+            WHERE ${roomClauses}
+            ORDER BY timestamp DESC
+            LIMIT 100
+          `).all(...roomParams);
+          for (const row of roomRows) {
+            if (!seenIds.has(row.id)) {
+              historyRows.push(row);
+              seenIds.add(row.id);
+            }
+          }
+          historyRows.sort((a: any, b: any) => (a.timestamp || 0) - (b.timestamp || 0));
+        }
+      } catch (temporalErr: any) {
+        console.warn('[NEURAL] Temporal proximity recall failed:', temporalErr?.message || temporalErr);
+      }
+
       // Forgetting-curve spaced repetition: keep recent conversation continuity,
       // re-rank older memories by forgetting probability (Ebbinghaus)
       // + importance, then mark the recalled ones so their stability strengthens.

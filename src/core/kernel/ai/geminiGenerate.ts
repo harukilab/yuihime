@@ -538,6 +538,21 @@ export async function generateContent(
             requestBody.toolConfig = config.toolConfig;
           }
 
+          // Gemini's default safety filters block mature character content with
+          // PROHIBITED_CONTENT. Set every harm category to BLOCK_NONE so Yui's
+          // roleplay prompt (assembled by the cortex) is not rejected before the
+          // first token. This mirrors the adult-roleplay deployment intent; the
+          // cortex/processor layer still enforces narrative-level safety rules.
+          if (!gemmaNative) {
+            requestBody.safetySettings = [
+              { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+              { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+              { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+              { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+              { category: 'HARM_CATEGORY_CIVIC_INTEGRITY', threshold: 'BLOCK_NONE' }
+            ];
+          }
+
           if (systemInstructionText) {
             requestBody.systemInstruction = {
               parts: [{ text: systemInstructionText }]

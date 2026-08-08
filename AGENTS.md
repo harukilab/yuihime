@@ -21,7 +21,7 @@
 - `npm run lint` — `tsc --noEmit`
 - Tests in `tools/tester/` are standalone and run with `tsx` (no test framework configured).
 - `python3 tools/update_log.py` — prepend `UPDATE_LOG.md` entry
-- `python3 tools/push_gh.py` — update logs + git add/commit/push
+- `python3 tools/push_gh.py` — update logs + git add/commit/push. Usage details in `tools/README.md` (see `push_gh.py usage`).
 - Deploy & verify after every change (build → restart daemon → health check):
   `npm run build 2>&1 | tail -3 && tools/yui-daemon.sh restart 2>&1 | tail -3 && curl -s http://127.0.0.1:3000/api/health; echo`
 - **Build server-only**: jika perubahan hanya di sisi server/daemon (bukan `web/`), pakai `npm run build:server` (jauh lebih cepat dari `npm run build`). Jika menyentuh `web/` atau `shared/`, tetap `npm run build`.
@@ -71,6 +71,14 @@
 - **No dynamic import of `./cortex.js`**: Use static `import { Cortex } from './cortex.js'` in `RegistryInitializer.ts`. Dynamic `import('./cortex.js')` causes `ERR_MODULE_NOT_FOUND` at runtime in `dist/server.cjs`.
 - **Regex sanitize JSON.parse for LLM responses**: Before `JSON.parse()` on raw LLM output (especially in DYNAMIC_SYNTHESIS and monologue-stripping paths), use `rawResponse.match(/\{[\s\S]*\}/)` to extract the valid JSON object first, handling markdown code fences and stray text safely.
 - **Always create a new todo list when fixing errors**: When a user reports a bug or error, start a fresh todo list to track the investigation and fix steps. Do not reuse todos from previous tasks.
+
+## Reference Docs (baca dulu sebelum kerja)
+- **`tools/README.md`** — referensi semua script di `tools/` (daemon, watchdog, data injector, mood, outfit, inventory, python utils). Baca sebelum memakai/membuat script tools.
+- **`scripts/README.md`** — referensi script di `scripts/` (boot, install, pm2 setup/restore).
+- **`docs/API_QUICKREF.md`** — quick-reference REST API (health, state, memories, AI/TTS, tools/shell, addons, cron, telegram, settings, DB). Baca sebelum memanggil endpoint API.
+- **`tools/yui-data.md`** — skema path + contoh perintah `tools/yui-data.sh` (get/set/push/add/sys/vbody). Gunakan tool ini untuk baca/tulis state (mood, emotion, systemHealth, inventory, virtual body) daripada buka DB langsung.
+- **`~/.yuihime/user_data/yui_status.md`** — snapshot status Yui (vitals/mood/emotion/relation/virtual body). Refresh dengan `tools/yui-status.sh gen`. Agent eksternal cukup baca file ini tanpa query DB.
+- **`docs/API_ENDPOINTS.md`** — blueprint detail semua endpoint (976 baris, bila butuh detail per-router).
 
 ## Logging & Docs
 - `UPDATE_LOG.md` is very large. **Only read lines 1–15.** To prepend, edit below the `---` line (line 5). For review, read at most lines 1–35.

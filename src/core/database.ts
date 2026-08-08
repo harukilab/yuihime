@@ -1276,8 +1276,11 @@ export function runAutoCleanup(db: any): CleanupResult {
   try {
     const ttlMs = AUTO_CLEANUP_LIMITS.pending_messages_ttl_minutes * 60 * 1000;
     const cutoffTs = Date.now() - ttlMs;
+    // Terminal statuses: 'completed' (the one MultiChannelQueue actually writes),
+    // plus legacy 'done'/'failed'/'delivered'. Rows stuck in 'pending'/'processing'
+    // are deliberately kept (they may still be dispatched/retried).
     const r = db.prepare(
-      `DELETE FROM pending_messages WHERE status IN ('done', 'failed', 'delivered') AND timestamp < ?`
+      `DELETE FROM pending_messages WHERE status IN ('completed', 'done', 'failed', 'delivered') AND timestamp < ?`
     ).run(cutoffTs);
     result.pending_messages = r.changes;
   } catch (e: any) {

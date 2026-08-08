@@ -798,7 +798,7 @@ export const ModulesTab: React.FC<ModulesTabProps> = ({
                               <input
                                 type="text"
                                 value={row.model || ''}
-                                placeholder="e.g. gemini-2.5-flash"
+                                placeholder="e.g. gemini-flash-latest"
                                 onChange={e => editFallbackRow(row.id, 'model', e.target.value)}
                                 className="w-full bg-black/40 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-amber-500/40"
                               />

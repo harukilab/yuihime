@@ -12,14 +12,16 @@ export const GeminiProvider: ProviderModule = {
     type: ModuleType.PROVIDER,
     order: 1,
     models: [
-      'gemini-3.5-flash',
+      'gemini-flash-latest',
       'gemini-3.1-flash-lite',
-      'gemini-3.1-pro-preview',
-      'gemini-2.5-flash',
-      'gemini-2.5-pro',
-      'gemini-2.0-flash',
-      'gemini-1.5-flash',
-      'gemini-1.5-pro'
+      'gemini-flash-lite-latest',
+      'gemini-3.5-flash-lite',
+      'gemini-3.5-flash',
+      'gemini-3.6-flash',
+      'gemini-3-flash-preview',
+      'gemma-4-26b-a4b-it',
+      'gemma-4-31b-it',
+      'gemini-2.5-flash'
     ],
     configSchema: {
       fields: {
@@ -62,14 +64,16 @@ export const GeminiProvider: ProviderModule = {
   },
   getModels: async (config: any) => {
     const staticGeminiOptions = [
-      { label: 'Gemini 3.5 Flash (Recommended)', value: 'gemini-3.5-flash' },
+      { label: 'Gemini Flash (Latest)', value: 'gemini-flash-latest' },
       { label: 'Gemini 3.1 Flash Lite', value: 'gemini-3.1-flash-lite' },
-      { label: 'Gemini 3.1 Pro (Heavy Reasoning)', value: 'gemini-3.1-pro-preview' },
+      { label: 'Gemini Flash Lite (Latest)', value: 'gemini-flash-lite-latest' },
+      { label: 'Gemini 3.5 Flash Lite', value: 'gemini-3.5-flash-lite' },
+      { label: 'Gemini 3.5 Flash', value: 'gemini-3.5-flash' },
+      { label: 'Gemini 3.6 Flash', value: 'gemini-3.6-flash' },
+      { label: 'Gemini 3 Flash (Preview)', value: 'gemini-3-flash-preview' },
       { label: 'Gemini 2.5 Flash', value: 'gemini-2.5-flash' },
-      { label: 'Gemini 2.5 Pro', value: 'gemini-2.5-pro' },
-      { label: 'Gemini 2.0 Flash', value: 'gemini-2.0-flash' },
-      { label: 'Gemini 1.5 Flash', value: 'gemini-1.5-flash' },
-      { label: 'Gemini 1.5 Pro', value: 'gemini-1.5-pro' }
+      { label: 'Gemma 4 26B', value: 'gemma-4-26b-a4b-it' },
+      { label: 'Gemma 4 31B', value: 'gemma-4-31b-it' }
     ];
 
     try {

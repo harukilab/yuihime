@@ -1021,7 +1021,7 @@ const CONFIG_HELP =
   '  /config set <key> <value>  — set & save a value\n\n' +
   'Examples:\n' +
   '  /config set gemini.enabled false\n' +
-  '  /config set gemini.model ["gemini-2.5-flash","gemini-3.5-flash"]\n' +
+  '  /config set gemini.model ["gemini-flash-latest"]\n' +
   '  /config set characterName "Yui Airi"\n' +
   '  /config set provider anthropic\n\n' +
   'Notes:\n' +
@@ -1077,7 +1077,7 @@ async function runConfigCommand(args: string, tc: TgToolContext): Promise<TgRepl
 
   if (sub === 'set') {
     if (keyParts.length < 1 || !toks[2]) {
-      return { text: '⚠️ Usage: /config set <dotted.key> <value>\n\nExamples:\n  /config set gemini.enabled false\n  /config set characterName "Yui Airi"\n  /config set gemini.model ["gemini-2.5-flash","gemini-3.5-flash"]\n  /config set gemini.apiKey "KEY1,KEY2"' };
+      return { text: '⚠️ Usage: /config set <dotted.key> <value>\n\nExamples:\n  /config set gemini.enabled false\n  /config set characterName "Yui Airi"\n  /config set gemini.model ["gemini-flash-latest"]\n  /config set gemini.apiKey "KEY1,KEY2"' };
     }
     const sm = await ensureSettingsLoaded();
     const value = parseConfigScalar(toks.slice(2).join(' '));

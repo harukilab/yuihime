@@ -31,7 +31,7 @@ export const OpenRouter: ProviderModule = {
     version: '1.0.0',
     type: ModuleType.PROVIDER,
     order: 2,
-    models: ['openai/gpt-4o', 'anthropic/claude-3.5-sonnet', 'google/gemini-2.0-flash-001'],
+    models: ['google/gemini-flash-latest', 'openai/gpt-4o', 'anthropic/claude-3.5-sonnet'],
     configSchema: {
       fields: {
         apiKey: { type: 'textarea', label: 'OpenRouter API Key Pool', description: 'One line = one API key. At least 2 keys recommended to enable pool rotation.', default: '' },
@@ -39,7 +39,7 @@ export const OpenRouter: ProviderModule = {
           type: 'select', 
           label: 'Model Selection', 
           dynamicOptions: true,
-          default: 'google/gemini-2.0-flash-001',
+          default: 'google/gemini-flash-latest',
           description: 'Select a model from OpenRouter' 
         }
       }
@@ -119,26 +119,42 @@ export const OpenRouter: ProviderModule = {
       payloadBody.response_format = { type: 'json_object' };
     }
 
+    // Free-tier OpenRouter endpoints (:free / openrouter/free) do not support
+    // tool use for image-generation tools (e.g. generate_image) — sending them
+    // yields a 404 "No endpoints found that support tool use". Strip image-gen
+    // tools from the payload for free models so the request routes successfully.
+    const isFreeModel = /(^|\/)free$|openrouter\/free|:free$|^free$/i.test(overriddenModel);
+    let sendTools = providerTools;
+    if (isFreeModel && Array.isArray(context.tools)) {
+      const filtered = context.tools.filter((t: any) => {
+        const id = t?.function?.name || t?.name || '';
+        return !/^generate_image|^image|^text2img|^img2img/i.test(id);
+      });
+      sendTools = filtered.length > 0 ? filtered : (Array.isArray(context.toolMessages) && context.toolMessages.length > 0 ? [] : undefined);
+    }
+
     // Native OpenAI function calling: expose registered tools to the model
-    if (providerTools !== undefined) {
-      payloadBody.tools = normalizeToolsForProvider(context.tools || [], 'openrouter') || context.tools;
+    if (sendTools !== undefined) {
+      payloadBody.tools = normalizeToolsForProvider(sendTools, 'openrouter') || sendTools;
       payloadBody.tool_choice = normalizeToolChoice(context.toolChoice, 'openrouter') ?? 'auto';
     }
 
-    let data: any;
-    if (typeof window === 'undefined') {
-      const aiService = AIService.getInstance();
-      data = await aiService.proxy({
-        url: 'https://openrouter.ai/api/v1/chat/completions',
-        method: 'POST',
-        headers: {
-          'Authorization': apiKey ? `Bearer ${apiKey}` : 'ENV_OPENROUTER_KEY',
-          'HTTP-Referer': 'https://aistudio.build',
-          'X-Title': 'Yuihime Agentic'
-        },
-        body: payloadBody
-      });
-    } else {
+    const headers = {
+      'Authorization': apiKey ? `Bearer ${apiKey}` : 'ENV_OPENROUTER_KEY',
+      'HTTP-Referer': 'https://aistudio.build',
+      'X-Title': 'Yuihime Agentic'
+    };
+
+    const doRequest = async (body: any) => {
+      if (typeof window === 'undefined') {
+        const aiService = AIService.getInstance();
+        return await aiService.proxy({
+          url: 'https://openrouter.ai/api/v1/chat/completions',
+          method: 'POST',
+          headers,
+          body
+        });
+      }
       const response = await fetch('/api/ai/proxy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -146,21 +162,33 @@ export const OpenRouter: ProviderModule = {
         body: JSON.stringify({
           url: 'https://openrouter.ai/api/v1/chat/completions',
           method: 'POST',
-          headers: {
-            'Authorization': apiKey ? `Bearer ${apiKey}` : 'ENV_OPENROUTER_KEY',
-            'HTTP-Referer': 'https://aistudio.build',
-            'X-Title': 'Yuihime Agentic'
-          },
-          body: payloadBody
+          headers,
+          body
         })
       });
-
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
         throw new Error(err.error?.message || `OpenRouter Proxy Error ${response.status}`);
       }
+      return response.json();
+    };
 
-      data = await response.json();
+    let data: any;
+    try {
+      data = await doRequest(payloadBody);
+    } catch (err: any) {
+      // If OpenRouter rejects the whole tool-use payload ("No endpoints found
+      // that support tool use"), retry once without tools so free endpoints can
+      // still serve a plain-text completion.
+      const msg = String(err?.message || err);
+      if (sendTools !== undefined && /no endpoints found that support tool use|does not support tools|tool use/i.test(msg)) {
+        const retryBody: any = { ...payloadBody };
+        delete retryBody.tools;
+        delete retryBody.tool_choice;
+        data = await doRequest(retryBody);
+      } else {
+        throw err;
+      }
     }
 
     const message = data.choices?.[0]?.message || {};

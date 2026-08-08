@@ -1,6 +1,62 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.342] - 2026-08-09
+### Fix: Standardize all hardcoded Gemini models to gemini-flash-latest
+- Replaced all hardcoded text-model defaults/fallbacks (gemini-3.5-flash, gemini-2.5-flash, gemini-2.0-flash, gemini-1.5-flash, gemini-3-flash-preview) with gemini-flash-latest
+- Files: cortexThinkEngine.ts, web_search.ts, webSearchRunner.ts, datasetSynthesizer.ts, YuiVisionModule.ts, RegistryInitializer.ts, listModelsSegment.ts, shared/constants.ts, GeminiProvider.ts (metadata order), OpenRouter.ts, telegram_quick_tools.ts usage text, ModularSettings.tsx, ProvidersTab.tsx, ModulesTab.tsx
+- GeminiTTS left on gemini-3.1-flash-tts-preview (TTS-specific model family, not a text model)
+- Dynamic/static model catalogs trimmed to single gemini-flash-latest entry
+- Verified: lint clean, build ok, daemon healthy, /api/ai/generate with gemini-flash-latest returns text
+
+
+## [4.341] - 2026-08-08
+### Fix: Same-room temporal recall for multi-user consistency
+- Per-user continuity: same person's interactions merged across contexts via aliases + linked accounts
+- Temporal proximity recall: recent 2h interactions visible so Yui answers with current facts
+- Same-room expansion: contexts active near-in-time treated as one room; full history pulled so Yui stays consistent across users
+- Removed requested_by from virtual_body addon; note now records Yui's own wish; wardrobe restored to full version
+
+
+## [4.341] - 2026-08-08
+### Fix: Cross-context user-aware memory recall
+- Per-user continuity recall: same-user interactions merged across contexts via speaker aliases + linked accounts
+- Temporal proximity recall: recent 2h interactions from any context visible so Yui answers with current facts
+- Keeps 1 user = 1 person boundary; other users' private conversations never mixed in
+
+
+## [4.341] - 2026-08-08
+### Fix: Gemini PROHIBITED_CONTENT block fix (safetySettings BLOCK_NONE)
+- Add safetySettings with every harm category set to BLOCK_NONE on the Gemini generateContent/streamGenerateContent request body so the adult roleplay system prompt is no longer rejected with promptFeedback.blockReason=PROHIBITED_CONTENT (which surfaced as 'Invalid response schema' and failed all pool keys/models).
+- Verified via /api/cortex/think: responses stream successfully on gemini-flash-latest / gemini-3.5-flash-lite with no block reason in SERVER_AI logs.
+
+
+## [4.340] - 2026-08-08
+### Fix: Fix pending_messages auto-cleanup never deleting completed rows
+- runAutoCleanup only purged status IN ('done','failed','delivered') but MultiChannelQueue writes 'completed' — so terminal rows were never deleted. Added 'completed' to the terminal-status filter.
+- Verified: startup cleanup purged 534 stale rows; pending_messages dropped from 539 to 5 (all recent/live).
+
+
+## [4.339] - 2026-08-08
+### Fix: OpenRouter free-model tool-use 404 fix
+- Strip image-generation tools (generate_image/image*/text2img/img2img) from OpenRouter payloads when the model is free-tier (:free / openrouter/free) so routing no longer 404s with 'No endpoints found that support tool use'.
+- Add one-shot retry without tools when OpenRouter rejects a tool-use payload, keeping free endpoints reachable as system-pool failover targets.
+
+
+## [4.338] - 2026-08-08
+### Fix: Purge dead Gemini models + fix provider connectivity
+- Add tools/tester/provider_health_check.sh: parallel per-key x per-model live probe (OK/429/NOT_FOUND), auto-removes unusable models from config.toml, probes extra free candidates.
+- Remove dead/quota models from config.toml gemini model pool (gemini-omni-flash-preview, gemini-1.5-flash, gemini-2.5-pro); add usable free ones (gemini-3.6-flash, gemini-3-flash-preview).
+- Purge hardcoded dead models from GeminiProvider metadata.models + static options; keep only verified-free models so the circuit stops trying obsolete fallbacks.
+
+
+## [4.337] - 2026-08-08
+### feature: Inventory Aphrodisiac Starter Items + tools/yui-inventory.sh
+- Add STARTER_APHRODISIACS (love-potion, perangsang, heat-drops) seeded into inventory.items with aphrodisiac flag and backfill for existing inventories
+- buildInventoryText now marks [aphrodisiac] on flagged items
+- New tools/yui-inventory.sh to read/inject/manage inventory (read/add/aphro/food/drink/del/reset/menu)
+
+
 ## [4.336] - 2026-08-08
 ### feature: KERNEL_FAIL_SAFE dizzy reply now carries a Telegram Retry button
 - cortexThinkEngine: kernel failsafe fallback sets fallbackTriggered=true so the 'inner circuit dizzy' reply gets the 🔄 Retry button on Telegram (re-runs the original user message)

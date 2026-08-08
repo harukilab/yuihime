@@ -447,6 +447,31 @@ export function registerCortexRoutes(app: express.Express, db: any) {
         (id.perceivedName && id.perceivedName.toLowerCase() === senderName.toLowerCase())
       );
 
+      // Auto-resolve paired Telegram identity when this is a tg context
+      let tgIdStr: string | null = null;
+      if (finalContextId && finalContextId.startsWith("tg_")) {
+        const parts = finalContextId.split("|");
+        tgIdStr = parts[0].replace("tg_", "");
+        if (parts[1] && parts[1].startsWith("usr_")) {
+          tgIdStr = parts[1].replace("usr_", "");
+        }
+        const tgIdNum = parseInt(tgIdStr);
+        if (!isNaN(tgIdNum)) {
+          try {
+            const tgUser = db.prepare("SELECT context FROM telegram_users WHERE tg_id = ?").get(tgIdNum) as any;
+            if (tgUser && tgUser.context && tgUser.context.startsWith("linked_identity:")) {
+              const pairedIdentityId = tgUser.context.replace("linked_identity:", "");
+              const paired = allIdentities.find((id: any) => id.id === pairedIdentityId);
+              if (paired) {
+                receiverIdentity = paired;
+              }
+            }
+          } catch (err) {
+            console.warn("[CORTEX_ROUTER_TG_PAIR] Error resolving paired identity:", err);
+          }
+        }
+      }
+
       if (!receiverIdentity) {
         const id = "api_usr_" + genId(9);
         db.prepare(`
@@ -549,6 +574,92 @@ export function registerCortexRoutes(app: express.Express, db: any) {
            LIMIT 100
          `).all(...dbQueryParams);
          historyRows = recentRows.reverse();
+
+         // Per-user continuity fallback: pull the most recent interactions whose
+         // speaker matches THIS user (perceivedName/realName/linked account
+         // aliases) even if they happened under a different context/channel.
+         // Keeps 1 user = 1 person: other users' conversations are never mixed in.
+         const userAliases = new Set<string>([senderName.toLowerCase()]);
+         if (receiverIdentity) {
+           for (const name of [receiverIdentity.perceivedName, receiverIdentity.realName]) {
+             if (name && typeof name === "string") userAliases.add(name.toLowerCase());
+           }
+           if (Array.isArray(receiverIdentity.linkedAccounts)) {
+             for (const acc of receiverIdentity.linkedAccounts) {
+               const cleanAcc = String(acc || "").toLowerCase();
+               const colonIdx = cleanAcc.lastIndexOf(":");
+               if (colonIdx > -1) userAliases.add(cleanAcc.slice(colonIdx + 1));
+               userAliases.add(cleanAcc);
+             }
+           }
+         }
+         const aliasList = Array.from(userAliases).filter(Boolean);
+         const aliasClauses = aliasList.map(() => "LOWER(speaker) = ?").join(" OR ");
+         const aliasRows = aliasClauses
+           ? db.prepare(`
+             SELECT * FROM memories
+             WHERE type = 'interaction'
+               AND (${aliasClauses})
+             ORDER BY timestamp DESC
+             LIMIT 60
+           `).all(...aliasList)
+           : [];
+         const seenIds = new Set(historyRows.map((r: any) => r.id));
+         for (const row of aliasRows) {
+           if (!seenIds.has(row.id)) {
+             historyRows.push(row);
+             seenIds.add(row.id);
+           }
+         }
+         historyRows.sort((a: any, b: any) => (a.timestamp || 0) - (b.timestamp || 0));
+
+         // Temporal proximity recall: interactions from ANY context within the
+         // recent window are treated as "just now" activity, so Yui can answer
+         // "what am I doing / who was I talking to" with current facts.
+         const temporalWindowMs = 2 * 60 * 60 * 1000;
+         const temporalCutoff = Date.now() - temporalWindowMs;
+         const temporalRows = db.prepare(`
+           SELECT * FROM memories
+           WHERE type = 'interaction'
+             AND timestamp >= ?
+           ORDER BY timestamp DESC
+           LIMIT 40
+         `).all(temporalCutoff);
+         for (const row of temporalRows) {
+           if (!seenIds.has(row.id)) {
+             historyRows.push(row);
+             seenIds.add(row.id);
+           }
+         }
+         historyRows.sort((a: any, b: any) => (a.timestamp || 0) - (b.timestamp || 0));
+
+         // Same-room expansion: when multiple users talk around the same time,
+         // treat their contexts as ONE room. Pull full recent history of every
+         // context that had activity in the temporal window, so Yui keeps
+         // consistent facts across users without denying recent exchanges.
+         const roomContexts = new Set<string>();
+         for (const row of temporalRows) {
+           if (row.context && !targetContexts.has(row.context)) {
+             roomContexts.add(row.context);
+           }
+         }
+         if (roomContexts.size > 0) {
+           const roomClauses = Array.from(roomContexts).map(() => "context LIKE ?").join(" OR ");
+           const roomParams = Array.from(roomContexts).map(c => `%${c}%`);
+           const roomRows = db.prepare(`
+             SELECT * FROM memories
+             WHERE ${roomClauses}
+             ORDER BY timestamp DESC
+             LIMIT 100
+           `).all(...roomParams);
+           for (const row of roomRows) {
+             if (!seenIds.has(row.id)) {
+               historyRows.push(row);
+               seenIds.add(row.id);
+             }
+           }
+           historyRows.sort((a: any, b: any) => (a.timestamp || 0) - (b.timestamp || 0));
+         }
        }
 
        const memories = historyRows.map((r: any) => ({

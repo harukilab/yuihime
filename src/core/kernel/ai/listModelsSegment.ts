@@ -249,14 +249,7 @@ export async function listModels(
           }
           
           const staticGeminiModels = [
-            { name: 'models/gemini-3.5-flash', displayName: 'Gemini 3.5 Flash (Recommended)', supportedGenerationMethods: ['generateContent'] },
-            { name: 'models/gemini-3.1-flash-lite', displayName: 'Gemini 3.1 Flash Lite', supportedGenerationMethods: ['generateContent'] },
-            { name: 'models/gemini-3.1-pro-preview', displayName: 'Gemini 3.1 Pro (Heavy Reasoning)', supportedGenerationMethods: ['generateContent'] },
-            { name: 'models/gemini-2.5-flash', displayName: 'Gemini 2.5 Flash', supportedGenerationMethods: ['generateContent'] },
-            { name: 'models/gemini-2.5-pro', displayName: 'Gemini 2.5 Pro', supportedGenerationMethods: ['generateContent'] },
-            { name: 'models/gemini-2.0-flash', displayName: 'Gemini 2.0 Flash', supportedGenerationMethods: ['generateContent'] },
-            { name: 'models/gemini-1.5-flash', displayName: 'Gemini 1.5 Flash', supportedGenerationMethods: ['generateContent'] },
-            { name: 'models/gemini-1.5-pro', displayName: 'Gemini 1.5 Pro', supportedGenerationMethods: ['generateContent'] }
+            { name: 'models/gemini-flash-latest', displayName: 'Gemini Flash (Latest)', supportedGenerationMethods: ['generateContent'] }
           ];
 
           if (data) {
@@ -292,27 +285,13 @@ export async function listModels(
       }
       return {
         models: [
-          { name: 'models/gemini-3.5-flash', displayName: 'Gemini 3.5 Flash (Recommended)', supportedGenerationMethods: ['generateContent'] },
-          { name: 'models/gemini-3.1-flash-lite', displayName: 'Gemini 3.1 Flash Lite', supportedGenerationMethods: ['generateContent'] },
-          { name: 'models/gemini-3.1-pro-preview', displayName: 'Gemini 3.1 Pro (Heavy Reasoning)', supportedGenerationMethods: ['generateContent'] },
-          { name: 'models/gemini-2.5-flash', displayName: 'Gemini 2.5 Flash', supportedGenerationMethods: ['generateContent'] },
-          { name: 'models/gemini-2.5-pro', displayName: 'Gemini 2.5 Pro', supportedGenerationMethods: ['generateContent'] },
-          { name: 'models/gemini-2.0-flash', displayName: 'Gemini 2.0 Flash', supportedGenerationMethods: ['generateContent'] },
-          { name: 'models/gemini-1.5-flash', displayName: 'Gemini 1.5 Flash', supportedGenerationMethods: ['generateContent'] },
-          { name: 'models/gemini-1.5-pro', displayName: 'Gemini 1.5 Pro', supportedGenerationMethods: ['generateContent'] }
+          { name: 'models/gemini-flash-latest', displayName: 'Gemini Flash (Latest)', supportedGenerationMethods: ['generateContent'] }
         ]
       };
     }
 
     const staticGeminiModels = [
-      { name: 'models/gemini-3.5-flash', displayName: 'Gemini 3.5 Flash (Recommended)', supportedGenerationMethods: ['generateContent'] },
-      { name: 'models/gemini-3.1-flash-lite', displayName: 'Gemini 3.1 Flash Lite', supportedGenerationMethods: ['generateContent'] },
-      { name: 'models/gemini-3.1-pro-preview', displayName: 'Gemini 3.1 Pro (Heavy Reasoning)', supportedGenerationMethods: ['generateContent'] },
-      { name: 'models/gemini-2.5-flash', displayName: 'Gemini 2.5 Flash', supportedGenerationMethods: ['generateContent'] },
-      { name: 'models/gemini-2.5-pro', displayName: 'Gemini 2.5 Pro', supportedGenerationMethods: ['generateContent'] },
-      { name: 'models/gemini-2.0-flash', displayName: 'Gemini 2.0 Flash', supportedGenerationMethods: ['generateContent'] },
-      { name: 'models/gemini-1.5-flash', displayName: 'Gemini 1.5 Flash', supportedGenerationMethods: ['generateContent'] },
-      { name: 'models/gemini-1.5-pro', displayName: 'Gemini 1.5 Pro', supportedGenerationMethods: ['generateContent'] }
+      { name: 'models/gemini-flash-latest', displayName: 'Gemini Flash (Latest)', supportedGenerationMethods: ['generateContent'] }
     ];
 
     // Predefined default static fallback models for all 30+ other provider profiles
@@ -441,7 +420,7 @@ export async function listModels(
       ],
       openrouter: [
         { name: 'openai/gpt-4o-mini', displayName: 'GPT-4o Mini (OpenRouter)' },
-        { name: 'google/gemini-2.0-flash', displayName: 'Gemini 2.0 Flash (OpenRouter)' },
+        { name: 'google/gemini-flash-latest', displayName: 'Gemini Flash (OpenRouter)' },
         { name: 'anthropic/claude-3.5-sonnet', displayName: 'Claude 3.5 Sonnet (OpenRouter)' }
       ],
       z_ai: [

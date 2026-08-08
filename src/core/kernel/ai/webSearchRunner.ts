@@ -49,7 +49,7 @@ async function geminiGrounding(query, cfg, topK, start, maxMs) {
   const baseUrl = String(gemini.baseUrl || 'https://generativelanguage.googleapis.com').replace(/\\/$/, '');
   if (baseUrl.indexOf('openrouter.ai') !== -1) return null;
   const apiVersion = gemini.apiVersion || 'v1beta';
-  const models = [resolveModelIdName(gemini.model), 'gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-1.5-flash'];
+  const models = [resolveModelIdName(gemini.model), 'gemini-flash-latest', 'gemini-3.1-flash-lite'];
   for (let i = 0; i < models.length; i++) {
     if (hasExpired(start, maxMs)) break;
     const model = models[i];
@@ -100,7 +100,7 @@ async function openrouterSearch(query, cfg, start, maxMs) {
   if (!or || !or.apiKey) return null;
   try {
     const payload = {
-      model: or.model || 'gemini-2.0-flash',
+      model: or.model || 'gemini-flash-latest',
       messages: [
         { role: 'system', content: 'You are an intelligent search retrieval assistant. Provide a highly accurate, clean, bulleted list of current factual details to satisfy the search query.' },
         { role: 'user', content: 'Search query: "' + query + '"' }

@@ -167,6 +167,13 @@ const STARTER_DRINKS = [
   { id: 'milk-coffee', name: 'Kopi Susu', en: 'Milk Coffee', jp: 'カフェラテ', emoji: '☕', qty: 2 },
   { id: 'milk', name: 'Susu Segar', en: 'Fresh Milk', jp: '牛乳', emoji: '🥛', qty: 2 }
 ];
+// Starter aphrodisiac items (perangsang) — flagged so isAphrodisiacItem() and
+// consumeAphrodisiac() treat them correctly, and /invadd Perangsang matches too.
+const STARTER_APHRODISIACS = [
+  { id: 'love-potion', name: 'Ramuan Cinta', en: 'Love Potion', jp: '恋の薬', emoji: '💗', qty: 2, aphrodisiac: true },
+  { id: 'perangsang', name: 'Perangsang', en: 'Aphrodisiac', jp: '媚薬', emoji: '🍬', qty: 3, aphrodisiac: true },
+  { id: 'heat-drops', name: 'Tetes Gairah', en: 'Heat Drops', jp: '発情ドロップ', emoji: '💧', qty: 2, aphrodisiac: true }
+];
 
 // Parses how many drinks were offered in the message, e.g. "minum 5 gelas",
 // "drink 5 glasses", "水を5杯", "cups 3". Falls back to 1 (single glass).
@@ -220,7 +227,8 @@ function buildInventoryText(inventory: any): string {
   const fmt = (item: any) => {
     const en = item.en ? ` (${item.en})` : '';
     const jp = item.jp ? ` / ${item.jp}` : '';
-    return `${item.emoji || '·'} ${item.name}${en}${jp} ×${item.qty}`;
+    const aph = item.aphrodisiac ? ' [aphrodisiac]' : '';
+    return `${item.emoji || '·'} ${item.name}${en}${jp}${aph} ×${item.qty}`;
   };
   const foods = (inventory?.foods || []).filter((i: any) => i.qty > 0).map(fmt);
   const drinks = (inventory?.drinks || []).filter((i: any) => i.qty > 0).map(fmt);
@@ -621,11 +629,19 @@ export const LifeSimulationModule: CortexModule = {
       inventory = {
         foods: STARTER_FOODS.map((f) => ({ ...f })),
         drinks: STARTER_DRINKS.map((d) => ({ ...d })),
-        items: []
+        items: STARTER_APHRODISIACS.map((a) => ({ ...a }))
       };
     }
     if (!inventory) {
       inventory = { foods: [], drinks: [], items: [] };
+    }
+    // Backfill the aphrodisiac starter items for inventories that predate them.
+    if (enableInventory && Array.isArray(inventory.items)) {
+      for (const aph of STARTER_APHRODISIACS) {
+        if (!inventory.items.some((i: any) => i.id === aph.id)) {
+          inventory.items.push({ ...aph });
+        }
+      }
     }
 
     // --- Permission mode: over-max caps + ask-before-act gating ---

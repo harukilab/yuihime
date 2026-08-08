@@ -5,9 +5,7 @@ export const DEFAULT_PROVIDER_OPTIONS = [
     id: 'gemini', 
     name: 'Google Gemini', 
     models: [
-      'gemini-3.5-flash',
-      'gemini-3-flash-preview',
-      'gemini-3.1-pro-preview',
+      'gemini-flash-latest',
     ] 
   },
   { 
@@ -168,4 +166,4 @@ export const AUTO_CLEANUP_LIMITS = {
   cleanup_interval_ms: 6 * 60 * 60 * 1000,
 };
 
-export const APP_VERSION = '4.336';
+export const APP_VERSION = '4.342';

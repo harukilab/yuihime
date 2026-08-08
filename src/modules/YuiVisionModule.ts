@@ -44,8 +44,8 @@ export const YuiVisionModule: CortexModule = {
         preferredModel: {
           type: 'string',
           label: 'Preferred Vision Model',
-          default: 'gemini-3.5-flash',
-          description: 'Vision model name to call. Examples: gemini-3.5-flash, gpt-4o-mini, claude-3-5-sonnet-latest, or llava.'
+          default: 'gemini-flash-latest',
+          description: 'Vision model name to call. Examples: gemini-flash-latest, gpt-4o-mini, claude-3-5-sonnet-latest, or llava.'
         },
         customUrl: {
           type: 'string',
@@ -137,7 +137,7 @@ export async function describeImageFromBuffer(buffer: Buffer, mimeType: string):
         return null;
       }
 
-      const defaultModel = "gemini-3.5-flash";
+      const defaultModel = "gemini-flash-latest";
       const rawTargetModel = visionSettings.preferredModel || geminiSettings.model || defaultModel;
       const targetModel = Array.isArray(rawTargetModel) ? (rawTargetModel[0] || defaultModel) : rawTargetModel;
       const cleanModel = targetModel.replace(/^models\//, "");

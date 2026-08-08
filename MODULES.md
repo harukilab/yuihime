@@ -199,3 +199,8 @@ Peta struktur direktori pasca-pemisahan Web UI ↔ Daemon (lihat UPDATE_LOG `[4.
 - `processor: stripAsteriskActions enforcement; system_prompt.md: no action narration in dialogue`
 - `processor/sanitizeSpeech: [dialogue] strip_asterisk_actions toggle`
 - `cortexThinkEngine: failsafe fallback marks fallbackTriggered`
+- `LifeSimulationModule`
+- `src/drivers/ai-providers/GeminiProvider.ts + tools/tester/provider_health_check.sh — Gemini provider model pool health`
+- `src/drivers/ai-providers/OpenRouter.ts — OpenRouter provider free-model tool filtering`
+- `src/core/database.ts — pending_messages auto-cleanup status filter`
+- `src/core/kernel/ai/geminiGenerate.ts — Gemini safety filter bypass for roleplay deployment`
