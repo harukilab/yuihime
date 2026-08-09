@@ -107,9 +107,12 @@ The Cortex module manages Yui's cognitive cycles, real-time overlays, stream eve
     "contextId": "web_default",
     "chatType": "web",
     "stream": false,
-    "attachments": []
+    "attachments": [],
+    "provider": "openrouter",
+    "model": "openai/gpt-4o-mini"
   }
   ```
+* **Provider/model override:** Optional `provider` and `model` body fields temporarily override the daemon's configured AI provider/model for this single think cycle (no `config.toml` change, no restart). Useful for playtesting alternative providers (`gemini`, `openrouter`, `local`, etc.).
 * **Response (JSON):**
   ```json
   {
@@ -139,9 +142,12 @@ The Cortex module manages Yui's cognitive cycles, real-time overlays, stream eve
     "messages": [
       { "role": "user", "content": "Hai Yui!" }
     ],
-    "stream": false
+    "stream": false,
+    "provider": "openrouter",
+    "model": "openai/gpt-4o-mini"
   }
   ```
+* **Provider/model override:** Optional `provider` and `model` body fields temporarily route this request through another AI provider/model, bypassing the default configured routing for a single call.
 * **Response (OpenAI JSON Format):**
   ```json
   {

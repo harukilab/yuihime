@@ -26,7 +26,7 @@ import { eventBus } from '@shared/core/kernel/event-bus';
 import { stateMachine } from '../kernel/state-machine';
 import { CognitiveScheduler } from '../kernel/CognitiveScheduler';
 import { normalizeToolCall } from './toolNormalizer';
-import { buildToolResultMessages, readNativeToolCalls, stripInlineToolCallFragments } from '../openaiTools';
+import { buildToolResultMessages, extractSpeechFromToolEnvelope, readNativeToolCalls, stripInlineToolCallFragments } from '../openaiTools';
 import { StreamExtractor } from './streamExtractors';
 import { toSingleString } from '@/core/kernel/configNormalizer';
 import { stripCodeFences, isolateBraceBlock, liftNestedProperties } from './jsonRepairer';
@@ -78,7 +78,8 @@ export async function executeCortexThink(
   attachments?: any[],
   onChunk?: (chunk: string) => void,
   signal?: AbortSignal,
-  db?: any
+  db?: any,
+  options?: { provider?: string; model?: string }
 ): Promise<any> {
   if (typeof window !== 'undefined') {
     try {
@@ -95,7 +96,9 @@ export async function executeCortexThink(
           chatType,
           taskId,
           attachments,
-          stream: shouldStream
+          stream: shouldStream,
+          provider: options?.provider,
+          model: options?.model
         }),
         signal
       });
@@ -205,6 +208,19 @@ export async function executeCortexThink(
 
   logs.push("[PHASE 1] Initializing Input Aggregation...");
   const settings = await cortexInstance.getSettings();
+
+  // Per-request provider/model override (from API body options). Lets external
+  // callers route this single think cycle through any configured provider
+  // (e.g. openrouter) and any model without mutating the persisted config.
+  if (options?.provider) {
+    settings.provider = options.provider;
+    logs.push(`[CORTEX] Provider override applied: ${options.provider}`);
+  }
+  if (options?.model) {
+    const ovProvider = options.provider || settings.provider;
+    settings[ovProvider] = { ...(settings[ovProvider] || {}), model: options.model };
+    logs.push(`[CORTEX] Model override applied for '${ovProvider}': ${options.model}`);
+  }
 
   // opencode-style approval resolution: if Yui previously asked (plan mode /
   // permission gating) and the user has just replied, resolve the request here.
@@ -1819,6 +1835,18 @@ if (typeof parsedArgs === 'string') {
   const isProactiveRun = userName === 'System';
 
   finalAnswer = APIService.cleanAIOutput(StandardizedProcessor.sanitizeOutput(processedResponse, isProactiveRun));
+
+  // Native envelope leak guard: an OpenAI-compatible model (e.g. gpt-4o-mini via
+  // OpenRouter) that answers with a delivery tool such as send_message produces a
+  // raw `{"tool_calls":[...]}` envelope here because the loop consumed no final
+  // speech. Recover the delivery payload's speech instead of leaking the envelope.
+  if (!finalAnswer || /^\{\s*"tool_calls"/.test(finalAnswer.trim())) {
+    const recovered = extractSpeechFromToolEnvelope(processedResponse ?? finalAnswer);
+    if (recovered) {
+      finalAnswer = APIService.cleanAIOutput(StandardizedProcessor.sanitizeOutput(recovered, isProactiveRun));
+      logs.push(`[CORTEX] Recovered user-facing speech from native delivery tool envelope.`);
+    }
+  }
 
   const cortexSettings = await cortexInstance.getSettings();
   const isFailsafeEnabled = cortexSettings?.developer?.enableKernelFailsafe !== false && cortexSettings?.enableKernelFailsafe !== false;

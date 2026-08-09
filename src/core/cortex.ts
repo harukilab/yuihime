@@ -179,7 +179,8 @@ export class Cortex {
     attachments?: any[],
     onChunk?: (chunk: string) => void,
     signal?: AbortSignal,
-    db?: any
+    db?: any,
+    options?: { provider?: string; model?: string }
   ): Promise<any> {
     return executeCortexThink(
       this,
@@ -198,7 +199,8 @@ export class Cortex {
       attachments,
       onChunk,
       signal,
-      db
+      db,
+      options
     );
   }
 

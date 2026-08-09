@@ -3,6 +3,7 @@ import { SubAgentRegistry } from './SubAgentRegistry';
 import { SystemRegistry } from '@shared/core/registry';
 import { genId } from '@shared/core/idGen';
 import { injectCharacterName } from '../kernel/characterName.js';
+import { extractSpeechFromToolEnvelope, stripInlineToolCallFragments } from '../openaiTools.js';
 
 export class SubAgentManager {
   private static instance: SubAgentManager;
@@ -56,7 +57,7 @@ export class SubAgentManager {
       const result: SubAgentResult = {
         agentId,
         success: true,
-        response: response.rawResult || response.response || '',
+        response: sanitizeSubAgentResponse(response.rawResult || response.response || ''),
         thoughts: response.thoughts || [],
         actions: response.actions || [],
         newMemories: response.newMemories || [],
@@ -209,4 +210,21 @@ When building an image prompt, mirror these fields exactly. NEVER substitute the
       return '[VIRTUAL BODY]: (unable to parse virtual body state)';
     }
   }
+}
+
+/**
+ * Convert a raw gateway response into user-presentable sub-agent text. Single-shot
+ * sub-agent calls have no cortex loop, so an OpenAI-compatible model that answers
+ * via a native tool call (e.g. `send_message`) yields the raw `{"tool_calls":[...]}`
+ * envelope as `rawResult`. Extract the delivery payload speech instead of leaking
+ * the envelope, and strip any inline tool-call fragments from the remainder.
+ */
+function sanitizeSubAgentResponse(raw: string): string {
+  if (typeof raw !== 'string' || !raw.trim()) return raw;
+
+  const speech = extractSpeechFromToolEnvelope(raw);
+  if (speech) return speech;
+
+  const stripped = stripInlineToolCallFragments(raw);
+  return stripped !== raw ? stripped : raw;
 }

@@ -326,7 +326,28 @@ export function normalizeToolsForProvider(tools: any[], providerId: string): any
         }))
       };
     default:
-      return tools; // OpenAI-compatible passthrough
+      // OpenAI-compatible passthrough. OpenAI's strict mode (signalled by
+      // `additionalProperties: false`) requires `required` to list EVERY key in
+      // `properties` — property defaults are NOT treated as an exemption, so a
+      // tool like websearch (optional `numResults`/`type` with defaults) is
+      // rejected with "Missing '<prop>'" unless the list is completed here.
+      return tools.map((t: any) => {
+        const fn = t.function || t;
+        const params = fn.parameters;
+        if (!params || params.type !== 'object' || !params.properties ||
+            params.additionalProperties !== false) {
+          return t;
+        }
+        const required = Array.from(new Set([
+          ...(Array.isArray(params.required) ? params.required : []),
+          ...Object.keys(params.properties)
+        ]));
+        const encoded = { ...params, required };
+        if (t.function) {
+          return { ...t, function: { ...fn, parameters: encoded } };
+        }
+        return { ...t, parameters: encoded };
+      });
   }
 }
 
@@ -378,6 +399,29 @@ export function buildToolResultMessages(results: any[], providerId: string): any
  * `tool_calls` immediately preceding the `role: "tool"` results; Anthropic
  * requires `tool_use` assistant blocks followed by a `tool_result` user block.
  */
+
+/**
+ * Re-encode canonical tool_calls (whose `function.arguments` is a plain object)
+ * into the OpenAI-compatible wire format where `function.arguments` MUST be a
+ * JSON string. Canonical calls are stored as objects internally (normalized from
+ * Anthropic/Gemini inputs), but OpenAI/OpenRouter/Custom/Local reject an object
+ * there with "expected a string, but got an object instead".
+ */
+function encodeToolCallsForOpenAI(toolCalls: any[]): any[] {
+  if (!Array.isArray(toolCalls)) return toolCalls;
+  return toolCalls.map((tc: any) => {
+    const fn = tc.function || tc;
+    const args = fn.arguments;
+    const encoded = typeof args === 'object' && args !== null
+      ? JSON.stringify(args)
+      : (args !== undefined ? String(args) : '{}');
+    if (tc.function) {
+      return { ...tc, function: { ...fn, arguments: encoded } };
+    }
+    return { ...tc, arguments: encoded };
+  });
+}
+
 export function buildChatMessages(
   providerId: string,
   opts: {
@@ -431,7 +475,7 @@ export function buildChatMessages(
       for (const block of opts.historyBlocks) {
         const assistantMsg = block.find((m: any) => m.role === 'assistant');
         if (assistantMsg && Array.isArray(assistantMsg.tool_calls) && assistantMsg.tool_calls.length > 0) {
-          messages.push({ role: 'assistant', content: null, tool_calls: assistantMsg.tool_calls });
+          messages.push({ role: 'assistant', content: null, tool_calls: encodeToolCallsForOpenAI(assistantMsg.tool_calls) });
         }
         messages.push(...block.filter((m: any) => m.role === 'tool'));
       }
@@ -471,7 +515,7 @@ export function buildChatMessages(
 
   // OpenAI-compatible (openai / custom / openrouter / local / gemini)
   if (assistantToolCalls.length > 0) {
-    messages.push({ role: 'assistant', content: null, tool_calls: assistantToolCalls });
+    messages.push({ role: 'assistant', content: null, tool_calls: encodeToolCallsForOpenAI(assistantToolCalls) });
   }
   if (toolMessages.length > 0) {
     messages.push(...toolMessages);
@@ -489,4 +533,32 @@ export function buildChatMessages(
 export function stripInlineToolCallFragments(text: string): string {
   if (typeof text !== 'string') return text;
   return text.replace(/functions\.[A-Za-z0-9_-]+:\d+\{[\s\S]*?\}/g, '').trim();
+}
+
+/**
+ * Extract user-presentable speech from a native tool_calls envelope. Single-shot
+ * calls (sub-agents, cortex final assembly) have no loop to consume delivery
+ * tools (speak/final_answer/send_message/...), so an OpenAI-compatible model
+ * that answers via a native tool call yields the raw `{"tool_calls":[...]}`
+ * envelope as text. This pulls the delivery payload's speech out of it, or
+ * returns the original string when there is nothing to extract.
+ */
+export function extractSpeechFromToolEnvelope(raw: any): string | null {
+  if (typeof raw !== 'string') return null;
+  const nativeCalls = readNativeToolCalls(raw, 'openrouter');
+  if (!Array.isArray(nativeCalls) || nativeCalls.length === 0) return null;
+  const deliveryNames = ['speak', 'final_answer', 'send_message', 'reply', 'send_telegram', 'send_discord', 'send_update', 'send_file'];
+  for (const call of nativeCalls) {
+    const fn = call.function || call;
+    const name = String(fn.name || call.name || '').toLowerCase();
+    if (!deliveryNames.includes(name)) continue;
+    const args = fn.arguments;
+    if (typeof args === 'object' && args !== null) {
+      const speech = args.speech || args.message || args.final_answer || args.text;
+      if (typeof speech === 'string' && speech.trim().length > 0) {
+        return speech.trim();
+      }
+    }
+  }
+  return null;
 }

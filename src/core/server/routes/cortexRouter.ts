@@ -168,6 +168,9 @@ export function registerCortexRoutes(app: express.Express, db: any) {
   app.post("/api/cortex/think", express.json(), async (req, res) => {
     try {
       const { input, userName, contextId, chatType, attachments } = req.body;
+      const thinkOptions = req.body.provider || req.body.model
+        ? { provider: req.body.provider, model: req.body.model }
+        : undefined;
       const senderName = (req.headers['x-yui-user-name'] || req.headers['x-user-name'] || req.headers['x-yui-user'] || req.body.user || userName || 'external_client') as string;
       const finalContextId = (req.headers['x-yui-context-id'] || req.headers['x-context-id'] || req.headers['x-yui-context'] || req.body.context_id || contextId || 'live_stream') as string;
       const finalChatType = (req.headers['x-yui-chat-type'] || req.headers['x-chat-type'] || req.headers['x-yui-chat-type'] || req.body.chat_type || chatType || 'web') as string;
@@ -229,7 +232,8 @@ export function registerCortexRoutes(app: express.Express, db: any) {
             currentTaskId,
             abortController.signal,
             attachments,
-            (chunk: string) => sendSse("chunk", { text: chunk })
+            (chunk: string) => sendSse("chunk", { text: chunk }),
+            thinkOptions
           );
           const auditLogs = APIService.getAuditLogs();
           const finalized = finalizeReply(reply, auditLogs);
@@ -269,7 +273,9 @@ export function registerCortexRoutes(app: express.Express, db: any) {
           false,
           currentTaskId,
           abortController.signal,
-          attachments
+          attachments,
+          undefined,
+          thinkOptions
         );
       } catch (thinkErr: any) {
         if (thinkErr.message && thinkErr.message.includes("TASK_SUSPENDED")) {
@@ -304,6 +310,10 @@ export function registerCortexRoutes(app: express.Express, db: any) {
   const handleOaiChatCompletions = async (req: express.Request, res: express.Response) => {
     try {
       const { messages, stream, model } = req.body;
+      const oaiProvider = req.body.provider;
+      const thinkOptions = (oaiProvider || model)
+        ? { provider: oaiProvider, model }
+        : undefined;
       
       console.log(`[YUI_LLM_GATEWAY] Received request for model: "${model || 'unknown'}". Bypassing requested model, routing strictly to YuiHime's core cognitive loop!`);
 
@@ -882,7 +892,8 @@ export function registerCortexRoutes(app: express.Express, db: any) {
               sendOaiSse(chunkText);
             },
             undefined,
-            db
+            db,
+            thinkOptions
           );
           
           sendOaiSse("", "stop");
@@ -916,7 +927,10 @@ export function registerCortexRoutes(app: express.Express, db: any) {
           finalChatType,
           currentTaskId,
           attachments,
-          db
+          undefined,
+          undefined,
+          db,
+          thinkOptions
         );
 
         // Process states and persist

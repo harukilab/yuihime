@@ -58,7 +58,7 @@ export class NeuralInterface {
     return result ? result.text : null;
   }
 
-  public static async processNeuralInputWithMeta(input: string, senderName: string, contextId: string, chatType: string, isProactive: boolean = false, taskId?: string, signal?: AbortSignal, attachments?: any[], onChunk?: (chunk: string) => void): Promise<NeuralReplyResult> {
+  public static async processNeuralInputWithMeta(input: string, senderName: string, contextId: string, chatType: string, isProactive: boolean = false, taskId?: string, signal?: AbortSignal, attachments?: any[], onChunk?: (chunk: string) => void, options?: { provider?: string; model?: string }): Promise<NeuralReplyResult> {
     const kernel = Kernel.getInstance();
     
     // Unify brain by running Cortex natively
@@ -534,7 +534,8 @@ export class NeuralInterface {
       attachments,
       onChunk,
       signal,
-      this.db
+      this.db,
+      options
     );
 
     if (result.systemHealth) {

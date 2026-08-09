@@ -80,8 +80,9 @@
 - Model falls back to the provider's configured default (`gemini-flash-latest`); any configured Gemini pool model may be requested.
 
 ### POST `/api/cortex/think`
-- **Body:** `{ "input": string, "userName"?: string, "contextId"?: string, "chatType"?: "web"|"telegram"|"discord", "stream"?: boolean, "attachments"?: Array }`
+- **Body:** `{ "input": string, "userName"?: string, "contextId"?: string, "chatType"?: "web"|"telegram"|"discord", "stream"?: boolean, "attachments"?: Array, "provider"?: string, "model"?: string }`
 - **Headers:** `x-yui-user-name`, `x-yui-context-id`, `x-yui-chat-type` (override body identity/routing).
+- **Provider/model override:** `provider` (e.g. `"openrouter"`, `"gemini"`, `"local"`) and `model` (e.g. `"openai/gpt-4o-mini"`) temporarily override the daemon's configured provider/model for this single think cycle without touching `config.toml`.
 - **Response:** `{ "success": true, "result": { "text": string, "mood": object, ... } }` — full cognitive audit log when `stream: true` (SSE chunks).
 
 ## OpenAI-compatible layer
@@ -92,6 +93,8 @@
 | POST | `/api/v1/chat/completions` | Alias. |
 | GET | `/v1/models` | Model list (OpenAI-style). |
 | GET | `/api/v1/models` | Alias. |
+
+`/v1/chat/completions` accepts optional non-standard body fields `provider` and `model` to temporarily route the request through another AI provider/model (same override mechanism as `/api/cortex/think`).
 
 ## Real-time events (SSE / WebSocket)
 

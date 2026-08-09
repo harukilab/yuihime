@@ -1,6 +1,18 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.345] - 2026-08-09
+### Fix: Fix native tool_calls envelope leak in sub-agent + cortex final answer
+- Extract speech from native delivery-tool envelope (send_message) instead of leaking raw JSON in sub-agent and cortex final assembly
+- Refactor shared extractSpeechFromToolEnvelope helper; SubAgentManager reuses it
+
+
+## [4.344] - 2026-08-09
+### Fix: Fix OpenRouter native tool calls (arguments string + strict required schema)
+- Fix tool_calls arguments being sent as object instead of JSON string to OpenAI-compatible APIs (400 invalid_type)
+- Complete required list for all properties in strict-mode tool schemas (OpenAI invalid_function_parameters)
+
+
 ## [4.343] - 2026-08-09
 ### Fix: Update API docs to gemini-flash-latest + document ai/cortex endpoints
 - docs/API_ENDPOINTS.md: examples updated from legacy gemini-2.5-flash to gemini-flash-latest (settings, ai/generate, ai/vision)
