@@ -46,6 +46,12 @@ export const ToolExecutorModule: CortexModule = {
           default: 50,
           description: 'Last-resort safety cap for the cognitive loop. Normal reasoning finishes earlier; the final iteration becomes a shutdown turn where tools are disabled and the model must summarize.'
         },
+        maxImagesPerTurn: {
+          type: 'number',
+          label: 'Max Images Per Turn',
+          default: 6,
+          description: 'Safety cap for how many image-generation tool calls (generate_image / tensorart) Yui may run for a single user request. Image tools auto-send each photo to the chat, so without this cap a model can keep generating photos on every loop iteration for many minutes. Set higher for explicit multi-photo requests.'
+        },
         maxIterationsCeiling: {
           type: 'number',
           label: 'Max Iterations Ceiling',

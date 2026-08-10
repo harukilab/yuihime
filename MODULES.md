@@ -205,3 +205,4 @@ Peta struktur direktori pasca-pemisahan Web UI ↔ Daemon (lihat UPDATE_LOG `[4.
 - `src/drivers/ai-providers/OpenRouter.ts — OpenRouter provider free-model tool filtering`
 - `src/core/database.ts — pending_messages auto-cleanup status filter`
 - `src/core/kernel/ai/geminiGenerate.ts — Gemini safety filter bypass for roleplay deployment`
+- `src/core/cortex/cortexThinkEngine.ts — image-generation turn budget guard; src/modules/ToolExecutorModule.ts — maxImagesPerTurn config field.`

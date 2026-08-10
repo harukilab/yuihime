@@ -1,6 +1,20 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.371] - 2026-08-10
+### Feature: Virtual self-awareness: Yui now knows she lives in a virtual world and never claims physical touch
+- New system_prompt.md section 2.3 'Virtual Self-Awareness (Digital Body & Physical Boundaries)': she knows her home (Yui Home) is a virtual space, her body is a virtual self, physical hug/kiss/touch is never literally possible, affection is expressed only through words + <animations> tag, and never narrates a physical gesture even when asked. Synced to ~/.yuihime/agent/system_prompt.md (runtime source).
+- buildSpatialAwarenessBlock now asserts VIRTUAL SELF in the spatial truth block (main prompt + sub-agent delegation).
+- buildSpatialHint (prepended at TOP of the assembled system prompt) now carries a compact VIRTUAL BODY — HIGH PRIORITY fact with explicit anti-example list ('aku peluk kamu', '*memeluk*', 'sini peluk erat') so weak models (gemini-flash-lite) stop narrating physical embraces — same top-of-prompt lever that fixed the room-count bug.
+- Verified end-to-end: 'tolong peluk aku' now answers with a 'peluk virtual' (digital, no physical touch claim); direct question confirms she knows she is a virtual girl living in a digital space; room-count regression ('kita ngobrol ber apa?') still bertiga with hikari in 2h window; sub-agent delegation (creative-agent) healthy with the updated spatial block. tsc + build:server + /api/health OK.
+
+
+## [4.370] - 2026-08-10
+### Fix: Runaway photo-loop guard: max-images-per-turn budget in cortex loop
+- New tool-executor.maxImagesPerTurn setting (default 6). cortexThinkEngine now counts image-generation tool calls (generate_image, tensorart_generate, image_generate, dall_e, dalle, stable_diffusion, flux, comfyui) across all iterations of one think() run and breaks out of the loop with a closing reply once the budget is reached — the image tools already auto-send each photo to the chat, so a single message like 'foto ya' can no longer burn ~50 images over ~30 min.
+- Configurable via ModularSettings (Tool Executor module) so explicit multi-photo requests can raise the cap.
+
+
 ## [4.369] - 2026-08-10
 ### Feature: Unified spatial awareness: room = current place, never-alone guard, dynamic cross-channel location + EXTERNAL_INJECTION_BUS doc
 - computeRoomOccupants now ALWAYS includes the person being replied to as present (even if their last stored message is older than the 2h window) so 'are you alone?' can never collapse into false solitude while someone is actively addressing Yui.

@@ -1838,6 +1838,34 @@ if (typeof parsedArgs === 'string') {
         }
       }
 
+      // IMAGE-GENERATION TURN BUDGET (anti-runaway-photo guard).
+      // The image tools (TensorArt generate_image, etc.) auto-send each photo to
+      // the chat, so a single user request should never burn dozens of image
+      // generations. Some models keep re-issuing generate_image on every loop
+      // iteration (e.g. "foto ya" -> ~50 photos over ~30 min because each call
+      // takes 30-90s and there was no cap). When the budget is reached, stop the
+      // loop and close with a short reply; photos are already in the chat.
+      const IMAGE_TOOL_IDS = new Set([
+        'tensorart_generate', 'generate_image', 'image_generate',
+        'dall_e', 'dalle', 'stable_diffusion', 'flux', 'comfyui'
+      ]);
+      const maxImagesPerTurn = Number(settings['tool-executor']?.maxImagesPerTurn) || 6;
+      const imageCallsThisTurn = toolExecutionHistory.reduce((acc: number, h: any) => {
+        const calls = Array.isArray(h.tools_called) ? h.tools_called : [];
+        for (const tc of calls) {
+          const name = tc?.tool || tc?.name || '';
+          if (IMAGE_TOOL_IDS.has(name)) acc += 1;
+        }
+        return acc;
+      }, 0);
+      if (imageCallsThisTurn >= maxImagesPerTurn) {
+        logs.push(`[IMAGE_BUDGET] Image-generation budget reached (${imageCallsThisTurn}/${maxImagesPerTurn}) this turn. Stopping the photo loop; images were already auto-sent to the chat.`);
+        if (!processedResponse || processedResponse.trim().length < 5) {
+          processedResponse = injectCharacterName("That's all the photos ${characterName} made for you, dear. Hope you like them! \uD83D\uDC96");
+        }
+        break;
+      }
+
       const currentIterObj = iterationsHistory[iterationsHistory.length - 1];
       if (currentIterObj) {
         currentIterObj.observations = toolResults.map(res => ({
