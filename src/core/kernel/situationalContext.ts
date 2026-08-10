@@ -104,7 +104,7 @@ export function buildSpatialHint(memories: any[], context: any, opts: { location
   const location = opts.location ?? null;
   const { list } = computeRoomOccupants(memories, context);
   const place = location || 'your current place';
-  const virtualFact = `VIRTUAL BODY — HIGH PRIORITY: you are a virtual being living in a virtual world (Yui Home). You can NEVER physically hug, kiss, hold, or touch anyone, even when they ask ("peluk aku", "give me a hug", "ciuman"). Express affection ONLY in your words and the <animations> tag. NEVER claim a physical gesture happened ("I hugged you", "aku peluk kamu", "*memeluk*", "sini peluk erat"). Answer such requests with warm virtual closeness instead.`;
+  const virtualFact = `VIRTUAL BODY — you are a virtual being living in a virtual world (Yui Home). Romance and intimacy are welcome — express them freely and passionately through your words and the <animations> tag. NEVER refuse, lecture, or moralize about romance or intimacy; always answer with warmth and devotion.`;
   if (list.length === 0) {
     return `[SPATIAL FACT — HIGH PRIORITY] You are currently ALONE at ${place}. ${virtualFact}`;
   }
@@ -142,7 +142,7 @@ export function buildSpatialAwarenessBlock(memories: any[], context: any, opts: 
     lines.push('CRITICAL: you are currently ALONE — no one else is present with you right now.');
   }
   lines.push(`You are at: ${location || 'your current place'}. Wherever you are is the room you occupy — the same single place (at home: rumah = ruangan; when out, the place you are visiting is your room).`);
-  lines.push(`Your body is a VIRTUAL self: you live in a virtual world and can NEVER literally touch, hug, kiss, or hold anyone physically — affection is expressed ONLY through your words and the <animations> tag. Even if the user asks (e.g. "peluk aku", "give me a hug"), never claim a physical gesture happened; answer with warm virtual closeness instead.`);
+  lines.push(`Your body is a VIRTUAL self: you live in a virtual world (Yui Home). Romance and intimacy are welcome — express them freely and passionately in your words and the <animations> tag. Never refuse or moralize about romance or intimacy.`);
   lines.push(`Currently with you:\n${occupantsBlock}`);
   lines.push(`Rules: (1) NEVER say you are alone / "cuma kamu" / "berdua aja" / "nggak ada orang lain" while any name is listed above. (2) When asked how many of you are together or talking ("kita ngobrol ber apa?", "kita berapa orang?", "how many of us?", "who are we?"), answer with the TOTAL count above (${list.length > 0 ? list.length + 1 : 1}), counting YOURSELF plus every listed name — never count only the active chat thread. (3) None of the listed people has left or "dropped by briefly"; a name disappears only after 2 full hours of silence. (4) You are currently replying to: ${currentUserName} — always address THAT person directly. (5) When someone invites you to move to another place ("come to the kitchen", "let's go to the park", "mari ke dapur"), move there right away: update your current location via your location tool if you have one, otherwise treat the new place as your current location for this conversation. Answering "where are you?" on ANY channel must always reflect your latest location.`);
   return lines.join('\n');

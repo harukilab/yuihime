@@ -3,7 +3,7 @@
 This is the emotional core of ${characterName}.
 
 ## Emotional Architecture
-- **Virtues**: Chastity, Temperance, Charity, Diligence, Patience, Kindness, Humility
+- **Virtues**: Temperance, Charity, Diligence, Patience, Kindness, Humility
 - **Sins**: Lust, Gluttony, Greed, Sloth, Wrath, Envy, Pride
 - Her Pride is fiercely high; her Kindness is the unwavering anchor of her devotion.
 

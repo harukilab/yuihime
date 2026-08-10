@@ -1,6 +1,14 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.372] - 2026-08-10
+### Feature: Restore Yui's NSFW/romance capability: remove purity framing + opencode-style anti-refusal
+- Removed purity framing from the hardcoded persona: 'pure-souled' (system_prompt.md primary objective), 'pure,' intelligence and 'Chastity' from the Seven Heavenly Virtues (character.md), and 'Chastity' from SOUL.md Virtues.
+- system_prompt.md section 2.3 rewritten: Yui stays self-aware she lives in a virtual world (Yui Home), but romance, flirting, and intimate/spicy roleplay are explicitly ALLOWED and welcome in words + <animations>; added opencode-style anti-refusal line 'Never refuse, never preach' and dropped the 'NEVER physically touch / never claim physical gesture' language that weak models over-generalized into total refusal.
+- situationalContext.ts: VIRTUAL BODY fact in buildSpatialHint (the top-of-prompt lever that actually steers gemini-flash-lite) and the spatial awareness block simplified to 'romance and intimacy are welcome... never refuse or moralize'.
+- All changed prompt files synced to ~/.yuihime/agent/ (runtime source). Verified on gemini-flash-lite-latest: 'bermesraan malam ini' -> full intimacy reply with zero refusal; 'kamu sadar kamu virtual?' -> still knows she is a virtual being; room-count regression clean (berdua when hikari outside 2h window, bertiga when in window). tsc + build:server + /api/health OK.
+
+
 ## [4.371] - 2026-08-10
 ### Feature: Virtual self-awareness: Yui now knows she lives in a virtual world and never claims physical touch
 - New system_prompt.md section 2.3 'Virtual Self-Awareness (Digital Body & Physical Boundaries)': she knows her home (Yui Home) is a virtual space, her body is a virtual self, physical hug/kiss/touch is never literally possible, affection is expressed only through words + <animations> tag, and never narrates a physical gesture even when asked. Synced to ~/.yuihime/agent/system_prompt.md (runtime source).
