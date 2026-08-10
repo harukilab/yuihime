@@ -389,6 +389,7 @@ try {
   if (!configData.twitter_bridge) configData.twitter_bridge = {};
   if (!configData.elevenlabs) configData.elevenlabs = {};
   if (!configData["modular-settings"]) configData["modular-settings"] = {};
+  if (!configData.debug) configData.debug = { requestLogging: false };
   if (!configData.sandbox_paths) configData.sandbox_paths = {};
 
   // Open TUI wizard setup ONLY if explicitly passed via flags or if it is a real interactive TTY on first boot
@@ -582,6 +583,7 @@ try {
   if (!configData.twitter_bridge) configData.twitter_bridge = {};
   if (!configData.elevenlabs) configData.elevenlabs = {};
   if (!configData["modular-settings"]) configData["modular-settings"] = {};
+  if (!configData.debug) configData.debug = { requestLogging: false };
   if (!configData.sandbox_paths) configData.sandbox_paths = {};
 
   // Persist resolved complete absolute paths to sandbox_paths section in config.toml

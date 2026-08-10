@@ -12,6 +12,7 @@
 
 import { buildToolResultMessages } from '../openaiTools';
 import { PromptRegistry } from '../PromptRegistry';
+import { appendNativeMessages, clearNativeMessages } from './nativeTransport';
 import { SUMMARY_TEMPLATE, estimateTokens, truncateContent } from './loopGuards';
 
 const TOOL_OUTPUT_MAX_CHARS = 2000;
@@ -161,4 +162,123 @@ export async function maybeCompactContext(opts: {
   );
 
   return `${loopContext.compactionCheckpoint}\n\n${opts.activeIterationInput}`;
+}
+
+/**
+ * Budget enforcement for the *persisted* native history (Kilo/opencode-style
+ * durable store). The anchored compactor (`maybeCompactContext`) only trims
+ * in-loop tool turns; a fresh think call also reloads the native_messages store
+ * as interleaved `nativeTurnBlocks` (assistant tool_calls + role:"tool" rows)
+ * which can alone blow past the provider window — a single long-lived session
+ * once sent ~528 messages / ~294K tokens. This keeps only the most recent turn
+ * blocks that fit the configured budget, truncates oversized row content as a
+ * last resort, and rewrites the persisted store so future turns / resumes load
+ * the compacted context instead of the full one. Deterministic (no extra LLM
+ * call), non-blocking, and off by budget when historyCompactionEnabled=false.
+ */
+export function maybeCompactNativeHistory(opts: {
+  loopContext: any;
+  settings: any;
+  logs: string[];
+  nativeSessionId: string;
+  input?: string;
+}): void {
+  const cfg = (opts.settings && opts.settings['tool-executor']) || {};
+  if (cfg.historyCompactionEnabled === false) return;
+
+  const lc = opts.loopContext;
+  const blocks: any[][] = Array.isArray(lc.nativeTurnBlocks) ? lc.nativeTurnBlocks : [];
+  if (blocks.length === 0) return;
+
+  const contextLimit = Number(cfg.historyContextLimit) || 110000;
+  const keepTokens = Number(cfg.historyKeepTokens) || 20000;
+  const charCap = Number(cfg.historyContentCharCap) || 4000;
+
+  const systemTokens = estimateTokens(lc.assembledSystemPrompt || '');
+  const inputTokens = estimateTokens(opts.input || '');
+  const blocksTokens = (arr: any[][]) => arr.reduce((acc: number, b: any[]) => acc + estimateTokens(b), 0);
+  const totalTokens = (arr: any[][]) => systemTokens + inputTokens + blocksTokens(arr);
+
+  if (totalTokens(blocks) <= contextLimit) return;
+
+  // Select the recent tail to keep verbatim (walk newest -> oldest).
+  const blockTokensArr = blocks.map((b) => estimateTokens(b));
+  let total = 0;
+  let split = blocks.length;
+  for (let i = blocks.length - 1; i >= 0; i--) {
+    const next = total + blockTokensArr[i];
+    if (next > keepTokens) {
+      split = i + 1;
+      break;
+    }
+    total = next;
+    split = i;
+  }
+  let kept = blocks.slice(split);
+  if (kept.length === 0) kept = blocks.slice(-1);
+
+  // Hard enforcement: drop the oldest block until under the limit (always keep
+  // the single most recent block).
+  let guard = 0;
+  while (kept.length > 1 && totalTokens(kept) > contextLimit && guard < 100) {
+    kept = kept.slice(1);
+    guard++;
+  }
+
+  // Last resort: truncate oversized row content within the kept tail.
+  if (totalTokens(kept) > contextLimit) {
+    let changed = false;
+    for (const block of kept) {
+      for (const m of block) {
+        if (typeof m?.content === 'string' && m.content.length > charCap) {
+          m.content = truncateContent(m.content, charCap);
+          changed = true;
+        }
+        if (Array.isArray(m?.parts)) {
+          for (const p of m.parts) {
+            if (p && typeof p === 'object' && typeof p.text === 'string' && p.text.length > charCap) {
+              p.text = truncateContent(p.text, charCap);
+              changed = true;
+            }
+          }
+        }
+      }
+    }
+    if (changed) {
+      opts.logs.push(`[COMPACTION] Native history still over budget; truncated oversized row content to ${charCap} chars.`);
+    }
+  }
+
+  const dropped = blocks.length - kept.length;
+  if (dropped === 0) return;
+
+  const seedUser =
+    (Array.isArray(lc.nativeHistory) && lc.nativeHistory.find((m: any) => m && m.role === 'user')) ||
+    { role: 'user', content: opts.input || '' };
+  const note =
+    `[system note: older conversation history was omitted to fit the context window ` +
+    `(${dropped} earlier turn block(s) trimmed). The record below starts at the most recent turns.]`;
+  const rebuilt: any[] = [
+    {
+      role: 'user',
+      content: `${note}\n\n${typeof seedUser.content === 'string' ? seedUser.content : ''}`
+    }
+  ];
+  for (const block of kept) {
+    for (const msg of block) rebuilt.push(msg);
+  }
+
+  lc.nativeTurnBlocks = kept;
+  lc.nativeHistory = rebuilt;
+  try {
+    clearNativeMessages(opts.nativeSessionId);
+    appendNativeMessages(opts.nativeSessionId, rebuilt);
+  } catch (rewriteErr: any) {
+    opts.logs.push(`[COMPACTION] Native store rewrite failed (non-blocking): ${rewriteErr?.message || rewriteErr}`);
+  }
+  opts.logs.push(
+    `[COMPACTION] Native history ~${totalTokens(blocks)} tokens exceeded the ${contextLimit} limit. ` +
+      `Trimmed ${dropped} oldest turn block(s), kept ${kept.length} recent (~${totalTokens(kept)} tokens). ` +
+      `Persisted ${rebuilt.length} message(s).`,
+  );
 }

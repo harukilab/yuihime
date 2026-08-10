@@ -2,6 +2,7 @@ import { ProviderModule, ModuleType } from '@shared/include/types';
 import { buildChatMessages, normalizeToolCallsToOpenAI, normalizeToolChoice, normalizeToolsForProvider } from '../../core/openaiTools';
 import { toSingleString } from '@/core/kernel/configNormalizer';
 import { AIService } from '../../core/kernel/ai.js';
+import { maybeLogRequestSizes } from '../../core/kernel/ai/requestDebug';
 
 export const AnthropicProvider: ProviderModule = {
   metadata: {
@@ -44,7 +45,7 @@ export const AnthropicProvider: ProviderModule = {
   generate: async (prompt: string, context: any) => {
     const config = context.config?.anthropic || context.config || (context.model ? context : {});
     const apiKey = toSingleString(config.apiKey || config.api_key);
-    const modelId = toSingleString(context.model || config.model) || AnthropicProvider.metadata.models[0];
+    const modelId = toSingleString(config.model || context.model) || AnthropicProvider.metadata.models[0];
 
     const blueprint = context.payloadBlueprint || config.payloadBlueprint;
     let systemInstruction = context.assembledSystemPrompt;
@@ -53,7 +54,9 @@ export const AnthropicProvider: ProviderModule = {
     let maxTokensOut = config.maxOutputTokens || config.maxTokens || 8192;
 
     if (blueprint) {
-      if (blueprint.model) {
+      // The blueprint's model belongs to the ACTIVE provider; when this
+      // provider is a system-pool failover target that id is invalid here.
+      if (blueprint.model && !config.model) {
         overriddenModel = blueprint.model;
       }
       const sysMsg = blueprint.messages.find((m: any) => m.role === 'system');
@@ -87,6 +90,14 @@ export const AnthropicProvider: ProviderModule = {
       system: systemInstruction,
       messages
     };
+
+    maybeLogRequestSizes(context, {
+      tag: 'anthropic',
+      model: overriddenModel,
+      messages,
+      system: systemInstruction,
+      tools: providerTools || undefined
+    });
 
     if (providerTools) {
       requestBody.tools = providerTools;

@@ -5,12 +5,54 @@ import { SystemRegistry } from '@shared/core/registry';
 import { LlmIoAuditor } from '../../server/llmAuditor.js';
 import { keyPool } from '../apiKeyPool.js';
 import { normalizeToolCallsToOpenAI, buildInlineToolsText } from '../../openaiTools.js';
+import { recordUsage, usageTokensFromMetadata, classifyUsageError } from './usageTracker.js';
+import { maybeLogRequestSizes } from './requestDebug.js';
 
 const OVERLOADED_KEY_TTL_MS = 5 * 60 * 1000;
-const RATE_LIMITED_KEY_TTL_MS = 15 * 60 * 1000;
+// A 429 rate-limit (RPM burst) on the free tier recovers within ~1 minute, so
+// keep the key-level cooldown short — a long TTL turns a momentary burst into
+// a pool-wide freeze that starves the remaining healthy keys.
+const RATE_LIMITED_KEY_TTL_MS = 60 * 1000;
 const FAILED_MODEL_TTL_MS = 30 * 60 * 1000;
+// "You exceeded your current quota, please check your plan and billing
+// details" is Google's GENERIC free-tier 429 — it fires for RPM bursts too,
+// not just genuine daily exhaustion, so it cannot be trusted to freeze a model
+// until the next 00:00 UTC reset. Cap the daily-quota model freeze at a short
+// window instead: a false positive self-heals within minutes, while a truly
+// exhausted model is retried cheaply once per window (2-key skip logic stops
+// the burn) until the daily boundary. `nextResetUtc` is still computed against
+// the real UTC day so recovery always aligns with Google's actual reset.
+const DAILY_QUOTA_RESET_BUFFER_MS = 2 * 60 * 1000;
+const DAILY_QUOTA_MIN_TTL_MS = 5 * 60 * 1000;
+const DAILY_QUOTA_MAX_TTL_MS = 30 * 60 * 1000;
+
+function dailyQuotaModelTtlMs(now: number = Date.now()): number {
+  const nextResetUtc = Date.UTC(
+    new Date(now).getUTCFullYear(),
+    new Date(now).getUTCMonth(),
+    new Date(now).getUTCDate() + 1
+  );
+  const untilReset = nextResetUtc - now + DAILY_QUOTA_RESET_BUFFER_MS;
+  return Math.max(DAILY_QUOTA_MIN_TTL_MS, Math.min(DAILY_QUOTA_MAX_TTL_MS, untilReset));
+}
 const PRIMARY_STALL_MS = 90_000; // first (expected-healthy) attempt gets the full header+body window
 const FALLBACK_STALL_MS = 30_000; // fallback attempts fail fast so rotation can't burn the pipeline budget
+
+// Recent-success bookkeeping: a "check your plan" 429 on a model that has
+// succeeded recently is an RPM burst (momentary concurrency over the per-key
+// requests/min limit), NOT daily exhaustion. Only models with no success in
+// RECENT_SUCCESS_WINDOW_MS may be frozen with the capped daily-quota TTL.
+const RECENT_SUCCESS_WINDOW_MS = 10 * 60 * 1000;
+const lastModelSuccessAt = new Map<string, number>();
+
+function noteModelSuccess(modelId: string): void {
+  lastModelSuccessAt.set(`gemini::${modelId}`, Date.now());
+}
+
+function hadRecentModelSuccess(modelId: string): boolean {
+  const last = lastModelSuccessAt.get(`gemini::${modelId}`);
+  return last !== undefined && (Date.now() - last) < RECENT_SUCCESS_WINDOW_MS;
+}
 
 // Busy-key / failed-model bookkeeping lives in the shared ApiKeyPool
 // (persisted to key_pool_state.json) so every provider driver gets the same
@@ -179,7 +221,13 @@ export async function generateContent(
   // the config lived under `providers.gemini` or was passed via `config`.
   const providersTable = (settings.get('providers') as any) || {};
   const settingsGemini = (settings.get('gemini') || {});
-  const configGemini = (config && typeof config === 'object') ? config : {};
+  // Per-request `config` overrides settings — but only for keys actually set.
+  // Dropping `undefined` values prevents a caller passing e.g. `model: undefined`
+  // from silently clobbering the configured `gemini.model` array and forcing a
+  // fallback to the module default (gemini-flash-latest).
+  const configGemini = (config && typeof config === 'object')
+    ? Object.fromEntries(Object.entries(config).filter(([, v]) => v !== undefined))
+    : {};
   const geminiSettings: any = {
     ...(providersTable.gemini || {}),
     ...settingsGemini,
@@ -543,21 +591,37 @@ export async function generateContent(
           // roleplay prompt (assembled by the cortex) is not rejected before the
           // first token. This mirrors the adult-roleplay deployment intent; the
           // cortex/processor layer still enforces narrative-level safety rules.
-          if (!gemmaNative) {
-            requestBody.safetySettings = [
-              { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-              { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-              { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-              { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
-              { category: 'HARM_CATEGORY_CIVIC_INTEGRITY', threshold: 'BLOCK_NONE' }
-            ];
-          }
+          // Applied to gemma models too — they hit PROHIBITED_CONTENT from TG
+          // otherwise (verified gemma-4-26b accepts BLOCK_NONE, returns 200).
+          requestBody.safetySettings = [
+            { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+            { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+            { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+            { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+            { category: 'HARM_CATEGORY_CIVIC_INTEGRITY', threshold: 'BLOCK_NONE' }
+          ];
 
           if (systemInstructionText) {
             requestBody.systemInstruction = {
               parts: [{ text: systemInstructionText }]
             };
           }
+
+          // Request-composition debug (opt-in): log the estimated size breakdown
+          // for the primary Gemini circuit like the OpenAI-compatible pool
+          // providers do, so oversized contents (e.g. huge history/memories) can
+          // be diagnosed without network captures. Gated by config:
+          // [debug] requestLogging=true or [tool-executor] debugRequestLogging=true.
+          try {
+            const fullSettings = (settings.getAll?.()) || {};
+            maybeLogRequestSizes({ config: fullSettings }, {
+              tag: 'gemini',
+              model: attempt.modelId,
+              messages: Array.isArray(requestBody.contents) ? requestBody.contents : [],
+              system: systemInstructionText,
+              tools: requestBody.tools
+            });
+          } catch (_debugErr) { /* never break generation on logging */ }
 
           const headers: Record<string, string> = {
             'Content-Type': 'application/json',
@@ -594,16 +658,41 @@ export async function generateContent(
           attemptIndex++;
           armStallTimeout(isFirstProbe ? PRIMARY_STALL_MS : FALLBACK_STALL_MS);
 
-          const res = await fetch(finalTargetUrl, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(requestBody),
-            signal: fetchController.signal
-          });
+          const fetchStartTs = Date.now();
+          let res: Response;
+          try {
+            res = await fetch(finalTargetUrl, {
+              method: 'POST',
+              headers,
+              body: JSON.stringify(requestBody),
+              signal: fetchController.signal
+            });
+          } catch (fetchErr: any) {
+            clearStallTimeout();
+            recordUsage({
+              provider: 'gemini',
+              model: attempt.modelId,
+              apiKey: attempt.apiKey,
+              ok: false,
+              ts: fetchStartTs,
+              latencyMs: Date.now() - fetchStartTs,
+              errorType: classifyUsageError(fetchErr?.message || String(fetchErr))
+            });
+            throw fetchErr;
+          }
 
           if (!res.ok) {
             const errText = await res.text();
             clearStallTimeout();
+            recordUsage({
+              provider: 'gemini',
+              model: attempt.modelId,
+              apiKey: attempt.apiKey,
+              ok: false,
+              ts: fetchStartTs,
+              latencyMs: Date.now() - fetchStartTs,
+              errorType: classifyUsageError(`HTTP ${res.status}: ${errText}`)
+            });
             throw new Error(`HTTP Error ${res.status}: ${errText}`);
           }
 
@@ -622,6 +711,7 @@ export async function generateContent(
             let escapeNext = false;
             let lastParsedIndex = 0;
             let lastFinishReason: string | undefined;
+            let streamUsage: any = null;
             const geminiFunctionCalls: any[] = [];
 
             for await (const rawChunk of reader as any) {
@@ -661,6 +751,7 @@ export async function generateContent(
                         const jsonStr = accumulated.substring(startIndex, lastParsedIndex + 1);
                         try {
                           const obj = JSON.parse(jsonStr);
+                          if (obj.usageMetadata) streamUsage = obj.usageMetadata;
                           const candidates = obj.candidates?.[0];
                           if (candidates?.finishReason) lastFinishReason = candidates.finishReason;
                           const parts = candidates?.content?.parts || [];
@@ -729,6 +820,7 @@ export async function generateContent(
                         const jsonStr = accumulated.substring(startIndex, lastParsedIndex + 1);
                         try {
                           const obj = JSON.parse(jsonStr);
+                          if (obj.usageMetadata) streamUsage = obj.usageMetadata;
                           const candidates = obj.candidates?.[0];
                           if (candidates?.finishReason) lastFinishReason = candidates.finishReason;
                           const parts = candidates?.content?.parts || [];
@@ -781,6 +873,21 @@ export async function generateContent(
               }
             }
 
+            // The stream itself succeeded at the HTTP level, so the request
+            // counted toward quota even if the envelope is later rejected as
+            // truncated — record it before the guard.
+            noteModelSuccess(attempt.modelId);
+            recordUsage({
+              provider: 'gemini',
+              model: attempt.modelId,
+              apiKey: attempt.apiKey,
+              ok: true,
+              ts: fetchStartTs,
+              latencyMs: Date.now() - fetchStartTs,
+              fromProvider: true,
+              ...usageTokensFromMetadata(streamUsage)
+            });
+
             // Truncation guard: if the accumulated model output is an unterminated
             // JSON envelope (cut off mid-generation, e.g. MAX_TOKENS), re-run the
             // pool instead of delivering the partial fragment to callers.
@@ -800,6 +907,17 @@ export async function generateContent(
           } else {
             const resJson: any = await res.json();
             clearStallTimeout();
+            noteModelSuccess(attempt.modelId);
+            recordUsage({
+              provider: 'gemini',
+              model: attempt.modelId,
+              apiKey: attempt.apiKey,
+              ok: true,
+              ts: fetchStartTs,
+              latencyMs: Date.now() - fetchStartTs,
+              fromProvider: true,
+              ...usageTokensFromMetadata(resJson.usageMetadata)
+            });
             const candidate = resJson.candidates?.[0];
             const finishReason = candidate?.finishReason;
             const parts = candidate?.content?.parts || [];
@@ -874,6 +992,25 @@ export async function generateContent(
             modelQuotaFailCount.set(attempt.modelId, failCount);
             if (failCount >= 2) {
               console.warn(`[SERVER_AI] Model '${attempt.modelId}' quota-exhausted across ${failCount} key(s). Skipping remaining pool keys for it this cycle.`);
+            }
+            // Quota-message skip: "check your plan and billing details" is the
+            // generic free-tier 429 and ALSO fires on momentary RPM bursts, so
+            // mark the model failed only for a SHORT capped TTL (never until
+            // midnight) — genuine daily exhaustion is retried cheaply per
+            // window, while a burst false-positive recovers within minutes.
+            const isDailyQuota = errorBody.toLowerCase().includes('check your plan') ||
+                                 errorBody.toLowerCase().includes('billing details') ||
+                                 (errorBody.toLowerCase().includes('daily') && errorBody.toLowerCase().includes('quota'));
+            // Burst guard: a model that succeeded within RECENT_SUCCESS_WINDOW_MS
+            // is hitting the per-key RPM ceiling, not the daily allowance — cool
+            // the keys but never freeze the model. The freeze is reserved for
+            // models that have been 429ing for a sustained stretch (no recent
+            // success = likely genuine daily exhaustion).
+            if (isDailyQuota && failCount >= 2 && !keyPool.isModelFailed('gemini', attempt.modelId) && !hadRecentModelSuccess(attempt.modelId)) {
+              const ttlMs = dailyQuotaModelTtlMs();
+              keyPool.markModelFailed('gemini', attempt.modelId, ttlMs);
+              overloadedModelsThisCall.add(attempt.modelId);
+              console.warn(`[SERVER_AI] Model '${attempt.modelId}' quota message detected (${errorBody.slice(0, 120)}). Marking failed for ${Math.round(ttlMs / 60000)}m (capped) — future calls skip it and recover on TTL expiry.`);
             }
             // Also cool the pair in the durable ApiKeyPool so future cycles
             // rotate to a healthy key instead of retrying the exhausted one.

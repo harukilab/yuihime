@@ -34,7 +34,7 @@ import { FastTrackRunner } from './fastTrackRunner';
 import { extractBestJsonObject, extractJsonObject } from './jsonExtract';
 import { makeToolCall } from './cortexThinkEngineUtils';
 import { compileMaxStepsPrompt, isDeliveryTool, isTransientToolError, classifyToolExecutionError } from './loopGuards.js';
-import { maybeCompactContext } from './contextCompactor.js';
+import { maybeCompactContext, maybeCompactNativeHistory } from './contextCompactor.js';
 import { loadNativeMessages, appendNativeMessages, clearNativeMessages } from './nativeTransport.js';
 import { DEFAULT_NEURAL_CORES } from '@shared/constants';
 import { broadcastToWS } from '../server/apiRouter.js';
@@ -381,10 +381,10 @@ export async function executeCortexThink(
     think
   });
 
-  console.log("[DEBUG_TRACE] PHASE 2 COMPLETE, entering gateway phase");
+  console.debug("[DEBUG_TRACE] PHASE 2 COMPLETE, entering gateway phase");
   logs.push("[PHASE 3] Gateway Active: Selecting Optimal Provider...");
   const gateway = SystemRegistry.getModule<CortexModule>('provider-gateway');
-  console.log("[DEBUG_TRACE] gateway module found:", !!gateway);
+  console.debug("[DEBUG_TRACE] gateway module found:", !!gateway);
   
   if (!gateway) {
     logs.push("[PHASE 3] CRITICAL FAILURE: Provider Gateway module not found.");
@@ -453,6 +453,15 @@ export async function executeCortexThink(
     loopContext.nativeTurnBlocks = blocks;
     if (blocks.length > 0) {
       logs.push(`[CORTEX] Rebuilt ${blocks.length} interleaved native turn block(s) from persisted history.`);
+      // Phase 5.5: enforce the context budget on the *persisted* history right
+      // away. A long-lived session's native_messages store alone can exceed the
+      // provider window (a 528-message / ~294K-token session was observed), so
+      // trim oldest turn blocks before the first request is built.
+      try {
+        maybeCompactNativeHistory({ loopContext, settings, logs, nativeSessionId, input });
+      } catch (nativeCompactErr: any) {
+        logs.push(`[COMPACTION] Non-blocking native history compaction error: ${nativeCompactErr?.message || nativeCompactErr}`);
+      }
     }
   }
 
@@ -584,7 +593,12 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
     // Anthropic tool_use, Gemini functionCall) instead of JSON-in-prompt.
     const iterationUsesNative = nativeTransportEnabled;
     const providerSpecificConfig = settings[activeProviderId] || {};
-    const targetModelId = toSingleString(providerSpecificConfig.model) || 'gemini-flash-latest';
+    // Resolve the active model from config (first entry of the configured model
+    // list), falling back to the provider's registry metadata default — never a
+    // hardcoded id, so the effective default follows config.toml like every
+    // other generation path.
+    const registryDefaultModel = toSingleString(SystemRegistry.getProvider(activeProviderId)?.metadata?.models?.[0]);
+    const targetModelId = toSingleString(providerSpecificConfig.model) || registryDefaultModel || '';
 
     if (!iterationUsesNative && iteration > 1 && toolExecutionHistory.length > 0) {
       const lastExecuted = toolExecutionHistory[toolExecutionHistory.length - 1];
@@ -677,6 +691,18 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
       }
     }
 
+    // Phase 5.5 (per iteration): re-enforce the budget on the persisted native
+    // history before building each request. The loop appends one interleaved
+    // block per executed tool turn, so a long chain can re-bloat the context
+    // across iterations; trim oldest blocks again when it does.
+    if (nativeTransportEnabled) {
+      try {
+        maybeCompactNativeHistory({ loopContext, settings, logs, nativeSessionId, input });
+      } catch (nativeCompactErr: any) {
+        logs.push(`[COMPACTION] Non-blocking native history compaction error: ${nativeCompactErr?.message || nativeCompactErr}`);
+      }
+    }
+
     const requestPayloadBlueprint: PayloadBlueprint = {
       model: targetModelId,
       messages: [
@@ -720,7 +746,7 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
       logs.push(`[CORTEX] Resuming task: Bypassing Gateway query. Tools to run: ${JSON.stringify(toolsToCall)}`);
       skipGatewayForResume = false; // Reset for subsequent iterations
     } else {
-      console.log("[DEBUG_TRACE] calling gateway.run now");
+      console.debug("[DEBUG_TRACE] calling gateway.run now");
       const gwT0 = Date.now();
       loopContext.disableTools = isLastStep;
       // Phase 5 (Kilo parity): on the final agent step force tool_choice 'none'
@@ -736,7 +762,7 @@ When calling tools, your "tool_calls" array MUST use the OpenAI-native shape: ea
           extractor.feed(chunk);
         }
       });
-      console.log(`[DEBUG_TRACE] gateway.run returned after ${((Date.now() - gwT0) / 1000).toFixed(1)}s, rawResult length=${(loopContext.rawResult || "").length}`);
+      console.debug(`[DEBUG_TRACE] gateway.run returned after ${((Date.now() - gwT0) / 1000).toFixed(1)}s, rawResult length=${(loopContext.rawResult || "").length}`);
       if (loopContext.activeProvider && loopContext.activeProvider !== activeProviderId) {
         activeProviderId = loopContext.activeProvider;
         logs.push(`[CORTEX_LOOP] Gateway auto-switched active provider to: ${activeProviderId}`);

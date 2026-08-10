@@ -213,6 +213,7 @@ import { CronModule } from "./src/core/kernel/cron.js";
 import { NeuralInterface } from "./src/core/kernel/NeuralInterface.js";
 import { MultiChannelQueue } from "./src/core/kernel/MultiChannelQueue.js";
 import { closeDatabase } from "./src/core/database.js";
+import { flushUsageSummary } from "./src/core/kernel/ai/usageTracker.js";
 
 // --- Settings System ---
 const settingsPath = process.env.YUIHIME_CONFIG || path.join(os.homedir(), ".yuihime", "data", "config.toml");
@@ -1107,6 +1108,11 @@ async function gracefulShutdown(sig: string) {
     MultiChannelQueue.getInstance().drainQueueToPending();
   } catch (e: any) {
     log(`[SYSTEM] Queue drain warning: ${e.message || e}`);
+  }
+  try {
+    flushUsageSummary();
+  } catch (e: any) {
+    log(`[SYSTEM] Usage summary flush warning: ${e.message || e}`);
   }
   if (__globalServer) {
     log('[SYSTEM] Closing HTTP server...');

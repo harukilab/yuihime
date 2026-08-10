@@ -9,6 +9,8 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { expandHomePath } from '../core/systemPaths.js';
+import { ExternalInjectionBus } from '../core/kernel/externalInjectionBus.js';
+import { memoryTimePrefix, computeRoomOccupants, buildSpatialAwarenessBlock, buildSpatialHint, buildRecentDialogueTranscript } from '../core/kernel/situationalContext.js';
 import { AI_NAME } from '@shared/constants';
 
 let characterData = "";
@@ -17,6 +19,11 @@ let systemPromptData = "";
 
 let initialized = false;
 const registry = PromptRegistry.getInstance();
+
+/**
+ * Absolute wall-clock (local) prefix for a memory line — see
+ * core/kernel/situationalContext.ts (shared with sub-agent injection).
+ */
 
 function resolveCharacterName(charData: string): string {
   if (!charData || typeof charData !== 'string') return AI_NAME;
@@ -478,25 +485,19 @@ export const PromptManagerModule: CortexModule = {
     }
 
     // Format chronological recent dialogue history to maintain seamless conversation continuity
-    const recentDialogueList = memories
-      .filter((m: any) => m && m.content && m.content.trim().length > 0 && (m.speaker || m.type === 'dialogue' || m.type === 'interaction'))
-      .sort((a: any, b: any) => (a.timestamp || 0) - (b.timestamp || 0)) // Ensure strict chronological order
-      .slice(-contextSize); // Dynamic, generous context window!
+    const formattedTranscript = buildRecentDialogueTranscript(memories, context, {
+      contextSize,
+      agentName: characterName
+    });
 
-    const formattedTranscript = recentDialogueList.length > 0
-      ? recentDialogueList.map((m: any) => {
-          let speakerName = m.speaker || m.type;
-          if (speakerName === 'agent') {
-            speakerName = characterName;
-          } else if (speakerName === 'user' || !speakerName || speakerName === 'chat' || speakerName === 'interaction') {
-            const resolvedUser = (context.userName && context.userName !== 'chat' && context.userName !== 'anon')
-              ? context.userName
-              : (context.viewerIdentity?.perceivedName || 'user');
-            speakerName = resolvedUser;
-          }
-          return `${speakerName}: ${m.content}`;
-        }).join('\n')
-      : 'No previous conversation records yet.';
+    // Room occupants: who is currently "in the room" — computed by the shared
+    // situationalContext helper (2h temporal proximity window, cap 5, newest-first)
+    // including the explicit current-speaker marker. Rendered via
+    // buildSpatialAwarenessBlock (unified home/room mapping) and shared with
+    // sub-agent injection so delegated agents sense the same room Yui does.
+    const { currentUserName } = computeRoomOccupants(memories, context);
+    const _resolvedLocation = ExternalInjectionBus.getInstance().resolveCurrentLocation(context);
+    const spatialHint = buildSpatialHint(memories, context, { location: _resolvedLocation });
 
     let extraMarkdownInjections = "";
     let filesToLoad: { name: string, title: string, maxChar?: number }[] = [];
@@ -646,7 +647,7 @@ export const PromptManagerModule: CortexModule = {
           const formattedOtherChats = otherChatRows && otherChatRows.length > 0
             ? otherChatRows.map((m: any) => {
                 const spk = m.speaker === 'agent' ? characterName : (m.speaker || 'Unknown');
-                return `${spk}: ${m.content}`;
+                return `${memoryTimePrefix(m)}${spk}: ${m.content}`;
               }).join('\n')
             : 'No previous conversation records yet.';
 
@@ -772,6 +773,8 @@ ${context.viewerIdentity?.importantFacts && context.viewerIdentity.importantFact
 </active_user_context>
 `.trim();
 
+    const externalFeatureBlock = ExternalInjectionBus.getInstance().renderMainPromptBlock(context);
+
     const systemContext = `
 # SOP PRIORITY DIRECTIVE
 Before responding or calling any tools, you MUST check the folder \`user_data/sops/\` using \`glob\` or \`read\`. If there is an SOP file whose name is relevant to the user's request (for example, an image request matches \`user_data/sops/foto.md\`), you MUST read that SOP and treat it as the highest-priority instruction to guide your answer or tool execution.
@@ -844,6 +847,10 @@ ${charLore}
 ${worldLore}
 </world_lore_and_knowledge>
 
+<room_occupants>
+${buildSpatialAwarenessBlock(memories, context, { location: _resolvedLocation })}
+</room_occupants>
+
 <current_physical_and_emotional_states>
 - Energy Level: ${state.energy}%
 - Mood Focus Frequency: ${state.emotion?.focus || 50}%
@@ -857,7 +864,7 @@ ${formattedCognitiveDirectives}
 </cognitive_directives>
 
 <recent_dialogue_transcript>
-*Below is the latest conversation transcript between the User and ${characterName} (me) to fully track topic continuity and current chat emotion flow (ensure your response aligns with the flow below):*
+*Below is the latest conversation transcript between the User and ${characterName} (me) to fully track topic continuity and current chat emotion flow (ensure your response aligns with the flow below). Each line is prefixed with the absolute local wall-clock time [HH:MM] of that exchange (older days get a [YYYY-MM-DD HH:MM] prefix) — use it to know exactly who was talking and when, e.g. to answer "who was just here" or "when did X chat". NOTE: you are currently replying to ${currentUserName}, even if an earlier transcript line came from someone else.*
 ${formattedTranscript}
 </recent_dialogue_transcript>
 
@@ -873,6 +880,12 @@ ${context.externalInjection}
 </external_module_injections>
 ` : ''}
 
+${externalFeatureBlock ? `
+<external_feature_injections>
+${externalFeatureBlock}
+</external_feature_injections>
+` : ''}
+
 <system_capabilities_and_tools>
 ${toolsInstruction}
 </system_capabilities_and_tools>
@@ -880,7 +893,7 @@ ${toolsInstruction}
 
     return { 
       ...context, 
-      assembledSystemPrompt: systemContext.replace(/\$\{characterName\}/g, characterName),
+      assembledSystemPrompt: `${spatialHint}\n\n${systemContext.replace(/\$\{characterName\}/g, characterName)}`,
     };
   }
 };

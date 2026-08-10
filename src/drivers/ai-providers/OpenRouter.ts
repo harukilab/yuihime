@@ -2,6 +2,7 @@ import { ProviderModule, ModuleType } from '@shared/include/types';
 import { buildChatMessages, normalizeToolCallsToOpenAI, normalizeToolChoice, normalizeToolsForProvider } from '../../core/openaiTools';
 import { toSingleString } from '@/core/kernel/configNormalizer';
 import { AIService } from '../../core/kernel/ai.js';
+import { maybeLogRequestSizes } from '../../core/kernel/ai/requestDebug';
 
 async function fetchOpenRouterModels(config: any): Promise<any[]> {
   const apiKey = config.apiKey || '';
@@ -68,7 +69,11 @@ export const OpenRouter: ProviderModule = {
   generate: async (prompt: string, context: any) => {
     const config = context.config?.openrouter || context.config || (context.model ? context : {});
     const apiKey = toSingleString(config.apiKey || config.api_key);
-    const googleModel = toSingleString(context.model || config.model) || OpenRouter.metadata.models[0];
+    // The provider's own configured model is authoritative. context.model /
+    // blueprint.model carry the ACTIVE provider's model id — when OpenRouter is
+    // a system-pool failover target that id belongs to the primary provider
+    // (e.g. gemini-flash-lite-latest), which OpenRouter rejects with a 400.
+    const googleModel = toSingleString(config.model) || toSingleString(context.model) || OpenRouter.metadata.models[0];
 
     const blueprint = context.payloadBlueprint || config.payloadBlueprint;
     let systemInstruction = context.assembledSystemPrompt || 'You are an AI assistant.';
@@ -77,7 +82,10 @@ export const OpenRouter: ProviderModule = {
     let isJsonFormat = !!config.isJson;
 
     if (blueprint) {
-      if (blueprint.model) {
+      // Only adopt the blueprint's model when this provider has no model of its
+      // own configured — otherwise the blueprint's active-provider model id
+      // leaks through during failover and OpenRouter 400s.
+      if (blueprint.model && !config.model) {
         overriddenModel = blueprint.model;
       }
       const sysMsg = blueprint.messages.find((m: any) => m.role === 'system');
@@ -109,6 +117,14 @@ export const OpenRouter: ProviderModule = {
       model: overriddenModel,
       messages: messages
     };
+
+    maybeLogRequestSizes(context, {
+      tag: 'openrouter',
+      model: overriddenModel,
+      messages,
+      system: systemInstruction,
+      tools: providerTools
+    });
 
     const finalMaxTokens = blueprint?.max_tokens ?? config.maxOutputTokens ?? config.maxTokens;
     if (finalMaxTokens) {

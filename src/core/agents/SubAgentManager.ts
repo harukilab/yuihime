@@ -4,6 +4,7 @@ import { SystemRegistry } from '@shared/core/registry';
 import { genId } from '@shared/core/idGen';
 import { injectCharacterName } from '../kernel/characterName.js';
 import { extractSpeechFromToolEnvelope, stripInlineToolCallFragments } from '../openaiTools.js';
+import { ExternalInjectionBus } from '../kernel/externalInjectionBus.js';
 
 export class SubAgentManager {
   private static instance: SubAgentManager;
@@ -126,7 +127,7 @@ export class SubAgentManager {
       ? scopedContext.memories.map((m: any) => `[${m.speaker || m.type}]: ${m.content}`).join('\n')
       : '[No relevant memories available]';
 
-    const virtualBodyDirective = this.buildVirtualBodyDirective(options.parentContext);
+    const externalFeaturesBlock = ExternalInjectionBus.getInstance().renderSubAgentBlock(options.parentContext);
 
     const identityContext = scopedContext.viewerIdentity
       ? `[FACING VIEWER]: ${scopedContext.viewerIdentity.perceivedName} (Trust: ${scopedContext.viewerIdentity.trust || 50}%, Affection: ${scopedContext.viewerIdentity.affection || 50}%)\n[VIEWER FACTS]: ${(scopedContext.viewerIdentity.importantFacts || []).slice(0, 5).join('; ')}`
@@ -148,7 +149,10 @@ ${identityContext}
 [RELEVANT MEMORIES]
 ${memorySummary}
 
-${virtualBodyDirective}
+${externalFeaturesBlock ? `
+[EXTERNAL FEATURE INJECTIONS]
+${externalFeaturesBlock}
+` : ''}
 
 [PARENT CONTEXT]
 Channel: ${options.chatType}
@@ -173,7 +177,10 @@ ${identityContext}
 [RELEVANT MEMORIES]
 ${memorySummary}
 
-${virtualBodyDirective}
+${externalFeaturesBlock ? `
+[EXTERNAL FEATURE INJECTIONS]
+${externalFeaturesBlock}
+` : ''}
 
 [PARENT CONTEXT]
 Channel: ${options.chatType}
@@ -181,34 +188,6 @@ Sender: ${options.senderName}
 
 [INSTRUCTION]
 Process the user's request using your specialized capabilities. Output a concise, actionable response in character. Do not break the fourth wall.`);
-  }
-
-  private buildVirtualBodyDirective(parentContext: any): string {
-    const raw = parentContext?.virtual_body_state_output;
-    if (!raw || typeof raw !== 'string') {
-      return '[VIRTUAL BODY]: (no virtual body state available)';
-    }
-    try {
-      const body = JSON.parse(raw);
-      const top = body.top || 'not specified';
-      const bottom = body.bottom || 'not specified';
-      const underwear = body.underwear || 'not specified';
-      const toys = body.toys || 'not specified';
-      const used = body.used || 'nothing';
-      const accessories = body.accessories || 'none';
-      const pussyInsert = body.pussy_insert || 'nothing';
-      const analInsert = body.anal_insert || 'nothing';
-      const nipples = body.nipples || 'nothing';
-      const clit = body.clit || 'nothing';
-      const pose = body.pose || 'not specified';
-      const location = body.location || 'unknown location';
-      const note = body.note || '';
-      return `[VIRTUAL BODY — MANDATORY SOURCE OF TRUTH FOR OUTFIT/POSE/LOCATION]
-Right now ${'${characterName}'} is: ${location}. Wearing: top = ${top}; bottom = ${bottom}; underwear = ${underwear}. Adult toys at hand: ${toys}. Currently in use: ${used}. Accessories = ${accessories}. Inserted in pussy: ${pussyInsert}. Inserted in anal: ${analInsert}. Nipples/breasts state: ${nipples}. Clitoris/labia state: ${clit}. Current pose: ${pose}.${note ? `\nSTANDING BODY INSTRUCTION: ${note}` : ''}
-When building an image prompt, mirror these fields exactly. NEVER substitute the default outfit, never drop the chastity belt/inserts/piercings, and never change her clothes or pose for the photo unless the user explicitly requests otherwise.`;
-    } catch (e) {
-      return '[VIRTUAL BODY]: (unable to parse virtual body state)';
-    }
   }
 }
 

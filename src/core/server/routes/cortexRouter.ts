@@ -766,7 +766,12 @@ export function registerCortexRoutes(app: express.Express, db: any) {
                 );
               }
             }
-          } else {
+          }
+
+          // Always persist the raw user interaction + agent reply as memories,
+          // even when the engine produced tool-call memories (newMemories), so
+          // temporal-proximity recall / continuity always have the exchange.
+          {
             const userMemoryId = genId(9);
             let savedUserInput = input;
             if (savedUserInput && typeof savedUserInput === "string") {

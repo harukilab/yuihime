@@ -2,6 +2,7 @@ import { ProviderModule, ModuleType } from '@shared/include/types';
 import { buildChatMessages, normalizeToolCallsToOpenAI, normalizeToolChoice, normalizeToolsForProvider } from '../../core/openaiTools';
 import { toSingleString } from '@/core/kernel/configNormalizer';
 import { AIService } from '../../core/kernel/ai.js';
+import { maybeLogRequestSizes } from '../../core/kernel/ai/requestDebug';
 
 export const CustomProvider: ProviderModule = {
   metadata: {
@@ -130,7 +131,7 @@ export const CustomProvider: ProviderModule = {
       const config = context.config?.custom || context.config || (context.model ? context : {});
       const baseUrl = config.baseUrl || 'https://api.openai.com/v1';
       const apiKey = toSingleString(config.apiKey);
-      const modelId = toSingleString(context.model || config.model) || CustomProvider.metadata.models[0];
+      const modelId = toSingleString(config.model || context.model) || CustomProvider.metadata.models[0];
       const customHeadersStr = config.customHeaders || '{}';
       
       let computedHeaders: Record<string, string> = {
@@ -154,7 +155,9 @@ export const CustomProvider: ProviderModule = {
       let isJsonFormat = !!config.isJson;
 
       if (blueprint) {
-        if (blueprint.model) {
+        // The blueprint's model belongs to the ACTIVE provider; when this
+        // provider is a system-pool failover target that id is invalid here.
+        if (blueprint.model && !config.model) {
           overriddenModel = blueprint.model;
         }
         const sysMsg = blueprint.messages.find((m: any) => m.role === 'system');
@@ -202,6 +205,14 @@ export const CustomProvider: ProviderModule = {
       }
 
       const endpointUrl = `${baseUrl}/chat/completions`;
+
+      maybeLogRequestSizes(context, {
+        tag: 'custom',
+        model: overriddenModel,
+        messages,
+        system: systemInstruction,
+        tools: payload.tools
+      });
 
       let data: any;
       if (typeof window === 'undefined') {

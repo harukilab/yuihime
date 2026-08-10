@@ -651,7 +651,12 @@ export class NeuralInterface {
           }
         }, 'insert-memory-from-newMemories');
       }
-    } else {
+    }
+
+    // Always persist the raw user interaction + agent reply as memories,
+    // even when the engine produced tool-call memories (newMemories), so
+    // temporal-proximity recall / continuity always have the exchange.
+    {
       if (isProactive) {
         const systemEventMemoryId = genId(9);
         await retryDbOperation(async () => {

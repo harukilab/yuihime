@@ -2,6 +2,7 @@ import { ProviderModule, ModuleType } from '@shared/include/types';
 import { buildChatMessages, normalizeToolCallsToOpenAI, normalizeToolChoice, normalizeToolsForProvider } from '../../core/openaiTools';
 import { toSingleString } from '@/core/kernel/configNormalizer';
 import { AIService } from '../../core/kernel/ai.js';
+import { maybeLogRequestSizes } from '../../core/kernel/ai/requestDebug';
 
 export const OpenAIProvider: ProviderModule = {
   metadata: {
@@ -131,7 +132,7 @@ export const OpenAIProvider: ProviderModule = {
       const config = context.config?.openai || context.config || (context.model ? context : {});
       const baseUrl = config.baseUrl || 'https://api.openai.com/v1';
       const apiKey = toSingleString(config.apiKey);
-      const modelId = toSingleString(context.model || config.model) || OpenAIProvider.metadata.models[0];
+      const modelId = toSingleString(config.model || context.model) || OpenAIProvider.metadata.models[0];
       const customHeadersStr = config.customHeaders || '{}';
       
       let computedHeaders: Record<string, string> = {
@@ -155,7 +156,9 @@ export const OpenAIProvider: ProviderModule = {
       let isJsonFormat = !!config.isJson;
 
       if (blueprint) {
-        if (blueprint.model) {
+        // The blueprint's model belongs to the ACTIVE provider; when this
+        // provider is a system-pool failover target that id is invalid here.
+        if (blueprint.model && !config.model) {
           overriddenModel = blueprint.model;
         }
         const sysMsg = blueprint.messages.find((m: any) => m.role === 'system');
@@ -191,6 +194,14 @@ export const OpenAIProvider: ProviderModule = {
         messages: messages,
         temperature: overriddenTemp
       };
+
+      maybeLogRequestSizes(context, {
+        tag: 'openai',
+        model: overriddenModel,
+        messages,
+        system: systemInstruction,
+        tools: payload.tools
+      });
 
       const finalMaxTokens = blueprint?.max_tokens ?? config.maxOutputTokens ?? config.maxTokens;
       if (finalMaxTokens) {

@@ -10,6 +10,7 @@ import { resolveSystemRoot } from '../systemPaths.js';
 // Levels (ascending): debug(0) < info(1) < warn(2) < error(3) < silent(4)
 const LOG_LEVELS: Record<string, number> = {
   debug: 0,
+  log: 1,
   verbose: 1,
   info: 1,
   warn: 2,

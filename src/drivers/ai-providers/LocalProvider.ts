@@ -1,6 +1,7 @@
 import { ProviderModule, ModuleType } from '@shared/include/types';
 import { buildChatMessages, normalizeToolCallsToOpenAI, normalizeToolChoice, normalizeToolsForProvider } from '../../core/openaiTools';
 import { toSingleString } from '@/core/kernel/configNormalizer';
+import { maybeLogRequestSizes } from '../../core/kernel/ai/requestDebug';
 
 /**
  * LocalProvider: Connects to a locally hosted LLM (Ollama / LM Studio / etc.).
@@ -55,6 +56,14 @@ export const LocalProvider: ProviderModule = {
       });
 
       const payload: any = { model, messages, stream: false };
+
+      maybeLogRequestSizes(context, {
+        tag: 'local',
+        model,
+        messages,
+        system: systemInstruction,
+        tools: payload.tools
+      });
 
       const localTools = normalizeToolsForProvider(
         (Array.isArray(context.tools) && context.tools.length > 0) ? context.tools : [],

@@ -100,6 +100,30 @@ export const ToolExecutorModule: CortexModule = {
           default: SUMMARY_TEMPLATE,
           description: 'Anchored summary structure produced by the compaction call.'
         },
+        historyCompactionEnabled: {
+          type: 'boolean',
+          label: 'Enable Native History Compaction',
+          default: true,
+          description: 'Budget enforcement for the persisted native history (Kilo/opencode-style durable store): keeps only the most recent turn blocks that fit the provider window, truncates oversized rows as a last resort, and rewrites the store. Protects long-lived sessions whose native_messages alone would exceed the context budget.'
+        },
+        historyContextLimit: {
+          type: 'number',
+          label: 'Native History Context Limit (tokens)',
+          default: 110000,
+          description: 'Estimated token budget (chars/4 heuristic) for the request when persisted native history is present. Oldest whole turn blocks are trimmed until the request fits.'
+        },
+        historyKeepTokens: {
+          type: 'number',
+          label: 'Native History Keep Tokens',
+          default: 20000,
+          description: 'Recent native turn blocks kept verbatim after trimming the persisted history.'
+        },
+        historyContentCharCap: {
+          type: 'number',
+          label: 'Native History Content Char Cap',
+          default: 4000,
+          description: 'Per-row content truncation cap applied as a last resort when the recent tail alone still exceeds the context budget.'
+        },
         enableManualCheck: {
           type: 'boolean',
           label: 'Enable Manual Tool Verification',

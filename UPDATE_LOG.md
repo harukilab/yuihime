@@ -1,6 +1,176 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.369] - 2026-08-10
+### Feature: Unified spatial awareness: room = current place, never-alone guard, dynamic cross-channel location + EXTERNAL_INJECTION_BUS doc
+- computeRoomOccupants now ALWAYS includes the person being replied to as present (even if their last stored message is older than the 2h window) so 'are you alone?' can never collapse into false solitude while someone is actively addressing Yui.
+- New buildSpatialAwarenessBlock (main prompt + sub-agent) unifies 'room' and 'current place' into ONE spatial truth: wherever Yui is (home = ruangan, or when invited out) is her room; occupants listed are physically present; explicit guard never to answer 'alone / berdua aja / nggak ada orang lain' while a name is listed, and to answer count questions ('kita ngobrol ber apa?') with the TOTAL = self + listed names.
+- New buildSpatialHint: ultra-compact spatial fact prepended at the TOP of the assembled system prompt so even weak models (e.g. gemini-flash-lite) follow presence/count semantics — previously the block was ignored despite being explicit.
+- New ExternalInjectionBus.resolveCurrentLocation: manifest-driven location resolution (first generic JSON 'location' field across inject.json state files) — NO feature-specific marker/tool name hardcoded; Yui's location is now dynamic and cross-channel consistent (move from CLI is answered correctly on TG).
+- ExternalInjectionBus.buildSubAgentSituationalBlock now uses the unified spatial block; room_occupants block moved earlier in the main prompt (right after world_lore). New docs/EXTERNAL_INJECTION_BUS.md documents the hub + spatial mapping.
+- Verified end-to-end: 'kita ngobrol ber apa?' -> ber-3 (Yui, hikari, Al); 'di rumah cuma kamu?' -> not alone; hikari moves Yui to living room -> Al via TG asks location -> answered correctly with occupants; sub-agent delegation healthy. tsc + build:server + /api/health OK.
+
+
+## [4.368] - 2026-08-10
+### Fix: Feat: Sub-agents now receive situational context (room occupants + proximity dialogue) via shared helper
+- New src/core/kernel/situationalContext.ts: shared helpers memoryTimePrefix, resolveCurrentUserName, computeRoomOccupants, buildRecentDialogueTranscript — the SAME spatial-temporal logic PromptManager uses, now reusable by any consumer so Yui's room awareness stays consistent everywhere (one source of truth).
+- PromptManager refactored to use the shared helpers (local memoryTimePrefix + inline room-occupants computation removed, now imported). ExternalInjectionBus.renderSubAgentBlock now appends [ROOM OCCUPANTS ...] (with the YOU ARE CURRENTLY TALKING TO THIS PERSON marker) + [RECENT ROOM DIALOGUE ...] (last 20 lines, absolute local wall-clock prefix per line) into every delegated sub-agent prompt — so delegated agents know who is in the room, who is being addressed, and the temporal flow.
+- Verified end-to-end via chat.py delegation: sub-agent injection block length 15535 chars with room=true, dialogue=true, vbody=true. build:server + tsc OK, daemon restart OK, /api/health OK.
+
+
+## [4.367] - 2026-08-10
+### Fix: Feat: ExternalInjectionBus — universal hub for external feature injections (addons + external cortex)
+- New src/core/kernel/externalInjectionBus.ts: a single universal bridge that collects injections from EXTERNAL features and serves the complete data snapshot to both the main prompt and sub-agent delegation. Sources are manifest-driven (no hardcoded feature ids): (1) addons drop an inject.json manifest in ~/.yuihime/addons/<id>/ listing state files to expose (any file, universal), (2) external cortex modules are inventoried from ~/.yuihime/cortexloader/*.json, (3) already-existing context fields (externalInjection, groundedKnowledge) are carried through. Lazy refresh (15s TTL) + startup-safe, zero rebuild needed when features change.
+- Main prompt: PromptManager now renders a new <external_feature_injections> block (file sources + external cortex module inventory) alongside the existing <external_module_injections>. Sub-agent: SubAgentManager.buildPrompt now injects [EXTERNAL FEATURE INJECTIONS] (file sources + live externalInjection + groundedKnowledge + module inventory) into every delegated sub-agent prompt, replacing the old dormant virtual-body-only directive.
+- virtual_body now participates purely as an external feature: ~/.yuihime/addons/virtual_body/inject.json manifest exposes user_data/virtual_body.json as a generic source. Verified: bus discovery returns the virtual_body source from the manifest; sub-agent delegation debug showed [EXTERNAL FEATURE INJECTIONS] block (4336 chars) starting with the full virtual body state; main prompt bundle contains the <external_feature_injections> wiring. No 'virtual_body' string remains anywhere in src/ (hardcode-free). build:server + tsc OK, daemon restart OK, /api/health OK.
+
+
+## [4.366] - 2026-08-10
+### Fix: Fix: Yui always replies to the exact current user + never claims listed room occupants left
+- src/modules/PromptManager.ts: room occupants block now marks the exact sender of the message being replied to with 'YOU ARE CURRENTLY TALKING TO THIS PERSON', and the <recent_dialogue_transcript> header states 'you are currently replying to <currentUserName>' even if an earlier transcript line came from someone else. Verified: asked via chat.py as Al 'kamu lagi ngobrol sama siapa sekarang?' -> Yui replied to Al (not Hikari).
+- src/modules/PromptManager.ts: hardened room occupants HARD RULE - every listed name is still physically present and MUST NEVER be described as having left / gone / 'sempat mampir', even if Yui would prefer private alone-time with the current user; a name only drops off after 2 full hours of silence. Timestamps removed from the occupant lines so they do not invite a 'left' reading. Verified: asked 'siapa yang masih ada di room?' as Hikari -> Yui correctly said both Hikari + Al are still present. build:server + tsc OK, daemon restart OK, /api/health OK.
+
+
+## [4.365] - 2026-08-10
+### Fix: Room occupants block: Yui knows who is currently in the room (max 5, 2h TTL)
+- src/modules/PromptManager.ts: new <room_occupants> prompt block lists distinct speakers active within the last 2h (temporal proximity window), capped at 5, newest-first, each with absolute local last-active time. A name drops off after 2h of silence, so Yui senses who is around / who just arrived or left (spatial room mapping). Speaker aliases (user/chat/anon) resolve to the current context.userName / perceivedName; agent/System/subconscious rows are excluded.
+- Verified: asked 'siapa aja yang lagi ada di room sekarang?' via chat.py -> Yui named Al + Hikari. build:server + tsc OK, daemon restart OK, /api/health OK.
+
+
+## [4.364] - 2026-08-10
+### Fix: Show absolute local clock per line in dialogue transcripts (restart-safe proximity)
+- src/modules/PromptManager.ts: every line of <recent_dialogue_transcript> and the other-people transcript now carries an absolute local wall-clock prefix [HH:MM] (older days get [YYYY-MM-DD HH:MM]) via the new memoryTimePrefix helper using dualClock getTzOffsetHours/formatLocalTime/formatLocalDateKey. Uses a fixed clock reading, not a relative 'N minutes ago' offset, so timestamps stay correct across daemon restarts.
+- Updated the transcript section instruction so Yui knows each line has the absolute time of the exchange, letting her answer 'who was just here' / 'when did X chat' (proximity).
+- Verified: asked 'jam berapa hikari chat terakhir?' via chat.py -> Yui answered 'tadi pagi jam 06:57' (absolute hour). build:server + tsc OK, daemon restart OK, /api/health OK.
+
+
+## [4.363] - 2026-08-10
+### Fix: Fix temporal proximity recall: persist user+agent interactions even when newMemories present
+- Root-caused proximity not working: raw user interactions were only stored in the else-branch (when result.newMemories was empty). Since Yui almost always replies via the speak/final_answer tool, loopGeneratedMemories is always non-empty -> newMemories truthy -> the user message was never saved, leaving temporal-proximity recall (2h window) with no recent exchange to recall. Confirmed in logs/DB: TG question 'yui chan apa hikari kesitu?' and chat.py messages left only tool_call/tool_obs rows, no user interaction.
+- Restructured memory storage in src/core/server/routes/cortexRouter.ts and src/core/kernel/NeuralInterface.ts: newMemories (tool_call/tool_obs) are still stored when present, but the raw user interaction + agent reply are NOW ALWAYS persisted as interaction memories (previously only when newMemories was empty). Proactive turns keep storing the system event instead of a user interaction.
+- Verified: sent 'tes proximity' via tools/chat.py as hikari -> user interaction + agent reply both stored alongside tool_call; build:server + tsc OK, daemon restart OK, /api/health OK.
+
+
+## [4.362] - 2026-08-10
+### Fix: Isolate [DEBUG_REQ] logger to its own file (no stdout spam)
+- Removed the console.log from maybeLogRequestSizes: request-composition debug output now only goes to the dedicated ~/.yuihime/debug/request.log file (NDJSON), no longer mixed into daemon stdout/current.log.
+- Verified: build:server + tsc OK, daemon restart OK, /api/health OK.
+
+
+## [4.361] - 2026-08-10
+### Fix: Persist [DEBUG_REQ] request-composition log into ~/.yuihime/debug/request.log
+- maybeLogRequestSizes now also appends a structured NDJSON entry to ~/.yuihime/debug/request.log (via fileLogger appendLog with the debug dir as baseDir) alongside the console line, so the opt-in request-composition logger is stored in Yui's own debug folder instead of only stdout/current.log.
+- Kept [debug] requestLogging = false as the default in both the live config and the first-boot template (onboarding.ts).
+- Verified: build:server + tsc OK, daemon restart OK, /api/health OK.
+
+
+## [4.360] - 2026-08-10
+### Fix: Keep [debug] section in config template (requestLogging = false by default)
+- Restored '[debug] requestLogging = false' in live ~/.yuihime/data/config.toml instead of removing the section, so the opt-in/off request-logging knob stays documented in config.
+- Added the default debug sub-object to the first-boot config template in src/core/server/onboarding.ts (wizard pre-seed + persist blocks), so fresh boots/clones write '[debug] requestLogging = false' automatically.
+- Verified: build:server OK, daemon restart OK, /api/health OK on port 3000.
+
+
+## [4.359] - 2026-08-10
+### Fix: Native history compaction (budget-enforced) fixes context_length_exceeded on long-lived sessions
+- Root-caused a persistent context_length_exceeded on the Telegram path: the persisted native_messages store for a long-lived session grew to 528 messages / ~294K tokens (23M chars), which the in-loop compactor never touched. Live DEBUG_REQ output proved the primary gemini circuit was still sending the full 528-message history.
+- New maybeCompactNativeHistory in core/cortex/contextCompactor.ts: deterministic budget enforcement for the persisted native history (nativeTurnBlocks). Keeps only the most recent turn blocks that fit historyContextLimit (default 110k est tokens), truncates oversized row content as a last resort (historyContentCharCap 4000), prepends a system note when older blocks are dropped, and rewrites the native_messages store so future turns/resumes load the compacted context.
+- Wired into cortexThinkEngine at load (after Phase 5 block rebuild) and per iteration before each request payload build, so a long tool chain cannot re-bloat the context mid-loop.
+- New ToolExecutorModule settings: historyCompactionEnabled (default true), historyContextLimit (110000), historyKeepTokens (20000), historyContentCharCap (4000).
+- Wired the opt-in request-composition logger into the primary Gemini circuit (geminiGenerate) and made requestDebug count Gemini parts[] content accurately. Verified via Telegram: session trimmed 528 -> 56 messages (188 turn blocks dropped), context ~33K est tokens, replies delivered successfully.
+
+
+## [4.358] - 2026-08-10
+### Fix: Bound memory injection + optional request-composition debug logger
+- Root-caused context_length_exceeded failover: a 19MB observation memory (tool_obs_1786026939455_d58d1, importance 0.8) was injected unbounded into the system prompt <memory_recall> block. Pruned the row in DB (19,187,181 -> 4,029 chars).
+- NeuralInterface: observation persistence now truncates content to 4,000 chars (+ ...[TRUNCATED]) instead of unbounded JSON.stringify.
+- PromptManager: transcript and <memory_recall> blocks truncate each memory entry to 4,000 chars before injection.
+- New opt-in request-composition logger src/core/kernel/ai/requestDebug.ts (maybeLogRequestSizes + contentLength): dumps composed request sizes per provider when debugRequestLogging is enabled (config [debug].requestLogging / [tool-executor].debugRequestLogging or context flag; default false).
+- Wired logger into CustomProvider, OpenRouter, OpenAIProvider, AnthropicProvider, LocalProvider and geminiGenerate.
+
+
+## [4.357] - 2026-08-09
+### Fix: Per-account usage audit (keyId) + Kilo custom provider
+- Usage tracker now records keyId (masked first6...last4) on every Gemini request entry in logs/usage.YYYY-MM-DD.log — enables per-account quota/usage auditing via /api/cortex/usage-log or raw log.
+- Configured custom provider (Kilo gateway, model kilo-auto/free) with Authorization Bearer token; verified via /api/ai/diagnose (provider=custom -> 200).
+
+
+## [4.356] - 2026-08-09
+### Docs: Custom providers documentation
+- New docs/CUSTOM_PROVIDERS.md covering multi-instance [custom.<name>] provider config (baseUrl/apiKey/model/customHeaders/temperature), pool failover behavior, and model-resolution semantics.
+- README: added 'Custom Providers' subsection under Kustomisasi linking the new doc.
+
+
+## [4.355] - 2026-08-09
+### Fix: Provider failover uses each provider's own configured model + multi-instance custom providers
+- drivers OpenRouter/OpenAI/Anthropic/Custom: model resolution now prefers the provider's own config.model; context.model and blueprint.model (the ACTIVE provider's id) no longer leak into a failover provider — fixes 'gemini-flash-lite-latest is not a valid model ID' 400s on OpenRouter failover.
+- ProviderGatewayModule: system pool failover now enumerates nested [custom.<name>] sections as extra custom providers (id 'custom:<name>', full baseUrl/apiKey/model/headers per instance) alongside the single legacy [custom] section.
+
+
+## [4.354] - 2026-08-09
+### Fix: Move verbose runtime tags to DEBUG level
+- registry.ts: [REGISTRY_RUN] module start/completed logs now console.debug (hidden at log_level='log', visible with log_level='debug').
+- LocalNanoNLPModule.ts / cortexThinkEngine.ts / ProviderGatewayModule.ts: [LOCAL_NLP] and [DEBUG_TRACE] console.log -> console.debug.
+
+
+## [4.353] - 2026-08-09
+### Fix: Burst guard: recent-success models no longer frozen by RPM 429
+- geminiGenerate: a 'check your plan' 429 on a model that succeeded within the last 10min is treated as a per-key RPM burst — keys cool for 60s, the model is NOT frozen (previously 2+ key 429s quarantined the model up to 30min, cascading the whole provider into failedModels/cooldown).
+- cortexThinkEngine: removed hardcoded 'gemini-flash-latest' fallback — targetModelId now falls back to the provider's registry metadata default, consistent with config resolution everywhere else.
+
+
+## [4.352] - 2026-08-09
+### Fix: Key pool maintenance: RPM-aware cooldowns + reset tool ordering + flash-lite default
+- Fix: RATE_LIMITED_KEY_TTL_MS 15m -> 60s so a momentary RPM burst no longer freezes keys for a quarter hour.
+- Fix: daily-quota model freeze capped at 30m (was until next 00:00 UTC); Google's 'check your plan' 429 is generic and fires on RPM bursts too, so an all-day freeze was a false-positive amplifier.
+- Fix: configGemini merge now drops undefined per-request keys, so model:undefined can no longer override the configured [gemini] model array.
+- Fix: tools/yui-pool.sh reset --restart now stops daemon -> clears state -> starts, preventing the old process from resurrecting stale rateLimited/failedModels.
+- Ops: default chat model moved to gemini-flash-lite-latest (RPD 500/account) ahead of gemini-flash-latest (RPD 20/account).
+
+
+## [4.351] - 2026-08-09
+### Feature: Backfill usage tracker baseline from historical llm logs
+- New `tools/backfill_usage.py`: reconstructs per-day `usage.YYYY-MM-DD.log` request counts (ok/failed + errorType) for the past N days from `llm*.log` archives, idempotent (dedup), skips today by default, `--today`/`--force`/`--providers`/`--dry-run` flags.
+- Historical llm logs do not persist usageMetadata, so backfilled entries are request-count baseline only (token fields null, marked `backfilled`/`tokensUnavailable`); live provider-reported tokens keep flowing through the tracker going forward.
+
+
+## [4.350] - 2026-08-09
+### Feature: Daily per-provider token/quota usage log (UTC-anchored)
+- New `src/core/kernel/ai/usageTracker.ts`: per-day NDJSON request log `logs/usage.YYYY-MM-DD.log` rotated at absolute 00:00 UTC (not a TTL) so restarts never reset or mis-rotate the day's counters.
+- Each entry records provider, model, ok/failed, latencyMs, and provider-reported tokens (prompt/completion/total + cached) tagged `fromProvider:true` so cached-request numbers stay usable as a reference.
+- Live daily totals mirrored to `logs/usage.YYYY-MM-DD.summary.log` (total/success/failed requests, successRate, avg RPM, avg TPM); hydrates from the current day's file at boot and finalizes on graceful shutdown.
+- Hooked into geminiGenerate.ts (chat/tool-call attempts incl. per-attempt failures) and webSearchRunner worker (Google grounding) via postMessage relay.
+
+
+## [4.349] - 2026-08-09
+### Fix: Gemini daily-quota model skip tied to 00:00 UTC reset
+- Daily-quota 429 (`check your plan`/`billing details`) no longer marks models failed for a fixed 12h that spills past the quota reset.
+- Failed TTL is now computed to the next 00:00 UTC boundary + 2m buffer (min 5m), so models auto-recover right after the free-tier daily reset instead of staying blacklisted through the following day.
+- Warn log now reports TTL in minutes and the reset anchor.
+
+
+## [4.348] - 2026-08-09
+### Feature: Real web search via OpenRouter server tool + all-keys pool in grounding runner
+- Replace fake 'imagine the search' OpenRouter stage in webSearchRunner.ts with the real openrouter:web_search server tool: OpenRouter executes the search server-side and returns grounded results with url_citation annotations (title/url/content), no more hallucinated answers.
+- Parse message.annotations url_citation entries in openrouterSearch(); fall back to grounded answer text when no citations are returned.
+- web_search.ts now feeds ALL OpenRouter api keys (toKeyArray + OPENROUTER_API_KEY env) into the runner instead of only the first key, so an exhausted free key is skipped and the next pool key is tried (max 3 keys).
+- Add 429 daily-quota short-circuit in geminiGrounding (2 hits -> skip remaining keys) so an exhausted Gemini pool no longer burns the whole 9-16s window before fallback stages run.
+- Run OpenRouter server-tool stage in parallel with Wikipedia fallback so web search always returns results (OR real-time or wiki/rss) instead of timing out to zero; widen stage budgets (MAX_MS 16s, hard timeout 18s).
+- Update WebSearchConfig.openrouter to accept apiKeys array (backward compatible with apiKey).
+
+
+## [4.347] - 2026-08-09
+### Fix: Durable daily-quota model skip + gemma safety settings in Gemini pool
+- Add DAILY_QUOTA_MODEL_TTL_MS (12h) durable model-level skip in geminiGenerate.ts: a 429 with 'check your plan/billing details' marks the model failed pool-wide for 12h, so future calls skip it immediately instead of re-burning attempts on the exhausted model every single cycle (confirmed: gemini-flash-latest AND gemma-4-31b-it both daily-quota-exhausted on shared keys from TG load)
+- Apply safetySettings BLOCK_NONE to gemma models too (previously skipped for gemmaNative): gemma was failing from TG with PROHIBITED_CONTENT blocks on the mature roleplay prompt even when within quota. Verified gemma-4-26b-a4b-it accepts BLOCK_NONE and returns 200 with the same content
+- OpenRouter 502 'Invalid URL' confirmed transient (Stealth provider routing); openrouter/free is a valid model ID (direct curl 200 via nvidia/nemotron-nano-9b-v2:free)
+
+
+## [4.346] - 2026-08-09
+### Fix: Add tools/yui-pool.sh key pool reseter
+- New tools/yui-pool.sh to inspect & reset key_pool_state.json (overloaded/rateLimited/cooldowns/failedModels/failedProviders); full reset or per-section, optional --restart.
+
+
 ## [4.345] - 2026-08-09
 ### Fix: Fix native tool_calls envelope leak in sub-agent + cortex final answer
 - Extract speech from native delivery-tool envelope (send_message) instead of leaking raw JSON in sub-agent and cortex final assembly

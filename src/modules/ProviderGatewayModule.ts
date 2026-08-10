@@ -126,7 +126,7 @@ export const ProviderGatewayModule: CortexModule = {
         rawResult: context.processedResponse
       };
     }
-    console.log("[DEBUG_TRACE] GATEWAY.run entered");
+    console.debug("[DEBUG_TRACE] GATEWAY.run entered");
     console.log('[GATEWAY] Evaluating provider suitability...');
 
     // Helper for Real-time Self-Learning Feedback Loop (Dual-Process Human Emulation)
@@ -203,6 +203,7 @@ export const ProviderGatewayModule: CortexModule = {
         const result = await primaryProvider.generate(input, {
           ...context,
           config: providerConfig,
+          debugRequestLogging: context.config?.debug?.requestLogging === true || context.config?.['tool-executor']?.debugRequestLogging === true,
           tools: context.disableTools ? [] : buildOpenAITools(context.allowedTools)
         });
 
@@ -236,6 +237,10 @@ export const ProviderGatewayModule: CortexModule = {
     const systemPoolEnabled = gatewayPoolConfig?.systemPoolFailover !== false;
     const providerAttempted = new Set<string>([selectedProviderId]);
     const poolProviderIds: string[] = [];
+    // Nested [custom.<name>] sections are full provider configs (baseUrl /
+    // apiKey / model / customHeaders / temperature) that register extra custom
+    // providers without editing code. id becomes 'custom:<name>'.
+    const customInstanceConfigs = new Map<string, any>();
 
     if (systemPoolEnabled) {
       for (const prov of SystemRegistry.getProviders()) {
@@ -255,6 +260,29 @@ export const ProviderGatewayModule: CortexModule = {
           providerAttempted.add(pId);
         }
       }
+
+      // Enumerate multi-instance custom providers from [custom.<name>].
+      const CUSTOM_INSTANCE_KEYS = new Set(['baseUrl', 'base_url', 'apiKey', 'api_key', 'apiKeys', 'api_keys', 'model', 'customHeaders', 'temperature', 'enabled', 'payloadBlueprint', 'endpoint', 'isJson']);
+      const customRoot = (context.config?.providers?.custom || context.config?.custom);
+      if (customRoot && typeof customRoot === 'object' && !Array.isArray(customRoot)) {
+        for (const [name, instCfg] of Object.entries(customRoot)) {
+          if (CUSTOM_INSTANCE_KEYS.has(name)) continue;
+          if (!instCfg || typeof instCfg !== 'object' || Array.isArray(instCfg)) continue;
+          const instanceId = `custom:${name}`;
+          if (providerAttempted.has(instanceId)) continue;
+          const cfg = instCfg as any;
+          if (cfg.enabled === false) continue;
+          const instKeyRaw = cfg.apiKey || cfg.api_key || cfg.apiKeys || '';
+          const instHasCredential = typeof instKeyRaw === 'string' ? instKeyRaw.trim().length > 0 : (Array.isArray(instKeyRaw) ? instKeyRaw.some((k: any) => k && String(k).trim().length > 0) : Boolean(instKeyRaw));
+          const instModel = toSingleString(cfg.model) || (SystemRegistry.getProvider('custom')?.metadata?.models?.[0]) || 'custom-model';
+          if (instHasCredential && instModel) {
+            poolProviderIds.push(instanceId);
+            providerAttempted.add(instanceId);
+            customInstanceConfigs.set(instanceId, cfg);
+          }
+        }
+      }
+
       console.log(`[GATEWAY] System pool failover enabled — ${poolProviderIds.length} candidate provider(s): ${poolProviderIds.join(', ') || 'none'}`);
     }
 
@@ -264,9 +292,16 @@ export const ProviderGatewayModule: CortexModule = {
           console.log(`[GATEWAY_POOL] Skipping provider '${poolProviderId}' (temporarily failed).`);
           continue;
         }
-        const poolProvider = SystemRegistry.getProvider(poolProviderId);
+        // Multi-instance custom providers use the 'custom' driver module but a
+        // per-instance config keyed as 'custom:<name>'.
+        const isCustomInstance = poolProviderId.startsWith('custom:');
+        const poolProvider = isCustomInstance
+          ? SystemRegistry.getProvider('custom')
+          : SystemRegistry.getProvider(poolProviderId);
         if (!poolProvider) continue;
-        const poolProviderConfig = context.config?.providers?.[poolProviderId] || context.config?.[poolProviderId] || {};
+        const poolProviderConfig = isCustomInstance
+          ? (customInstanceConfigs.get(poolProviderId) || {})
+          : (context.config?.providers?.[poolProviderId] || context.config?.[poolProviderId] || {});
         const poolModel = toSingleString(poolProviderConfig.model) || (poolProvider.metadata?.models ? poolProvider.metadata.models[0] : 'unknown');
         try {
           console.log(`[GATEWAY_POOL] Auto-switching to system pool provider: ${poolProviderId} (model: ${poolModel})`);
@@ -274,6 +309,7 @@ export const ProviderGatewayModule: CortexModule = {
           const result = await poolProvider.generate(input, {
             ...context,
             config: poolProviderConfig,
+            debugRequestLogging: context.config?.debug?.requestLogging === true || context.config?.['tool-executor']?.debugRequestLogging === true,
             tools: context.disableTools ? [] : buildOpenAITools(context.allowedTools)
           });
 

@@ -1,4 +1,5 @@
 import { Worker } from 'worker_threads';
+import { recordUsage } from './usageTracker.js';
 
 export interface WebSearchConfig {
   gemini?: {
@@ -8,6 +9,7 @@ export interface WebSearchConfig {
     apiVersion?: string;
   };
   openrouter?: {
+    apiKeys?: string[];
     apiKey?: string;
     model?: string;
   };
@@ -19,10 +21,19 @@ export interface WebSearchRunnerResult {
   reason?: string;
 }
 
-const WEB_SEARCH_HARD_TIMEOUT_MS = 12000;
+const WEB_SEARCH_HARD_TIMEOUT_MS = 18000;
 
 const WEB_SEARCH_WORKER_CODE = `
 const { parentPort } = require('worker_threads');
+
+var usageLog = [];
+
+function usageErrType(status) {
+  if (status === 429) return 'quota';
+  if (status === 401 || status === 403) return 'auth';
+  if (status === 404) return 'model';
+  return 'http_' + status;
+}
 
 function hasExpired(start, maxMs) {
   return Date.now() - start > maxMs;
@@ -50,10 +61,12 @@ async function geminiGrounding(query, cfg, topK, start, maxMs) {
   if (baseUrl.indexOf('openrouter.ai') !== -1) return null;
   const apiVersion = gemini.apiVersion || 'v1beta';
   const models = [resolveModelIdName(gemini.model), 'gemini-flash-latest', 'gemini-3.1-flash-lite'];
+  let quotaHits = 0;
   for (let i = 0; i < models.length; i++) {
     if (hasExpired(start, maxMs)) break;
     const model = models[i];
     if (!model) continue;
+    quotaHits = 0;
     for (let j = 0; j < keys.length; j++) {
       if (hasExpired(start, maxMs)) break;
       const key = keys[j];
@@ -61,6 +74,7 @@ async function geminiGrounding(query, cfg, topK, start, maxMs) {
         const targetUrl = baseUrl.indexOf('/models/') !== -1 || baseUrl.indexOf(':generateContent') !== -1
           ? baseUrl
           : baseUrl + '/' + apiVersion + '/models/' + model + ':generateContent?key=' + encodeURIComponent(key);
+        const reqStart = Date.now();
         const res = await fetch(targetUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'User-Agent': 'aistudio-build' },
@@ -71,8 +85,17 @@ async function geminiGrounding(query, cfg, topK, start, maxMs) {
           }),
           signal: AbortSignal.timeout(6000)
         });
+        const reqLatency = Date.now() - reqStart;
         if (res.ok) {
           const resJson = await res.json();
+          const um = resJson.usageMetadata || {};
+          usageLog.push({
+            provider: 'gemini', model: model, ok: true, latencyMs: reqLatency, kind: 'grounding', fromProvider: true,
+            promptTokens: um.promptTokenCount || um.prompt_tokens || 0,
+            completionTokens: um.candidatesTokenCount || um.candidates_tokens || um.completion_tokens || 0,
+            totalTokens: um.totalTokenCount || um.total_tokens || 0,
+            cachedTokens: um.cachedContentTokenCount || (um.prompt_tokens_details && um.prompt_tokens_details.cached_tokens) || 0
+          });
           const cand = resJson.candidates && resJson.candidates[0];
           const chunks = cand && cand.groundingMetadata ? (cand.groundingMetadata.groundingChunks || []) : [];
           if (chunks.length > 0) {
@@ -88,6 +111,12 @@ async function geminiGrounding(query, cfg, topK, start, maxMs) {
           const parts = cand && cand.content ? (cand.content.parts || []) : [];
           const text = parts.map(function (p) { return p.text || ''; }).join('').trim();
           if (text) return [{ title: 'Summary for "' + query + '"', snippet: text, url: 'https://google.com' }];
+        } else {
+          usageLog.push({ provider: 'gemini', model: model, ok: false, latencyMs: reqLatency, kind: 'grounding', errorType: usageErrType(res.status) });
+          if (res.status === 429) {
+            quotaHits++;
+            if (quotaHits >= 2) return null;
+          }
         }
       } catch (e) {}
     }
@@ -97,32 +126,62 @@ async function geminiGrounding(query, cfg, topK, start, maxMs) {
 
 async function openrouterSearch(query, cfg, start, maxMs) {
   const or = cfg && cfg.openrouter;
-  if (!or || !or.apiKey) return null;
+  const orKeys = or && (Array.isArray(or.apiKeys) ? or.apiKeys : (or.apiKey ? [or.apiKey] : []));
+  if (!orKeys || orKeys.length === 0) return null;
   try {
     const payload = {
-      model: or.model || 'gemini-flash-latest',
+      model: or.model || 'openrouter/free',
       messages: [
-        { role: 'system', content: 'You are an intelligent search retrieval assistant. Provide a highly accurate, clean, bulleted list of current factual details to satisfy the search query.' },
+        { role: 'system', content: 'You are a real-time search assistant. Use the provided openrouter:web_search tool to search the web for the user query. Then answer with a concise bulleted list of accurate current facts, each bullet citing its source URL. Only state facts backed by the search results. If nothing useful is found, say so.' },
         { role: 'user', content: 'Search query: "' + query + '"' }
       ],
-      max_tokens: 500,
-      temperature: 0.1
+      max_tokens: 800,
+      temperature: 0.1,
+      tools: [
+        { type: 'openrouter:web_search', parameters: { max_results: 5, search_context_size: 'medium' } }
+      ]
     };
-    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + or.apiKey,
-        'HTTP-Referer': 'https://ai.studio/build',
-        'X-Title': 'YuiHime AI Studio Search Grounding'
-      },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(6000)
-    });
-    if (res.ok) {
-      const data = await res.json();
-      const content = data.choices && data.choices[0] && data.choices[0].message ? (data.choices[0].message.content || '') : '';
-      if (content) return [{ title: 'Search Grounding Context', snippet: content, url: 'https://openrouter.ai' }];
+    for (let k = 0; k < Math.min(orKeys.length, 3); k++) {
+      if (hasExpired(start, maxMs)) return null;
+      const remainingMs = maxMs - (Date.now() - start);
+      if (remainingMs < 2000) return null;
+      const fetchTimeout = Math.max(4000, Math.min(remainingMs + 2000, 10000));
+      try {
+        const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + orKeys[k],
+            'HTTP-Referer': 'https://ai.studio/build',
+            'X-OpenRouter-Title': 'YuiHime AI Studio Search Grounding'
+          },
+          body: JSON.stringify(payload),
+          signal: AbortSignal.timeout(fetchTimeout)
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const message = data.choices && data.choices[0] && data.choices[0].message ? data.choices[0].message : null;
+          const content = message && message.content ? String(message.content) : '';
+          if (content) {
+            const annotations = Array.isArray(message.annotations) ? message.annotations : [];
+            const results = [];
+            for (let i = 0; i < annotations.length; i++) {
+              const a = annotations[i] || {};
+              const cite = (a.type === 'url_citation' && a.url_citation) || {};
+              const url = cite.url || '';
+              const title = cite.title || 'Source ' + (i + 1);
+              const snippet = cite.content || content.slice(0, 400);
+              if (url) results.push({ title: title, snippet: String(snippet).slice(0, 400), url: url });
+            }
+            if (results.length === 0) {
+              results.push({ title: 'Search Grounding Context', snippet: content, url: 'https://openrouter.ai' });
+            }
+            return results;
+          }
+        } else if (res.status === 429) {
+          continue;
+        }
+      } catch (e) {}
     }
   } catch (e) {}
   return null;
@@ -206,16 +265,17 @@ async function runSearch(msg) {
   if (!query) return [];
   const topK = Math.max(1, Math.min(20, Number(msg.topK) || 5));
   const start = Date.now();
-  const MAX_MS = 9000;
+  const MAX_MS = 16000;
   const results = [];
 
   const grounding = await geminiGrounding(query, msg.config, topK, start, MAX_MS);
   if (grounding && grounding.length > 0) return grounding.slice(0, topK);
 
-  const or = await openrouterSearch(query, msg.config, start, MAX_MS);
+  const [or, wiki] = await Promise.all([
+    openrouterSearch(query, msg.config, start, MAX_MS).catch(function () { return null; }),
+    wikipediaSearch(query, start, MAX_MS)
+  ]);
   if (or && or.length > 0) results.push.apply(results, or);
-
-  const wiki = await wikipediaSearch(query, start, MAX_MS);
   results.push.apply(results, wiki);
 
   if (results.length < 3) {
@@ -229,9 +289,9 @@ async function runSearch(msg) {
 parentPort.on('message', async function (msg) {
   try {
     const results = await runSearch(msg);
-    parentPort.postMessage({ id: msg.id, success: true, results: results });
+    parentPort.postMessage({ id: msg.id, success: true, results: results, usage: usageLog });
   } catch (err) {
-    parentPort.postMessage({ id: msg.id, success: false, error: String((err && err.message) || err) });
+    parentPort.postMessage({ id: msg.id, success: false, error: String((err && err.message) || err), usage: usageLog });
   }
 });
 `;
@@ -271,6 +331,11 @@ export class WebSearchRunner {
 
       worker.on('message', (msg: any) => {
         if (settled) return;
+        try {
+          if (Array.isArray(msg?.usage)) {
+            for (const u of msg.usage) recordUsage(u);
+          }
+        } catch (err) {}
         if (msg && msg.success) {
           finish({ results: Array.isArray(msg.results) ? msg.results : [], failed: false });
         } else {

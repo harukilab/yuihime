@@ -1,4 +1,4 @@
-# 👑 Yuihime AI v4.345 - Autonomous VTuber Engine (Airi OS Core v2.39)
+# 👑 Yuihime AI v4.369 - Autonomous VTuber Engine (Airi OS Core v2.39)
 
 **Yuihime** adalah engine agen AI otonom untuk VTuber dengan arsitektur *daemon + web UI*.cognitive loop, memory jangka panjang (SQLite), eksekusi tool modular, dan antarmuka web real-time untuk kontrol kepribadian.
 
@@ -376,6 +376,28 @@ File konfigurasi dan data disimpan **di luar binary**:
 - `agent/` — Berkas kepribadian (`character.md`, `lore.md`, `IDENTITY.md`, `SOUL.md`, `MEMORY.md`)
 - `addons/` — Plugin kustom
 - `cortexloader/` — Modul Cortex eksternal yang selalu jalan tiap putaran (JSON)
+
+### Custom Providers (OpenAI-compatible)
+
+Driver `custom` adalah templat untuk **menambah provider** (DeepSeek, Groq, lokal
+Ollama/LM Studio, Kilo, vLLM, dst.) tanpa menulis kode. Sejak v4.355 mendukung
+**banyak instance** via section `[custom.<nama>]` — tiap instance punya
+`baseUrl`/`apiKey`/`model`/`customHeaders` sendiri dan otomatis jadi kandidat
+system pool failover (`custom:<nama>`):
+
+```toml
+[custom.deepseek]
+baseUrl = "https://api.deepseek.com/v1"
+apiKey = "sk-..."
+model = "deepseek-chat"
+
+[custom.ollama]
+baseUrl = "http://localhost:11434/v1"
+apiKey = ""
+model = "llama3.2"
+```
+
+Docs lengkap: [`docs/CUSTOM_PROVIDERS.md`](docs/CUSTOM_PROVIDERS.md).
 
 ### CLI Override
 ```bash

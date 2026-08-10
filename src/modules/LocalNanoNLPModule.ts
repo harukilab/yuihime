@@ -89,7 +89,7 @@ export const LocalNanoNLPModule: CortexModule = {
     }
   },
   run: async (input: string, state: AgentState, context: any): Promise<any> => {
-    console.log('[LOCAL_NLP] Ingesting neural signals with Dual-Process emulation...');
+    console.debug('[LOCAL_NLP] Ingesting neural signals with Dual-Process emulation...');
 
     const timeoutMs = 15000;
     const timeoutPromise = new Promise<never>((_, reject) => {
@@ -308,7 +308,7 @@ async function triggerBackgroundTraining(intervalHours: number, triggerThreshold
 
     if (shouldTrain) {
       isTrainingInProgress = true;
-      console.log(`[LOCAL_NLP] Triggering autonomous Markov retrain. New messages: ${msgAddedSinceLastTrain}, hours passed: ${Number(durationSinceLastTrain / (3600 * 1000)).toFixed(1)}`);
+      console.debug(`[LOCAL_NLP] Triggering autonomous Markov retrain. New messages: ${msgAddedSinceLastTrain}, hours passed: ${Number(durationSinceLastTrain / (3600 * 1000)).toFixed(1)}`);
       
       // Execute Training
       await performMarkovTraining(db, currentMsgCount);
@@ -323,7 +323,7 @@ async function triggerBackgroundTraining(intervalHours: number, triggerThreshold
  */
 async function performMarkovTraining(db: any, currentMsgCount: number) {
   try {
-    console.log('[LOCAL_NLP] Commencing Markov compilation on CPU...');
+    console.debug('[LOCAL_NLP] Commencing Markov compilation on CPU...');
     
     // Fetch all Yui's historical responses
     const rows = db.prepare("SELECT content FROM memories WHERE speaker = 'agent' ORDER BY timestamp DESC LIMIT 500").all();
@@ -385,7 +385,7 @@ async function performMarkovTraining(db: any, currentMsgCount: number) {
 
     // Train the local Neuromorphic Brain using Stochastic Gradient Descent (Backpropagation)
     try {
-      console.log('[LOCAL_NLP] Commencing NanoBrain self-learning on CPU...');
+      console.debug('[LOCAL_NLP] Commencing NanoBrain self-learning on CPU...');
       const userRows = db.prepare("SELECT content FROM memories WHERE speaker = 'user' AND content NOT LIKE '%<tool_calls>%' ORDER BY timestamp DESC LIMIT 400").all();
       
       if (userRows && userRows.length > 0) {
@@ -411,9 +411,9 @@ async function performMarkovTraining(db: any, currentMsgCount: number) {
         }
 
         await brain.saveWeightsToStorage();
-        console.log(`[LOCAL_NLP] NanoBrain trained successfully! Labeled samples: ${userRows.length}. Loss trend: ${initialLoss.toFixed(4)} -> ${finalLoss.toFixed(4)}`);
+        console.debug(`[LOCAL_NLP] NanoBrain trained successfully! Labeled samples: ${userRows.length}. Loss trend: ${initialLoss.toFixed(4)} -> ${finalLoss.toFixed(4)}`);
       } else {
-        console.log('[LOCAL_NLP] Insufficient user chat history. Bootstrapping NanoBrain with base weights only.');
+        console.debug('[LOCAL_NLP] Insufficient user chat history. Bootstrapping NanoBrain with base weights only.');
       }
     } catch (brainErr) {
       console.error('[LOCAL_NLP] NanoBrain background self-training failed:', brainErr);
@@ -431,7 +431,7 @@ async function performMarkovTraining(db: any, currentMsgCount: number) {
       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updatedAt = excluded.updatedAt
     `).run('yuihime_nano_nlp_markov_meta', JSON.stringify(meta), Date.now());
 
-    console.log(`[LOCAL_NLP] Markov compiled successfully on CPU! Distinct start points: ${model.startWords.length} and transition keys: ${Object.keys(model.transitions).length}`);
+    console.debug(`[LOCAL_NLP] Markov compiled successfully on CPU! Distinct start points: ${model.startWords.length} and transition keys: ${Object.keys(model.transitions).length}`);
   } catch (err) {
     console.error('[LOCAL_NLP] Training execution failed:', err);
   } finally {

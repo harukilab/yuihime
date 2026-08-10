@@ -35,7 +35,11 @@ export async function executeGoogleSearch(query: string, topK: number = 5): Prom
     const apiKeys = [...toKeyArray(primaryKey), ...toKeyArray(fallbackKey)].filter((v, i, a) => a.indexOf(v) === i);
 
     const openrouterSettings = settings.get('openrouter') || {};
-    const openrouterKey = toSingleString(openrouterSettings.apiKey) || process.env.OPENROUTER_API_KEY;
+    const openrouterKeys = [
+      ...toKeyArray(openrouterSettings.apiKey),
+      ...toKeyArray(openrouterSettings.apiKeys),
+      ...(process.env.OPENROUTER_API_KEY ? toKeyArray(process.env.OPENROUTER_API_KEY) : [])
+    ].filter((v, i, a) => a.indexOf(v) === i);
 
     const result = await WebSearchRunner.search(query, topK, {
       gemini: {
@@ -45,7 +49,7 @@ export async function executeGoogleSearch(query: string, topK: number = 5): Prom
         apiVersion: geminiSettings.apiVersion
       },
       openrouter: {
-        apiKey: openrouterKey,
+        apiKeys: openrouterKeys,
         model: toModelString(openrouterSettings.model)
       }
     });

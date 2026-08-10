@@ -28,6 +28,7 @@ All shell tools fall back to `$HOME/.yuihime` automatically.
 | `yui-outfit.sh` | Thin wrapper around the `virtual_body` addon (same write path as daemon). | `read`, `top "<v>"`, `bottom "<v>"`, `underwear "<v>"`, `accessories "<v>"`, `outfit "<top>" "<bottom>" "<underwear>"`, `show`. |
 | `yui-virtual-body.sh` | Full edit/inspect of virtual body state via addon. | `read`, `set <field> <value>`, `raw '<json args>'`, `field <field>` (interactive), `edit` ($EDITOR), `menu`. |
 | `yui-inventory.sh` | Inspect & inject items into `systemHealth.lifeInventory` (foods/drinks/items). | `read`, `add "<name>" [qty] [emoji]`, `aphro "<name>" [qty] [emoji]` (perangsang), `del "<name>" [qty]`, `food "<name>" [qty]`, `drink "<name>" [qty]`, `reset`. |
+| `yui-pool.sh` | Inspect & reset the API key pool cooldown state (`key_pool_state.json`): overloaded, rateLimited, cooldowns, failedModels, failedProviders. | `show`, `reset` (all), `reset <section>`, `reset --restart` (also restart daemon). NOTE: in-memory failure maps hydrate at boot, so a full reset needs a daemon restart. |
 
 ## Python utilities
 
@@ -38,6 +39,22 @@ All shell tools fall back to `$HOME/.yuihime` automatically.
 | `db_server.py` | Web CRUD UI for `yuihime.db` (SQL queries). `python3 tools/db_server.py --port 5500`. |
 | `demo_server.py` | Minimal demo HTTP server used to test Yui background tasks. |
 | `full_scan_db_prepare.py` | Audit: scan repo for all `db.prepare()` calls (DB access points). `--root`, `--ext`. |
+| `backfill_usage.py` | Backfill the UTC-anchored usage tracker (`logs/usage.YYYY-MM-DD.log`) from historical `llm*.log` audit logs, so daily totals have a baseline. Token counts are unavailable in llm logs, so entries are request-count only (`backfilled:true`, `tokensUnavailable:true`). |
+
+### `backfill_usage.py` usage
+
+```bash
+python3 tools/backfill_usage.py --days 7
+python3 tools/backfill_usage.py --days 7 --today        # also merge today's llm.log entries
+python3 tools/backfill_usage.py --force                 # rebuild files from scratch
+python3 tools/backfill_usage.py --providers gemini      # filter by provider
+python3 tools/backfill_usage.py --dry-run               # preview without writing
+```
+
+* Reads `~/.yuihime/logs/llm.YYYY-MM-DD.log` archives (and `llm.log` for today) and
+  reconstructs `usage.YYYY-MM-DD.log` + `usage.YYYY-MM-DD.summary.log`.
+* Idempotent: existing entries are skipped (dedup on ts/provider/model/ok/errorType).
+* Default skips today so it never collides with the live tracker.
 
 ### `push_gh.py` usage
 
