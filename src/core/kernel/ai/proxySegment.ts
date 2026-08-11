@@ -41,9 +41,10 @@ export async function proxyAIRequest(options: {
 
   let response: Response;
   try {
-    // Hard timeout (120s) to prevent hanging forever on the upstream provider.
+    // Hard timeout (10m) to prevent hanging forever on the upstream provider.
+    // Raised from 120s so slow local models (llama.cpp on CPU) can finish.
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 120000);
+    const timeout = setTimeout(() => controller.abort(), 600000);
     try {
       response = await fetch(url, {
         method,

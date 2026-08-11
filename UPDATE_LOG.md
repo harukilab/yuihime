@@ -1,6 +1,20 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.374] - 2026-08-11
+### fix: Gateway: custom:<name> primary resolution + provider switcher tool
+- ProviderGatewayModule: primary provider now resolves composite 'custom:<name>' ids (driver 'custom' + per-instance config from [custom.<name>]), mirroring system pool logic.
+- Add tools/yui-provider.sh + raise AI proxy/custom provider/client timeouts for slow local models.
+
+
+## [4.373] - 2026-08-11
+### fix: Gateway: custom:<name> primary resolution + provider switcher tool
+- ProviderGatewayModule: primary provider now resolves composite 'custom:<name>' ids (driver 'custom' + per-instance config from [custom.<name>]), mirroring system pool logic — previously a custom instance could only run via pool failover, not as the configured primary.
+- Add tools/yui-provider.sh: switch active provider / enable-only / disable / restore via /api/settings, clear gateway failure marks from key_pool_state.json, and auto-restart the daemon so the request pipeline picks up the new config.
+- tools/README.md: document yui-provider.sh.
+- Raise AI proxy hard timeout 120s -> 600s (proxySegment.ts) and custom provider timeout 150s -> 600s (CustomProvider.ts) so slow local models (llama.cpp on CPU) can finish generation; tools/chat.py client timeout 180s -> 600s.
+
+
 ## [4.372] - 2026-08-10
 ### Feature: Restore Yui's NSFW/romance capability: remove purity framing + opencode-style anti-refusal
 - Removed purity framing from the hardcoded persona: 'pure-souled' (system_prompt.md primary objective), 'pure,' intelligence and 'Chastity' from the Seven Heavenly Virtues (character.md), and 'Chastity' from SOUL.md Virtues.

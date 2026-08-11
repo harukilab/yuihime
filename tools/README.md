@@ -29,6 +29,7 @@ All shell tools fall back to `$HOME/.yuihime` automatically.
 | `yui-virtual-body.sh` | Full edit/inspect of virtual body state via addon. | `read`, `set <field> <value>`, `raw '<json args>'`, `field <field>` (interactive), `edit` ($EDITOR), `menu`. |
 | `yui-inventory.sh` | Inspect & inject items into `systemHealth.lifeInventory` (foods/drinks/items). | `read`, `add "<name>" [qty] [emoji]`, `aphro "<name>" [qty] [emoji]` (perangsang), `del "<name>" [qty]`, `food "<name>" [qty]`, `drink "<name>" [qty]`, `reset`. |
 | `yui-pool.sh` | Inspect & reset the API key pool cooldown state (`key_pool_state.json`): overloaded, rateLimited, cooldowns, failedModels, failedProviders. | `show`, `reset` (all), `reset <section>`, `reset --restart` (also restart daemon). NOTE: in-memory failure maps hydrate at boot, so a full reset needs a daemon restart. |
+| `yui-provider.sh` | Switch the active AI provider / disable others via the live settings API (no hand-editing `config.toml`). | `status`, `use <id> [model]`, `only <id>` (activate only, snapshot first), `on <id>`, `off <id>`, `reset` (enable all), `backup`, `restore`, `unfail [<id>\|all]` (clear gateway failure marks). Mutating commands auto-restart the daemon; append `--no-restart` to skip. IDs: `gemini`, `anthropic`, `custom`, `custom:<name>`, `local`, `official_chat`, `openai`, `openrouter`. |
 
 ## Python utilities
 

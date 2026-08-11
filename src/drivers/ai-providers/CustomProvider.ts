@@ -225,7 +225,7 @@ export const CustomProvider: ProviderModule = {
         });
       } else {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 150000);
+        const timeout = setTimeout(() => controller.abort(), 600000);
         let response: Response;
         try {
           response = await fetch('/api/ai/proxy', {

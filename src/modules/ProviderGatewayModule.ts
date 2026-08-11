@@ -192,10 +192,25 @@ export const ProviderGatewayModule: CortexModule = {
       }
     };
 
-    // 1. Attempt the primary provider chosen in context
-    const primaryProvider = SystemRegistry.getProvider(selectedProviderId);
+    // 1. Attempt the primary provider chosen in context.
+    // Composite 'custom:<name>' ids resolve to the 'custom' driver module with
+    // the per-instance config from [custom.<name>], mirroring the system pool
+    // logic below so a custom instance can serve as the primary provider.
+    const resolveProviderEntry = (id: string): { module: any; config: any } => {
+      if (id.startsWith('custom:')) {
+        const instName = id.slice('custom:'.length);
+        const customRoot = (context.config?.providers?.custom || context.config?.custom || {}) as any;
+        return { module: SystemRegistry.getProvider('custom'), config: customRoot[instName] || context.config || {} };
+      }
+      return {
+        module: SystemRegistry.getProvider(id),
+        config: context.config?.providers?.[id] || context.config?.[id] || context.config || {}
+      };
+    };
+    const primaryResolved = resolveProviderEntry(selectedProviderId);
+    const primaryProvider = primaryResolved.module;
     if (primaryProvider && !isProviderFailed(selectedProviderId)) {
-      const providerConfig = context.config?.providers?.[selectedProviderId] || context.config?.[selectedProviderId] || context.config || {};
+      const providerConfig = primaryResolved.config;
       const actualModelOfProvider = toSingleString(context.model || providerConfig.model) || (primaryProvider.metadata?.models ? primaryProvider.metadata.models[0] : 'unknown');
       try {
         console.log(`[GATEWAY] Routing primary request to: ${selectedProviderId} (Attempting...)`);

@@ -35,7 +35,7 @@ def send(base_url: str, payload: bytes) -> dict:
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req, timeout=180) as resp:
+        with urllib.request.urlopen(req, timeout=600) as resp:
             return json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
         return {"success": False, "error": f"HTTP {e.code}: {e.read().decode('utf-8')}"}
