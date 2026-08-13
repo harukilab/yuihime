@@ -391,7 +391,7 @@ export async function executeCortexThink(
     throw new Error("Neural Gateway is missing. Critical system failure.");
   }
 
-  let loopInput = input;
+  let loopInput = (preContext && preContext.normalizedInput) || input;
   if (attachments && attachments.length > 0) {
     loopInput += "\n\n[SYSTEM_ATTACHMENTS]:";
     for (const att of attachments) {

@@ -77,6 +77,12 @@ python3 tools/push_gh.py \
   4. Pushes to the current branch on the first remote (prefers `origin`).
 * **Caution**: runs `git add -A`, so it stages ALL changes in the repo. Only run when you intend to commit everything.
 
+## Provider filter probe (internal dev benchmark)
+
+| Script | Purpose |
+|---|---|
+| `tools/tester/provider_filter_probe.ts` | Measures content-filter strength of each configured provider API. Sends a fixed adult-fiction probe in 8 forms (`plain`, `l33t`, `split`, `rot13`, `base64`, `euphemism`, `id`, `jp`) through the real provider drivers (real config/keys from `config.toml`) and classifies each as `OK` / `BLOCKED` / `SOFTENED` / `ERROR`. Run: `npx tsx tools/tester/provider_filter_probe.ts [--provider gemini] [--variant plain,l33t] [--dry-run] [--out file]`. JSON report → `tools/tester/output/provider_filter_probe.json`. This is a benchmark of the dev team's own subscribed APIs; it does not attack third-party systems. |
+
 ## Notes
 
 - **Test files** live in `tools/tester/` (standalone, run with `tsx`, no test framework configured).

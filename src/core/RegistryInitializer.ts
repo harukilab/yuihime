@@ -37,6 +37,7 @@ import { SubAgentDelegationModule } from '../modules/SubAgentDelegationModule.js
 import { YuiVisionModule } from '../modules/YuiVisionModule.js';
 import { L2DExpressionTranslatorModule } from '../modules/L2DExpressionTranslator.js';
 import { SendFinalReplyTool, SendStatusUpdateTool } from '../modules/LiveStatusToolsModule.js';
+import { NSFWGlossaryModule, NSFWTranslateTool } from '../modules/NSFWTermGlossaryModule.js';
 import { DelegateTool } from '../drivers/tools/delegate.js';
 import { UndoLastChangesTool } from '../drivers/tools/undo_last_changes.js';
 import { DiagnosticsTool } from '../drivers/tools/diagnostics.js';
@@ -468,6 +469,7 @@ export function initializeCortexModules(): Promise<void> {
         NeuralVerifierModule, NeuralLoopModule, MultiChannelQueueModule, MoodAnalysisModule, MemoryModule,
         LocalNanoNLPModule, FileManipulationModule, EmotionEngine, NeuralEchoAddon,
         SandboxFSModule, SandboxTerminalModule, SOPModule, RAGModule, ProviderGatewayModule,
+        NSFWGlossaryModule,
         PromptManagerModule, PlanningModule, ParallelStreamerModule, OutputRendererModule,
         ToolExecutorModule, TTSSelectorModule, SubAgentDelegationModule, YuiVisionModule, L2DExpressionTranslatorModule, McpBridgeModule,
         YUIAGICoreModule, WeatherNewsEmpathyModule, TopDownExecutiveControlModule, SubconsciousMonologueModule,
@@ -494,6 +496,7 @@ export function initializeCortexModules(): Promise<void> {
         QuestionTool, ApplyPatchTool,
         GrepTool, TodoWriteTool, SkillTool,
         SendFinalReplyTool, SendStatusUpdateTool,
+        NSFWTranslateTool,
         DelegateTool,
         UndoLastChangesTool,
         DiagnosticsTool,
