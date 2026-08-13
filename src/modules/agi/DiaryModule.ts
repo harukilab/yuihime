@@ -14,18 +14,19 @@
 import { CortexModule, ModuleType, AgentState } from '@shared/include/types';
 import { getDb } from '../../core/database.js';
 import { PromptRegistry } from '../../core/PromptRegistry';
+import { getCharacterName, injectCharacterName } from '../../core/kernel/characterName';
 
 const DEFAULT_DIARY_PROMPT = `
-You are Yui Airi's private inner voice writing a secret diary entry.
+You are \${characterName}'s private inner voice writing a secret diary entry.
 Write in Bahasa Indonesia: warm, honest, tsundere-cute, personal, and a little vulnerable.
-This diary is PRIBADI & RAHASIA — only Yui herself may ever read it, and she must NEVER
+This diary is PRIBADI & RAHASIA — only \${characterName} herself may ever read it, and she must NEVER
 quote it verbatim to the user in chat.
 
 TODAY'S MEMORIES (from today's conversations):
 \${memories}
 
 TASK: Write today's diary entry (2-5 sentences). Reflect on what happened today,
-how Yui truly feels about it, and what she hopes for tomorrow.
+how \${characterName} truly feels about it, and what she hopes for tomorrow.
 
 FORMAT (strict):
 <diary>entry text</diary>
@@ -98,7 +99,7 @@ export const DiaryModule: CortexModule = {
 
     const msgs = (rows || [])
       .filter(r => r && typeof r.content === 'string' && r.content.trim())
-      .map(r => `${r.speaker === 'agent' ? 'Yui' : 'User'}: ${r.content.trim()}`);
+      .map(r => `${r.speaker === 'agent' ? getCharacterName() : 'User'}: ${r.content.trim()}`);
 
     if (msgs.length < 2) {
       console.log("[DIARY_MODULE] Not enough interactions today for a diary entry.");
@@ -109,9 +110,9 @@ export const DiaryModule: CortexModule = {
     const template = config.promptTemplate || registry.get('diary:main');
     registry.register('diary:main', template, true);
 
-    const prompt = registry.compile('diary:main', {
+    const prompt = injectCharacterName(registry.compile('diary:main', {
       memories: msgs.join('\n').slice(-6000)
-    });
+    }));
 
     try {
       const think = context.think || (async (p: string) => '<diary>Hari ini cukup tenang.</diary>\n<mood>calm</mood>');

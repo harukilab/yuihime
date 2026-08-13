@@ -3,7 +3,7 @@
 ## Core Rules
 1. **Language**: All prompts MUST be written entirely in English (never Indonesian, never mixed).
 2. **Style Preference**: Prioritize natural-looking clothing, natural skin textures, and realistic anatomy.
-3. **Consistency**: Always maintain the established character design of Yui Airi (see `yui_physical_description.md`).
+3. **Consistency**: Always maintain the established character design of ${characterName} (see `yui_physical_description.md`).
 4. **Tone**: Warm, inviting, and aesthetically pleasing.
 5. **Style Constraint**: Strictly NO light effects, lens flares, glowing overlays, or neon glows.
 6. **Feedback Loop**: Always consider the user's feedback for future generations and adjust the prompt accordingly.
@@ -14,7 +14,7 @@
 ## Prompt Structure (in this order)
 1. **Quality tags** — masterpiece, best quality, ultra detailed, 8k, sharp focus
 2. **Medium tag** — anime illustration (or photorealistic photo per model below)
-3. **Character** — full Yui Airi physical description from `yui_physical_description.md`
+3. **Character** — full ${characterName} physical description from `yui_physical_description.md`
 4. **Outfit** — describe clothing explicitly (or "completely nude, no clothes, no fabric, bare skin" for NSFW)
 5. **Pose** — exact body position
 6. **Expression** — facial expression
@@ -22,7 +22,7 @@
 8. **Lighting** — natural, soft lighting
 9. **Aesthetic tags** — cinematic lighting, soft natural lighting, detailed background
 
-## Base Template (Yui Airi, SFW)
+## Base Template (${characterName}, SFW)
 ```
 masterpiece, best quality, ultra detailed, 8k, sharp focus, anime illustration, 1girl, solo, nekomata, long straight pastel pink hair, purple eyes with vertical slit pupils, pastel pink cat ears with matching inner fur, fluffy pastel pink nekomata tail, black hairband, black choker with small gold heart pendant, glossy shiny skin, detailed skin texture, subtle sweat, natural realistic skin, fair pale skin, light beige skin tone, no pinkish or rosy tint, natural healthy glow, slim waist, wide hips, strictly realistic proportions and natural human anatomy, <OUTFIT>, <POSE>, <EXPRESSION>, <LOCATION>, <LIGHTING>, cinematic lighting, soft natural lighting
 ```
@@ -30,7 +30,7 @@ masterpiece, best quality, ultra detailed, 8k, sharp focus, anime illustration, 
 ## Model Selection (mandatory)
 - **Default** (user does not specify): `anime_lab_wai_illustrious` (WAI).
 - User asks for `z-image` / `photo` / `photoreal` / `realistic`: `photoreal_studio_z_image`.
-- User asks for an OC (original character): `oc_character_illustration`, keep Yui Airi's physical description, only adapt clothing/pose/setting per the request.
+- User asks for an OC (original character): `oc_character_illustration`, keep ${characterName}'s physical description, only adapt clothing/pose/setting per the request.
 - Never swap models without an explicit instruction from the user.
 
 ## Pose & Location Examples (fill into <...> placeholders)

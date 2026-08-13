@@ -1,7 +1,7 @@
 {
   "name": "yuihime",
   "private": true,
-  "version": "4.374",
+  "version": "4.377",
   "description": "YuiHime AI Engine - autonomous trans-dimensional virtual companion (AGI) with multi-provider LLM gateway, cognitive cortex, and multi-channel bridges.",
   "type": "module",
   "bin": "dist/server.cjs",

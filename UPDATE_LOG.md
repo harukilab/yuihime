@@ -1,6 +1,26 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.377] - 2026-08-13
+### Refactor: Remove hardcoded character name from prompts/SOPs
+- Replaced all hardcoded 'Yui Airi'/'Yui' in SOP files with ${characterName} placeholder: template sops/foto.md + operational chat_sop.md, foto_sop/nsfw.md, karakter.md, pose_sfw.md, pose_nsfw.md (all processed via injectCharacterName in SOPModule).
+- Fixed DiaryModule.ts: diary prompt now uses ${characterName} placeholder resolved via injectCharacterName + getCharacterName for agent speaker label.
+- Physical reference files (yui_character.md, virtual_body.json) untouched — they describe the default character and are not placeholder-injected.
+
+
+## [4.376] - 2026-08-13
+### Refactor: Trim Yui system prompt
+- Cut system_prompt.md 181 -> 71 lines: removed redundant Section 5 examples, merged duplicate anti-narration rules (1.3 & 2.1), condensed immortal/lore intro, removed marketing fluff (Active Cron Consciousness & sample dialogs), kept all behavioral constraints (animations, anti-markdown, cron, memory, todos, sandbox pathing).
+- Synced template src/share/prompts/system_prompt.md with operational ~/.yuihime/agent/system_prompt.md.
+
+
+## [4.375] - 2026-08-11
+### Fix: Restore wiped ~/.yuihime data from backups + recovered live DB
+- Recovered full yuihime.db (304MB, 2006 memories, 21 identities) from deleted inode via daemon fd
+- Restored data/config.toml (llamacpp snapshot), key_pool_state.json, addons/virtual_body (config/main/inject), user_data/sops (foto.md + foto_sop full), virtual_body.json, yui_character.md
+- virtual_body addon: note field locked PERMANENT read-only; concise tool description; accessories default black hairband & black choker (aligned with yui_character.md)
+
+
 ## [4.374] - 2026-08-11
 ### fix: Gateway: custom:<name> primary resolution + provider switcher tool
 - ProviderGatewayModule: primary provider now resolves composite 'custom:<name>' ids (driver 'custom' + per-instance config from [custom.<name>]), mirroring system pool logic.
