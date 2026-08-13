@@ -1,6 +1,34 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.389] - 2026-08-14
+### Refactor: Per-provider manual tool toggle; remove auto roleplay routing
+- Revert auto roleplay routing in ProviderGatewayModule: removed roleplayProvider override & nsfwGlossary/roleplayRequest detection; selectedProviderId is config-driven again.
+- Add manual per-provider enableTools flag (default true). When enableTools=false the gateway strips tools for that provider in primary, pool and fallback-chain paths (fixes 404 tool-use error on Puter RP models).
+- roleplayOnly now excludes custom instances from pool enumeration too (was registry providers only).
+- Config: dropped top-level roleplayProvider; [custom.puter] & [custom.puter2] now enableTools=false + roleplayOnly=true (manual-only RP use).
+- Verified: provider=custom:puter routes as primary successfully without tools; pool excludes puter/puter2 (custom, gemini, custom:kilo).
+
+
+## [4.388] - 2026-08-14
+### Fix: Set Puter to uncensored RP models + add backup instance
+- custom:puter now uses thedrummer/cydonia-24b-v4.1 (uncensored creative writing, 131K ctx) and new custom:puter2 uses sao10k/l3.3-euryale-70b (RP) as gateway failover backup. Provider-gateway pool falls through on hard errors.
+- Verified via provider_filter_probe plain variant: both models OK (direct anatomical terms, no softening); gpt-5.4-nano dropped (was SOFTENED). puter2 (70B) is slow (~171s).
+
+
+## [4.387] - 2026-08-14
+### Fix: Proxy allowlist now auto-derives domains from configured provider baseUrls
+- proxyAIRequest loads settings and auto-adds every provider baseUrl/base_url/endpoint hostname (recursive scan, depth 5) to the allowed list on top of the static baseline; new providers in config.toml are proxied without code changes.
+- Security kept: unconfigured/unlisted domains (e.g. evil-random.example.com) still blocked; localhost/127.0.0.1/192.168/10. relative paths unchanged.
+- Verified: opencode.ai (config-only) passes, api.puter.com passes, unknown domain blocked; lint clean, build:server + daemon healthy.
+
+
+## [4.386] - 2026-08-14
+### Fix: Add Puter.js as provider (custom:puter, OpenAI-compatible)
+- Added [custom.puter] to config.toml -> baseUrl https://api.puter.com/puterai/openai/v1 with user's Puter auth token, model gpt-5.4-nano. Zero code change (multi-instance custom provider pattern like custom:kilo); removal = delete the config section.
+- Verified: direct chat/completions call returns standard OpenAI response; daemon restarted healthy; /api/settings shows custom.puter enabled.
+
+
 ## [4.385] - 2026-08-14
 ### Fix: Move NSFW terms out of sops/foto.md into foto_sop/nsfw.md
 - foto.md is now clean of NSFW trigger words (pussy/dildo/nipples/clit/bondage/nude/etc.); rule #12 and the virtual-body insert/piercing mapping now delegate to foto_sop/nsfw.md.

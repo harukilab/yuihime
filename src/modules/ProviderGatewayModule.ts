@@ -219,7 +219,7 @@ export const ProviderGatewayModule: CortexModule = {
           ...context,
           config: providerConfig,
           debugRequestLogging: context.config?.debug?.requestLogging === true || context.config?.['tool-executor']?.debugRequestLogging === true,
-          tools: context.disableTools ? [] : buildOpenAITools(context.allowedTools)
+          tools: context.disableTools || providerConfig.enableTools === false ? [] : buildOpenAITools(context.allowedTools)
         });
 
         console.log(`[GATEWAY] Provider ${selectedProviderId} response successfully captured.`);
@@ -270,7 +270,7 @@ export const ProviderGatewayModule: CortexModule = {
         const needsKey = pId !== 'local';
         const hasCredential = needsKey ? hasApiKey : Boolean(pCfg.baseUrl || pCfg.endpoint);
         const pModel = toSingleString(pCfg.model) || (prov.metadata?.models && prov.metadata.models[0]);
-        if (!explicitlyDisabled && hasCredential && pModel) {
+        if (!explicitlyDisabled && !pCfg.roleplayOnly && hasCredential && pModel) {
           poolProviderIds.push(pId);
           providerAttempted.add(pId);
         }
@@ -286,7 +286,7 @@ export const ProviderGatewayModule: CortexModule = {
           const instanceId = `custom:${name}`;
           if (providerAttempted.has(instanceId)) continue;
           const cfg = instCfg as any;
-          if (cfg.enabled === false) continue;
+          if (cfg.enabled === false || cfg.roleplayOnly === true) continue;
           const instKeyRaw = cfg.apiKey || cfg.api_key || cfg.apiKeys || '';
           const instHasCredential = typeof instKeyRaw === 'string' ? instKeyRaw.trim().length > 0 : (Array.isArray(instKeyRaw) ? instKeyRaw.some((k: any) => k && String(k).trim().length > 0) : Boolean(instKeyRaw));
           const instModel = toSingleString(cfg.model) || (SystemRegistry.getProvider('custom')?.metadata?.models?.[0]) || 'custom-model';
@@ -325,7 +325,7 @@ export const ProviderGatewayModule: CortexModule = {
             ...context,
             config: poolProviderConfig,
             debugRequestLogging: context.config?.debug?.requestLogging === true || context.config?.['tool-executor']?.debugRequestLogging === true,
-            tools: context.disableTools ? [] : buildOpenAITools(context.allowedTools)
+            tools: context.disableTools || poolProviderConfig.enableTools === false ? [] : buildOpenAITools(context.allowedTools)
           });
 
           console.log(`[GATEWAY_POOL] Provider ${poolProviderId} response successfully captured (system pool failover).`);
@@ -383,7 +383,7 @@ export const ProviderGatewayModule: CortexModule = {
             const result = await fallbackProvider.generate(input, {
               ...context,
               config: providerConfig,
-              tools: context.disableTools ? [] : buildOpenAITools(context.allowedTools)
+              tools: context.disableTools || providerConfig.enableTools === false ? [] : buildOpenAITools(context.allowedTools)
             });
 
             console.log(`[GATEWAY_FALLBACK] Fallback Step ${providerId} succeeded!`);
