@@ -22,7 +22,7 @@ const manifest = {
       },
       "schedule": { 
         "type": "string", 
-        "description": "When to run. Supported formats: interval (5m, 30s, 2h, 1d); absolute one-shot ('2026-08-07T09:00:00' or '@at 2026-08-07 09:00', naive times use the user's local timezone); or standard cron with optional IANA timezone suffix (e.g. '0 7 * * *', '0 9 * * 1-5 (Asia/Jakarta)', 'TZ=America/New_York 0 8 * * *'). One-shot/at tasks delete themselves after firing." 
+        "description": "When to run. Supported formats: interval (5m, 30s, 2h, 1d); absolute one-shot ('2026-08-07T09:00:00' or '@at 2026-08-07 09:00', naive times use the user's local timezone); a bare daily time ('19:00' = every day at 19:00); or standard cron with optional IANA timezone suffix (e.g. '0 7 * * *', '0 9 * * 1-5 (Asia/Jakarta)', 'TZ=America/New_York 0 8 * * *'). One-shot/at tasks delete themselves after firing." 
       },
       "taskId": {
         "type": "string",

@@ -227,28 +227,6 @@ export const getCronAction = (id: string, name: string, repeating: boolean, db: 
 
   try {
     // CUSTOM OVERRIDES FOR BUILT-IN SYSTEM TASKS
-    if (id === 'memory-consolidation') {
-      try {
-        const consolidator = SystemRegistry.getModule('memory-consolidation');
-        if (consolidator) {
-           await consolidator.run('CONSOLIDATE_MEMORIES', {}, { db });
-        } else {
-           console.warn("[CRON] Memory Consolidator module not found in registry.");
-        }
-      } catch (e: any) {
-        error = e?.message || String(e);
-        console.error("[CRON] Memory consolidation trigger failed:", e.message || e);
-      }
-      
-      if (repeating) {
-        await withSqliteRetry('update-cron-lastrun', db, () => db.prepare("UPDATE cron_tasks SET lastRun = ? WHERE id = ?").run(Date.now(), id));
-      } else {
-        await withSqliteRetry('delete-cron-task', db, () => db.prepare("DELETE FROM cron_tasks WHERE id = ?").run(id));
-        CronModule.getInstance().stopTask(id);
-      }
-      return;
-    }
-
     if (id === 'heartbeat') {
       try {
         const scan = heartbeatScan();

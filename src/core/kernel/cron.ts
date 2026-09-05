@@ -35,7 +35,6 @@ export interface CronTask {
 
 /** Built-in system jobs that do not run as chat prompts. */
 export const SYSTEM_CRON_IDS = new Set([
-  'memory-consolidation',
   'heartbeat',
 ]);
 
@@ -232,6 +231,16 @@ export function parseCronSchedule(schedule: string): CronScheduleKind | null {
     const unit = rel[2].toLowerCase();
     const ms = ({ s: 1000, m: 60000, h: 3600000, d: 86400000 } as Record<string, number>)[unit] * value;
     return { kind: 'relative', ms };
+  }
+
+  // Bare wall-clock time `HH:MM` (e.g. '19:00') → daily recurring cron `MM HH * * *`.
+  // Without this, '19:00' falls through to a 1-field cron where only the minute
+  // '19' is parsed, making the job fire every hour at minute 19.
+  const hhmm = body.match(/^(\d{1,2}):(\d{2})$/);
+  if (hhmm) {
+    const hh = hhmm[1].padStart(2, '0');
+    const mm = hhmm[2];
+    return { kind: 'cron', expr: `${mm} ${hh} * * *`, tz };
   }
 
   return { kind: 'cron', expr: body, tz };

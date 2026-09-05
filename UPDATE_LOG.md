@@ -1,6 +1,13 @@
 # YuiHime Project Updates Logs
 ---
 
+## [4.390] - 2026-08-15
+### Fix: Remove memory-consolidation cron; fix HH:MM schedule parsing
+- Remove memory-consolidation cron: auto-seed at install (seedDefaultCronTask), existing DB task, SYSTEM_CRON_IDS handling, apiRouter override, and database.ts exclusion. Remaining system cron: heartbeat.
+- Fix bare wall-clock schedule parsing (e.g. '19:00'): previously parsed as a 1-field cron firing every hour at minute 19; now normalized to daily cron 'MM HH * * *'.
+- Update scheduler tool schedule param description to document daily 'HH:MM' format.
+
+
 ## [4.389] - 2026-08-14
 ### Refactor: Per-provider manual tool toggle; remove auto roleplay routing
 - Revert auto roleplay routing in ProviderGatewayModule: removed roleplayProvider override & nsfwGlossary/roleplayRequest detection; selectedProviderId is config-driven again.
